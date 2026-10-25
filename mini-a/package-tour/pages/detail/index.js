@@ -11,7 +11,8 @@ Page({
       const withFallbackSessions = d.sessions && d.sessions.length ? d.sessions : fallbackSessions()
       const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
       const gallery = (d.images || []).map(api.img)
-      this.setData({ p: d, sessions: withFallbackSessions, loading: false, fallback: !(d.sessions && d.sessions.length),
+      const sv = this.sessView(withFallbackSessions[0])
+      this.setData({ p: d, sessions: withFallbackSessions, selView: sv, loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv })
       this.fetchReviews()
@@ -37,7 +38,17 @@ Page({
     const p = this.data.p || {}
     return { title: p.title || '向往的自由 · 主题游', query: 'id=' + this.pid + (this.myScene ? '&scene=' + this.myScene : '') }
   },
-  pick(e) { this.setData({ sel: Number(e.currentTarget.dataset.i) }) },
+  // 团期展示预计算（wxml 只做取值，防分包表达式炸编译）
+  sessView(s) {
+    if (!s) return { label: '', extra: '' }
+    const parts = [s.depart_date + ' · 余' + s.left_seats]
+    const extra = []
+    if (s.isEarly) extra.push('🐦 早鸟价 ¥' + (s.priceNow / 100) + '（提前 ' + s.daysToDepart + ' 天报名）')
+    if (s.groupProgress) extra.push(s.groupProgress.reached ? '已成团' : '需 ' + s.groupProgress.minGo + ' 人成团 · 已报 ' + s.groupProgress.booked)
+    return { label: parts[0], extra: extra.join(' · ') }
+  },
+
+  pick(e) { this.setData({ sel: Number(e.currentTarget.dataset.i), selView: this.sessView(this.data.sessions[Number(e.currentTarget.dataset.i)]) }) },
   addQty() { this.setData({ qty: Math.min(9, this.data.qty + 1) }) },
   subQty() { this.setData({ qty: Math.max(1, this.data.qty - 1) }) },
   toggleBean() { this.setData({ useBean: !this.data.useBean }) },
@@ -57,7 +68,8 @@ Page({
     try {
       await api.ensureLogin()
       const beanBal = this.data.beanBal || 0
-      const want = this.data.useBean ? Math.min(beanBal, Math.floor(s.price_adult * this.data.qty / 10)) : 0
+      const unit = s.priceNow || s.price_adult
+      const want = this.data.useBean ? Math.min(beanBal, Math.floor(unit * this.data.qty / 10)) : 0
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
         promoScene: wx.getStorageSync('promoScene') || undefined,
         contactName: this.data.contactName, contactPhone: this.data.contactPhone })

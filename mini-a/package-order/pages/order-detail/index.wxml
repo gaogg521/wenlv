@@ -31,6 +31,8 @@
 
   <view class="btn ghost" style="color:var(--red);border-color:var(--red)"
         wx:if="{{[10,20,30,40].indexOf(o.status) > -1}}" bindtap="refund">申请退款</view>
+  <view class="btn ghost" style="color:#1a9c6b;border-color:#1a9c6b"
+        wx:if="{{o.canRebook}}" bindtap="rebook">未成团 · 免费改签 ›</view>
 
   <!-- 写评价：核销完成后 · 一单一评 -->
   <view class="card" wx:if="{{o.status === 50 && !o.reviewed && !reviewDone}}">

@@ -5,6 +5,7 @@ import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
 import * as pass from './domain/pass.mjs'
 import * as promo from './domain/promo.mjs'
+import * as group from './domain/group.mjs'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -81,6 +82,12 @@ export async function tickAttest() {
   if (r.leaves > 0) console.log('[job:attest] batch #' + r.batchId, 'leaves', r.leaves, 'root', String(r.root).slice(0, 12))
 }
 
+/** 拼团未成团自动取消（分钟级）：§4 depart_date 前 group_cancel_hours 小时未达 min_go → 取消+全额退款+通知 */
+export async function tickGroupCancel() {
+  const done = await group.cancelDueSessions()
+  if (done.length) console.log('[job:group-cancel]', done.join(','))
+}
+
 async function main() {
   console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / settlement 周一 01:00')
   let lastCommission = '', lastSettlement = ''
@@ -90,6 +97,7 @@ async function main() {
     try {
       await tickClose()
       await tickComplete()
+      await tickGroupCancel()
       await tickExpire()
       await tickAttest()
       // 心跳：运维控制台据此判断任务进程存活

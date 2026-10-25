@@ -101,3 +101,40 @@ export async function attest(bizType, bizRef, canonical) {
   await q('INSERT IGNORE INTO attest_event (biz_type, biz_ref, payload_hash) VALUES (?,?,?)',
     [bizType, bizRef, sha256(bizType + '|' + bizRef + '|' + canonical)])
 }
+
+/** 离线名单（§10）：本店有效凭证 + 未来 30 个窗口的展示码映射（断网期间人工比对用） */
+export async function offlineListForStore(merchantId) {
+  const passes = await q(`SELECT tp.id pass_id, tp.name, o.order_no, o.contact_name, p.title
+    FROM travel_pass tp JOIN orders o ON o.id = tp.order_id JOIN tour_product p ON p.id = o.product_id
+    WHERE p.merchant_id = ? AND tp.status = 1 AND o.status IN (20, 30, 40)
+    ORDER BY o.paid_at DESC LIMIT 500`, [merchantId])
+  const winSec = await cfgNum('pass.code_window')
+  const win = windowOf(Math.floor(Date.now() / 1000), winSec)
+  const codes = {}
+  for (const p of passes) {
+    for (let w = win - 2; w <= win + 30; w++) {
+      const c = displayCode(p.pass_id, w)
+      if (!(c in codes)) codes[c] = p.pass_id
+    }
+  }
+  return { syncedAt: new Date().toISOString(), windowNo: win, passes, codes }
+}
+
+/** 人工队列确认核销：凭证置已核销 + 补流水 + 全单核销完推订单 40 */
+export async function adminConfirmPass(passId, adminId) {
+  const p = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
+  if (!p) throw new Error('凭证不存在')
+  if (p.status !== 1) return false
+  await tx(async (c) => {
+    const n = await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ? AND status = 1', [passId])
+    if (n !== 1) throw new Error('并发冲突')
+    await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,NULL,3,1,NULL)',
+      [passId, 0, adminId])
+  })
+  const remaining = await one('SELECT COUNT(*) c FROM travel_pass WHERE order_id = ? AND status = 1', [p.order_id])
+  if (Number(remaining.c) === 0) {
+    const o = await one('SELECT order_no FROM orders WHERE id = ?', [p.order_id])
+    if (o) await order.fire(o.order_no, 'VERIFY_ALL', 'admin:' + adminId, async () => '人工队列确认核销')
+  }
+  return true
+}

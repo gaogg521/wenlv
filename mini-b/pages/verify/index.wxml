@@ -1,3 +1,11 @@
+<!-- 离线模式黄条（§10）：队列待上传 / 名单同步时间 -->
+<view wx:if="{{offline.pending > 0}}" style="background:#fff8e6;border:1.5rpx solid #f0c674;color:#8a6d1a;border-radius:18rpx;padding:18rpx 24rpx;font-size:24rpx;margin-bottom:16rpx;display:flex;align-items:center;gap:16rpx">
+  <view style="flex:1">⚠️ 离线队列 {{offline.pending}} 条待上传 · 名单同步于 {{offline.syncedAt}}</view>
+  <view bindtap="uploadQueue" style="background:#8a6d1a;color:#fff;border-radius:14rpx;padding:8rpx 20rpx">上传</view>
+</view>
+<view wx:elif="{{offline.listReady}}" style="background:#f4f9f4;border:1.5rpx solid #cfe3cf;color:#3f6f3f;border-radius:18rpx;padding:14rpx 24rpx;font-size:22rpx;margin-bottom:16rpx">
+  ✓ 离线名单已就绪（同步于 {{offline.syncedAt}}）· 断网可继续核销，恢复后自动上传
+</view>
 <view class="scan-box">
   <view class="scan-frame">
     <view class="corner c1"></view><view class="corner c2"></view>
@@ -25,5 +33,5 @@
     <view class="v tiny">#{{result.passId || result.payload}}</view>
   </view>
 </view>
-<view class="note">断网时暂缓核销 · 恢复后补登（离线队列 P1）</view>
+<view class="note">离线核销仅限名单内凭证 · 恢复网络后二次校验，冲突转人工队列（§10）</view>
 <view class="note" wx:if="{{streak > 0}}" style="color:var(--brand);font-weight:600">🔥 连续核销 {{streak}} 单 · 800ms 自动进入下一单</view>

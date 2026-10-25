@@ -11,6 +11,22 @@ Page({
     } catch (e) { wx.showToast({ title: e.msg || '加载失败', icon: 'none' }) }
   },
   goCode(e) { wx.navigateTo({ url: '/package-order/pages/pass-code/index?id=' + e.currentTarget.dataset.id }) },
+  // 免费改签（未成团取消单）：同频道同价团期列表 → 选中改签
+  async rebook() {
+    const opts = this.data.o.rebookOptions || []
+    if (!opts.length) return wx.showToast({ title: '暂无可改签团期', icon: 'none' })
+    const ok = await new Promise((r) => wx.showActionSheet({
+      itemList: opts.map((s) => s.depart_date + ' · ¥' + (s.price_adult / 100) + ' · 余' + s.left_seats),
+      success: r, fail: () => {},
+    })).catch(() => null)
+    if (ok == null) return
+    try {
+      const res = await api.request('/c/orders/' + this.no + '/rebook', 'POST', { sessionId: opts[ok].id })
+      wx.showToast({ title: '改签成功，已出票', icon: 'success' })
+      wx.navigateTo({ url: '/package-order/pages/order-detail/index?no=' + res.orderNo })
+    } catch (e) { wx.showToast({ title: e.msg || '改签失败', icon: 'none' }) }
+  },
+
   async refund() {
     const ok = await new Promise(r => wx.showModal({ title: '申请退款', content: '按平台退改梯度执行，确认？', success: r }))
     if (!ok.confirm) return

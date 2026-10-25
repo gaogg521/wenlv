@@ -6,6 +6,8 @@ import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
 import * as pass from './domain/pass.mjs'
 import * as promo from './domain/promo.mjs'
+import * as refund from './domain/refund.mjs'
+import * as group from './domain/group.mjs'
 import * as wxpay from './domain/wxpay.mjs'
 import * as wxapi from './domain/wxapi.mjs'
 import * as wxsec from './infra/wxsec.mjs'
@@ -71,10 +73,16 @@ const c = {
   'GET /c/tours/:id': async (req) => {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
-    const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, price_adult, status
-      FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() ORDER BY depart_date`, [p.id])
+    const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
+      price_adult, early_price, early_days, status
+      FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status <> 5 ORDER BY depart_date`, [p.id])
     const agg = await one(`SELECT COALESCE(AVG(rating),0) avg_rating, COUNT(*) count FROM review WHERE product_id = ? AND status = 1`, [p.id])
-    return { ...p, priceLabel: fen2yuan(p.price_from), sessions: sessions.map(s => ({ ...s, priceLabel: fen2yuan(s.price_adult) })),
+    return { ...p, priceLabel: fen2yuan(p.price_from), sessions: sessions.map((s) => {
+      const ep = order.priceForSession(s)
+      return { ...s, priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
+        isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
+        groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
+    }),
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) } }
   },
 
@@ -152,7 +160,18 @@ const c = {
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const reviewed = !!(await one('SELECT id FROM review WHERE order_id = ?', [o.id]))
-    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed }
+    const canRebook = Number(o.status) === 70 && o.close_reason === 'group_cancel' &&
+      !(await one('SELECT id FROM orders WHERE rebook_of = ?', [o.order_no]))
+    // 改签候选：同频道、同价（单价×数量=原 goods）、报名中、余量足够
+    const rebookOptions = canRebook ? await q(
+      `SELECT s.id, s.depart_date, s.price_adult, s.quota - s.booked AS left_seats, p.title
+       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+       WHERE p.channel = (SELECT p2.channel FROM tour_product p2 WHERE p2.id = ?)
+         AND s.price_adult * ? = ? AND s.status = 1 AND s.depart_date >= CURDATE()
+         AND s.quota - s.booked >= ? AND s.id <> ?
+       ORDER BY s.depart_date LIMIT 10`,
+      [o.product_id, Number(o.qty), Number(o.amount_goods), Number(o.qty), o.session_id]) : []
+    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions }
   },
 
   'GET /c/pass/:id/code': async (req) => {
@@ -225,22 +244,16 @@ const c = {
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     const { reason } = req.body
     if (o.status === 10) { await order.fire(o.order_no, 'CLOSE_TIMEOUT', 'user'); return { closed: true } }
-    if (![20, 30, 40].includes(o.status)) throw new BizError(2002, '当前状态不可退款')
-    const refundNo = 'RF' + Date.now()
-    await q(`INSERT INTO refunds (order_id, refund_no, amount, reason, status, operator) VALUES (?,?,?,?,0,'user')`,
-      [o.id, refundNo, o.amount_pay, reason || '用户申请'])
-    await order.fire(o.order_no, 'REFUND_APPLY', 'user:' + u.uid)
-    const wxr = await wxpay.refund({ orderNo: o.order_no, refundNo, amountFen: Number(o.amount_pay), totalFen: Number(o.amount_pay), reason: reason || '用户退款' })
-    await order.fire(o.order_no, 'REFUND_SUCCESS', 'system', async (cc) => {
-      // 负向冲正：抵扣豆退回 / 已返豆回收 / 凭证作废 / 佣金无效
-      if (Number(o.bean_deducted) > 0) await bean.reverse(u.uid, Number(o.bean_deducted), o.order_no)
-      await pass.revokeForOrder(o.order_no)
-      await promo.invalidateCommission(o.order_no)
-      await cc.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
-      await cc.upd('UPDATE payment SET status = 4 WHERE order_id = ?', [o.id])
-      return '退款成功·全量冲正'
-    })
-    return { refunded: true, wxRefund: wxr.status || 'MOCK' }
+    const r = await refund.fullRefund({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid })
+    await q("UPDATE orders SET close_reason = 'user_refund' WHERE order_no = ? AND status = 70", [o.order_no])
+    return r
+  },
+
+  // 免费改签（§4 拼团定稿）：未成团退款单 → 同频道同价团期，免支付出票
+  'POST /c/orders/:no/rebook': async (req) => {
+    const u = requireUser(req)
+    const { sessionId } = req.body
+    return await group.rebook({ userId: u.uid, orderNo: req.params.no, sessionId })
   },
 }
 
@@ -291,6 +304,33 @@ const m = {
     return r
   },
 
+  // 离线名单（§10）：断网前同步本店有效凭证 + 展示码映射
+  'GET /m/verify/offline-list': async (req) => {
+    const u = requireUser(req)
+    return await pass.offlineListForStore(u.merchantId)
+  },
+
+  // 恢复上传（二次校验）：逐条重走 verifyScan；失败条目进人工队列
+  'POST /m/verify/offline-batch': async (req) => {
+    const u = requireUser(req)
+    const { items = [] } = req.body
+    const results = []
+    for (const it of items.slice(0, 200)) {
+      const payload = String(it.payload || '').trim()
+      if (!payload) continue
+      const r = await pass.verifyScan({ merchantId: u.merchantId, staffId: u.uid, payload, cityCode: '310118' })
+      if (!r.ok) {
+        await q(`INSERT INTO verify_offline_conflict (merchant_id, pass_id, payload, offline_at, reason)
+          VALUES (?,?,?,?,?)`, [u.merchantId, r.passId || null, payload.slice(0, 120), it.offlineAt ? new Date(it.offlineAt) : new Date(), r.reason])
+        results.push({ payload, ok: false, reason: r.reason, conflict: true })
+      } else {
+        results.push({ payload, ok: true, passId: r.passId })
+        await pass.attest('pass_verify', 'pass-' + r.passId, JSON.stringify({ by: u.merchantId, offline: true }))
+      }
+    }
+    return { uploaded: results.filter((r) => r.ok).length, conflicts: results.filter((r) => r.conflict).length, results }
+  },
+
   'GET /m/verify/records': async (req) => {
     const u = requireUser(req)
     return await q(`SELECT v.id, v.pass_id, v.result, v.created_at, o.order_no, p.name pass_name
@@ -307,7 +347,8 @@ const m = {
 
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult, s.status, p.title
+    return await q(`SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
+      s.early_price, s.early_days, s.min_go, s.status, p.title
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
       WHERE p.merchant_id = ? AND s.depart_date >= CURDATE() - INTERVAL 7 DAY ORDER BY s.depart_date`, [u.merchantId])
   },
@@ -319,6 +360,15 @@ const m = {
     if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid]); return { stopped: true } }
     if (action === 'adjust_quota') { await q('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid]); return { quota: value } }
     if (action === 'price') { await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [value, req.params.sid]); return { price: value } }
+    if (action === 'early') {
+      // 早鸟价（旺季武器 §9 P1）：value={price, days}；price=null 关闭
+      const price = value && value.price != null ? Number(value.price) : null
+      const days = value && value.days != null ? Math.max(0, Number(value.days)) : 3
+      if (price != null && price >= (await one('SELECT price_adult FROM tour_session WHERE id = ?', [req.params.sid])).price_adult)
+        throw new BizError(1001, '早鸟价需低于原价')
+      await q('UPDATE tour_session SET early_price = ?, early_days = ? WHERE id = ?', [price, price == null ? null : days, req.params.sid])
+      return { earlyPrice: price, earlyDays: price == null ? null : days }
+    }
     throw new BizError(1001, '未知操作')
   },
 
@@ -767,6 +817,32 @@ const admin = {
     await requireAdmin(req)
     const { orderNo } = req.body
     return await handlePayNotify(orderNo, 'MOCK' + Date.now(), true)
+  },
+
+  // 离线核销冲突人工队列（治理）
+  'GET /admin/verify/conflicts': async (req) => {
+    await requireAdmin(req)
+    const status = req.query.status != null ? Number(req.query.status) : 0
+    return await q('SELECT * FROM verify_offline_conflict WHERE status = ? ORDER BY id DESC LIMIT 100', [status])
+  },
+  'POST /admin/verify/conflicts/:id/resolve': async (req) => {
+    const a = await requireAdmin(req)
+    const { action } = req.body // confirm=确认核销 reject=驳回
+    const row = await one('SELECT * FROM verify_offline_conflict WHERE id = ?', [req.params.id])
+    if (!row || row.status !== 0) throw new BizError(1004, '冲突不存在或已处理')
+    if (action === 'confirm') {
+      if (!row.pass_id) throw new BizError(1001, '无法定位凭证，只能驳回')
+      await pass.adminConfirmPass(row.pass_id, a.uid || 0)
+    }
+    await q('UPDATE verify_offline_conflict SET status = ?, resolved_by = ?, resolved_at = NOW(3) WHERE id = ?',
+      [action === 'confirm' ? 1 : 2, a.uid || 0, req.params.id])
+    return { resolved: action }
+  },
+
+  // 拼团未成团取消（生产=定时任务分钟级；联调/演示=手动触发）
+  'POST /admin/dev/group-cancel': async (req) => {
+    await requireAdmin(req)
+    return { done: await group.cancelDueSessions() }
   },
 
   // 观察期完成（生产=定时任务；联调=手动触发）

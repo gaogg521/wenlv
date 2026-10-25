@@ -32,11 +32,18 @@ export async function fire(orderNo, ev, actor, listener) {
   })
 }
 
+/** 早鸟价判定：出发前 early_days 天（含）之前报名享 early_price；未开启返回原价（总方案 §4） */
+export function priceForSession(s) {
+  const days = Math.floor((new Date(s.depart_date + 'T00:00:00') - new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00')) / 86400000)
+  const early = s.early_price && s.early_days != null && days >= Number(s.early_days) ? Number(s.early_price) : Number(s.price_adult)
+  return { price: early, isEarly: early !== Number(s.price_adult), daysToDepart: days }
+}
+
 /** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
 export async function place({ userId, sessionId, qty, wantedBeans, promoScene, beanHook }) {
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
-  const goods = Number(s.price_adult) * qty
+  const goods = priceForSession(s).price * qty
   const clampCap = Math.floor((goods * (await cfgNum('bean.deduct_max_pct'))) / 10) // 豆数上限（10 豆=1 元）
   const beans = Math.max(0, Math.min(wantedBeans || 0, clampCap))
   const dedFen = beans * 10

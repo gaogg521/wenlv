@@ -35,6 +35,7 @@
           bindtap="pick" data-i="{{index}}">{{item.depart_date}} · 余{{item.left_seats}}</view>
     <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
   </view>
+  <view class="muted2" wx:if="{{selView.extra}}" style="margin:8rpx 8rpx 0;font-size:22rpx;color:#1a9c6b">{{selView.extra}}</view>
 
   <view class="card">
     <view class="kv"><text>出行人数</text>

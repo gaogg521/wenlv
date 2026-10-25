@@ -31,4 +31,25 @@ Page({
         .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none' }))
     }})
   },
+  // 早鸟价（旺季武器 §9 P1）：格式「价格(元),提前天数」；留空提交=关闭早鸟
+  setEarly(e) {
+    const id = e.currentTarget.dataset.id
+    const cur = e.currentTarget.dataset.early ? (Number(e.currentTarget.dataset.early) / 100).toFixed(0) + ',' + e.currentTarget.dataset.earlydays : ''
+    wx.showModal({ title: '早鸟价设置', editable: true, content: cur,
+      placeholderText: '早鸟价(元),提前天数 如 238,7 · 清空=关闭', success: (r) => {
+        if (!r.confirm) return
+        const txt = String(r.content || '').trim()
+        if (!txt) {
+          api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: null } })
+            .then(() => { wx.showToast({ title: '早鸟已关闭' }); this.fetch() })
+          return
+        }
+        const parts = txt.split(/[,，]/)
+        const yuan = Number(parts[0]), days = Number(parts[1] || 7)
+        if (!yuan || yuan <= 0 || !(days >= 0)) return wx.showToast({ title: '格式：238,7', icon: 'none' })
+        api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: Math.round(yuan * 100), days } })
+          .then(() => { wx.showToast({ title: '早鸟 ¥' + yuan + ' · 提前' + days + '天' }); this.fetch() })
+          .catch((err) => wx.showToast({ title: err.msg || '设置失败', icon: 'none' }))
+      }})
+  },
 })
