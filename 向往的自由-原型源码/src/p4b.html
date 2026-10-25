@@ -1,0 +1,377 @@
+<script>
+/* ==========================================================================
+   视觉资产生成器 · 场景插画（纯 SVG，零外部依赖）
+   每条线路 / 商品 / 剧本都用不同 seed 生成独一无二的封面
+   ========================================================================== */
+function srnd(seed){ let s=(seed>>>0)||1; return function(){ s^=s<<13; s>>>=0; s^=s>>>17; s^=s<<5; s>>>=0; return s/4294967296; }; }
+const _r = (R,a,b)=>a+(b-a)*R();
+
+const SCENE_CFG = {
+  bamboo:    { sky:['#dcefe0','#fdf9e8'], sun:{x:312,y:64,r:30,c:'#ffedb8',o:.95}, far:'#c4dcc6', mid:'#84ab90', near:'#3f6a55', ground:'#22453a', fg:'bamboo',  water:false, haze:.42, vig:.30 },
+  redhall:   { sky:['#f9d4b4','#f6e2d0'], sun:{x:96,y:64,r:26,c:'#fff0cf',o:.75},  far:'#d9b7a0', mid:'#b3846d', near:'#7d4038', ground:'#5c2f2a', fg:'town',    water:false, haze:.24, vig:.30 },
+  garden:    { sky:['#d5e6e4','#f6f4ea'], sun:{x:252,y:54,r:20,c:'#fffbf0',o:.66},  far:'#c3d4d1', mid:'#8ba5a1', near:'#4e6b62', ground:'#2f4a42', fg:'garden',  water:true,  haze:.34, vig:.28, lanterns:true },
+  camp:      { sky:['#13203f','#3a4f86'], sun:{x:302,y:50,r:13,c:'#e8eeff',o:.9},  far:'#3a4f80', mid:'#2b3a63', near:'#1a2542', ground:'#111a30', fg:'camp',    water:false, haze:.16, vig:.42, stars:true },
+  lake:      { sky:['#bfe6f5','#f0fbfe'], sun:{x:206,y:42,r:24,c:'#ffffff',o:.8},   far:'#cfe9f2', mid:'#94c8dc', near:'#4f92ab', ground:'#2f6d86', fg:'boat',    water:true,  haze:.20, vig:.18 },
+  watertown: { sky:['#4b3a63','#f0a878'], sun:{x:322,y:88,r:28,c:'#ffd9a0',o:.85}, far:'#8f7c95', mid:'#6a5872', near:'#40334a', ground:'#2a2434', fg:'town',    water:true,  haze:.30, vig:.38, lanterns:true },
+  mountain:  { sky:['#d3e4ea','#f5f8f3'], sun:{x:124,y:52,r:22,c:'#fffbe8',o:.62}, far:'#ccdad3', mid:'#9cb4a7', near:'#5f8168', ground:'#365244', fg:'trees',   water:false, haze:.44, vig:.26 },
+  autumn:    { sky:['#f8dcc0','#fdf3e4'], sun:{x:286,y:60,r:26,c:'#ffe9b8',o:.8},  far:'#e3c4a4', mid:'#c08f66', near:'#8a5334', ground:'#61391f', fg:'town',    water:false, haze:.30, vig:.30 },
+  island:    { sky:['#a8e0f0','#e9f8fb'], sun:{x:330,y:54,r:26,c:'#ffffff',o:.85}, far:'#bfe4ea', mid:'#7fc6cf', near:'#3f9aa8', ground:'#1f7a8c', fg:'palms',   water:true,  haze:.20, vig:.22 },
+  jinggang:  { sky:['#dcd9cf','#f6f2e6'], sun:{x:150,y:52,r:20,c:'#fff8dc',o:.5},  far:'#c3c8bd', mid:'#8e9a8c', near:'#566659', ground:'#38463c', fg:'trees',   water:false, haze:.52, vig:.30, flag:true },
+  city:      { sky:['#16233d','#3b5378'], sun:{x:74,y:52,r:18,c:'#ffe4a8',o:.6},   far:'#2c3f60', mid:'#1e2e49', near:'#141f33', ground:'#0d1522', fg:'skyline', water:true,  haze:.14, vig:.40, stars:true, lights:true },
+  tea:       { sky:['#d8e8d6','#f6f7ec'], sun:{x:288,y:58,r:24,c:'#fff6cf',o:.7},  far:'#c3d8bd', mid:'#8fb387', near:'#567a4f', ground:'#37542f', fg:'terraces',water:false, haze:.34, vig:.24 },
+  stage:     { sky:['#241c33','#4b3557'], sun:{x:200,y:40,r:30,c:'#ffd9c0',o:.5},  far:'#2e2542', mid:'#241d34', near:'#191428', ground:'#100d1a', fg:'stage',   water:false, haze:.20, vig:.46 },
+};
+
+/* 起伏山脊（折线山峰 + 柔和肩部） */
+function _ridge(R, baseY, amp, W, H, steps){
+  var pts = [], i;
+  for(i=0;i<=steps;i++){
+    var x = W*i/steps;
+    var peak = (i%2===1);
+    var y = baseY - amp*(peak ? 0.62+0.55*R() : 0.10+0.28*R());
+    pts.push([x, y]);
+  }
+  var d = 'M0 '+baseY;
+  for(i=0;i<pts.length;i++){
+    var p = pts[i];
+    if(i===0){ d += ' L '+p[0].toFixed(1)+' '+p[1].toFixed(1); continue; }
+    var q = pts[i-1];
+    var mx = (q[0]+p[0])/2, my = Math.min(q[1],p[1]) - amp*0.06;
+    d += ' Q '+mx.toFixed(1)+' '+my.toFixed(1)+' '+p[0].toFixed(1)+' '+p[1].toFixed(1);
+  }
+  return d + ' L '+W+' '+H+' L 0 '+H+' Z';
+}
+
+/* 江南屋顶：三角瓦顶 + 翘角 */
+function _roof(x, y, w, h, fill){
+  const e = w*0.09;
+  return '<path d="M'+x+' '+(y+h)+' Q '+(x+e*0.4)+' '+(y+h*0.55)+' '+(x+w*0.5)+' '+y+
+         ' Q '+(x+w-e*0.4)+' '+(y+h*0.55)+' '+(x+w)+' '+(y+h)+
+         ' q '+(-e*0.5)+' '+h*0.16+' '+(-e)+' 0 L '+x+' '+(y+h)+' Z" fill="'+fill+'"/>';
+}
+
+/* 前景：水乡古镇 */
+function _fgTown(R, c, W, H, gy){
+  let g='', n=4+Math.floor(R()*2);
+  for(let i=0;i<n;i++){
+    const w=_r(R,54,92), h=_r(R,30,46), x=(i*W/n)-_r(R,6,20), y=gy-h-_r(R,0,16);
+    const wallT = y+h*0.55;
+    g += '<rect x="'+x.toFixed(1)+'" y="'+wallT.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(gy-wallT+2).toFixed(1)+'" fill="'+c.near+'" opacity=".92"/>';
+    g += _roof(x-w*0.06, y, w*1.12, h*0.95, c.ground);
+    /* 窗 */
+    const wins = Math.max(1, Math.round(w/34));
+    for(let k=0;k<wins;k++){
+      const wx = x + w*(k+0.5)/wins - 4;
+      g += '<rect x="'+wx.toFixed(1)+'" y="'+(wallT+7).toFixed(1)+'" width="8" height="10" rx="1" fill="'+(c.lanterns?'#ffcf8a':'#ffffff')+'" opacity="'+(c.lanterns?.85:.22)+'"/>';
+    }
+    if(c.lanterns){
+      const lx = x + w*0.5, ly = wallT - 4;
+      g += '<circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="8" fill="#ffb45c" opacity=".28"/>';
+      g += '<ellipse cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" rx="2.6" ry="3.4" fill="#ff9a3c"/>';
+    }
+  }
+  return g;
+}
+/* 竹林：竿身带节 + 叶簇 + 前景虚化叶 */
+function _fgBamboo(R, c, W, H, gy){
+  let g='';
+  /* 后景竹竿（浅，制造纵深） */
+  for(let i=0;i<8;i++){
+    const x=_r(R,0,W), w=_r(R,1.8,3), top=_r(R,0,44);
+    g += '<rect x="'+x.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(gy-top+6).toFixed(1)+'" fill="'+c.mid+'" opacity=".38" rx="'+(w/2).toFixed(1)+'"/>';
+  }
+  /* 中景竹竿（深色，带竹节与叶簇） */
+  for(let i=0;i<6;i++){
+    const x=_r(R,8,W-16), w=_r(R,3.6,6), top=_r(R,-12,26);
+    g += '<rect x="'+x.toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(gy-top+8).toFixed(1)+'" fill="'+c.near+'" rx="'+(w/2).toFixed(1)+'"/>';
+    for(let y=top+40; y<gy-6; y+=46){
+      g += '<rect x="'+(x-1.2).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(w+2.4).toFixed(1)+'" height="1.5" fill="'+c.ground+'" opacity=".45"/>';
+    }
+    for(let k=0;k<4;k++){
+      const ly=_r(R,top+14,top+128), dir=R()>.5?1:-1, base=x+w/2;
+      g += '<g opacity=".85">';
+      for(let j=0;j<3;j++){
+        const len=_r(R,10,19), dy=(j-1)*5.5, ang=dy*0.02*dir;
+        const ex=base+dir*len, ey=ly+dy+len*0.34;
+        g += '<path d="M'+base.toFixed(1)+' '+(ly+dy).toFixed(1)
+          + ' Q '+(base+dir*len*0.55).toFixed(1)+' '+(ly+dy-5).toFixed(1)+' '+ex.toFixed(1)+' '+ey.toFixed(1)
+          + ' Q '+(base+dir*len*0.5).toFixed(1)+' '+(ly+dy+3.5).toFixed(1)+' '+base.toFixed(1)+' '+(ly+dy).toFixed(1)+' Z" fill="'+c.near+'"/>';
+      }
+      g += '</g>';
+    }
+  }
+  /* 前景大叶片（近景虚化） */
+  g += '<g opacity=".5">';
+  for(let k=0;k<6;k++){
+    const px=_r(R,0,W), py=_r(R,gy-46,gy-4);
+    g += '<ellipse cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" rx="'+_r(R,15,26).toFixed(1)+'" ry="3.2" fill="'+c.ground+'" transform="rotate('+_r(R,-42,42).toFixed(0)+' '+px.toFixed(1)+' '+py.toFixed(1)+')"/>';
+  }
+  g += '</g>';
+  return g;
+}
+/* 营地 */
+function _fgCamp(R, c, W, H, gy){
+  let g='';
+  g += '<path d="M0 '+gy+' Q 90 '+(gy-16)+' 180 '+gy+' T 400 '+gy+' L400 '+H+' L0 '+H+' Z" fill="'+c.ground+'"/>';
+  /* 帐篷（暖色布 + 深色轮廓 + 内透光） */
+  const tx=246, tw=84, th=54;
+  g += '<path d="M'+tx+' '+gy+' L'+(tx+tw/2)+' '+(gy-th)+' L'+(tx+tw)+' '+gy+' Z" fill="#e8a763"/>';
+  g += '<path d="M'+(tx+tw/2)+' '+(gy-th)+' L'+(tx+tw*0.76)+' '+gy+' L'+(tx+tw*0.24)+' '+gy+' Z" fill="#ffdda8" opacity=".9"/>';
+  g += '<path d="M'+tx+' '+gy+' L'+(tx+tw/2)+' '+(gy-th)+' L'+(tx+tw)+' '+gy+'" stroke="'+c.near+'" stroke-width="1.8" fill="none" opacity=".85"/>';
+  g += '<rect x="'+(tx+tw/2-5)+'" y="'+(gy-15)+'" width="10" height="15" rx="2" fill="#8a5a2b" opacity=".5"/>';
+  /* 篝火 */
+  const fx=146;
+  g += '<circle cx="'+fx+'" cy="'+(gy-8)+'" r="30" fill="#ff9a3c" opacity=".16"/>';
+  g += '<ellipse cx="'+fx+'" cy="'+(gy-1)+'" rx="14" ry="3.4" fill="'+c.ground+'" opacity=".85"/>';
+  g += '<path d="M'+fx+' '+(gy-24)+' q 9 11 5 18 q -2 4 -5 4 q -3 0 -5 -4 q -4 -7 5 -18 Z" fill="#ffb45c"/>';
+  g += '<path d="M'+fx+' '+(gy-13)+' q 5 6 2.6 10 q -1.4 2.4 -2.6 2.4 q -1.2 0 -2.6 -2.4 q -2.4 -4 2.6 -10 Z" fill="#ffe9b8"/>';
+  /* 近处星点 */
+  for(let i=0;i<7;i++){
+    g += '<circle cx="'+_r(R,10,W-10).toFixed(1)+'" cy="'+_r(R,8,62).toFixed(1)+'" r="'+_r(R,.9,1.7).toFixed(1)+'" fill="#fff" opacity="'+_r(R,.55,.95).toFixed(2)+'"/>';
+  }
+  return g;
+}
+/* 皮划艇（水面主体） */
+function _fgBoat(R, c, W, H, gy){
+  var bx=_r(R,110,180), by=gy+18, g='';
+  var hull='#12384a', man='#0e2a38';
+  g += '<ellipse cx="'+bx.toFixed(1)+'" cy="'+(by+10).toFixed(1)+'" rx="46" ry="8" fill="#ffffff" opacity=".16"/>';
+  /* 艇身 */
+  g += '<path d="M'+(bx-52).toFixed(1)+' '+by.toFixed(1)+' q 52 19 104 0 q -13 17 -52 17 q -39 0 -52 -17 Z" fill="'+hull+'"/>';
+  g += '<path d="M'+(bx-36).toFixed(1)+' '+(by-0.6).toFixed(1)+' q 36 10 72 0" stroke="#ffffff" stroke-width="1.6" fill="none" opacity=".5"/>';
+  /* 人（坐姿 + 划桨） */
+  g += '<rect x="'+(bx-5).toFixed(1)+'" y="'+(by-19).toFixed(1)+'" width="10" height="17" rx="4.6" fill="'+man+'"/>';
+  g += '<circle cx="'+bx.toFixed(1)+'" cy="'+(by-23).toFixed(1)+'" r="4.8" fill="'+man+'"/>';
+  g += '<rect x="'+(bx-6.4).toFixed(1)+'" y="'+(by-15).toFixed(1)+'" width="12.8" height="2.4" rx="1.2" fill="#ffd166" opacity=".92"/>';
+  g += '<path d="M'+(bx-28).toFixed(1)+' '+(by-4).toFixed(1)+' L '+(bx+28).toFixed(1)+' '+(by-24).toFixed(1)+'" stroke="'+man+'" stroke-width="2.4" stroke-linecap="round"/>';
+  g += '<ellipse cx="'+(bx+31).toFixed(1)+'" cy="'+(by-25).toFixed(1)+'" rx="5" ry="2.3" fill="'+man+'" transform="rotate(-26 '+(bx+31).toFixed(1)+' '+(by-25).toFixed(1)+')"/>';
+  /* 水花 */
+  g += '<path d="M'+(bx-50).toFixed(1)+' '+(by+7).toFixed(1)+' q 8 -6 16 0 M'+(bx+34).toFixed(1)+' '+(by+8).toFixed(1)+' q 8 -6 16 0" stroke="#ffffff" stroke-width="1.8" fill="none" opacity=".55"/>';
+  /* 远处第二艘 */
+  var bx2=bx+_r(R,88,120);
+  g += '<path d="M'+(bx2-14).toFixed(1)+' '+(by-4).toFixed(1)+' q 14 5 28 0 q -4 5 -14 5 q -10 0 -14 -5 Z" fill="'+hull+'" opacity=".55"/>';
+  g += '<rect x="'+(bx2-1.6).toFixed(1)+'" y="'+(by-13).toFixed(1)+'" width="3.2" height="9" rx="1.4" fill="'+man+'" opacity=".7"/>';
+  return g;
+}
+/* 树丛 + 农舍（近景） */
+function _fgTrees(R, c, W, H, gy){
+  var g='', i;
+  /* 远景树 */
+  for(i=0;i<6;i++){
+    var x=_r(R,-10,W), h=_r(R,44,84), r=_r(R,13,24);
+    g += '<rect x="'+(x-1.4).toFixed(1)+'" y="'+(gy-h).toFixed(1)+'" width="2.8" height="'+h.toFixed(1)+'" fill="'+c.ground+'" opacity=".7"/>';
+    for(var k=0;k<3;k++){
+      g += '<ellipse cx="'+(x+_r(R,-r,r*0.7)).toFixed(1)+'" cy="'+(gy-h+_r(R,-8,16)).toFixed(1)+'" rx="'+r.toFixed(1)+'" ry="'+(r*0.72).toFixed(1)+'" fill="'+c.mid+'" opacity="'+_r(R,.55,.85).toFixed(2)+'"/>';
+    }
+  }
+  /* 农舍 */
+  var hx=_r(R,240,300), hw=_r(R,46,62), hh=_r(R,26,34);
+  g += '<rect x="'+hx.toFixed(1)+'" y="'+(gy-hh).toFixed(1)+'" width="'+hw.toFixed(1)+'" height="'+hh.toFixed(1)+'" fill="'+c.near+'"/>';
+  g += '<path d="M'+(hx-6).toFixed(1)+' '+(gy-hh).toFixed(1)+' L '+(hx+hw/2).toFixed(1)+' '+(gy-hh-19).toFixed(1)+' L '+(hx+hw+6).toFixed(1)+' '+(gy-hh).toFixed(1)+' Z" fill="'+c.ground+'"/>';
+  g += '<rect x="'+(hx+hw*0.42).toFixed(1)+'" y="'+(gy-hh*0.55).toFixed(1)+'" width="9" height="'+(hh*0.55).toFixed(1)+'" fill="#ffd48a" opacity=".7"/>';
+  /* 近景大树（左右框景） */
+  [[26,1],[W-30,-1]].forEach(function(pp){
+    var x=pp[0], dir=pp[1], h=_r(R,96,130), tw=_r(R,5,8);
+    g += '<rect x="'+(x-tw/2).toFixed(1)+'" y="'+(gy-h).toFixed(1)+'" width="'+tw.toFixed(1)+'" height="'+(h+4).toFixed(1)+'" rx="2" fill="'+c.ground+'"/>';
+    for(var k2=0;k2<4;k2++){
+      g += '<ellipse cx="'+(x+dir*_r(R,0,16)).toFixed(1)+'" cy="'+(gy-h+_r(R,-4,26)).toFixed(1)+'" rx="'+_r(R,16,27).toFixed(1)+'" ry="'+_r(R,13,20).toFixed(1)+'" fill="'+c.ground+'" opacity="'+_r(R,.7,.95).toFixed(2)+'"/>';
+    }
+  });
+  return g;
+}
+/* 棕榈 */
+function _fgPalms(R, c, W, H, gy){
+  let g='';
+  [[58,1],[340,-1]].forEach(function(p){
+    const x=p[0], dir=p[1], h=_r(R,70,96);
+    g += '<path d="M'+x+' '+gy+' q '+(dir*6)+' '+(-h*0.6)+' '+(dir*12)+' '+(-h)+'" stroke="'+c.ground+'" stroke-width="4" fill="none" stroke-linecap="round"/>';
+    for(let k=0;k<5;k++){
+      const a=(-140+k*26)*Math.PI/180, lx=x+dir*12+Math.cos(a)*40, ly=gy-h+Math.sin(a)*26;
+      g += '<path d="M'+(x+dir*12)+' '+(gy-h)+' Q '+(x+dir*12+Math.cos(a)*22)+' '+(gy-h+Math.sin(a)*8-6)+' '+lx+' '+ly+'" stroke="'+c.near+'" stroke-width="3.2" fill="none" stroke-linecap="round"/>';
+    }
+  });
+  return g;
+}
+/* 天际线 */
+function _fgSkyline(R, c, W, H, gy){
+  let g='';
+  for(let i=0;i<11;i++){
+    const w=_r(R,20,42), h=_r(R,34,86), x=i*W/11+_r(R,-6,4), y=gy-h;
+    g += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+(h+4).toFixed(1)+'" fill="'+c.ground+'" opacity="'+_r(R,.8,1).toFixed(2)+'"/>';
+    for(let k=0;k<6;k++){
+      if(R()>.5) continue;
+      g += '<rect x="'+(x+6+((k%2)*11)).toFixed(1)+'" y="'+(y+10+Math.floor(k/2)*13).toFixed(1)+'" width="4" height="5" fill="#ffd98a" opacity="'+_r(R,.25,.8).toFixed(2)+'"/>';
+    }
+  }
+  return g;
+}
+/* 江南园林：白墙黛瓦 + 月洞门 + 亭 + 垂柳 */
+function _fgGarden(R, c, W, H, gy){
+  var g='', i;
+  var wallTop = gy-44;
+  g += '<rect x="-12" y="'+wallTop+'" width="'+(W+24)+'" height="'+(gy-wallTop+3)+'" fill="#f3efe3"/>';
+  g += '<rect x="-12" y="'+(wallTop-7)+'" width="'+(W+24)+'" height="8" fill="'+c.ground+'"/>';
+  for(i=0;i<14;i++){ g += '<rect x="'+(i*30)+'" y="'+(wallTop-10)+'" width="14" height="3.4" rx="1" fill="'+c.ground+'" opacity=".65"/>'; }
+  /* 月洞门 */
+  var dx=104;
+  g += '<circle cx="'+dx+'" cy="'+wallTop+'" r="26" fill="'+c.near+'" opacity=".5"/>';
+  g += '<circle cx="'+dx+'" cy="'+wallTop+'" r="26" fill="none" stroke="#ddd6c6" stroke-width="3.5"/>';
+  /* 漏窗 */
+  for(i=0;i<2;i++){
+    var wx=196+i*58;
+    g += '<rect x="'+wx+'" y="'+(wallTop+13)+'" width="30" height="22" rx="3" fill="'+c.near+'" opacity=".42"/>';
+    g += '<path d="M'+(wx+15)+' '+(wallTop+13)+' v 22 M'+wx+' '+(wallTop+24)+' h 30" stroke="#e6dfd0" stroke-width="1.6"/>';
+  }
+  /* 亭子 */
+  var px=298, py=wallTop-32;
+  g += '<path d="M'+(px-24)+' '+(py+9)+' Q '+(px+28)+' '+(py-24)+' '+(px+80)+' '+(py+9)+' Z" fill="'+c.ground+'"/>';
+  g += '<rect x="'+(px)+'" y="'+(py+9)+'" width="3.6" height="'+(gy-py-9)+'" fill="'+c.ground+'"/>';
+  g += '<rect x="'+(px+54)+'" y="'+(py+9)+'" width="3.6" height="'+(gy-py-9)+'" fill="'+c.ground+'"/>';
+  g += '<rect x="'+(px-2)+'" y="'+(py+28)+'" width="62" height="3.2" fill="'+c.ground+'" opacity=".85"/>';
+  /* 垂柳 */
+  for(i=0;i<8;i++){
+    var ex = 44 + _r(R,-18,28), ey = gy - _r(R,8,46);
+    g += '<path d="M44 '+(wallTop-18)+' Q '+(44+_r(R,-16,16)).toFixed(1)+' '+(gy-46).toFixed(1)+' '+ex.toFixed(1)+' '+ey.toFixed(1)+'" stroke="'+c.mid+'" stroke-width="1.9" fill="none" opacity=".85"/>';
+    g += '<ellipse cx="'+ex.toFixed(1)+'" cy="'+ey.toFixed(1)+'" rx="2.4" ry="1.4" fill="'+c.mid+'" opacity=".9"/>';
+  }
+  return g;
+}
+/* 梯田 */
+function _fgTerraces(R, c, W, H, gy){
+  let g='';
+  for(let i=0;i<5;i++){
+    const y=gy+ i*11, off=_r(R,-8,8);
+    g += '<path d="M-10 '+y+' Q 120 '+(y-14+off)+' 410 '+(y+6)+'" stroke="'+c.near+'" stroke-width="'+(11+i*1.4)+'" fill="none" opacity="'+(0.9-i*0.12).toFixed(2)+'" stroke-linecap="round"/>';
+  }
+  return g;
+}
+/* 舞台 */
+function _fgStage(R, c, W, H, gy){
+  let g='';
+  g += '<path d="M120 0 L60 260 L340 260 L280 0 Z" fill="#ffffff" opacity=".05"/>';
+  g += '<ellipse cx="200" cy="'+(gy+16)+'" rx="120" ry="20" fill="#ffd0a0" opacity=".10"/>';
+  g += '<path d="M0 0 h44 q -14 130 6 260 h -50 Z" fill="'+c.ground+'" opacity=".85"/>';
+  g += '<path d="M400 0 h-44 q 14 130 -6 260 h 50 Z" fill="'+c.ground+'" opacity=".85"/>';
+  g += '<ellipse cx="200" cy="'+(gy+8)+'" rx="26" ry="6" fill="'+c.ground+'"/>';
+  return g;
+}
+
+
+
+function sceneSVG(kind, seed, cls){
+  const c = SCENE_CFG[kind] || SCENE_CFG.bamboo;
+  const R = srnd(seed || 7);
+  const W = 400, H = 200, uid = 's' + (seed||7) + '_' + kind;
+  const gy = c.water ? H*0.60 : H*0.72;
+  const fgMap = { town:_fgTown, bamboo:_fgBamboo, camp:_fgCamp, boat:_fgBoat, trees:_fgTrees, palms:_fgPalms, skyline:_fgSkyline, terraces:_fgTerraces, stage:_fgStage };
+  let fg = (fgMap[c.fg]||_fgTown)(R, c, W, H, gy);
+
+  let stars = '';
+  if(c.stars){
+    for(let i=0;i<46;i++){
+      stars += '<circle cx="'+_r(R,0,W).toFixed(1)+'" cy="'+_r(R,0,H*0.55).toFixed(1)+'" r="'+_r(R,.5,1.5).toFixed(1)+'" fill="#fff" opacity="'+_r(R,.25,.9).toFixed(2)+'"/>';
+    }
+  }
+  let clouds = '';
+  for(let i=0;i<3;i++){
+    const cx=_r(R,20,W-20), cy=_r(R,18,74), rx=_r(R,34,70), ry=rx*0.26;
+    clouds += '<ellipse cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" rx="'+rx.toFixed(1)+'" ry="'+ry.toFixed(1)+'" fill="#ffffff" opacity="'+_r(R,.10,.26).toFixed(2)+'"/>';
+  }
+  const sun = c.sun;
+  const waterBand = c.water ? '<rect x="0" y="'+gy+'" width="'+W+'" height="'+(H-gy)+'" fill="url(#'+uid+'w)"/>' : '';
+  let waves = '';
+  if(c.water){
+    for(let i=0;i<9;i++){
+      const y=gy+6+i*((H-gy)/9), w=_r(R,20,70), x=_r(R,0,W-w);
+      waves += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="1.2" rx=".6" fill="#ffffff" opacity="'+_r(R,.08,.28).toFixed(2)+'"/>';
+    }
+  }
+  const reflect = c.water ? '<g transform="translate(0,'+(2*gy)+') scale(1,-1)" opacity=".16">'+fg+'</g>' : '';
+  const flag = c.flag ? '<g><rect x="86" y="70" width="2.4" height="52" fill="#5a4a3a"/><path d="M88 72 q 20 6 34 0 q -4 14 -34 12 Z" fill="#c92a2a" opacity=".9"/></g>' : '';
+
+  return '<svg class="scene '+(cls||'')+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs>'
+    + '<linearGradient id="'+uid+'k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+c.sky[0]+'"/><stop offset="1" stop-color="'+c.sky[1]+'"/></linearGradient>'
+    + '<radialGradient id="'+uid+'g"><stop offset="0" stop-color="'+sun.c+'" stop-opacity="'+(sun.o)+'"/><stop offset="1" stop-color="'+sun.c+'" stop-opacity="0"/></radialGradient>'
+    + (c.water ? '<linearGradient id="'+uid+'w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+c.near+'"/><stop offset="1" stop-color="'+c.ground+'"/></linearGradient>' : '')
+    + '<linearGradient id="'+uid+'h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset=".55" stop-color="#ffffff" stop-opacity="'+(c.haze*0.55).toFixed(2)+'"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>'
+    + '<radialGradient id="'+uid+'v" cx=".5" cy=".45" r=".78"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="'+(c.vig)+'"/></radialGradient>'
+    + '</defs>'
+    + '<rect width="'+W+'" height="'+H+'" fill="url(#'+uid+'k)"/>'
+    + '<circle cx="'+sun.x+'" cy="'+sun.y+'" r="'+(sun.r*3.4)+'" fill="url(#'+uid+'g)"/>'
+    + '<circle cx="'+sun.x+'" cy="'+sun.y+'" r="'+sun.r+'" fill="'+sun.c+'" opacity="'+(sun.o*0.55).toFixed(2)+'"/>'
+    + stars + clouds
+    + '<path d="'+_ridge(R, gy-46, 36, W, H, 5)+'" fill="'+c.far+'" opacity=".7"/>'
+    + '<path d="'+_ridge(R, gy-20, 24, W, H, 7)+'" fill="'+c.mid+'" opacity=".9"/>'
+    + '<path d="'+_ridge(R, gy, 20, W, H, 6)+'" fill="'+c.near+'"/>'
+    + waterBand + reflect + flag + fg + waves
+    + '<rect y="'+(gy-26)+'" width="'+W+'" height="46" fill="url(#'+uid+'h)"/>'
+    + '<rect width="'+W+'" height="'+H+'" fill="url(#'+uid+'v)"/>'
+    + '</svg>';
+}
+/* 场景映射：为每条线路 / 商品 / 剧本挑选最贴切的场景 */
+const SCENE_MAP = {
+  1:'bamboo', 2:'redhall', 3:'garden', 4:'camp', 5:'lake', 6:'watertown',
+  7:'mountain', 8:'autumn', 9:'island', 10:'jinggang',
+  101:'bamboo', 102:'autumn', 103:'lake', 104:'watertown', 105:'mountain', 106:'camp',
+  201:'stage', 202:'tea', 203:'city', 204:'garden',
+};
+const CAT_SCENE = { yoga:'bamboo', sister:'garden', single:'camp', script:'stage', sport:'lake', family:'mountain', red:'jinggang', abroad:'island' };
+function sceneOf(o){
+  if(!o) return 'bamboo';
+  return o.sc || SCENE_MAP[o.id] || CAT_SCENE[o.cat] || 'bamboo';
+}
+function seedOf(o){ return ((o && o.id) || 1) * 137 + 11; }
+
+/* ===== 剧本闯关 · 朱家角地图（全程序化生成，无外部图片）===== */
+function scriptMapSVG(curId, doneIds){
+  const W = 400, H = 250;
+  const R = srnd(20261019);
+  const nodes = DB.scriptData.nodes;
+  let g = '';
+  /* 宣纸底 + 纸纹 */
+  g += '<rect width="'+W+'" height="'+H+'" fill="#f6f1e7"/>';
+  for(let i=0;i<24;i++){
+    g += '<line x1="'+_r(R,0,W).toFixed(1)+'" y1="0" x2="'+_r(R,0,W).toFixed(1)+'" y2="'+H+'" stroke="#e6decb" stroke-width="'+_r(R,.4,1).toFixed(1)+'" opacity=".55"/>';
+  }
+  /* 远山 */
+  g += '<path d="M0 92 q 58 -32 118 -6 q 58 26 116 -10 q 62 -32 166 4 L '+W+' 0 L0 0 Z" fill="#dfe7dc" opacity=".85"/>';
+  /* 漕港河 */
+  const river = 'M -10 212 C 70 198, 96 150, 168 148 S 300 178, 330 96 S 380 40, 412 34';
+  g += '<path d="'+river+'" fill="none" stroke="#a9c9d0" stroke-width="26" stroke-linecap="round" opacity=".8"/>';
+  g += '<path d="'+river+'" fill="none" stroke="#d6ebef" stroke-width="12" stroke-linecap="round"/>';
+  for(let i=0;i<14;i++){
+    const x = _r(R, 24, W-24), y = 158 + Math.sin(i*1.1)*42 + _r(R,-12,12);
+    g += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+_r(R,10,26).toFixed(1)+'" height="1.4" rx=".7" fill="#8fb8c0" opacity=".4"/>';
+  }
+  /* 街巷虚线 */
+  const road = 'M ' + nodes.map(n=>(n.x/100*W).toFixed(1)+' '+(n.y/100*H).toFixed(1)).join(' L ');
+  g += '<path d="'+road+'" fill="none" stroke="#c9b896" stroke-width="7" stroke-dasharray="1 7" stroke-linecap="round" opacity=".9"/>';
+  /* 节点 */
+  nodes.forEach(n=>{
+    const px = n.x/100*W, py = n.y/100*H;
+    const isCur = n.id===curId, isDone = (doneIds||[]).indexOf(n.id)>=0;
+    const c = isDone ? '#0f9d58' : (isCur ? '#e87722' : '#8a919c');
+    g += '<circle cx="'+px+'" cy="'+py+'" r="13" fill="#fff" stroke="'+c+'" stroke-width="'+(isCur?3:2)+'"/>';
+    if(isDone){
+      g += '<path d="M '+(px-5)+' '+(py+1)+' l 4 5 l 7 -9" fill="none" stroke="'+c+'" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>';
+    } else {
+      g += '<circle cx="'+px+'" cy="'+py+'" r="4" fill="'+c+'"/>';
+    }
+    if(isCur){
+      g += '<circle cx="'+px+'" cy="'+py+'" r="13" fill="none" stroke="'+c+'" stroke-width="2" opacity=".75"><animate attributeName="r" from="13" to="26" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" from=".75" to="0" dur="1.6s" repeatCount="indefinite"/></circle>';
+      g += '<g transform="translate('+(px-8)+','+(py-36)+')"><rect x="0" y="0" width="2" height="14" fill="#5a4a3a"/><path d="M2 1 q 12 4 16 0 q -3 10 -16 8 Z" fill="#e87722"/></g>';
+    }
+    const anchor = px > W*0.78 ? 'end' : (px < W*0.2 ? 'start' : 'middle');
+    const tx = anchor==='end' ? px+16 : (anchor==='start' ? px-16 : px);
+    g += '<text x="'+tx+'" y="'+(py+30)+'" text-anchor="'+anchor+'" font-size="11" font-weight="800" fill="#4a3f2f">'+n.n+'</text>';
+    if(isCur){ g += '<text x="'+tx+'" y="'+(py+43)+'" text-anchor="'+anchor+'" font-size="8" fill="#e87722">当前位置</text>'; }
+  });
+  /* 罗盘 */
+  g += '<g transform="translate(364,28)" opacity=".75"><circle r="13" fill="none" stroke="#8a919c" stroke-width="1.4"/><path d="M0 -9 L 4 0 L 0 9 L -4 0 Z" fill="#c92a2a"/><text y="-15" text-anchor="middle" font-size="8" fill="#4a3f2f">北</text></g>';
+  /* 图例 */
+  g += '<g transform="translate(14,'+(H-24)+')"><circle r="5" fill="#0f9d58"/><text x="10" y="3.5" font-size="8.5" fill="#4a3f2f">已完成</text><circle cx="72" r="5" fill="#e87722"/><text x="82" y="3.5" font-size="8.5" fill="#4a3f2f">当前位置</text><circle cx="152" r="5" fill="#fff" stroke="#8a919c" stroke-width="1.6"/><text x="162" y="3.5" font-size="8.5" fill="#4a3f2f">待解锁</text></g>';
+  return '<svg class="script-map" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+}
+
+</script>

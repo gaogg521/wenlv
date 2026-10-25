@@ -165,8 +165,20 @@ code: 10, message: 'Error: 错误 undefined (code 10)'
 | — | 截图 | `api/automator-shots-cli/`（逐页 8 张）、`api/automator-shots/`（链路 4 张） |
 
 ---
+## 8.wanderlust 小程序 CLI 调试（2026-10-25 打通经验参考）
+**一键命令**：`bash C:/Users/allenzhao/Desktop/文旅项目/wanderlust/debug-cli.sh`（连跑两遍全绿：7 页逐页检查 + 黄金链路）
+- 结构：`wanderlust/mini-a` = 正式端（appid `wx39208e393c439be5`）；`mini-b` = touristappid 测试号（只能模拟器）；`api` = 后端 + 自动化脚本（`api/test/automator-*.mjs`，连 `ws://127.0.0.1:9421`）。
+- **IDE 装在 D 盘**：`D:/Program Files (x86)\Tencent\微信web开发者工具\cli.bat` —— 所有文档/默认探测只查 C 盘，必须自己加 D 盘候选。
+- 五个必踩坑（缺一个就"CLI 不行"）：
+  1. 路径形式：给 `cli.bat` 传 `pwd -W` 的 `C:/...`，不能传 `/c/...`；
+  2. `MSYS_NO_PATHCONV=1`：否则 `node ... /pages/xxx` 被改写成 PortableGit 路径 → 全页 `Uncaught [object Object]`（假失败头号元凶）；
+  3. 先 `cli close --project` 再 `cli auto --auto-port 9421`：重复 auto 留半死会话（连上但命令 timeout）；
+  4. 连上后**轮询 `currentPage()` 等首屏**再 reLaunch：冷启动直接 reLaunch 会崩会话（`getPageMetaByWebviewId null`）→ 整条通道失联；
+  5. 不要用 TCP 探活端口（单客户端通道会被干扰），要等就真连一次。
+- `cli preview`（真机）另属上传编译管线，本项目在 compile_start 抛 opaque code 10；调试不要走它，走 `auto` + automator。要 CI 化上传再上 `miniprogram-ci` + 上传密钥。
 
-## 8. 给下一个 AI 的检查清单
+
+## 9. 给下一个 AI 的检查清单
 
 1. 先跑 `debug-cli.sh`。**别先读代码、别先改代码。**
 2. 失败时按 §3 表格对症状，不要一上来就怀疑"小程序有 bug"——五个坑里四个都是环境/时序问题。

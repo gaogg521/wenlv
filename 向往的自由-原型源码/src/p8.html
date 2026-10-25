@@ -1,0 +1,2162 @@
+<script>
+/* =====================================================
+   平台运营端（管理舱 · 经营与风控）
+===================================================== */
+VIEWS.admin = {
+  dash(){
+    /* v1.10：全部数字来自 dashRange(口径)，视图层零硬编码 */
+    const r = dashRange(DB.x.range.cur);
+    const N = function(v){ return Number(v).toLocaleString('zh-CN'); };
+    const F = function(k){
+      const v = k.v;
+      if(k.fmt === 'money') return v >= 100000 ? '¥' + (v/10000).toFixed(1) + '万' : '¥' + Math.round(v).toLocaleString('zh-CN');
+      if(k.fmt === 'int')   return N(Math.round(v));
+      if(k.fmt === 'yuan')  return '¥' + Math.round(v);
+      if(k.fmt === 'pct1')  return v.toFixed(1) + '%';
+      if(k.fmt === 'x1')    return v.toFixed(1) + '×';
+      return String(v);
+    };
+    /* 环比：金额用 %，比率用 pp；涨红跌绿（A 股口径） */
+    const D = function(k){
+      const v = k.d, unit = k.unit === 'pp' ? 'pp' : '%';
+      if(Math.abs(v) < 0.05) return '<span class="vflat">— 持平</span>';
+      return '<span class="' + (v > 0 ? 'vup' : 'vdn') + '">' + (v > 0 ? '▲ ' : '▼ ') + Math.abs(v).toFixed(1) + unit + '</span>';
+    };
+    const TG = function(k){
+      const p = Math.max(0, Math.min(100, k.pct));
+      const cls = k.pct >= 100 ? '' : (k.pct >= 90 ? 'mid' : 'low');
+      return '<div class="tgt ' + cls + '"><i style="width:' + p.toFixed(1) + '%"></i></div>';
+    };
+    const LV = { ok:'#0f9d58', warn:'#f59f00', bad:'#e03131' };
+    const bad = r.insight.filter(function(x){ return x.lv !== 'ok'; }).length;
+
+    /* 趋势图：目标虚线位置 = 每列目标 / 刻度上限（与柱高同一坐标系，必然对齐） */
+    const tPct = Math.max(2, Math.min(98, r.tv / r.maxV * 100));
+
+    const fSteps = [
+      { n:'曝光',     v:r.funnel.e, c:'#1c7ed6' },
+      { n:'详情浏览', v:r.funnel.v, c:'#2f9e8f' },
+      { n:'下单',     v:r.funnel.o, c:'#e87722' },
+      { n:'核销完成', v:r.funnel.f, c:'#0f9d58' },
+    ];
+
+    return `
+    <div class="admin-hero">
+      <div class="ah-row">
+        <div class="ah-ic">${ic('i-chart')}</div>
+        <div><b>经营驾驶舱</b><span>${r.label} · ${r.days} 天 · ${N(r.cur.ord)} 单 · 全域合计</span></div>
+        <div class="ah-live"><i></i>实时</div>
+      </div>
+    </div>
+    <div class="rng-bar" style="margin-top:-18px">
+      ${RANGE_OPTS.map(function(o){
+        return '<b class="' + (o.k === r.k ? 'on' : '') + '" onclick="setDashRange(\'' + o.k + '\')">' + o.l + '</b>';
+      }).join('')}
+    </div>
+    <div class="rng-hint">${ic('i-calendar')} 环比基线 <em>${r.prevLabel}</em> · 目标日均 <em>¥${N(Math.round(r.goal.gmv / r.days))}</em> · 达成率见各卡进度条</div>
+
+    <div class="admin-kpi" style="margin-top:0">
+      ${r.kpi.map(function(k){
+        const tip = '本期 ' + F(k) + ' · 目标 ' + (k.unit === 'pp' ? k.note.replace('目标 ', '') : k.note.replace('目标 ', '')) +
+                    ' · 环比 ' + (k.d >= 0 ? '+' : '') + k.d.toFixed(1) + (k.unit === 'pp' ? 'pp' : '%');
+        return '<div class="ak" title="' + tip + '"><b class="kn">' + F(k) + '</b><span>' + k.l + '</span>' +
+          '<div class="tr">' + D(k) + '</div>' + TG(k) + '</div>';
+      }).join('')}
+    </div>
+
+    <div class="dgn">
+      <div class="dgn-h">${ic('i-spark')} 经营诊断<span>${bad ? bad + ' 项需关注' : '全线健康 · 0 项待处理'}</span></div>
+      ${r.insight.map(function(x){
+        const c = LV[x.lv] || LV.ok;
+        return '<div class="dgn-row' + (x.act ? ' jump' : '') + '"' + (x.act ? ' onclick="' + x.act + '"' : '') + '>' +
+          '<em style="background:' + c + '"></em>' +
+          '<div class="dt" style="color:' + c + '">' + x.t + '</div>' +
+          '<div class="db">' + x.d + '</div>' +
+          (x.act ? '<span class="go">' + ic('i-arrow') + '</span>' : '') +
+        '</div>';
+      }).join('')}
+    </div>
+
+    <div class="chart-card">
+      <h4>日均成交额（千元/日）<span>每列 ${r.trend.per > 1 ? r.trend.per + ' 天日均' : '单日'} · 目标 ¥${N(Math.round(r.goal.gmv / r.days))}/日</span></h4>
+      <div style="margin-top:14px">
+        <div style="position:relative;height:74px">
+          <div style="position:absolute;left:0;right:0;top:${(100 - tPct).toFixed(2)}%;border-top:1px dashed #f59f00;pointer-events:none;z-index:2"></div>
+          ${r.trend.items.map(function(x){
+            const h = Math.max(2, x.v / r.maxV * 100);
+            const bg = x.cur ? 'linear-gradient(180deg,#f5a623,#e87722)' : 'linear-gradient(180deg,#14b8a6,#0f766e)';
+            return '<div title="' + x.full + '" style="position:absolute;bottom:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;width:' + (100 / r.trend.items.length).toFixed(3) + '%;left:' + (100 / r.trend.items.length * r.trend.items.indexOf(x)).toFixed(3) + '%;padding:0 3px;box-sizing:border-box">' +
+              '<b style="position:absolute;left:0;right:0;bottom:100%;margin-bottom:3px;text-align:center;font-size:8px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums">' + x.v.toFixed(1) + '</b>' +
+              '<div style="height:' + h.toFixed(2) + '%;border-radius:5px 5px 2px 2px;background:' + bg + '"></div>' +
+            '</div>';
+          }).join('')}
+        </div>
+        <div style="display:flex;margin-top:5px">
+          ${r.trend.items.map(function(x){
+            return '<div style="flex:1;text-align:center;font-size:8.5px;color:var(--sub)">' + x.l + '</div>';
+          }).join('')}
+        </div>
+      </div>
+      <div class="legend" style="margin-top:9px">
+        <i>${ic('i-trend')} 日均 ¥${N(Math.round(r.cur.gmv / r.days))}</i>
+        <i style="margin-left:auto;color:#f59f00;white-space:nowrap">— — 目标 ¥${N(Math.round(r.goal.gmv / r.days))}</i>
+      </div>
+    </div>
+
+    <div class="chart-box" style="margin-top:0">
+      <div class="ch"><b>转化漏斗</b><span class="cv">${r.label} · 四端合计</span></div>
+      ${funnelSVG(fSteps)}
+      <div class="legend"><i>${ic('i-trend')} 曝光→核销 ${r.funnel.rate.toFixed(2)}%</i><i style="margin-left:auto">${ic('i-shield')} 已剔除异常流量</i></div>
+    </div>
+
+    <div class="chart-card" id="cityCard">
+      <h4>分城经营明细<span>${r.label} · 合计等于大盘</span></h4>
+      <div class="ct-h"><b>城市</b><b>GMV</b><b>占比</b><b>环比</b></div>
+      ${r.cities.map(function(c){
+        return '<div class="ct-r"' + (c.core ? '' : ' style="opacity:.72"') + '>' +
+          '<div class="cn"><i style="background:' + c.c + '"></i><b>' + c.n + '</b></div>' +
+          '<span class="cg">¥' + (c.gmv >= 10000 ? (c.gmv / 10000).toFixed(1) + '万' : Math.round(c.gmv).toLocaleString()) + '</span>' +
+          '<em>' + c.share.toFixed(1) + '%</em>' +
+          '<em class="' + (c.up >= 0 ? 'vup' : 'vdn') + '">' + (c.up >= 0 ? '+' : '') + c.up.toFixed(1) + '%</em>' +
+        '</div>';
+      }).join('')}
+      <div class="ct-tot"><span>分城合计 · ${N(r.cur.ord)} 单</span><b>¥${N(r.cur.gmv)}</b></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="ch"><b>收入结构</b><span class="cv">方案 §2 · 四条业务线 · 随口径漂移</span></div>
+      <div style="display:flex;align-items:center;gap:11px">
+        ${donutSVG(r.biz, { size:96, center:r.biz[0].v + '%', sub:r.biz[0].n })}
+        <div style="flex:1;min-width:0">
+          ${r.biz.map(function(c){
+            return '<div class="biz-line"><em style="background:' + c.c + '"></em>' +
+              '<div class="bl-b"><b>' + c.n + '</b><span>' + c.d + '</span></div>' +
+              '<b class="bl-v">' + c.v + '%</b></div>';
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h4>实时业务流 <span>四端数据互通</span></h4>
+      ${DB.admin.stream.slice(0, 6).map(function(s){
+        return '<div class="stream-row"><span class="dot" style="background:' + s.c + '"></span><span class="st2">' + s.d + '</span><span class="sv2">' + s.t + '</span></div>';
+      }).join('')}
+    </div>
+
+    <div class="sec-title">生态与功能入口 <span class="more">经营视图之上的能力层</span></div>
+    <div class="eco-entry" onclick="pushEcoPage()">
+      <div class="ee-ic">${ic('i-layers')}</div>
+      <div class="ee-b"><b>生态架构与总体方案</b><span>三层架构 · 六大引擎 · 技术选型 · 五阶段验收</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="eco-entry" onclick="pushWeb3Page()">
+      <div class="ee-ic" style="background:#e8f0f7;color:#2f6f9f">${ic('i-chain')}</div>
+      <div class="ee-b"><b>Web3 数字底座</b><span>Travel ID 确权 · 旅豆链上凭证 · 贡献存证 · 境内外隔离</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="eco-entry" onclick="pushNftOpsPage()">
+      <div class="ee-ic" style="background:#fdf0e4;color:#e87722">${ic('i-box')}</div>
+      <div class="ee-b"><b>数字藏品发行中台</b><span>发行计划 · 批量铸造 · 转赠监控 · 合规红线</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="eco-entry" onclick="pushRightsPage()">
+      <div class="ee-ic" style="background:#e7f6ee;color:#0f766e">${ic('i-ticket')}</div>
+      <div class="ee-b"><b>权益核销与结算</b><span>核销漏斗 · 商家对账 · 差异处置 · 并入分账</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="note">
+      <b>口径说明</b>　成交额 = 订单实付合计（含未核销、不含退款）；成交订单 = 支付成功单；客单价 = 成交额 ÷ 成交订单；
+      权益核销率 = 已核销单 ÷ 成交单（最近 4 天订单仍在核销期内，故短口径偏低属在途）；复购率按近 90 天滚动窗口计算；
+      分城按履约地归属，长尾归「其他城市」；环比基期为上一等长区间（「本月」对上一月同期）。数据截止 ${r.label.split(' – ')[1] || r.label}。
+    </div>`;
+  },
+
+  risk(){
+    const b = DB.admin.budget;
+    const pct = Math.round(b.issued/b.total*100);
+    const f = fcState();
+    const fh = f.lv === 'red'
+      ? '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 破红灯线'
+      : f.lv === 'amber'
+        ? '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 已破熔断线'
+        : '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 在可控区间';
+    return `
+    <div class="admin-hero">
+      <div class="ah-row">
+        <div class="ah-ic">${ic('i-shield')}</div>
+        <div><b>积分风控</b><span>发行预算池 · 生命周期 · 反作弊预警</span></div>
+        <div class="ah-live"><i></i>预警 ${DB.admin.warnings.length} 条</div>
+      </div>
+    </div>
+    <div class="fc-alert ${f.lv}" style="margin:14px 14px 0">
+      <div class="fh">${ic(f.lv === 'green' ? 'i-check' : 'i-alert')} 权益成本事前预警 · ${fh}</div>
+      <div class="fd">本期实付 ¥${f.net.toLocaleString()} 已超预留池，且近周节奏比全期均速高 <b>${(f.trend * 100).toFixed(1)}%</b>。按当前节奏外推，下期成本将达 <b>¥${f.fcNext.toLocaleString()}</b>，¥${f.pool.toLocaleString()} 的池子在第 <b>${f.bottom.toFixed(1)}</b> 天见底 —— 等结算完再处置，钱已经花完了。</div>
+      <button class="fc-ago" onclick="pushRightsPage()">查看下期预测与超支审批</button>
+    </div>
+    <div class="sec-title" style="padding-top:16px">积分发行预算池</div>
+    <div class="card" style="padding:16px">
+      <div class="budget-ring">
+        <div class="br" style="background:conic-gradient(#0f766e 0 ${pct}%, #e8efee 0)"><b>${pct}%</b></div>
+        <div class="br-info">
+          <div class="bri"><span>本月预算上限</span><b>${b.total.toLocaleString()} 豆</b></div>
+          <div class="bri"><span>已发行</span><b style="color:#0f766e">${b.issued.toLocaleString()} 豆</b></div>
+          <div class="bri"><span>已核销</span><b>${b.used.toLocaleString()} 豆</b></div>
+          <div class="bri"><span>剩余可发行</span><b>${(b.total-b.issued).toLocaleString()} 豆</b></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--sub);margin-top:10px;line-height:1.7">发行原则：预算驱动发行，与已批准营销预算及可承受订单贡献利润挂钩，严禁超发。</div>
+    </div>
+    <div class="sec-title">积分生命周期 <span class="more">方案 §9 · 六机制</span></div>
+    <div class="life-wrap">
+      ${[
+        {t:'发行', d:'与订单贡献利润、商家营销预算或专项预算挂钩', k:'不超发'},
+        {t:'发放', d:'订单履约完成、退款观察期结束后生效', k:'不见单不发'},
+        {t:'使用', d:'兑换明确的服务、优惠或会员权益', k:'不兑现'},
+        {t:'结算', d:'依据商家协议承担成本并统一对账', k:'可对账'},
+        {t:'回收', d:'退款、作弊、重复领取时撤销或冲正', k:'可冲正'},
+        {t:'到期', d:'明示有效期，依法告知并评估履约义务', k:'有期限'},
+      ].map(function(x,i){ return `
+        <div class="life-row">
+          <div class="lf-no">${i+1}</div>
+          <div class="lf-b"><div class="lf-h"><b>${x.t}</b><span>${x.k}</span></div><div class="lf-d">${x.d}</div></div>
+        </div>`; }).join('')}
+    </div>
+    <div class="budget-formula">
+      <div class="bf-t">${ic('i-calc')} 积分预算上限</div>
+      <div class="bf-f">= min（ 已批准营销预算 ， 可承受的订单贡献利润比例 ）</div>
+      <div class="bf-d">预算驱动发行，而不是无限增发。权益成本率按 GMV 计提，进入单城测算的权益成本项。</div>
+    </div>
+    <div class="sec-title">四本账分别建账 <span class="more">不可混同</span></div>
+    <div class="book-grid">
+      ${[['积分账','旅豆发行/消耗/结余'],['现金佣金账','合伙人、创作者佣金'],['商家应收账','结算与退款冲正'],['支付资金账','用户实付与通道清算']].map(function(x){
+        return '<div class="book"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>';
+      }).join('')}
+    </div>
+    <div class="sec-title">积分发放限额 <span class="more">按用户 / 活动 / 商家分层</span></div>
+    <div class="card" style="padding:4px 14px 6px">
+      ${[
+        {n:'单用户单月上限', v:'2,000 豆', d:'超出需人工审批 · 防刷取'},
+        {n:'单活动预算上限', v:'50,000 豆', d:'按营销预算批复额度执行'},
+        {n:'单商家月结算上限', v:'30,000 豆', d:'与履约评分挂钩浮动'},
+        {n:'单笔订单返豆上限', v:'订单金额 10%', d:'不得突破毛利率红线'},
+      ].map(function(x){ return '<div class="row" style="padding:11px 0"><div class="rt"><b>'+x.n+'</b><span>'+x.d+'</span></div><b style="color:#0f766e;font-size:12.5px">'+x.v+'</b></div>'; }).join('')}
+    </div>
+    <div class="sec-title">风控预警 <span class="more">${DB.admin.warnings.length} 条待处理</span></div>
+    ${DB.admin.warnings.map((w,i)=>`<div class="warn-card">
+      <div class="wh"><div style="width:32px;height:32px;border-radius:10px;background:${w.c}18;color:${w.c};display:flex;align-items:center;justify-content:center">${ic('i-alert')}</div>
+      <b>${w.t}</b><span class="lv" style="background:${w.c}18;color:${w.c}">${w.lv}</span></div>
+      <p>${w.d}</p>
+      <div class="wf"><button class="btn sm" onclick="handleWarn('${w.id}','freeze')">冻结返佣结算</button><button class="btn sm ghost" onclick="handleWarn('${w.id}','ignore')">标记误报</button></div>
+    </div>`).join('')}
+    <div class="note">风控规则：用户 / 活动 / 商家分别设置上限；线下数据真实性由订单、动态核销码、商家确认与异常检测联合验证。</div>`;
+  },
+  audit(){
+    /* v1.10：审核统计改为派生，构成占比由件数归一得到，杜绝「百分比与件数不符」 */
+    const ST = DB.x.auditStat;
+    const passN = Math.round(ST.done * ST.passPct / 100);
+    const rejN = ST.done - passN;
+    const dist = ST.mix.map(function(x){
+      return { n:x.n, c:x.c, v: Math.round(x.n2 / ST.done * 1000) / 10 };
+    });
+    return `
+    <div class="admin-hero">
+      <div class="ah-row">
+        <div class="ah-ic">${ic('i-task')}</div>
+        <div><b>准入审核</b><span>UGC 内容 · 商家资质 · 佣金核算</span></div>
+        <div class="ah-live"><i></i>待审 ${DB.admin.audits.length} 项</div>
+      </div>
+    </div>
+    <div class="kpi-grid" style="padding-top:14px">
+      <div class="kpi-item"><b class="num">${ST.done}</b><span>本月已审</span><div class="trend up">环比 +${ST.mom}%</div></div>
+      <div class="kpi-item"><b class="num">${ST.passPct}%</b><span>通过率</span><div class="trend up">${passN} 项通过</div></div>
+      <div class="kpi-item"><b class="num">${ST.hours}h</b><span>平均时效</span><div class="trend up">优于 ${ST.sla}h 承诺</div></div>
+      <div class="kpi-item"><b class="num">${rejN}</b><span>本月驳回</span><div class="trend" style="color:#e5484d">${ST.rejTop}</div></div>
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>审核类型构成</b><span class="cv">本月 ${ST.done} 项</span></div>
+      <div class="chart" style="align-items:center">
+        ${donutSVG(dist, { size:112, center:dist[0].v + '%', sub:dist[0].n })}
+        <div class="legend" style="flex:1">
+          ${dist.map(function(x){ return '<i style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:'+x.c+';display:inline-block"></span>'+x.n+' · '+x.v+'%</i>'; }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="sec-title">待审队列 <span class="more">${DB.admin.audits.length} 项</span></div>
+      ${DB.admin.audits.length ? DB.admin.audits.map(function(x,i){ return `<div class="audit-card">
+        <div class="ah"><div class="ai" style="background:${x.c}18;color:${x.c}">${ic(x.ic)}</div>
+        <div><b>${x.n}</b><span>${x.t} · ${x.st}</span></div></div>
+        <p>${x.d}</p>
+        <div class="af"><button class="btn sm" onclick="handleAudit('${x.id}','pass')">${ic('i-check')} 通过</button><button class="btn sm ghost" onclick="handleAudit('${x.id}','reject')">驳回</button></div>
+      </div>`; }).join('') : '<div class="empty">'+ic('i-task')+'审核队列已清空<br>所有待审事项均已处理</div>'}
+    <div class="sec-title">准入与风控要点</div>
+    <div class="info-block" style="margin:0 14px 12px">
+      <p>平台核心管控合作方<b>资质、合同、退款</b>环节，规避客诉与合规风险；UGC 内容经审核推荐后方可获授权费；合伙人佣金经反作弊校验后结算。</p>
+    </div>`;
+  },
+  calc(){
+    return `
+    <div class="admin-hero">
+      <div class="ah-row">
+        <div class="ah-ic">${ic('i-calc')}</div>
+        <div><b>经营测算</b><span>单城模型 · 盈亏平衡 · 敏感性分析</span></div>
+        <div class="ah-live"><i></i>模型 v2.3</div>
+      </div>
+    </div>
+    <div class="sec-title" style="padding-top:16px">单城经营测算器
+      <span class="more" style="cursor:pointer;color:#0f766e;font-weight:800" onclick="calcFromRange()">按当前口径代入 ›</span>
+    </div>
+    <div class="calc-card">
+      <div class="calc-row2"><label>月订单量</label><input type="range" min="500" max="10000" step="100" value="${DB.admin.calc.orders}" oninput="calcUpdate('orders',this.value)"><span class="cv num" id="cv_orders">${DB.admin.calc.orders}</span></div>
+      <div class="calc-row2"><label>客单价</label><input type="range" min="99" max="999" step="10" value="${DB.admin.calc.price}" oninput="calcUpdate('price',this.value)"><span class="cv num" id="cv_price">${DB.admin.calc.price}</span></div>
+      <div class="calc-row2"><label>综合变现率</label><input type="range" min="5" max="40" step="1" value="${DB.admin.calc.rate}" oninput="calcUpdate('rate',this.value)"><span class="cv num" id="cv_rate">${DB.admin.calc.rate}%</span></div>
+      <div class="calc-row2"><label>变动成本率</label><input type="range" min="3" max="20" step="1" value="${DB.admin.calc.varCost}" oninput="calcUpdate('varCost',this.value)"><span class="cv num" id="cv_varCost">${DB.admin.calc.varCost}%</span></div>
+      <div class="calc-row2"><label>权益成本率</label><input type="range" min="0" max="10" step="1" value="${DB.admin.calc.equity}" oninput="calcUpdate('equity',this.value)"><span class="cv num" id="cv_equity">${DB.admin.calc.equity}%</span></div>
+      <div class="calc-row2"><label>月固定成本</label><input type="range" min="50000" max="500000" step="10000" value="${DB.admin.calc.fixed}" oninput="calcUpdate('fixed',this.value)"><span class="cv num" id="cv_fixed">${(DB.admin.calc.fixed/10000).toFixed(0)}万</span></div>
+    </div>
+    <div class="calc-result" id="calcResult">${calcResultHtml()}</div>
+    <div class="sec-title">走到盈亏平衡 <span class="more">方案 §8.1 公式反解</span></div>
+    <div class="path-card" id="pathBox">${pathsHtml()}</div>
+    <div class="sec-title">敏感性测算 <span class="more">客单价 × 月订单量</span></div>
+    <div class="sens-wrap">
+      <div class="sens-title">月经营贡献结余（元）</div>
+      <table class="sens" id="sensTable">${sensTableHtml()}</table>
+      <div class="sens-legend"><span><i style="background:#fdeced"></i>亏损</span><span><i style="background:#fff6e8"></i>微利</span><span><i style="background:#e7f6ee"></i>健康</span><span><i style="background:#c9ecda"></i>优秀</span></div>
+    </div>
+    <div class="calc-note">公式（依据总体方案 §8）：月 GMV = 月订单量 × 客单价；平台月收入 = GMV × 综合变现率；盈亏平衡订单量 = 月固定成本 ÷ [客单价 ×（综合变现率 − 变动成本率 − 权益成本率）]。仅为情景测算，未单列税费、退款损失、资本开支及融资成本。</div>`;
+  },
+  ame(){
+    const a = DB.admin;
+    /* 与驾驶舱同源：近 30 日口径。原先用「今日」核销率，同一页面上两个不同数会被追问 */
+    const v30 = dashRange('30d').cur.verify;
+    return `
+    <div class="profile" style="background:linear-gradient(135deg,#0f766e,#14b8a6)">
+      <div class="avatar" style="background:rgba(255,255,255,.2)">${ic('i-chart')}</div>
+      <div class="pi"><b>平台运营 · 上海璟宬</b>
+        <span class="plv">${ic('i-verified')} 生态运营方</span>
+        <div class="did">${ic('i-code')} ${DB.travelId.did} <span onclick="copyText('${DB.travelId.did}')" style="text-decoration:underline">复制</span></div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b class="num">${money(a.todayGmv)}</b><span>今日 GMV</span></div>
+      <div class="stat"><b class="num">${a.todayOrders}</b><span>今日订单</span></div>
+      <div class="stat"><b class="num">${a.warnings.length}</b><span>风控预警</span></div>
+      <div class="stat"><b>${v30.toFixed(1)}%</b><span>核销率 30日</span></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">管理舱</div>
+      <div class="row" onclick="jumpTab('dash')"><div class="ric">${ic('i-chart')}</div><div class="rt"><b>经营驾驶舱</b><span>单城经营视图 · 实时数据</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="jumpTab('risk')"><div class="ric">${ic('i-shield')}</div><div class="rt"><b>风控</b><span>积分风控 · 预警 ${a.warnings.length} 条待处理</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="jumpTab('audit')"><div class="ric">${ic('i-task')}</div><div class="rt"><b>准入审核</b><span>境外准入六项 · 资质审查</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="jumpTab('calc')"><div class="ric">${ic('i-calc')}</div><div class="rt"><b>单城测算</b><span>盈亏平衡 · 敏感性分析</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">引擎可玩演示（v1.4）</div>
+      <div class="row" onclick="pushEnginePage('reward')"><div class="ric" style="color:#e87722">${ic('i-wallet')}</div><div class="rt"><b>激励引擎 · 可玩链路</b><span>预算池校验 → 批次启用 → 逐笔发放 → 冻结回收 → 四本账</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushEnginePage('contrib')"><div class="ric" style="color:#2f6f9f">${ic('i-trend')}</div><div class="rt"><b>贡献引擎 · 可玩链路</b><span>内容提交 → CS 计算 → 作弊拦截 → 分润分配</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushEnginePage('settle')"><div class="ric" style="color:#7b5aa6">${ic('i-calc')}</div><div class="rt"><b>结算引擎 · 可玩链路</b><span>订单分账 → 退款冲正 → 商家对账 → 佣金核算</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushEnginePage('gateway')"><div class="ric" style="color:#0f766e">${ic('i-layers')}</div><div class="rt"><b>生态网关 · 可玩链路</b><span>密钥盘点 → 接口目录 → 在线调试 → 配额扩容</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">方案与数据</div>
+      <div class="row" onclick="pushRolePage()"><div class="ric">${ic('i-user')}</div><div class="rt"><b>我的角色 · 生态位</b><span>${ENDS.admin.sub} · 五环中的第 5 环 · 能做什么 / 不做什么</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushEcoPage()"><div class="ric">${ic('i-layers')}</div><div class="rt"><b>生态架构与方案</b><span>三层架构 · 六大引擎 · 五阶段验收</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="resetDemo()"><div class="ric">${ic('i-refresh')}</div><div class="rt"><b>重置演示数据</b><span>恢复初始经营与账户数据</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">通用</div>
+      <div class="row" onclick="switchIdentity()"><div class="ric">${ic('i-switch')}</div><div class="rt"><b>切换身份</b><span>游客 / 合伙人 / 商家 / 平台运营</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="confirmLogout()"><div class="ric" style="color:#e5484d">${ic('i-logout')}</div><div class="rt"><b style="color:#e5484d">退出登录</b></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="note">上海璟宬文化发展有限公司 · 向往的自由 · 演示原型 v1.10</div>`;
+  },
+};
+function sensTableHtml(){
+  const c = DB.admin.calc;
+  const rowStep = Math.max(100, Math.round(c.price*0.25/10)*10);
+  const colStep = Math.max(100, Math.round(c.orders*0.25/100)*100);
+  const prices = [c.price - rowStep, c.price, c.price + rowStep];
+  const orders = [c.orders - colStep, c.orders, c.orders + colStep];
+  const cell = function(p, o){
+    const gmv = p*o;
+    const profit = gmv*c.rate/100 - gmv*c.varCost/100 - gmv*c.equity/100 - c.fixed;
+    let bg = '#fdeced', fg = '#c92a2a';
+    if(profit >= 0 && profit < c.fixed*0.3){ bg = '#fff6e8'; fg = '#b26a00'; }
+    else if(profit >= c.fixed*0.3 && profit < c.fixed){ bg = '#e7f6ee'; fg = '#0f7a46'; }
+    else if(profit >= c.fixed){ bg = '#c9ecda'; fg = '#09603a'; }
+    return { v: Math.round(profit), bg: bg, fg: fg };
+  };
+  let html = '<thead><tr><th></th>' + orders.map(function(o){ return '<th>' + o.toLocaleString() + ' 单</th>'; }).join('') + '</tr></thead><tbody>';
+  prices.forEach(function(p){
+    html += '<tr><th>¥' + p + '</th>' + orders.map(function(o){ const r = cell(p,o); return '<td style="background:'+r.bg+';color:'+r.fg+'">'+(r.v>=0?'':'-') + Math.abs(r.v).toLocaleString() + '</td>'; }).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  return html;
+}
+function calcUpdate(k, v){
+  DB.admin.calc[k] = Number(v);
+  $('#cv_'+k).textContent = k==='fixed' ? (v/10000).toFixed(0)+'万' : (k==='orders'||k==='price' ? v : v+'%');
+  $('#calcResult').innerHTML = calcResultHtml();
+  const pb = $('#pathBox'); if(pb) pb.innerHTML = pathsHtml();
+  const st = $('#sensTable'); if(st) st.innerHTML = sensTableHtml();
+}
+function calcResultHtml(){
+  const c = DB.admin.calc;
+  const gmv = c.orders * c.price;
+  const revenue = gmv * c.rate / 100;
+  const varC = gmv * c.varCost / 100;
+  const eqC = gmv * c.equity / 100;
+  const profit = revenue - varC - eqC - c.fixed;
+  const be = c.price * (c.rate - c.varCost - c.equity) / 100 > 0 ? Math.round(c.fixed / (c.price * (c.rate - c.varCost - c.equity) / 100)) : Infinity;
+  return `
+    <div class="cr"><span>月 GMV</span><b>${money(gmv)}</b></div>
+    <div class="cr"><span>平台月收入</span><b>${money(Math.round(revenue))}</b></div>
+    <div class="cr"><span>月变动成本</span><b>${money(Math.round(varC))}</b></div>
+    <div class="cr"><span>月权益成本</span><b>${money(Math.round(eqC))}</b></div>
+    <div class="cr"><span>月固定成本</span><b>${money(c.fixed)}</b></div>
+    <div class="cr big ${profit<0?'neg':''}"><span>月经营贡献结余</span><b>${money(Math.round(profit))}</b></div>
+    <div class="cr big"><span>盈亏平衡月订单量</span><b>${be===Infinity?'无法平衡':be.toLocaleString()+' 单'}</b></div>
+    <div class="cr-note">当前参数${(c.orders===3000&&c.price===399&&c.rate===20&&c.varCost===9&&c.equity===2&&c.fixed===180000)?'与总体方案 §8.2 示例假设一致':''} · 单位贡献利润 ${money(Math.round(c.price*(c.rate-c.varCost-c.equity)/100))}/单 · 固定成本需 ${be===Infinity?'—':be.toLocaleString()} 单覆盖</div>`;
+}
+/* 方案 §8.1：从亏损走到盈亏平衡的四条路径 */
+function pathsHtml(){
+  const c = DB.admin.calc;
+  const gmv = c.orders * c.price;
+  const margin = (c.rate - c.varCost - c.equity) / 100;
+  const profit = gmv * margin - c.fixed;
+  if(profit >= 0) return '<div class="path-ok">' + '<b>已实现盈亏平衡</b><span>月经营贡献结余 ' + money(Math.round(profit)) + '，每单贡献 ' + money(Math.round(c.price*margin)) + '</span></div>';
+  const gap = -profit;
+  if(margin <= 0) return '<div class="path-warn">综合变现率不高于变动成本率与权益成本率之和，单位贡献利润为负，单量越大亏损越大。需先修复定价结构。</div>';
+  const needPrice = Math.ceil(c.fixed / (c.orders * margin));
+  const needRate  = Math.round((c.fixed / gmv * 100 + c.varCost + c.equity) * 10) / 10;
+  const needFixed = Math.round(gmv * margin);
+  const needOrders= Math.ceil(c.fixed / (c.price * margin));
+  const items = [
+    { n:'提客单价', cur:'¥'+c.price, need:'¥'+needPrice, d:'+'+(Math.round((needPrice/c.price-1)*1000)/10)+'%', v:'靠主题游深度与二销组合拉高，非普涨' },
+    { n:'提综合变现率', cur:c.rate+'%', need:needRate+'%', d:'+'+(Math.round((needRate-c.rate)*10)/10)+'pp', v:'增加内容授权、SaaS、跨境服务收入' },
+    { n:'降月固定成本', cur:(c.fixed/10000)+'万', need:(Math.round(needFixed/1000)/10)+'万', d:(Math.round((needFixed/c.fixed-1)*1000)/10)+'%', v:'单城小队 + 共享中台，不做重资产前置' },
+    { n:'提月订单量', cur:c.orders+'单', need:needOrders.toLocaleString()+'单', d:'+'+(Math.round((needOrders/c.orders-1)*1000)/10)+'%', v:'方案 §8.2 基准解法：约 5,000 单/月' },
+  ];
+  return '<div class="path-gap">距盈亏平衡缺口 <b>' + money(Math.round(gap)) + '</b>/月 · 以下任一单变量路径可达</div>' +
+    items.map(function(it){
+      return '<div class="path-row"><div class="pr-n">' + it.n + '</div>' +
+        '<div class="pr-v"><span>' + it.cur + '</span><i>→</i><b>' + it.need + '</b><em>' + it.d + '</em></div>' +
+        '<div class="pr-d">' + it.v + '</div></div>';
+    }).join('');
+}
+function handleWarn(id, act){
+  const i = DB.admin.warnings.findIndex(function(a){ return a.id === id; });
+  if(i < 0) return;
+  const w = DB.admin.warnings[i];
+  if(act === 'freeze'){
+    toast('已冻结相关返佣结算 · 转人工复核');
+  } else {
+    toast('已标记为误报');
+  }
+  DB.admin.warnings.splice(i,1);
+  renderBase();
+}
+function handleAudit(id, act){
+  /* 按 id 定位：连点同一个按钮时，第二、三次已找不到该项，自然幂等 */
+  const i = DB.admin.audits.findIndex(function(a){ return a.id === id; });
+  if(i < 0) return;
+  const x = DB.admin.audits[i];
+  /* 处置即入账：本月已审 +1，通过率随之重算（统计不能停在静态快照） */
+  const ST = DB.x.auditStat;
+  const passBefore = Math.round(ST.done * ST.passPct / 100);
+  ST.done += 1;
+  ST.passPct = Math.round((passBefore + (act === 'pass' ? 1 : 0)) / ST.done * 1000) / 10;
+  if(act === 'pass'){
+    if(x.t === 'UGC 内容'){
+      DB.wallet += 50;
+      DB.txLog.unshift({d:'游记被平台推荐奖励', t:'刚刚', a:'+50', p:'plus', chain:''});
+    }
+    toast('已通过：'+x.n + ' · 本月通过率 ' + ST.passPct + '%');
+  } else {
+    toast('已驳回：'+x.n + ' · 本月通过率 ' + ST.passPct + '%');
+  }
+  DB.admin.audits.splice(i,1);
+  renderBase();
+}
+
+/* ===== 生态架构（依据总体方案 §1.2 / §10.2 / §10.1 / §13） ===== */
+const ECO_LAYERS = [
+  { k:'A', n:'会员消费生态', role:'用户增长 · 数字权益 · 消费复购',
+    d:'游客用人民币消费，获得旅豆与 Travel Pass；评价、推荐、UGC 反哺复购。',
+    c:'#e87722', c2:'#f5a623', jump:"setEnd('tourist')", jl:'进游客端' },
+  { k:'B', n:'贡献经济共同体', role:'商家、创作者、合伙人协作与价值分配',
+    d:'商家出供给、创作者出内容、合伙人出渠道，按可核验订单与合同分配收益。',
+    c:'#2f6f9f', c2:'#5ba8c9', jump:"pushPromoCenter()", jl:'进推广中心' },
+  { k:'C', n:'全球 Web3 网络', role:'跨区域身份互认 · 权益互通 · 跨境协作',
+    d:'DID/VC 互认、权益跨平台核销、跨境商家订单与对账，境外独立闭环。',
+    c:'#0f766e', c2:'#14b8a6', jump:"pushOverseaPage()", jl:'看境外模型' },
+];
+const ECO_ENGINES = [
+  { n:'Travel Identity Engine', cn:'身份引擎', en:'Identity', d:'身份、会员、数字凭证、权限、隐私同意', ic:'i-chain', j:"pushTravelIdPage()", jl:'Travel ID', live:1 },
+  { n:'Travel Experience Engine', cn:'体验引擎', en:'Experience', d:'剧本任务、地图、签到、剧情分支、成就', ic:'i-compass', j:"setEnd('tourist');setTab('theme')", jl:'剧本闯关', live:1 },
+  { n:'Reward Engine', cn:'激励引擎', en:'Reward', d:'积分发行、冻结、扣减、回收、有效期、预算控制', ic:'i-wallet', j:"pushEnginePage('reward')", jl:'可玩链路', live:1 },
+  { n:'Contribution Engine', cn:'贡献引擎', en:'Contribution', d:'内容及推荐归因、贡献计算、作弊检测', ic:'i-trend', j:"pushEnginePage('contrib')", jl:'可玩链路', live:1 },
+  { n:'Settlement Engine', cn:'结算引擎', en:'Settlement', d:'订单分账、退款冲正、商家对账、佣金核算', ic:'i-calc', j:"pushEnginePage('settle')", jl:'可玩链路', live:1 },
+  { n:'Ecosystem Gateway', cn:'生态网关', en:'Gateway', d:'景区、酒店、城市运营方、海外平台 API', ic:'i-layers', j:"pushEnginePage('gateway')", jl:'可玩链路', live:1 },
+];
+const ECO_SPEC = [
+  ['用户前端','微信小程序 + React Native','国内低门槛接入、海外扩展'],
+  ['管理后台','React / Next.js','商家及运营管理'],
+  ['业务后端','Java Spring Boot 或 Go','订单与权益服务'],
+  ['数据库','PostgreSQL','事务一致性和审计'],
+  ['缓存及消息','Redis + Kafka','事件异步处理'],
+  ['数字身份','DID / VC 标准兼容设计','可验证、跨系统互认'],
+  ['国内存证','向往自由链','已跑通、有政府背书'],
+  ['海外链适配','EVM 兼容链适配器','保留互操作能力'],
+  ['数据分析','ClickHouse + BI','消费、复购、贡献、反作弊'],
+  ['AI 服务','LLM + RAG + 推荐系统','智能行程、剧本生成、运营辅助'],
+];
+const ECO_STAGES = [
+  { n:'1. 真实交易闭环', d:'商品、订单、支付、核销、退款、结算', g:'每笔交易可对账，单位贡献利润可核算', st:'已跑通' },
+  { n:'2. 会员权益闭环', d:'Travel ID、积分、会员、Travel Pass', g:'权益成本可预测、可核销、可追踪', st:'已跑通' },
+  { n:'3. 贡献经济闭环', d:'创作者归因、合伙人佣金、反作弊', g:'贡献可核验，分润可审计', st:'建设中' },
+  { n:'4. 多城市网络', d:'多租户、商家 API、跨城权益', g:'新城市可独立经营和核算', st:'规划' },
+  { n:'5. 国际 Web3 网络', d:'DID/VC 互认、境外合作、链适配', g:'完成目标市场法律、支付及数据合规评估', st:'规划' },
+];
+/* ===== 我的角色 · 生态位（v1.12） =====
+   四端共用一个入口，但内容按角色完全不同：你在第几环 / 能做什么 / 钱怎么算 / 不做什么。
+   本页替换掉「四端『我的』里挂同一份生态架构与方案」的做法 —— 那是投资人视角的文档，
+   不是角色视角的功能；四端一字不差，等于告诉对面「这四个身份没差别」。 */
+const ROLE_RINGS = ['分发获客','体验消费','内容沉淀','履约核销','治理结算'];
+function rolePos(){
+  const vo = DB.visitorOrders || [];
+  const paySum = vo.reduce(function(s,o){ return s + (o.price||0); }, 0);
+  const d30 = (typeof dashRange === 'function') ? dashRange('30d').cur : null;
+  const MAP = {
+    tourist:{
+      rings:[2,3], c:'#e87722', c2:'#f5a623',
+      line:'生态的起点与终点 —— 你的消费创造真实收入，你的体验产出可信内容',
+      up:'推广服务商（把你带进来）', down:'商户（兑现服务）· 平台（治理与结算）',
+      can:[
+        ['报名主题游 · 到店核销', "setTab('theme')", 'i-compass'],
+        ['发布游记 / 短视频 · 领授权费', "pushCreateCenter()", 'i-pen'],
+        ['推广中心 · 推荐客户与分润', "pushPromoCenter()", 'i-users'],
+        ['我的订单 · 核销码与状态', "pushMyOrdersPage()", 'i-doc'],
+        ['旅豆明细 · 链上可查验', "pushBeanDetailPage()", 'i-wallet'],
+      ],
+      money:[
+        ['你的消费支出', paySum ? money(paySum) + ' · ' + vo.length + ' 笔订单' : '—'],
+        ['旅豆余额', DB.wallet.toLocaleString() + ' 豆 · 不可提现'],
+        ['推广分润', money(DB.partner.monthEarn) + ' · ' + DB.partner.downline + ' 位关联用户'],
+        ['会员等级', DB.user.level + ' · 再 ' + DB.user.lvNeed + ' 条线路升级'],
+      ],
+      dont:['不参与分账与结算，也不承担经营风险','旅豆不可提现，只在生态内兑换服务与商品','看不到其他用户的订单与联系方式','推广分润不按层级计酬 —— 推荐的人再推荐别人，不产生你的返佣'],
+    },
+    /* 推广服务商不是独立端：它是小程序 A 里同一个身份的功能视图（我的 → 推广中心） */
+    partner:{
+      rings:[1,3], c:'#2f6f9f', c2:'#5ba8c9',
+      line:'生态的获客引擎 —— 你带来的人产生真实消费，你按服务订单拿佣金，不按层级',
+      up:'平台（货盘 · 素材 · 结算）', down:'游客（消费）· 商户（履约）',
+      can:[
+        ['收益明细 / 返佣账单', "pushEarnDetailPage()", 'i-doc'],
+        ['推荐客户 · 按有效订单排序', "openPromoTab('team')", 'i-users'],
+        ['邀请海报 / 专属码', "pushPosterPage()", 'i-qr'],
+        ['提现 · T+7 到账', "openWithdrawSheet()", 'i-cash'],
+      ],
+      money:[
+        ['累计返佣', money(DB.partner.totalEarn)],
+        ['本月返佣', money(DB.partner.monthEarn) + ' · ' + DB.partner.downline + ' 人'],
+        ['可提现余额', money(DB.partner.withdrawable) + ' = 累计 − 已提现'],
+        ['计酬费率', DB.partner.rate + '% · 仅对有效服务订单'],
+      ],
+      dont:['不按层级计酬 —— 下线拉下线不产生任何返佣','不碰资金池，不做资金归集，不承诺收益','不代收游客货款，退款冲正由平台处理'],
+    },
+    merch:{
+      rings:[4], c:'#7b5aa6', c2:'#a97fd1',
+      line:'生态的履约底座 —— 你把线路兑现成真实体验，核销即进入结算',
+      up:'平台（派单 · 货源）· 游客（下单）', down:'平台（结算 · 佣金核算）',
+      can:[
+        ['订单与核销 · 待核销 ' + DB.merch.pending + ' 笔', "setTab('order')", 'i-box'],
+        ['库存盘点 · 排期与余位', "pushStockPage()", 'i-layers'],
+        ['货源中心 · 平台铺货', "setTab('supply')", 'i-bag'],
+        ['对账单 · 佣金与旅豆分账', "pushStatementPage()", 'i-doc'],
+      ],
+      money:[
+        ['今日流水', money(DB.merch.gmv) + ' · ' + DB.merch.today + ' 单'],
+        ['本月累计', DB.merch.monthOrders + ' 单 · 评分 ' + DB.merch.rating],
+        ['结算方式', 'T+7 到账 · 平台服务费已在分账中扣除'],
+        ['待核销', DB.merch.pending + ' 笔 · 核销后进入结算'],
+      ],
+      dont:['不参与平台定价与分佣规则，只执行','看不到游客真实手机号，只看到脱敏信息','核销即进入结算，撤销须走退款冲正，不能私下改单'],
+    },
+    admin:{
+      rings:[5], c:'#0f766e', c2:'#14b8a6',
+      line:'生态的规则与裁判 —— 你不参与交易，你定义交易如何发生、如何被结算与约束',
+      up:'全部角色（游客 · 合伙人 · 商户）', down:'无 —— 治理闭环，对结果负责',
+      can:[
+        ['经营驾驶舱 · 四个口径可切', "setTab('dash')", 'i-chart'],
+        ['风控 · 积分与权益成本预警', "setTab('risk')", 'i-shield'],
+        ['准入审核 · 待审 ' + DB.admin.audits.length + ' 项', "setTab('audit')", 'i-task'],
+        ['单城测算 · 盈亏平衡', "setTab('calc')", 'i-calc'],
+      ],
+      money:[
+        ['今日 GMV', money(DB.admin.todayGmv) + ' · ' + DB.admin.todayOrders + ' 单'],
+        ['近 30 日核销率', d30 ? d30.verify.toFixed(1) + '%' : '—'],
+        ['平台服务费', '¥35.8 / 单 · 已计入商家结算'],
+        ['近 30 日 GMV', d30 ? money(Math.round(d30.gmv)) + ' · ' + d30.ord + ' 单' : '—'],
+      ],
+      dont:['不直接经手用户资金，只做规则、风控与结算指令','不修改已上链存证，只做补充登记','不替商户做经营决策，只提供诊断与测算'],
+    },
+  };
+  return MAP[S.end] || MAP.tourist;
+}
+function pushRolePage(){
+  const end = S.end, E = ENDS[end], pos = rolePos();
+  const ringHtml = ROLE_RINGS.map(function(n,i){
+    const on = pos.rings.indexOf(i+1) >= 0;
+    return '<div class="rg ' + (on?'on':'') + '"><b>' + (i+1) + '</b><span>' + n + '</span></div>';
+  }).join('');
+  const peers = ['tourist','merch','admin'].filter(function(k){ return k !== end; }).map(function(k){
+    const r = LOGIN_ROLES.filter(function(x){ return x.k === k; })[0] || {n:k,d:'',ic:'i-user',c:'#888'};
+    return '<div class="role-peer" onclick="rolePeek(\'' + k + '\')">'
+      + '<div class="rp-i" style="background:' + r.c + '16;color:' + r.c + '">' + ic(r.ic) + '</div>'
+      + '<div class="rp-b"><b>' + r.n + '</b><span>' + ENDS[k].sub + ' · ' + r.d + '</span></div>'
+      + '<div class="rp-a">切换 ' + ic('i-arrow') + '</div></div>';
+  }).join('');
+  const html = `
+    <div class="eco-hero" style="background:radial-gradient(120% 120% at 12% 0%, ${pos.c} 0%, #101a28 58%, #060c15 100%)">
+      <div class="eh-tag">${E.sub}</div>
+      <div class="eh-title">${E.name}</div>
+      <div class="eh-sub">${pos.line}</div>
+      <div class="eh-hr"></div>
+      <div class="eh-rule"><b>上游</b> ${pos.up}<br><b>下游</b> ${pos.down}</div>
+    </div>
+
+    <div class="sec-title">你在生态链的第 ${pos.rings.join('、')} 环 <span class="more">五环价值流</span></div>
+    <div class="card" style="padding:0;--rc:${pos.c}"><div class="role-rings">${ringHtml}</div>
+      <div class="note" style="padding:0 14px 12px">同一笔 ¥298：游客付钱 → 商户履约 → 合伙人分佣 → 平台留毛利。你只在自己那一环有权限。</div>
+    </div>
+
+    <div class="sec-title">你能做什么 <span class="more">当前身份可用</span></div>
+    <div class="menu-group">
+      ${pos.can.map(function(x){ return '<div class="row" onclick="' + x[1] + '"><div class="ric">' + ic(x[2]) + '</div><div class="rt"><b>' + x[0] + '</b></div><div class="arr">' + ic('i-arrow') + '</div></div>'; }).join('')}
+    </div>
+
+    <div class="sec-title">钱怎么算 <span class="more">真实口径</span></div>
+    <div class="card" style="padding:6px 14px">
+      ${pos.money.map(function(x){ return '<div class="kv-row"><span>' + x[0] + '</span><b>' + x[1] + '</b></div>'; }).join('')}
+    </div>
+
+    <div class="sec-title">你不做什么 <span class="more">边界即权限</span></div>
+    <div class="card" style="padding:10px 14px">
+      ${pos.dont.map(function(x){ return '<div class="neg-row"><i>×</i><span>' + x + '</span></div>'; }).join('')}
+    </div>
+
+    <div class="sec-title">其他三个身份看到什么 <span class="more">四套不同的界面</span></div>
+    <div class="card" style="padding:0">${peers}</div>
+
+    ${end === 'admin' ? `
+    <div class="sec-title">完整方案 <span class="more">投资人视角</span></div>
+    <div class="menu-group">
+      <div class="row" onclick="pushEcoPage()"><div class="ric">${ic('i-layers')}</div><div class="rt"><b>生态架构与方案</b><span>三层架构 · 六大引擎 · 五阶段验收</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>` : ''}
+    <div class="note">四个身份共用同一个 Travel ID，但数据、功能、权限完全隔离；可在「我的 → 切换身份」随时切换。</div>`;
+  push('我的角色', html, {});
+}
+/** 从「我的角色」页直接切到另一个身份，看同一页面变成什么样（用户主动点击，非自动跳转） */
+function rolePeek(k){
+  if(k === S.end) return;
+  setEnd(k);
+  clearStack();
+  pushRolePage();
+  toast('已切到「' + ENDS[k].name + '」视角');
+}
+
+function pushEcoPage(){
+  const html = `
+    <div class="eco-hero">
+      <div class="eh-tag">战略定位 · D 模式</div>
+      <div class="eh-title">Tourism Web3 OS</div>
+      <div class="eh-sub">文旅生态操作系统 —— 不是旅游 App，也不是发币项目</div>
+      <div class="eh-hr"></div>
+      <div class="eh-rule">Web3 负责<b>确权、协作、记录与激励</b>；真实旅游消费负责<b>创造收入</b>；平台通过<b>提供服务</b>获得利润。</div>
+    </div>
+
+    <div class="sec-title">每个用户关联三个权益对象 <span class="more">方案 §3</span></div>
+    <div class="tri-row">
+      ${[['Travel ID','统一数字身份','记录会员、旅行经历、数字凭证与隐私授权','i-chain','#2f6f9f','pushTravelIdPage()'],
+         ['旅豆','Freedom Points','向往自由链发行的链上权益凭证 · 权益兑换与核销','i-wallet','#e87722',"setEnd('tourist');setTab('wallet')"],
+         ['Travel Pass','服务使用权','旅游服务使用权、活动资格、数字成就等凭证','i-ticket','#0f766e',"setEnd('tourist');setTab('me')"]].map(function(x){ return `
+        <div class="tri-card" onclick="${x[5]}">
+          <div class="tri-ic" style="background:${x[4]}14;color:${x[4]}">${ic(x[3])}</div>
+          <b>${x[0]}</b>
+          <span class="tri-en">${x[1]}</span>
+          <span class="tri-d">${x[2]}</span>
+        </div>`; }).join('')}
+    </div>
+
+    <div class="sec-title">三层架构 <span class="more">方案 §1.2</span></div>
+    <div class="layer-stack">
+      ${ECO_LAYERS.map((L,i)=>`
+        <div class="layer-box" style="--lc:${L.c}">
+          <div class="lb-bar" style="background:linear-gradient(135deg,${L.c},${L.c2})"></div>
+          <div class="lb-body">
+            <div class="lb-h"><span class="lb-tag" style="background:${L.c}1a;color:${L.c}">${L.k} 层</span><b>${L.n}</b></div>
+            <div class="lb-role">${L.role}</div>
+            <div class="lb-d">${L.d}</div>
+            <button class="lb-jump" style="color:${L.c}" onclick="${L.jump}">${L.jl} ${ic('i-arrow')}</button>
+          </div>
+        </div>
+        ${i<2?'<div class="layer-arrow">'+ic('i-arrow')+'</div>':''}`).join('')}
+      <div class="layer-base">
+        <div class="base-h">${ic('i-layers')} 共同底座 · 真实文旅交易与履约</div>
+        <div class="base-tags">${['主题游','剧本游','景区','酒店民宿','餐饮','活动','内容服务'].map(t=>'<span>'+t+'</span>').join('')}</div>
+        <div class="base-d">订单 · 支付 · 结算 · CRM · 积分 · 数字凭证 · 风控 · 数据分析</div>
+      </div>
+    </div>
+
+    <div class="sec-title">Web3 数字底座 <span class="more">确权 · 记录 · 激励</span></div>
+    <div class="eco-entry" onclick="pushWeb3Page()">
+      <div class="ee-ic" style="background:#e8f0f7;color:#2f6f9f">${ic('i-chain')}</div>
+      <div class="ee-b"><b>Travel ID · 链上权益 · 贡献存证</b><span>DID 身份 / 旅豆凭证 / CS 贡献确权 / 境内外隔离</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="eco-entry" onclick="pushNftOpsPage()">
+      <div class="ee-ic" style="background:#fdf0e4;color:#e87722">${ic('i-box')}</div>
+      <div class="ee-b"><b>数字藏品发行中台</b><span>供应量写死 · 批次上链 · 转赠与仿盘监控 · 六条合规红线</span></div>
+      <div class="ee-a">${ic('i-arrow')}</div>
+    </div>
+
+    <div class="sec-title">谁贡献什么 · 谁拿什么 <span class="more">方案 §4 B 层</span></div>
+    <div class="val-wrap">
+      <div class="val-head"><span>参与者</span><span>创造价值</span><span>合理回报</span></div>
+      ${[['游客','消费、评价、有效推荐','会员福利、消费权益'],
+         ['内容创作者','剧本、攻略、视频及有效转化','内容授权费、服务佣金'],
+         ['商家','产品供给与服务履约','订单收入、获客增长'],
+         ['城市合伙人','招商、运营、履约协作','合同服务费 + 业绩佣金'],
+         ['平台','技术、流量、交易规则与风控','服务费、佣金、技术收入']].map(function(r){ return `
+        <div class="val-row"><b>${r[0]}</b><span>${r[1]}</span><span class="vr">${r[2]}</span></div>`; }).join('')}
+    </div>
+    <div class="val-note">${ic('i-shield')} 现金佣金按可核验订单及合同结算；城市合伙人只对真实服务和有效交易计酬，不按发展下级层级计酬。</div>
+
+    <div class="sec-title">六大核心引擎 <span class="more">方案 §10.2</span></div>
+    <div class="note" style="padding:0 16px 10px;color:var(--sub);font-size:11px;line-height:1.7">四个引擎已做成<b style="color:var(--brand-deep)">可玩链路</b>：每步真实改数据（钱包 / 预算池 / 分账 / 配额），刷新即复位。</div>
+    <div class="eng-grid">
+      ${ECO_ENGINES.map(e=>`
+        <div class="eng-card" onclick="${e.j}">
+          <div class="eg-ic">${ic(e.ic)}</div>
+          <div class="eg-n">${e.cn}</div>
+          <div class="eg-en">${e.en}</div>
+          <div class="eg-d">${e.d}</div>
+          <div class="eg-link">${e.jl} ${ic('i-arrow')}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec-title">技术选型 <span class="more">方案 §10.1</span></div>
+    <div class="spec-wrap">
+      ${ECO_SPEC.map(r=>`
+        <div class="spec-row">
+          <div class="sr-k">${r[0]}</div>
+          <div class="sr-v"><b>${r[1]}</b><span>${r[2]}</span></div>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec-title">五阶段建设与验收 <span class="more">方案 §13</span></div>
+    <div class="stage-tl">
+      ${ECO_STAGES.map((s,i)=>`
+        <div class="stage-row ${s.st==='已跑通'?'done':s.st==='建设中'?'cur':''}">
+          <div class="st-dot"><i></i>${i<ECO_STAGES.length-1?'<em></em>':''}</div>
+          <div class="st-body">
+            <div class="st-h"><b>${s.n}</b><span class="st-tag ${s.st==='已跑通'?'g':s.st==='建设中'?'o':''}">${s.st}</span></div>
+            <div class="st-d">${s.d}</div>
+            <div class="st-g">${ic('i-check')} ${s.g}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec-title">四个责任中心 <span class="more">方案 §12</span></div>
+    <div class="resp-wrap">
+      ${[['文旅经营','商品销售、主题游、履约','资质、合同、退款'],
+         ['平台技术','软件、数据、积分、凭证','信息安全、隐私、审计'],
+         ['生态运营','商家、创作者、合伙人','佣金合同、税务、反舞弊'],
+         ['境外业务','国际合作与当地服务','属地支付、虚拟资产、税务和消费者保护']].map(function(r){ return `
+        <div class="resp-row"><b>${r[0]}</b><span class="rs-d">${r[1]}</span><span class="rs-k">${ic('i-shield')} ${r[2]}</span></div>`; }).join('')}
+    </div>
+    <div class="resp-note">不必从一开始成立四家独立公司；可先实现业务、账务和权限隔离，待许可和规模需要再考虑法律实体拆分。</div>
+    <div class="sec-title">最小可验证单元 <span class="more">方案 §11</span></div>
+    <div class="case-entry" onclick="pushDemoCasePage()">
+      <div class="ce-l"><b>朱家角 · 江南谜案</b><span>一单 ¥298 的七步闭环：内容获客 → 真实交易 → 线下体验 → 贡献确认 → 分账与权益 → 再次消费 → 商家再投入</span></div>
+      <div class="ce-a">${ic('i-arrow')}</div>
+    </div>
+    <div class="sec-title">长期壁垒</div>
+    <div class="moat-row">
+      <div class="moat"><b>内容壁垒</b><span>剧本与攻略可持续生产</span></div>
+      <div class="moat"><b>商家网络壁垒</b><span>供给密度与履约质量</span></div>
+      <div class="moat"><b>数字权益与数据壁垒</b><span>权益记录与用户资产</span></div>
+    </div>
+    <div class="note">Web3 只在闭环能于多个城市独立成立时，才从营销概念转化为文旅产业基础设施。以上结构、引擎与技术选型均取自《「向往的自由」Web3 文旅生态商业与技术总体方案》，经济数字为示例假设。</div>`;
+  return push('生态架构', html, {});
+}
+
+/* ===== 境外业务：稳定币安全区准入模型（方案 §7） ===== */
+const OVERSEA_COND = [
+  { n:'客户身份过滤', d:'KYC / KYB 前置，排除境内用户与受限名单', ic:'i-user' },
+  { n:'纯境外目的地产品', d:'仅销售境外目的地旅游产品，不涉境内资源', ic:'i-compass' },
+  { n:'资金完全境外闭环', d:'收付、清算、留存均在境外，不回流境内账户', ic:'i-wallet' },
+  { n:'零境内营销', d:'不在境内渠道投放、不面向境内用户推广', ic:'i-spark' },
+  { n:'境外独立团队运营', d:'独立主体、独立人员、独立系统权限', ic:'i-users' },
+  { n:'当地持牌经营', d:'取得目的地市场支付/旅游相关牌照或合作持牌方', ic:'i-shield' },
+];
+let overseaOn = [true,true,true,true,true,false];
+function pushOverseaPage(){
+  const html = `
+    <div class="ov-hero">
+      <div class="ov-tag">C 层 · 境外业务</div>
+      <div class="ov-t">境外做外国人生意：稳定币 + 法币</div>
+      <div class="ov-d">两边用正常的 B2B 采购协议连接。境内做境内生意（人民币 + 向往自由链旅豆），境内外严格隔离。</div>
+    </div>
+    <div class="sec-title">安全区准入 · 六项必须同时满足 <span class="more">方案 §7</span></div>
+    <div id="ovList">${ovListHtml()}</div>
+    <div class="ov-gate" id="ovGate">${ovGateHtml()}</div>
+    <div class="sec-title">境内外隔离</div>
+    <div class="info-block" style="margin:0 14px 12px">
+      <div class="kvs"><span>境内资产</span><b>人民币 + 向往自由链旅豆（链上权益凭证）</b></div>
+      <div class="kvs"><span>境外资产</span><b>Voyage Token（EVM 链）+ 稳定币 / 法币结算，独立主体独立账</b></div>
+      <div class="kvs"><span>连接方式</span><b>仅 B2B 采购协议，不做用户级资产互通</b></div>
+      <div class="kvs"><span>共同底线</span><b>只对真实服务与有效交易计酬 · 不资金池</b></div>
+    </div>
+    <div class="note">境外公司收稳定币须六项条件同时满足，缺一不可。任一条不满足，该市场不进入 —— 这是准入闸门，不是评分项。</div>`;
+  return push('境外业务', html, {});
+}
+function ovListHtml(){
+  return OVERSEA_COND.map((c,i)=>`
+    <div class="ov-item ${overseaOn[i]?'on':''}" onclick="ovToggle(${i})">
+      <div class="ov-ck">${overseaOn[i]?ic('i-check'):''}</div>
+      <div class="ov-ic">${ic(c.ic)}</div>
+      <div class="ov-b"><b>${c.n}</b><span>${c.d}</span></div>
+    </div>`).join('');
+}
+function ovGateHtml(){
+  const ok = overseaOn.filter(Boolean).length;
+  const pass = ok === OVERSEA_COND.length;
+  return `
+    <div class="gate-box ${pass?'pass':'block'}">
+      <div class="gb-h">${pass?ic('i-check')+' 准入通过':ic('i-shield')+' 准入未通过'}</div>
+      <div class="gb-n"><b>${ok}</b> / 6 项满足${pass?' · 可进入该市场':' · 缺 '+(6-ok)+' 项，禁止展业'}</div>
+      <div class="gb-d">${pass?'六项条件全部满足，可开展境外收单与结算部署。':'六项条件必须同时满足，缺一不可 —— 未满足前不得收款。'}</div>
+    </div>`;
+}
+function ovToggle(i){
+  overseaOn[i] = !overseaOn[i];
+  const l = $('#ovList'), g = $('#ovGate');
+  if(l) l.innerHTML = ovListHtml();
+  if(g) g.innerHTML = ovGateHtml();
+}
+/* ===== 朱家角示范闭环（依据总体方案 §11） ===== */
+const CASE_STEPS = [
+  { n:'内容获客', who:'创作者', amt:'—', d:'创作者发布朱家角剧本游内容，带合法有效的归因链接。', sys:'归因记录 · 来源可追溯' },
+  { n:'真实交易', who:'游客', amt:'¥298', d:'游客用人民币购买主题游，形成订单与 Travel Pass。', sys:'订单落库 · 凭证发行' },
+  { n:'线下体验', who:'游客 · 商家', amt:'核销', d:'完成剧情任务，并在合作餐饮、文化体验商家消费。', sys:'动态核销码 · 商家确认' },
+  { n:'贡献确认', who:'平台', amt:'CS 计分', d:'核验订单、任务、推荐归因，计算真实贡献。', sys:'反作弊校验 · 贡献入账' },
+  { n:'分账与权益', who:'商家 · 创作者', amt:'¥196.6', d:'结算商家款项和创作者佣金，发放预算内积分及成就。', sys:'分账 · 佣金 · 积分发放' },
+  { n:'再次消费', who:'游客', amt:'旅豆抵扣', d:'游客在下一次主题游或联盟商家使用权益。', sys:'权益核销 · 复购归因' },
+  { n:'商家持续投入', who:'商家', amt:'增量采购', d:'根据增量收入和获客成本继续采购服务、投入营销预算。', sys:'续约 · 预算再投入' },
+];
+const CASE_SPLIT = [
+  { n:'商家结算', v:172.8, p:58, c:'#7b5aa6' },
+  { n:'平台服务费', v:35.8, p:12, c:'#0f766e' },
+  { n:'创作者佣金', v:23.8, p:8, c:'#2f6f9f' },
+  { n:'积分预算', v:14.9, p:5, c:'#e87722' },
+  { n:'平台剩余毛利', v:50.7, p:17, c:'#0f9d58' },
+];
+/** 示范闭环分账行：与 DB.x.waterfall 同源，标签换算为四方视角，并带实绩口径 */
+function caseSplitRows(){
+  const RS = splitRowsReal();
+  const MAP = { '履约成本':'商家结算', '平台服务费':'平台服务费', '合伙人分润':'创作者佣金', '权益预算':'权益预算', '留存毛利':'平台剩余毛利' };
+  return RS.rows.map(function(w){ return { n: MAP[w.n] || w.n, v:w.v, p:w.p, c:w.c, real: !!w.real }; });
+}
+function pushDemoCasePage(){
+  const html = `
+    <div class="case-hero">
+      <div class="ch-tag">方案 §11 · 示范闭环</div>
+      <div class="ch-t">朱家角 · 江南谜案</div>
+      <div class="ch-d">一单 ¥298 的剧本游，如何把创作者、游客、商家、平台四方的收益同时做成立 —— 这是整套生态的最小可验证单元。</div>
+    </div>
+    <div class="sec-title">七步闭环 <span class="more">每一步都要留痕</span></div>
+    <div class="case-tl">
+      ${CASE_STEPS.map(function(s,i){ return `
+        <div class="case-row">
+          <div class="cs-dot"><i></i>${i<CASE_STEPS.length-1?'<em></em>':''}</div>
+          <div class="cs-body">
+            <div class="cs-h"><b>${i+1}. ${s.n}</b><span class="cs-who">${s.who}</span><span class="cs-amt">${s.amt}</span></div>
+            <div class="cs-d">${s.d}</div>
+            <div class="cs-sys">${ic('i-chain')} ${s.sys}</div>
+          </div>
+        </div>`; }).join('')}
+    </div>
+    <div class="sec-title">一单 ¥298 怎么分 <span class="more">与商户端瀑布图同源 · 实绩口径</span></div>
+    <div class="split-card">
+      <div class="split-bar">
+        ${(()=>{ const CS = caseSplitRows();
+          return CS.map(function(x){ return '<i style="width:'+x.p+'%;background:'+x.c+'"></i>'; }).join(''); })()}
+      </div>
+      <div class="split-list">
+        ${(()=>{ const CS = caseSplitRows();
+          return CS.map(function(x){ return `
+          <div class="sp-row"><span class="sp-dot" style="background:${x.c}"></span>
+            <span class="sp-n">${x.n}${x.real ? ' <em style="font-style:normal;font-size:8px;font-weight:800;color:#b26a00;background:#fff4e8;padding:1px 4px;border-radius:5px">实绩</em>' : ''}</span>
+            <span class="sp-p">${x.p}%</span>
+            <b class="sp-v num">¥${x.v.toFixed(2)}</b></div>`; }).join(''); })()}
+      </div>
+      <div class="split-note">商家拿大头（58%），平台服务费 12%，创作者佣金 8%；<b style="color:#b26a00">权益预留实绩 ¥${splitRowsReal().rows.filter(function(w){return w.g==='pool';})[0].v.toFixed(2)}</b>（预算 ¥14.9，缺口由留存毛利吸收），平台剩余毛利同步扣减至 ¥${splitRowsReal().rows.filter(function(w){return w.n==='留存毛利';})[0].v.toFixed(2)}。五口径合计恒为 ¥298。</div>
+    </div>
+    <div class="spl-real" style="margin:0 14px 10px">
+      <div class="rh">${ic('i-calc')} 权益成本从核销结算回流</div>
+      <div class="rd">${splitRealNote().text}。数据源：运营端「权益核销与结算」页的商家对账结果，差异核减与商家申诉受理后，本页实绩立即同步。</div>
+    </div>
+    <div class="sec-title">闭环判定 <span class="more">三条同时成立才算闭环</span></div>
+    <div class="judge-wrap">
+      ${[['各方均有合理收益','履约与成本核算后，四方的收益都能站住'],
+         ['游客愿意复购','体验本身值得回头，而不是靠补贴拉动'],
+         ['不靠新钱付旧账','不依靠新用户购买 Token 支付旧用户奖励']].map(function(x,i){ return `
+        <div class="judge-row"><div class="jg-n">${i+1}</div><div class="jg-b"><b>${x[0]}</b><span>${x[1]}</span></div></div>`; }).join('')}
+    </div>
+    <div class="note">示范场景取自方案 §11。金额为单位经济模型示例，实际分账比例以商家协议与创作者合同为准；积分部分受权益预算约束，不超发。</div>`;
+  return push('示范闭环', html, {});
+}
+
+
+/* ============================================================
+   六大引擎 · 可玩链路（v1.4 起四引擎全部端到端可玩）
+   —— 奖励 / 贡献 / 结算 / 网关 四条端到端可玩演示
+   —— 真实修改 DB.engine / DB.contrib / DB.settle / DB.gateway 及钱包预算流水
+   ============================================================ */
+
+/* ============================================================
+   激励引擎 · Reward Engine（方案 §9）
+   可玩链路：预算池校验 → 批次启用 → 发放/冻结/回收 → 四本账核对
+   全部真实改 DB.engine / DB.wallet / DB.txLog
+   ============================================================ */
+const ENG_STEPS = {
+  reward:[
+    { k:'cap',   t:'第 1 步 · 预算上限校验', d:'按方案 min(已批准营销预算, 可承受贡献利润) 计算可发额度' },
+    { k:'batch', t:'第 2 步 · 启用发行批次', d:'批次从「待启用」转「进行中」，占用预算池额度' },
+    { k:'issue', t:'第 3 步 · 逐笔发放',   d:'发放前校验剩余额度；发放后写入钱包与链上流水' },
+    { k:'life',  t:'第 4 步 · 冻结与回收', d:'售后期冻结防退款未冲正；过期回收后不再重新发行' },
+    { k:'book',  t:'第 5 步 · 四本账核对', d:'发行账 / 流通账 / 核销账 / 回收账 分别建账，不可混同' },
+  ],
+  contrib:[
+    { k:'submit', t:'第 1 步 · 提交内容',   d:'UGC 提交后进入待确认，原始质量分 Q 已就位' },
+    { k:'cs',     t:'第 2 步 · 计算 CS',    d:'CS = 0.5Q + 0.3S + 0.2R，三维加权得贡献分' },
+    { k:'anti',   t:'第 3 步 · 作弊检测',   d:'同一 IP 批量注册、异常点击比等命中即拦截' },
+    { k:'split',  t:'第 4 步 · 分润分配',   d:'按 CS 占比分配当月分润池，实时给出每人金额' },
+  ],
+  settle:[
+    { k:'split',  t:'第 1 步 · 订单分账',   d:'按履约/服务费/合伙人/预算池/留存五口径拆分，数字自洽' },
+    { k:'refund', t:'第 2 步 · 退款冲正',   d:'退款生成负向分账，回收已发权益与预算池注入' },
+    { k:'recon',  t:'第 3 步 · 商家对账',   d:'订单流水与商家应结逐笔比对，生成对账单' },
+    { k:'comm',   t:'第 4 步 · 佣金核算',   d:'按可核验订单计酬，只挂直接贡献不挂层级' },
+  ],
+  gateway:[
+    { k:'key',    t:'第 1 步 · 密钥与权限', d:'境内走旅豆通道，境外走 Voyage Token，账本物理隔离' },
+    { k:'catalog',t:'第 2 步 · 接口目录',   d:'五个开放接口，含配额与调用量' },
+    { k:'debug',  t:'第 3 步 · 在线调试',   d:'填参数真实发起调用，返回结构化 JSON' },
+    { k:'quota',  t:'第 4 步 · 配额与限流', d:'接近阈值自动告警，可扩容' },
+  ],
+};
+function engSteps(k){
+  return (ENG_STEPS[k]||[]).map((s,i)=>{
+    const done = (S.engStep && S.engStep[k] || []).indexOf(s.k) >= 0;
+    const btn = done
+      ? `<button class="egm-btn ghost" disabled>${ic('i-check')} 已完成</button>`
+      : `<button class="egm-btn" onclick="engDo('${k}','${s.k}')">${i===0?'开始':s.t.slice(0,4).trim()}</button>`;
+    return `<div class="egm-step ${done?'done':''}">
+      <div class="n">${done?'✓':i+1}</div>
+      <div class="t"><b>${s.t}</b><span>${s.d}</span></div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+function engMark(k, step){
+  S.engStep = S.engStep || {};
+  S.engStep[k] = S.engStep[k] || [];
+  if(S.engStep[k].indexOf(step) < 0) S.engStep[k].push(step);
+}
+function engLog(k, d, lv){
+  lv = lv || 'ok';
+  const c = lv==='ok' ? '#0f9d58' : lv==='warn' ? '#e8a020' : '#e5484d';
+  const bg = lv==='ok' ? '#e8f6ee' : lv==='warn' ? '#fdf3e0' : '#fdecec';
+  /* 三本日志表按引擎分别初始化，避免首次写入时目标数组不存在 */
+  if(k === 'gateway')      DB.gateway.logs   = DB.gateway.logs   || [];
+  else if(k === 'contrib') DB.contrib.logs   = DB.contrib.logs   || [];
+  else                      DB.engine.log     = DB.engine.log     || [];
+  const target = k==='gateway' ? DB.gateway.logs : k==='contrib' ? DB.contrib.logs : DB.engine.log;
+  target.unshift({ t:'刚刚', d:d, lv:lv, c:c, bg:bg });
+}
+function engDo(k, step){
+  const fn = ({ 'reward:cap':'rwCap','reward:batch':'rwBatch','reward:issue':'rwIssue','reward:life':'rwLife','reward:book':'rwBook',
+                'contrib:submit':'ctSubmit','contrib:cs':'ctCalc','contrib:anti':'ctAnti','contrib:split':'ctSplit',
+                'settle:split':'stSplit','settle:refund':'stRefund','settle:recon':'stRecon','settle:comm':'stComm',
+                'gateway:key':'gwKey','gateway:catalog':'gwCatalog','gateway:debug':'gwDebug','gateway:quota':'gwQuota' })[k+':'+step];
+  if(fn && typeof window[fn] === 'function') window[fn]();
+}
+
+/* ---------- 激励引擎 ---------- */
+function rwCap(){
+  const b = DB.admin.budget;
+  /* 口径统一（与运营端风控页 / 支付流 applyOrder 一致）：
+     total=已批准营销预算 · issued=已发行额度 · used=已核销 · 剩余可发=total-issued */
+  const room = b.total - b.issued;
+  engMark('reward','cap');
+  engLog('reward','预算池校验通过：已批准营销预算 '+fmtNum(b.total)+' − 已发行 '+fmtNum(b.issued)+' = 剩余可发 '+fmtNum(room)+' 旅豆');
+  engLog('reward','已核销 '+fmtNum(b.used)+'，剩余可发额度 '+fmtNum(room)+' 旅豆', room>0?'ok':'warn');
+  toast('预算上限校验通过 · 可发 '+fmtNum(Math.max(0,room))+' 豆');
+  repaintEngine('reward');
+}
+function rwBatch(){
+  const nb = DB.engine.batches.find(x=>x.st==='待启用');
+  if(!nb){ toast('所有批次已启用 · 无待启用批次'); repaintEngine('reward'); return; }
+  nb.st = '进行中';
+  engMark('reward','batch');
+  engLog('reward','批次 '+nb.id+'「'+nb.n+'」已启用，额度 '+fmtNum(nb.amt)+' 挂入预算池，周期 '+nb.d);
+  toast('批次已启用 · '+nb.n);
+  repaintEngine('reward');
+}
+function rwIssue(){
+  const t = DB.engine.tasks.find(x=>x.st==='pending');
+  if(!t){ toast('没有待发放任务 · 全部已处理'); repaintEngine('reward'); return; }
+  const b = DB.admin.budget;
+  if(b.total - b.issued < t.amt){ toast('预算池额度不足 · 已拦截'); engLog('reward','拦截：'+t.n+' 需 '+t.amt+' 豆，剩余可发 '+fmtNum(Math.max(0,b.total-b.issued))+' 不足','warn'); repaintEngine('reward'); return; }
+  t.st = 'done';
+  b.issued += t.amt;
+  DB.wallet += t.amt;
+  const bat = DB.engine.batches[0]; bat.used += t.amt;
+  DB.txLog.unshift({ d:t.n, t:todayStr(), a:'+'+t.amt, p:'plus', chain:'0x'+Math.random().toString(16).slice(2,10)+'…'+Math.random().toString(16).slice(2,6) });
+  engMark('reward','issue');
+  engLog('reward','发放 '+t.amt+' 豆 → '+t.to+'（'+t.n+'）；已发行 '+fmtNum(b.issued)+'，剩余可发 '+fmtNum(b.total-b.issued)+'，钱包余额 '+DB.wallet);
+  toast('已发放 +'+t.amt+' 旅豆 · '+t.to);
+  repaintEngine('reward');
+}
+function rwLife(){
+  const fz = DB.engine.tasks.find(x=>x.st==='frozen');
+  if(fz){
+    fz.st = 'pending';
+    engLog('reward','解冻 '+fz.n+'（'+fz.amt+' 豆）：T+7 售后期满，未发生退款，恢复可发放');
+    toast('已解冻 · '+fz.n);
+  } else {
+    const rc = DB.engine.tasks.find(x=>x.st==='recycle');
+    if(rc){
+      rc.st = 'done';
+      DB.engine.recycled = (DB.engine.recycled||0) + rc.amt;
+      engLog('reward','回收 '+rc.n+'（'+rc.amt+' 豆）：有效期届满，回收后不重新发行，避免超发；回收账累计 '+fmtNum(DB.engine.recycled),'warn');
+      toast('已回收 · 不再发行');
+    } else {
+      DB.engine.tasks.push({ id:'R-'+(90+DB.engine.tasks.length), n:'新增待发放 · 履约完成', amt:60, to:'U-'+(2000+Math.floor(Math.random()*900)), st:'pending', d:'履约确认后发放', why:'演示数据' });
+      engLog('reward','新增一笔待发放任务，用于继续演示发放流程','warn');
+      toast('已新增一笔待发放任务');
+    }
+  }
+  engMark('reward','life');
+  repaintEngine('reward');
+}
+function rwBook(){
+  const b = DB.admin.budget;
+  const books = DB.engine.books;
+  /* 四本账与预算池字段同口径：发行账=已发行 · 流通账=持有量 · 核销账=已核销 · 回收账=累计回收 */
+  books[0].v = fmtNum(b.issued);
+  books[1].v = fmtNum(DB.wallet * 100);
+  books[2].v = fmtNum(b.used);
+  books[3].v = fmtNum(DB.engine.recycled || 0);
+  engMark('reward','book');
+  engLog('reward','四本账已分别核对：发行账 '+books[0].v+' / 流通账 '+books[1].v+' / 核销账 '+books[2].v+' / 回收账 '+books[3].v);
+  toast('四本账已核对 · 口径独立不混同');
+  repaintEngine('reward');
+}
+
+/* ---------- 贡献引擎 ---------- */
+function csOf(it){ return Math.round(it.q * 0.5 + it.s * 0.3 + it.r * 0.2); }
+function ctSubmit(){
+  const w = DB.contrib.items.find(x=>x.st==='待确认');
+  if(w){ toast(w.n+' 已在流程中 · 等下一步确认'); repaintEngine('contrib'); return; }
+  DB.contrib.items.push({ id:'C-0'+(DB.contrib.items.length+1), n:'湖州亲子露营实拍笔记', a:'牧云', q:79, s:74, r:66, st:'待确认', bad:false, earn:0, d:'刚提交 · 待确认质量分与采纳情况' });
+  engMark('contrib','submit');
+  engLog('contrib','收到新内容《湖州亲子露营实拍笔记》，进入待确认队列');
+  toast('内容已提交 · 进入待确认');
+  repaintEngine('contrib');
+}
+function ctCalc(){
+  let any = false;
+  DB.contrib.items.forEach(function(it){
+    if(it.st==='待确认'){ it.st = '已确认'; it.cs = csOf(it); any = true; }
+  });
+  if(!any){ toast('没有待确认内容 · 已完成全部计算'); repaintEngine('contrib'); return; }
+  const bad = DB.contrib.items.filter(x=>x.bad);
+  engMark('contrib','cs');
+  engLog('contrib','CS = 0.5Q + 0.3S + 0.2R 已计算：' + DB.contrib.items.filter(x=>!x.bad).map(x=>x.n.slice(0,10)+'='+x.cs).join('、'));
+  if(bad.length) engLog('contrib','注意：'+bad.map(x=>x.n).join('、')+' 命中反作弊规则，CS 不参与分润', 'warn');
+  toast('CS 已计算 · 参与分润 ' + DB.contrib.items.filter(x=>!x.bad).length + ' 条');
+  repaintEngine('contrib');
+}
+function ctAnti(){
+  const bad = DB.contrib.items.filter(x=>x.bad && x.st!=='已拦截');
+  if(!bad.length){
+    engLog('contrib','本轮未发现新增作弊特征，风控规则持续生效');
+    toast('未发现新增作弊特征');
+  } else {
+    bad.forEach(function(x){ x.st = '已拦截'; x.cs = 0; });
+    const names = bad.map(x=>x.n).join('、');
+    engLog('contrib','反作弊拦截：'+names+'（同一 IP 批量注册 46 账号，互动结构异常）', 'err');
+    /* 幂等写入：已存在同源告警则不重复追加，避免运营端告警列表被刷屏 */
+    if(!DB.admin.warnings.some(w=>String(w.d).indexOf('安吉瑜伽谷避坑指南') >= 0)){
+      DB.admin.warnings.unshift({ t:'刷单特征已确认', lv:'高', c:'#e5484d', d:'内容《安吉瑜伽谷避坑指南》同一 IP 批量注册 46 账号，已拦截并冻结该账号 CS 结算，建议人工复核。' });
+    }
+    toast('已拦截 ' + bad.length + ' 条作弊内容');
+  }
+  engMark('contrib','anti');
+  repaintEngine('contrib');
+}
+function ctSplit(){
+  const valid = DB.contrib.items.filter(x=>x.cs && !x.bad);
+  const total = valid.reduce(function(s,x){ return s + x.cs; }, 0);
+  if(!total){ toast('请先完成 CS 计算'); repaintEngine('contrib'); return; }
+  const dist = valid.map(function(x){
+    const share = x.cs / total;
+    return { n:x.n, a:x.a, cs:x.cs, pct:Math.round(share*1000)/10, amt:Math.round(DB.contrib.pool * share) };
+  });
+  DB.contrib.dist = dist;
+  engMark('contrib','split');
+  engLog('contrib','当月分润池 ¥'+fmtNum(DB.contrib.pool)+' 按 CS 占比分配：' + dist.map(x=>x.a+' ¥'+fmtNum(x.amt)).join('、'));
+  toast('分润已分配 · 合计 ¥' + dist.reduce(function(s,x){return s+x.amt;},0));
+  repaintEngine('contrib');
+}
+
+/* ---------- 结算引擎 ---------- */
+function stSplit(){
+  const o = DB.settle.orders.find(x=>x.st==='待对账');
+  if(!o){ toast('没有待分账订单 · 全部已处理'); repaintEngine('settle'); return; }
+  const sum = DB.settle.ratio.reduce(function(s,r){ return s + r.pct; }, 0);
+  o.split = DB.settle.ratio.map(function(r){ return { k:r.k, pct:r.pct, amt:Math.round(o.amt * r.pct / 100), c:r.c, to:r.to }; });
+  o.st = '已分账';
+  /* 预算池注入 5% 分账即确认，占用已发行额度；退款时原路回收（见 stRefund） */
+  const poolIn = o.split.find(x=>x.k==='预算池注入');
+  if(poolIn){
+    DB.admin.budget.issued += poolIn.amt;
+    engLog('settle','预算池注入 '+poolIn.amt+' 豆已占用发行额度，剩余可发 '+fmtNum(DB.admin.budget.total - DB.admin.budget.issued));
+  }
+  engMark('settle','split');
+  engLog('settle','订单 '+o.id+'（'+o.merch+' ¥'+fmtNum(o.amt)+'）分账完成，占比合计 '+sum+'%：' + o.split.map(x=>x.k+' ¥'+x.amt).join('、'));
+  if(Math.abs(o.split.reduce(function(s,x){return s+x.amt;},0) - o.amt) > 1) engLog('settle','注意：分账明细与订单金额存在四舍五入差额，已计入留存毛利','warn');
+  toast('分账完成 · ' + o.id);
+  repaintEngine('settle');
+}
+function stRefund(){
+  const o = DB.settle.orders.filter(function(x){ return x.split && x.refund===0; })[0];
+  if(!o){ toast('没有可冲正的已分账订单'); repaintEngine('settle'); return; }
+  o.refund = o.amt;
+  o.st = '已冲正';
+  o.splitRev = o.split.map(function(x){ return { k:x.k, amt:-x.amt, c:x.c }; });
+  const poolBack = o.split.find(x=>x.k==='预算池注入');
+  if(poolBack){
+    DB.admin.budget.issued = Math.max(0, DB.admin.budget.issued - poolBack.amt);
+    engLog('settle','退款冲正：预算池注入 '+poolBack.amt+' 豆原路回收，剩余可发 '+fmtNum(DB.admin.budget.total - DB.admin.budget.issued), 'warn');
+  }
+  const beanBack = DB.txLog.filter(function(x){ return x.d.indexOf(o.merch) >= 0 || x.d.indexOf(o.amt) >= 0; })[0];
+  if(beanBack){ engLog('settle','已发旅豆权益按规则扣回，冲正流水 '+beanBack.a+' 豆','warn'); }
+  engMark('settle','refund');
+  engLog('settle','订单 '+o.id+' 全额退款 ¥'+fmtNum(o.amt)+'，生成负向分账：' + o.splitRev.map(x=>x.k+' ¥'+x.amt).join('、'), 'warn');
+  toast('已冲正 · ' + o.id);
+  repaintEngine('settle');
+}
+function stRecon(){
+  const done = DB.settle.orders.filter(x=>x.split);
+  if(!done.length){ toast('请先完成订单分账'); repaintEngine('settle'); return; }
+  const rows = done.map(function(o){
+    const gross = o.split ? o.split.filter(x=>x.to==='商户/供应商').reduce(function(s,x){return s+x.amt;},0) : 0;
+    /* 全额退款的订单应结为 0，不允许出现负数应结 */
+    return { id:o.id, merch:o.merch, amt:o.amt, gross:gross, refund:o.refund, net:Math.max(0, gross - o.refund), st:o.st };
+  });
+  const totalNet = rows.reduce(function(s,r){ return s + r.net; }, 0);
+  DB.settle.stmts = rows;
+  engMark('settle','recon');
+  engLog('settle','商家对账单已生成：'+rows.length+' 笔，商户应结合计 ¥'+fmtNum(totalNet)+'（已扣退款冲正）');
+  toast('对账单已生成 · 应结 ¥'+fmtNum(totalNet));
+  repaintEngine('settle');
+}
+function stComm(){
+  if(!DB.settle.stmts.length){ toast('请先生成对账单'); repaintEngine('settle'); return; }
+  const base = DB.settle.stmts.filter(r=>!r.refund).reduce(function(s,r){ return s + r.amt; }, 0);
+  const comm = Math.round(base * 0.08);
+  engMark('settle','comm');
+  engLog('settle','佣金核算：可核验订单 ¥'+fmtNum(base)+' × 8% = ¥'+fmtNum(comm)+'，只挂直接贡献、不挂下线圈层');
+  engLog('settle','已退款订单 ¥'+fmtNum(DB.settle.stmts.filter(r=>r.refund).reduce(function(s,r){return s+r.refund;},0))+' 不计佣，符合「只对真实服务与有效交易计酬」', 'warn');
+  toast('佣金核算完成 · ¥'+fmtNum(comm));
+  repaintEngine('settle');
+}
+
+/* ---------- 生态网关 ---------- */
+function gwKey(){
+  engMark('gateway','key');
+  const cn = DB.gateway.keys.filter(k=>k.q==='境内' && k.st==='启用').length;
+  const hk = DB.gateway.keys.filter(k=>k.q==='境外' && k.st==='启用').length;
+  engLog('gateway','权限盘点：境内启用 '+cn+' 个密钥（旅豆通道），境外启用 '+hk+' 个（Voyage Token 通道），两套账本物理隔离');
+  toast('密钥与权限已盘点 · 境内外双通道');
+  repaintEngine('gateway');
+}
+function gwCatalog(){
+  engMark('gateway','catalog');
+  engLog('gateway','接口目录已加载 '+DB.gateway.apis.length+' 个开放接口，合计配额 '+fmtNum(DB.gateway.apis.reduce(function(s,a){return s+a.q;},0))+' 次/日');
+  toast('接口目录已加载 · ' + DB.gateway.apis.length + ' 个');
+  repaintEngine('gateway');
+}
+function gwDebug(){
+  const a = DB.gateway.apis.find(x=>x.used >= x.q*0.9) || DB.gateway.apis[0];
+  if(a.used >= a.q){
+    engLog('gateway','调用 '+a.id+' 被限流：配额 '+fmtNum(a.q)+' 已用尽，请扩容后再试','err');
+    toast('已被限流 · 请先扩容配额');
+    repaintEngine('gateway'); return;
+  }
+  a.used += 1;
+  DB.gateway.lastApi = a.id;
+  DB.gateway.lastResp = gwResp(a);
+  engMark('gateway','debug');
+  engLog('gateway','调用 '+a.id+' 成功（'+a.used+'/'+fmtNum(a.q)+'），HTTP '+(a.m==='GET'?'200':'201')+'，耗时 '+(18+Math.floor(Math.random()*60))+'ms');
+  toast('调用成功 · ' + a.id);
+  repaintEngine('gateway');
+}
+function gwResp(a){
+  if(a.id === '/v1/tour/search') return { code:0, msg:'ok', total:2, data:[{ id:'T-1042', title:'朱家角剧本游 · 江南谜案', price:298, seats:6 },{ id:'T-1041', title:'安吉瑜伽谷 · 2天1夜', price:688, seats:2 }] };
+  if(a.id === '/v1/order/create') return { code:0, msg:'created', orderId:'S-' + (1100 + DB.gateway.apis[1].used), idempotent:true, splitHint:'五口径分账已生成' };
+  if(a.id === '/v1/verify/redeem') return { code:0, msg:'verified', code6:'884213', used:true, chain:'0x8c2d…a41b' };
+  if(a.id === '/v1/bean/redeem') return { code:0, msg:'redeemed', bean:-200, remain:DB.wallet, budgetChecked:true };
+  return { code:0, msg:'accepted', cs:'0.5Q+0.3S+0.2R', pending:'反作弊校验中' };
+}
+function gwQuota(){
+  const hot = DB.gateway.apis.filter(function(a){ return a.used / a.q >= 0.9; });
+  hot.forEach(function(a){ a.st = '正常'; a.q = Math.round(a.q * 1.5); });
+  engMark('gateway','quota');
+  if(hot.length){
+    engLog('gateway','配额扩容：' + hot.map(function(a){ return a.id+' → '+fmtNum(a.q); }).join('、') + '（按历史调用量上浮 50%）');
+    toast('已扩容 ' + hot.length + ' 个接口配额');
+  } else {
+    const mx = DB.gateway.apis.slice().sort(function(a,b){ return b.used/b.q - a.used/a.q; })[0];
+    engLog('gateway','配额巡检：全部接口在阈值内，最高使用率 ' + mx.id + ' ' + Math.round(mx.used/mx.q*100) + '%');
+    toast('配额正常 · 最高使用率 ' + Math.round(mx.used/mx.q*100) + '%');
+  }
+  repaintEngine('gateway');
+}
+
+/* ---------- 引擎演示页渲染 ---------- */
+const ENG_META = {
+  reward:  { t:'激励引擎', en:'Reward Engine', c:'#e87722', d:'积分发行、冻结、扣减、回收、有效期、预算控制 —— 方案 §9', sc:'bamboo' },
+  contrib: { t:'贡献引擎', en:'Contribution Engine', c:'#2f6f9f', d:'内容及推荐归因、贡献计算、作弊检测 —— 方案 §4 / §14', sc:'water' },
+  settle:  { t:'结算引擎', en:'Settlement Engine', c:'#7b5aa6', d:'订单分账、退款冲正、商家对账、佣金核算 —— 方案 §8.2 / §11', sc:'stage' },
+  gateway: { t:'生态网关', en:'Ecosystem Gateway', c:'#0f766e', d:'景区、酒店、城市运营方、海外平台 API —— 方案 §10.1', sc:'mountain' },
+};
+function engLogs(k){
+  const arr = k==='gateway' ? DB.gateway.logs : k==='contrib' ? (DB.contrib.logs||[]) : DB.engine.log;
+  return `<div class="egm-log">${ arr.length ? arr.slice(0,8).map(function(l){
+      return `<div class="lg"><span class="tm">${l.t}</span><span class="lv" style="color:${l.c};background:${l.bg}">${l.lv==='ok'?'正常':l.lv==='warn'?'注意':'拦截'}</span><span style="flex:1;color:var(--ink2)">${l.d}</span></div>`;
+    }).join('') : '<div class="lg"><span style="color:var(--faint)">暂无执行记录，点击上方步骤开始</span></div>' }</div>`;
+}
+function pushEnginePage(k){
+  const m = ENG_META[k];
+  return push(m.t + ' · 可玩演示', engPageHtml(k), {});
+}
+/** 引擎页内容（供 push 与原地重绘共用） */
+function engPageHtml(k){
+  const m = ENG_META[k];
+  return `
+    <div class="egm-hero" style="background:linear-gradient(140deg,${m.c},${m.c}cc)">
+      <div class="eh-t">${m.t}</div>
+      <div class="eh-s">${m.d}</div>
+      <div class="eh-chips"><span class="eh-chip">${m.en}</span><span class="eh-chip">可玩链路</span><span class="eh-chip">真实改数据</span></div>
+    </div>
+    ${engSteps(k)}
+    ${k==='reward' ? rwBody() : k==='contrib' ? ctBody() : k==='settle' ? stBody() : gwBody()}
+    <div class="egm-card"><div class="egm-ch"><b>执行记录</b><span>方案口径可追溯</span></div>${engLogs(k)}</div>
+    <div class="note" style="padding:2px 16px 20px">本页为演示数据，操作会真实修改内存中的 DB（钱包 / 预算池 / 流水 / 分账 / 配额），刷新页面即复位。所有数字与《总体方案》口径一致，不代表已验证经营数据。</div>`;
+}
+/** 原地重绘引擎页（不压新页） */
+function repaintEngine(k){ repaintCurrentPage(function(){ return engPageHtml(k); }); }
+/* 激励引擎主体 */
+function rwBody(){
+  const b = DB.admin.budget;
+  const issued = b.issued, room = b.total - b.issued;
+  const pct = Math.round(issued / b.total * 100);
+  const STC = { pending:['#e8a020','#fdf3e0','待发放'], done:['#0f9d58','#e8f6ee','已发放'], frozen:['#2f6f9f','#e8f0f7','冻结中'], recycle:['#8a94a6','#eef0f3','待回收'] };
+  return `
+    <div class="egm-formula">
+      <b>预算上限</b>（方案 §9 硬约束，超发即违规）
+      <span class="fx">上限 = min(已批准营销预算, 可承受的订单贡献利润比例)</span>
+      预算池总额 <b>${fmtNum(b.total)}</b> · 已发行 <b>${fmtNum(issued)}</b>（${pct}%）· 剩余可发 <b>${fmtNum(Math.max(0,room))}</b>
+      <div class="egm-bar" style="margin-top:7px"><i style="width:${Math.min(100,pct)}%;background:${pct>85?'#e5484d':'#e87722'}"></i></div>
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>发行批次</b><span>预算池按周期切批</span></div>
+      ${DB.engine.batches.map(function(x){
+        const p = Math.round(x.used / x.amt * 100);
+        return `<div class="egm-row"><div class="t"><b>${x.n}</b><span>${x.id} · ${x.d} · 已用 ${fmtNum(x.used)} / ${fmtNum(x.amt)}</span>
+          <div class="egm-bar"><i style="width:${Math.min(100,p)}%;background:${x.c0||mColor('#e87722')}"></i></div></div>
+          <span class="egm-tag" style="color:${x.st==='进行中'?'#0f9d58':'#8a94a6'};background:${x.st==='进行中'?'#e8f6ee':'#eef0f3'}">${x.st}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>发放队列</b><span>点第 3 步逐笔发放，真实进钱包与流水</span></div>
+      ${DB.engine.tasks.map(function(x){
+        const s = STC[x.st] || STC.pending;
+        return `<div class="egm-row"><div class="t"><b>${x.n}</b><span>${x.to} · ${x.d} · ${x.why}</span></div>
+          <span class="egm-tag" style="color:${s[0]};background:${s[1]}">${s[2]} ${x.amt}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>四本账</b><span>分别建账 · 不可混同</span></div>
+      ${DB.engine.books.map(function(x){
+        return `<div class="egm-row"><div class="t"><b>${x.n}</b><span>${x.d}</span></div>
+          <span class="egm-tag" style="color:${x.c};background:${x.c}14">${x.v}</span></div>`;
+      }).join('')}
+    </div>`;
+}
+function mColor(c){ return c; }
+/* 贡献引擎主体 */
+function ctBody(){
+  const dist = DB.contrib.dist;
+  const totalCS = DB.contrib.items.filter(x=>x.cs && !x.bad).reduce(function(s,x){ return s+x.cs; }, 0);
+  return `
+    <div class="egm-formula">
+      <b>贡献分 CS</b>（方案 §4，对应股权与 Token）
+      <span class="fx">CS = 0.5Q（质量）+ 0.3S（采纳）+ 0.2R（履约核验）</span>
+      当月分润池 <b>¥${fmtNum(DB.contrib.pool)}</b> · 按 CS 占比分配 · 已参与 <b>${DB.contrib.items.filter(x=>x.cs&&!x.bad).length}</b> 条 · 合计 CS <b>${totalCS}</b>
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>内容队列</b><span>点第 2 步算 CS，第 3 步跑反作弊</span></div>
+      ${DB.contrib.items.map(function(x){
+        const c = x.st==='已拦截' ? '#e5484d' : x.st==='已确认' ? '#0f9d58' : '#e8a020';
+        const bg = x.st==='已拦截' ? '#fdecec' : x.st==='已确认' ? '#e8f6ee' : '#fdf3e0';
+        return `<div class="egm-row"><div class="t"><b>${x.n}</b><span>${x.a} · ${x.d}</span>
+          <span style="font-size:9px;color:var(--sub)">Q${x.q} · S${x.s} · R${x.r}${x.cs?' · <b style="color:#2f6f9f">CS '+x.cs+'</b>':''}</span></div>
+          <span class="egm-tag" style="color:${c};background:${bg}">${x.st}</span></div>`;
+      }).join('')}
+    </div>
+    ${dist.length ? `<div class="egm-card"><div class="egm-ch"><b>分润分配结果</b><span>按 CS 占比 · 实时</span></div>
+      <div class="egm-split">${dist.map(function(d){
+        return `<div class="sr"><span class="nm">${d.a}</span><div class="bar"><i style="width:${d.pct}%;background:#2f6f9f"></i></div>
+          <span class="pc">${d.pct}%</span><span class="vl">¥${fmtNum(d.amt)}</span></div>`;
+      }).join('')}</div></div>` : ''}`;
+}
+/* 结算引擎主体 */
+function stBody(){
+  return `
+    <div class="egm-formula">
+      <b>五口径分账</b>（方案 §11 一单 ¥298 分账，占比合计 100%）
+      <span class="fx">履约 ${DB.settle.ratio[0].pct}% + 服务费 ${DB.settle.ratio[1].pct}% + 合伙人 ${DB.settle.ratio[2].pct}% + 预算池 ${DB.settle.ratio[3].pct}% + 留存 ${DB.settle.ratio[4].pct}% = 100%</span>
+      点击第 1 步对「待对账」订单分账，点第 2 步模拟全额退款冲正。
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>订单分账</b><span>分账 / 冲正 / 对账</span></div>
+      ${DB.settle.orders.map(function(o){
+        const c = o.st==='已冲正' ? '#e5484d' : o.st==='已分账' ? '#7b5aa6' : '#e8a020';
+        const bg = o.st==='已冲正' ? '#fdecec' : o.st==='已分账' ? '#f0ebf7' : '#fdf3e0';
+        return `<div class="egm-row"><div class="t"><b>${o.id} · ${o.merch}</b><span>${o.d} · ¥${fmtNum(o.amt)}${o.refund?' · 已全额退款':''}</span>
+          ${o.split ? `<span style="font-size:9px;color:var(--sub);margin-top:3px">${o.split.map(x=>x.k+' ¥'+fmtNum(x.amt)).join(' · ')}</span>` : ''}</div>
+          <span class="egm-tag" style="color:${c};background:${bg}">${o.st}</span></div>`;
+      }).join('')}
+    </div>
+    ${DB.settle.stmts.length ? `<div class="egm-card"><div class="egm-ch"><b>商家对账单</b><span>已扣退款冲正</span></div>
+      ${DB.settle.stmts.map(function(r){
+        return `<div class="egm-row"><div class="t"><b>${r.id} · ${r.merch}</b><span>订单 ¥${fmtNum(r.amt)} · 履约 ¥${fmtNum(r.gross)}${r.refund?' · 退款 -¥'+fmtNum(r.refund):''}</span></div>
+          <span class="egm-tag" style="color:#0f9d58;background:#e8f6ee">应结 ¥${fmtNum(r.net)}</span></div>`;
+      }).join('')}</div>` : ''}`;
+}
+/* 生态网关主体 */
+function gwBody(){
+  const ap = DB.gateway.lastApi;
+  const last = ap ? DB.gateway.apis.find(x=>x.id===ap) : null;
+  return `
+    <div class="egm-formula">
+      <b>双通道隔离</b>（方案 §7 境内外物理隔离）
+      <span class="fx">境内 → 向往自由链 · 旅豆账本　｜　境外 → EVM 链 · Voyage Token</span>
+      开放接口 <b>${DB.gateway.apis.length}</b> 个 · 密钥 <b>${DB.gateway.keys.filter(k=>k.st==='启用').length}</b> 个启用 · 境内外账本互不交叉。
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>密钥与权限</b><span>点第 1 步盘点</span></div>
+      ${DB.gateway.keys.map(function(k){
+        const c = k.st==='启用' ? '#0f766e' : '#8a94a6';
+        return `<div class="egm-row"><div class="t"><b>${k.n} · <span style="font-family:ui-monospace,monospace;font-size:10px">${k.id} ${k.sk}</span></b><span>${k.d}</span></div>
+          <span class="egm-tag" style="color:${c};background:${c}14">${k.q} · ${k.st}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="egm-card">
+      <div class="egm-ch"><b>接口目录</b><span>点第 3 步在线调试</span></div>
+      ${DB.gateway.apis.map(function(a){
+        const p = Math.round(a.used / a.q * 100);
+        const c = p>=90 ? '#e5484d' : p>=75 ? '#e8a020' : '#0f766e';
+        return `<div class="egm-api">
+          <div class="ah"><span class="mth ${a.m}">${a.m}</span><span class="pid">${a.id}</span>
+            <span class="egm-tag" style="color:${c};background:${c}14">${a.st}</span></div>
+          <div class="ad">${a.d} · 今日 ${fmtNum(a.used)} / ${fmtNum(a.q)}（${p}%）</div>
+          <div class="egm-bar"><i style="width:${Math.min(100,p)}%;background:${c}"></i></div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${last ? `<div class="egm-card"><div class="egm-ch"><b>最近一次调用</b><span>${last.id} · HTTP ${last.m==='GET'?'200':'201'}</span></div>
+      <div class="egm-code">${JSON.stringify(DB.gateway.lastResp, null, 2).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div></div>` : ''}`;
+}
+
+/* ============================================================
+   数字藏品发行中台（运营侧 · v1.5）
+   —— 与游客端 Travel ID 的「持有侧」构成发行 ↔ 持有闭环
+   ============================================================ */
+const NFT_RULES = [
+  { n:'不承诺升值', d:'不做价格暗示、不宣传投资收益，藏品不对应任何分红权' },
+  { n:'不以藏品融资', d:'定价与赠与分离，收入来自真实文旅服务与商品，不做资金池' },
+  { n:'实名 + 限额', d:'铸造前校验 L2 实名，单人单计划限量，超限直接拒铸' },
+  { n:'概率必须公示', d:'盲盒类须公示各档概率与总量，概率写死在元数据里' },
+  { n:'转赠受控', d:'仅鲸探内转赠，设 24 小时冷却期与单人转赠次数上限' },
+  { n:'全量留痕', d:'铸造、转赠、核销全链上可审计，异常时可冻结权益核销' },
+];
+function nftSum(){
+  const p = DB.nftOps.plans;
+  return {
+    supply: p.reduce(function(a,x){ return a + x.supply; }, 0),
+    minted: p.reduce(function(a,x){ return a + x.minted; }, 0),
+    live: p.filter(function(x){ return x.st === '进行中'; }).length,
+    alert: DB.nftOps.alerts.filter(function(a){ return a.st === '待处置'; }).length,
+  };
+}
+function nftHash(){
+  const h = '0123456789abcdef'; let s = '0x';
+  for(let i=0;i<4;i++) s += h[Math.floor(Math.random()*16)];
+  s += '…';
+  for(let i=0;i<4;i++) s += h[Math.floor(Math.random()*16)];
+  return s;
+}
+function nftNow(){ return stampNow(); }
+function nftPlanName(id){
+  const p = DB.nftOps.plans.filter(function(x){ return x.id === id; })[0];
+  return p ? p.n : id;
+}
+function pushNftOpsPage(){ return push('数字藏品发行', nftOpsHtml(), {}); }
+function repaintNftOps(){ repaintCurrentPage(nftOpsHtml); }
+
+function nftPlanCard(p, i){
+  const pct = Math.round(p.minted / p.supply * 100);
+  const stMap = { '进行中':['#e7f6ee','#0f7a46'], '已暂停':['#fff4e8','#b26a00'], '已结束':['#eef1f5','#6b7684'] };
+  const st = stMap[p.st] || stMap['已结束'];
+  const acts = p.st === '已结束'
+    ? `<button class="np-btn d" onclick="nftPlanProof(${i})">${ic('i-doc')} 查看发行存证</button>`
+    : `<button class="np-btn" style="background:${p.c};color:#fff" onclick="nftIssue(${i})">${ic('i-box')} 铸造下一批</button>
+       <button class="np-btn g" style="flex:0 0 82px" onclick="nftTogglePlan(${i})">${p.st==='已暂停'?'恢复发行':'暂停'}</button>`;
+  return `
+  <div class="nfo-plan">
+    <div class="np-top">
+      <div class="np-ic" style="background:${p.c}14;color:${p.c}">${ic(p.ic)}</div>
+      <div class="np-b"><b>${p.n}</b><span>${p.id} · ${p.sub} · ${DB.nftOps.chain}</span></div>
+      <span class="np-st" style="background:${st[0]};color:${st[1]}">${p.st}</span>
+    </div>
+    <div class="np-mid">
+      <div class="np-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${p.c}88,${p.c})"></i></div>
+      <div class="np-meta"><span>已铸 <b>${p.minted.toLocaleString()}</b> / ${p.supply.toLocaleString()} 件</span><b>${pct}%</b></div>
+    </div>
+    <div class="np-rows">
+      <div class="np-row"><em>价格</em><span>${p.price}</span></div>
+      <div class="np-row"><em>限额</em><span>${p.rule}</span></div>
+    </div>
+    <div class="np-acts">${acts}</div>
+  </div>`;
+}
+function nftAlertCard(a, i){
+  const off = a.st !== '待处置';
+  return `
+  <div class="nfo-al${off?' off':''}" style="border-left-color:${a.c}">
+    <div class="na-h">
+      <span class="na-lv" style="background:${a.c}17;color:${a.c}">${a.lv}危</span>
+      <b>${a.n}</b>
+      <span class="na-id">${a.id}</span>
+    </div>
+    <div class="na-d">${a.d}</div>
+    <div class="na-f">
+      <span class="na-act">${ic('i-aim')} ${off ? (a.done || '已处置') : '建议：' + a.act}</span>
+      ${off ? `<span class="na-done">${ic('i-check')} 已处置</span>`
+            : `<button class="na-btn" onclick="nftHandleAlert(${i})">立即处置</button>`}
+    </div>
+  </div>`;
+}
+function nftOpsHtml(){
+  const O = DB.nftOps, s = nftSum();
+  const pct = Math.round(s.minted / s.supply * 100);
+  const done = O.alerts.filter(function(a){ return a.st !== '待处置'; }).length;
+  return `
+  <div class="nfo-hero">
+    <div class="nfo-tag">${ic('i-box')} 运营侧 · 发行与流通</div>
+    <div class="nfo-t">数字藏品发行中台</div>
+    <div class="nfo-s">游客端看到的每一件藏品，都在这里被限量、被铸造、被记录、被约束。</div>
+    <div class="nfo-contract">${ic('i-chain')} ${O.contract} · ${O.chain} · 版税 0% · 增发权限已放弃</div>
+    <div class="nfo-stats">
+      <div><b class="num">${s.minted.toLocaleString()}</b><span>累计铸造</span></div>
+      <div><b class="num">${s.supply.toLocaleString()}</b><span>全量供应</span></div>
+      <div><b class="num">${fmtNum(O.holders)}</b><span>持有地址</span></div>
+    </div>
+    <div class="nfo-prog">
+      <div class="np-h"><span>总铸造进度</span><b>${pct}%</b></div>
+      <div class="nfo-bar"><i style="width:${pct}%"></i></div>
+    </div>
+  </div>
+
+  <div class="nfo-kpi">
+    <div class="nk"><b class="num">${s.live}</b><span>进行中计划</span></div>
+    <div class="nk"><b class="num">${O.verifyRate}%</b><span>权益核销率</span></div>
+    <div class="nk"><b class="num">${fmtNum(O.gifts)}</b><span>累计转赠</span></div>
+    <div class="nk"><b class="num" style="color:${s.alert?'#e03131':'#0f9d58'}">${s.alert}</b><span>待处置告警</span></div>
+  </div>
+
+  <div class="sec-title">发行计划 <span class="more">供应量写死 · 不可增发</span></div>
+  ${O.plans.map(function(p,i){ return { p:p, i:i }; })
+    .sort(function(a,b){ const o = { '进行中':0, '已暂停':1, '已结束':2 }; return o[a.p.st] - o[b.p.st]; })
+    .map(function(x){ return nftPlanCard(x.p, x.i); }).join('')}
+
+  <div class="sec-title">铸造批次 <span class="more">最近 ${Math.min(O.batches.length,6)} 批 · 追加即上链</span></div>
+  <div class="nfo-batch">
+    ${O.batches.slice(0,6).map(function(b){ return `
+      <div class="nb-item">
+        <div class="nb-top"><b>${b.id}</b><span>${nftPlanName(b.plan)}</span><em>+${b.n}</em></div>
+        <div class="nb-sub">${b.t} · ${b.by} · <code>${b.hash}</code> · ${b.st}</div>
+      </div>`; }).join('')}
+  </div>
+
+  <div class="sec-title">转赠与二级监控 <span class="more">已处置 ${done} / ${O.alerts.length}</span></div>
+  ${O.alerts.map(function(a,i){ return nftAlertCard(a,i); }).join('')}
+
+  <div class="sec-title">发行规则与合规红线 <span class="more">六条不可越线</span></div>
+  <div class="nfo-rule">
+    ${NFT_RULES.map(function(r,i){ return `
+      <div class="nr-row">
+        <div class="nr-no">${i+1}</div>
+        <div class="nr-b"><b>${r.n}</b><span>${r.d}</span></div>
+      </div>`; }).join('')}
+  </div>
+  <div class="eco-entry" onclick="pushRightsPage()">
+    <div class="ee-ic" style="background:#e7f6ee;color:#0f766e">${ic('i-ticket')}</div>
+    <div class="ee-b"><b>下一步：权益核销与结算对账</b><span>藏品挂的线下权益核销后，成本怎么和商家结、什么时候入分账</span></div>
+    <div class="ee-a">${ic('i-arrow')}</div>
+  </div>
+  <div class="note" style="padding:12px 16px 16px">发行侧只做三件事：<b>限量</b>（供应量写死、增发权限已放弃）、<b>可核验</b>（每次铸造上链留痕）、<b>守边界</b>（不做二级交易撮合、不承诺收益）。藏品价值来自线下真实权益，不是价格曲线。本页数字为演示示例。</div>`;
+}
+function nftIssue(i){
+  const p = DB.nftOps.plans[i];
+  if(!p) return;
+  if(p.st !== '进行中'){ toast('该计划未在进行中，不能铸造'); repaintNftOps(); return; }
+  const left = p.supply - p.minted;
+  if(left <= 0){ p.st = '已结束'; toast('该计划已铸造完毕'); repaintNftOps(); return; }
+  const n = Math.min(120, left);
+  p.minted += n;
+  if(p.minted >= p.supply) p.st = '已结束';
+  DB.nftOps.seq += 1;
+  const bh = ++DB.web3.chainInfo.height;
+  DB.nftOps.batches.unshift({ id:'BT-' + DB.nftOps.seq, plan:p.id, n:n, t:nftNow(),
+    by:'运营 · 当前账号', hash:nftHash(), st:'已确认' });
+  toast('已铸造 ' + n + ' 张 · ' + p.n + '\n批次 BT-' + DB.nftOps.seq + ' 已确认 · 区块 #' + bh.toLocaleString());
+  repaintNftOps();
+}
+function nftTogglePlan(i){
+  const p = DB.nftOps.plans[i];
+  if(!p) return;
+  if(p.st === '已结束'){ toast('该计划已结束，不可恢复发行'); repaintNftOps(); return; }
+  p.st = p.st === '进行中' ? '已暂停' : '进行中';
+  toast(p.st === '进行中' ? '已恢复发行 · 变更记录上链' : '已暂停发行 · 停止新增铸造');
+  repaintNftOps();
+}
+function nftHandleAlert(i){
+  const a = DB.nftOps.alerts[i];
+  if(!a) return;
+  if(a.st !== '待处置'){ toast('该告警已处置'); repaintNftOps(); return; }
+  a.st = '已处置';
+  a.done = a.act + ' · ' + nftNow();
+  toast('已执行：' + a.act);
+  repaintNftOps();
+}
+function nftPlanProof(i){
+  const p = DB.nftOps.plans[i], O = DB.nftOps;
+  const bs = O.batches.filter(function(b){ return b.plan === p.id; });
+  openSheet(`
+    <div class="sheet-title">${ic('i-doc')} ${p.n}</div>
+    <div class="sheet-sub">${p.id} · 元数据已冻结 · 不可增发</div>
+    <div class="info-block" style="margin:0 0 10px">
+      <div class="kvs"><span>合约地址</span><b style="font-family:ui-monospace,Menlo,monospace">${O.contract}</b></div>
+      <div class="kvs"><span>所属链</span><b>${O.chain}</b></div>
+      <div class="kvs"><span>总供应（写死）</span><b>${p.supply.toLocaleString()} 件</b></div>
+      <div class="kvs"><span>实际铸造</span><b>${p.minted.toLocaleString()} 件</b></div>
+      <div class="kvs"><span>增发权限</span><b style="color:#0f9d58">已永久放弃 renounce</b></div>
+      <div class="kvs"><span>二级版税</span><b>0% · 平台不参与分成</b></div>
+      <div class="kvs"><span>元数据哈希</span><b style="font-family:ui-monospace,Menlo,monospace">ipfs://Qm7x…f2a9</b></div>
+      <div class="kvs"><span>审计结论</span><b>供应量与元数据一致 · 无超发</b></div>
+    </div>
+    <div class="info-block" style="margin:0 0 10px">
+      <h4>${ic('i-box')} 最近铸造批次</h4>
+      ${(bs.length ? bs : O.batches.slice(0,2)).map(function(b){ return `
+        <div class="kvs"><span>${b.id} · ${b.n} 件 · ${b.t}</span><b style="font-family:ui-monospace,Menlo,monospace;font-size:10px">${b.hash}</b></div>`; }).join('')}
+      <div style="font-size:9px;color:var(--faint);margin-top:7px;line-height:1.6">累计已铸 ${p.minted.toLocaleString()} 件，全部批次可用合约地址在链上回溯核验。</div>
+    </div>
+    <div class="note" style="padding:0 2px 12px">存证对外公开：合作方与监管方可用批次哈希独立核验，不需要访问用户数据。</div>
+    <button class="btn" onclick="toast('公开核验链接已复制\\n可交监管/合作方独立验真')">复制公开核验链接</button>
+  `, {maxH:'88%'});
+}
+
+/* ============================================================
+   权益核销与结算对账（运营侧 · v1.6）
+   —— 发行 → 持有 → 核销 → 对账 → 并入分账 的最后一跳
+   ============================================================ */
+const RSN_RISK = [
+  { n:'一码一用', d:'核销码一次性，重复提交直接拦截（本期拦截 4 次）' },
+  { n:'跨店串用', d:'不同商户权益相互隔离，跨店核销须平台改派并留痕' },
+  { n:'异常时段', d:'凌晨 2–5 点核销占比 0.3%，超阈值自动转人工复核' },
+  { n:'自核销禁令', d:'商家员工账号与消费者账号分离，员工不得核销本店权益' },
+];
+function rsnSum(){
+  const R = DB.rights;
+  const total = R.merchants.reduce(function(a,m){ return a + m.amt; }, 0);
+  const settled = R.merchants.filter(function(m){ return m.st === '已确认'; })
+    .reduce(function(a,m){ return a + rightsLineNet(m); }, 0);
+  const openAppeals = R.appeals.filter(function(a){ return a.st === '待受理'; });
+  return {
+    total: total, settled: settled, pending: total - settled,
+    wait: R.merchants.filter(function(m){ return m.st === '待确认'; }).length,
+    open: R.diffs.filter(function(d){ return d.st === '待处置'; }).length,
+    ap: openAppeals.length,
+    apAmt: openAppeals.reduce(function(a,x){ return a + x.amt; }, 0),
+    cnt: R.merchants.reduce(function(a,m){ return a + m.cnt; }, 0),
+  };
+}
+function rsnConfirmN(){ return DB.rights.merchants.filter(function(m){ return m.st === '已确认'; }).length; }
+function pushRightsPage(){ return push('权益核销与结算', rightsHtml(), {}); }
+function repaintRights(){ repaintCurrentPage(rightsHtml); }
+
+/* ---------- 权益预留池 · 超支审批（v1.8）---------- */
+/** 超支审批区块：缺口 / 授权情况 / 熔断 / 分级授权 / 待批单 */
+function rsnOverrunBox(){
+  const R = DB.rights, O = R.overrun, o = overrunState();
+  const lvl = overrunLevel(o.gap || o.openAmt);
+  const next = overrunNextPer();
+  return `
+  <div class="rsn-card" style="padding:11px 13px">
+    <div class="mny-row"><span>本期权益预留（${R.budget.orders.toLocaleString()} 单 × ¥${R.budget.per}）</span><b>¥${R.budget.pool.toLocaleString()}</b></div>
+    <div class="mny-row"><span>实际核销成本（${o.net.toLocaleString()} 元，已扣核减）</span><b>¥${o.net.toLocaleString()}</b></div>
+    <div class="mny-row"><span>超支缺口</span><b class="neg">−¥${o.gap.toLocaleString()}（${(o.rate * 100).toFixed(1)}%，熔断线 ${(O.limit * 100).toFixed(0)}%）</b></div>
+    <div class="mny-row"><span>已批准调剂（营销预算科目）</span><b class="pos">¥${o.fromMkt.toLocaleString()}</b></div>
+    <div class="mny-row"><span>未获批准 · 直接扣留存毛利</span><b class="${o.fromKeep > 0 ? 'neg' : ''}">¥${o.fromKeep.toLocaleString()}</b></div>
+    <div class="mny-row"><span>待审批单据</span><b>${o.open} 张 · ¥${o.openAmt.toLocaleString()}</b></div>
+    <div class="mny-row"><span>本期归口审批人</span><b>${lvl}</b></div>
+    <div class="mny-row"><span>下期建议预留单价</span><b>¥${R.budget.per} → ¥${next}（实绩上浮 + 3% 缓冲）</b></div>
+  </div>
+  <div class="ovs-fuse${o.fuse ? ' on' : ''}">
+    <div class="rh">${ic(o.fuse ? 'i-alert' : 'i-check')} ${o.fuse
+      ? '熔断生效中 · 藏品新批次铸造转入「待财务放行」'
+      : '熔断未触发 · 发行投放正常'}</div>
+    <div class="rd">判定口径：<b>超支率（缺口 ÷ 预留池）&gt; ${(O.limit * 100).toFixed(0)}% 且缺口尚无已批准处置</b>。当前超支率 ${(o.rate * 100).toFixed(1)}%、已批处置 ¥${o.okAmt.toLocaleString()}、未覆盖 ¥${o.uncovered.toLocaleString()}。熔断不停止存量核销，只卡新增投放 —— 停投放伤体验，放量则亏更多。</div>
+  </div>
+  <div class="sec-title">分级授权 <span class="more">按金额自动判定审批人</span></div>
+  <div class="ovs-grade">
+    ${O.grades.map(function(g, i){
+      const cur = g.lv === lvl;
+      return `<div class="og-row${cur ? ' cur' : ''}">
+        <div class="og-no">${i+1}</div>
+        <div class="og-b"><b>${g.lv}</b><span>${g.scope}</span></div>
+        <span class="og-lim">${g.lim === null ? '终审' : '≤ ¥' + g.lim.toLocaleString()}</span>
+      </div>`; }).join('')}
+  </div>
+  <div class="sec-title">超支审批单 <span class="more">${o.open} 张待批 · 谁批、批多少、超额自动升级</span></div>
+  ${R.overrun.asks.map(function(a, i){ return rsnOverrunCard(a, i); }).join('')}
+  <div class="note" style="padding:12px 16px 4px">超支审批只决定<b>钱记在哪个科目</b>（营销预算 / 留存毛利），不改变游客实付 ¥298 的分账恒等式 —— 批与不批，五口径合计都还是 ¥298。批的价值在于：<b>有授权、有留痕、有责任人</b>；不批的超支则直接从利润里扣，年底自然暴露。</div>
+  <div class="spl-real" style="margin:12px 14px 0">
+    <div class="rh">${ic('i-shield')} 超额怎么办 · 三级处置</div>
+    <div class="rd"><b>① 部分批准</b>：本级批一部分，余量自动生成升级单转上一级审批人；<b>② 全额批准</b>：缺口挂营销预算科目，熔断线随之重算；<b>③ 驳回</b>：缺口无出处全额扣留存毛利，且未覆盖比例破线时触发熔断、新批次铸造转「待财务放行」。</div>
+  </div>`;
+}
+/* ---------- 下期预算预测 · 事前预警（v1.9）---------- */
+/** 预警灯 + 周节奏 + 预测数字 + 见底日 + 三个动作（全部由 fcState() 同源派生） */
+function fcBox(){
+  const F = DB.rights.overrun.fc, f = fcState();
+  /* 日均类数字统一保留一位小数，避免出现 ¥1,795.579 这类精度噪音 */
+  const d1 = x => (Math.round(x * 10) / 10).toLocaleString();
+  const lvMap = {
+    red:   { bg:'#fdeceb', bd:'#f3c2bd', c:'#c92a2a', t:'预警 · 红灯' },
+    amber: { bg:'#fff4e8', bd:'#f0d9ae', c:'#b26a00', t:'预警 · 黄灯' },
+    green: { bg:'#e7f6ee', bd:'#bfe6d2', c:'#0f7a46', t:'正常 · 绿灯' },
+  };
+  const L = lvMap[f.lv];
+  const head = f.lv === 'red'
+    ? '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 破熔断线 ' + (f.rate / f.limit).toFixed(1) + ' 倍'
+    : f.lv === 'amber'
+      ? '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 已破熔断线，需在账期开始前处置'
+      : '下期超支预测 ' + (f.rate * 100).toFixed(1) + '% · 在熔断线内，按现行节奏执行';
+  const det = f.lv === 'green'
+    ? '本期已过 ' + f.days + ' 天、实付权益成本 ¥' + f.net.toLocaleString() + '，近周节奏与全期均速基本持平。按此外推下期成本 ¥' + f.fcNext.toLocaleString() + '，仍在预留池内 —— 保持当前协议价与投放节奏即可。'
+    : '本期已过 ' + f.days + ' 天、实付成本 ¥' + f.net.toLocaleString() + ' 已超预留池 ' + ((f.net - f.pool > 0 ? (f.net - f.pool) / f.pool * 100 : 0)).toFixed(1) + '%；且近 5 日日均 <b>¥' + d1(f.perDayLast) + '</b> 比全期日均 ¥' + d1(f.perDayAll) + ' 高 <b>' + (f.trend * 100).toFixed(1) + '%</b> —— 节奏还在往上走。按此外推，下期 ' + f.days + ' 天成本将达 <b>¥' + f.fcNext.toLocaleString() + '</b>，超支 <b>¥' + f.fcGap.toLocaleString() + '</b>。等结算完再批，钱已经花完了。';
+  const maxPer = Math.max.apply(null, f.weeks.map(function(w){ return w.perDay; }));
+  const bottomPct = Math.min(100, f.bottom / f.days * 100);
+  return `
+  <div class="fc-alert ${f.lv}">
+    <div class="fh">${ic(f.lv === 'green' ? 'i-check' : 'i-alert')} ${L.t} · ${head}</div>
+    <div class="fd">${det}</div>
+  </div>
+  <div class="fc-card">
+    <div class="fc-sub">近三周核销节奏 · 金额与日均（历史实际发生，不随协议变更回溯；条形按日均，避免短周被低估）</div>
+    ${f.weeks.map(function(w){
+      const wow = w.wow === null ? '' : '<i style="color:' + (w.wow >= 0 ? '#c92a2a' : '#0f7a46') + '">' + (w.wow >= 0 ? '↑' : '↓') + Math.abs(w.wow * 100).toFixed(1) + '%</i>';
+      return `
+      <div class="fc-wk">
+        <span class="wn">${w.w}${w.days < 7 ? '（' + w.days + ' 天）' : ''}</span>
+        <span class="wb"><i style="width:${(w.perDay / maxPer * 100).toFixed(1)}%;background:${w.wow === null ? '#8fb6cf' : w.wow >= 0 ? '#e87722' : '#0f766e'}"></i></span>
+        <span class="wv"><b>¥${w.amt.toLocaleString()}</b> · 日均 ¥${d1(w.perDay)}${wow}</span>
+      </div>`; }).join('')}
+    <div class="fc-grid">
+      <div class="fc-gi"><span>全期日均成本</span><b>¥${d1(f.perDayAll)}</b><em style="color:var(--sub)">后视镜 · ${f.days} 天</em></div>
+      <div class="fc-gi"><span>近周日均成本</span><b style="color:#c92a2a">¥${d1(f.perDayLast)}</b><em style="color:#c92a2a">前挡风 · 趋势 +${(f.trend * 100).toFixed(1)}%</em></div>
+      <div class="fc-gi"><span>下期预测成本</span><b>¥${f.fcNext.toLocaleString()}</b><em style="color:var(--sub)">近周节奏 × ${f.days} 天</em></div>
+      <div class="fc-gi"><span>预测超支</span><b style="color:${L.c}">¥${f.fcGap.toLocaleString()}</b><em style="color:${L.c}">超支率 ${(f.rate * 100).toFixed(1)}%</em></div>
+    </div>
+    <div class="fc-bottom">
+      <div class="bh"><span>下期预留池 ¥${f.pool.toLocaleString()} 见底日</span><b>第 ${f.bottom.toFixed(1)} 天${f.bottom < f.days ? ' · 早于账期结束 ' + (f.days - f.bottom).toFixed(1) + ' 天' : ''}</b></div>
+      <div class="fc-bbar"><i style="width:${bottomPct.toFixed(1)}%;background:${f.lv === 'green' ? '#0f7a46' : '#c92a2a'}"></i><u style="left:${(f.days > 0 ? f.bottom / f.days * 100 : 0).toFixed(1)}%"></u></div>
+      <div class="fd" style="font-size:8.5px;color:var(--sub);margin-top:5px">按近周日均 ¥${d1(f.perDayLast)} / 天消耗，¥${f.pool.toLocaleString()} 的池子撑不到账期结束 —— 剩下的日子全是无来源成本。</div>
+    </div>
+  </div>
+  <div class="fc-acts">
+    <div class="fc-act">
+      <div class="an" style="background:#e7f6ee;color:#0f7a46">1</div>
+      <div class="ab">
+        <b>协议调价（首选）${f.agrSave > 0 ? '' : ' · 暂无待审批变更'}</b>
+        <span>${f.agrSave > 0
+          ? '待审批变更全部生效后，预测成本降至 <b class="imp">¥' + f.fcNextAgr.toLocaleString() + '</b>、超支率 ' + (f.fcRateAgr * 100).toFixed(1) + '%（仍' + (f.fcRateAgr > f.amber ? '破红灯线' : '在黄灯区') + '）。单价每降 ¥1，下期省 ¥412 × 1 —— 调价是唯一能同时降本又不伤体验的动作。'
+          : '当前没有待审批的降价变更单。可在商户端「协议变更」发起，或推动存量商户重谈。'}</span>
+        <button class="fc-ago" onclick="fcJump('.ovs-card.agr')">去审批协议变更</button>
+      </div>
+    </div>
+    <div class="fc-act">
+      <div class="an" style="background:#eef4f9;color:#2f6f9f">2</div>
+      <div class="ab">
+        <b>重设下期预留单价</b>
+        <span>¥${DB.rights.budget.per} → <b class="imp">¥${f.fcPerBuf}</b>（预测单均 ¥${f.fcPer.toFixed(2)} + 3% 缓冲），一次性覆盖预测成本；差额由下期履约定价消化，不动游客实付。</span>
+        <button class="fc-ago" onclick="fcJump('.ovs-fuse')">去看超支审批单</button>
+      </div>
+    </div>
+    <div class="fc-act">
+      <div class="an" style="background:#fdf0ee;color:#c92a2a">3</div>
+      <div class="ab">
+        <b>收缩新增投放 10%</b>
+        <span>预测成本降至 ¥${f.fcNextCut.toLocaleString()}、超支率 ${(f.fcRateCut * 100).toFixed(1)}%${f.fcRateCut > f.limit ? '，<b style="color:#c92a2a">仍破熔断线</b> —— 单靠压投放救不回来，必须动价格。' : '，可回到熔断线内。'}</span>
+        <button class="fc-ago" onclick="fcJump('.ovs-grade')">看分级授权额度</button>
+      </div>
+    </div>
+  </div>
+  <div class="note" style="padding:6px 16px 4px">预测口径透明可复算：<b>下期成本 = 本期实付 × (1 + 近周日均 ÷ 全期日均 − 1)</b>。协议变更一旦生效，本期实付自动重算、预测同步下降 —— 预警与账实同源，不存在两套数。</div>`;
+}
+/** 跳转到权益页内指定区块（带回执，保证点击有可见反馈） */
+function fcJump(sel){
+  const page = document.querySelector('#pageStack .page:last-child');
+  const el = page ? page.querySelector(sel) : document.querySelector(sel);
+  const name = sel === '.ovs-card.agr' ? '协议变更审批' : sel === '.ovs-fuse' ? '超支审批区' : '分级授权';
+  if(!el){ toast('目标区块暂不可见'); return; }
+  el.scrollIntoView({ block:'start' });
+  const sc = el.closest('.scroll');
+  if(sc) sc.scrollTop = Math.max(0, sc.scrollTop - 64);
+  toast('已定位到「' + name + '」');
+}
+function rsnOverrunCard(a, i){
+  const open = a.st === '待审批';
+  const col = open ? '#b26a00' : a.st === '已驳回' ? '#8a94a6' : '#0f7a46';
+  const lvl = overrunLevel(a.amt);
+  return `
+  <div class="ovs-card${open ? ' open' : ''}">
+    <div class="oc-top">
+      <span class="oc-id">${a.id}</span>
+      <b>超支调剂 ¥${a.amt.toLocaleString()}</b>
+      <span class="oc-st" style="background:${open ? '#fff4e8' : a.st === '已驳回' ? '#f1f3f6' : '#e7f6ee'};color:${col}">${a.st}</span>
+    </div>
+    <div class="oc-meta">申请人 ${a.by} · ${a.at} · 科目 ${a.src}${a.up ? ' · <b style="color:#e87722">由 ' + a.up + ' 部分批准后升级</b>' : ''}</div>
+    <div class="oc-why">${a.why}</div>
+    <div class="oc-lv">${ic('i-user')} 审批权限：申请额 ¥${a.amt.toLocaleString()} 落在 <b>${lvl}</b>${open ? '' : ' · ' + (a.lg || '—')}</div>
+    ${open ? `
+      <div class="oc-btns">
+        <button class="oc-btn pri" onclick="rsnOverApprove(${i})">全额批准 ¥${a.amt.toLocaleString()}</button>
+        <button class="oc-btn" onclick="rsnOverPart(${i})">部分批准</button>
+        <button class="oc-btn ghost" onclick="rsnOverReject(${i})">驳回</button>
+      </div>` : `<div class="oc-done">${ic('i-check')} ${a.done || '已结'}</div>`}
+  </div>`;
+}
+/** 全额批准：缺口挂营销预算科目，熔断线重算 */
+function rsnOverApprove(i){
+  const O = DB.rights.overrun, a = O.asks[i];
+  if(!a || a.st !== '待审批'){ toast('该单据已审批'); repaintRights(); return; }
+  const lv = overrunNeed(a.amt).g;
+  a.st = '已批准'; a.got = a.amt; a.lg = lv.lv;
+  a.done = '批准 ¥' + a.amt.toLocaleString() + ' · ' + stampNow() + ' · ' + lv.lv;
+  O.log.unshift({ t:stampNow(), by:lv.lv, d:'批准 ' + a.id + ' 调剂 ¥' + a.amt.toLocaleString() + '（' + a.src + '）' });
+  const o = overrunState();
+  toast('超支调剂已批准 ¥' + a.amt.toLocaleString() + ' · ' + lv.lv + '\n记入「' + a.src + '」科目 · 未覆盖 ¥' + o.fromKeep.toLocaleString() + (o.fuse ? '\n⚠ 未覆盖比例仍破熔断线' : '\n熔断已解除，发行投放恢复'));
+  repaintRights();
+}
+/** 部分批准：余量自动升级到上一级审批人 —— 这是「超额怎么办」的答案 */
+function rsnOverPart(i){
+  const O = DB.rights.overrun, a = O.asks[i];
+  if(!a || a.st !== '待审批'){ toast('该单据已审批'); repaintRights(); return; }
+  openSheet(`
+    <div class="sheet-title">${ic('i-money')} 部分批准超支调剂</div>
+    <div class="sheet-sub">${a.id} · 申请 ¥${a.amt.toLocaleString()} · ${a.by}</div>
+    <div class="form-label">${ic('i-tag')} 本级批准金额（元）</div>
+    <input class="form-input num" id="ovAmt" value="${Math.min(3000, a.amt)}" inputmode="decimal" />
+    <div class="form-label" style="margin-top:12px">${ic('i-shield')} 审批人判定</div>
+    <div class="note" style="padding:10px 2px" id="ovWho">—</div>
+    <div class="note" style="padding:0 2px 12px">余下未批部分将<b>自动生成升级单</b>转交上一级审批人；若无人可批（已到终审），则全额挂留存毛利并触发熔断。</div>
+    <button class="btn" onclick="rsnOverPartOk(${i})">确认部分批准</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="closeSheet()">取消</button>
+  `);
+}
+function rsnOverPartOk(i){
+  const O = DB.rights.overrun, a = O.asks[i];
+  const amt = parseFloat(((($('#ovAmt')||{}).value)||'').replace(/[^0-9.]/g,'')) || 0;
+  if(amt <= 0){ toast('请填写批准金额'); return; }
+  if(amt >= a.amt){ closeSheet(); rsnOverApprove(i); return; }
+  const lv = overrunNeed(amt).g;
+  a.st = '部分批准'; a.got = amt; a.lg = lv.lv;
+  a.done = '批准 ¥' + amt.toLocaleString() + ' / ¥' + a.amt.toLocaleString() + ' · ' + stampNow() + ' · ' + lv.lv;
+  const rest = Math.round((a.amt - amt) * 100) / 100;
+  O.log.unshift({ t:stampNow(), by:lv.lv, d:'部分批准 ' + a.id + ' ¥' + amt.toLocaleString() + '，余 ¥' + rest.toLocaleString() + ' 升级' });
+  const up = overrunUp(amt);
+  const nid = 'OV-1019-' + String(O.asks.length + 1).padStart(2,'0');
+  O.asks.push({ id:nid, amt:rest, st:'待审批', by:a.by, at:stampNow(), lg:null, src:a.src,
+    up:a.id, why:'承接 ' + a.id + ' 部分批准后的余量：' + a.why });
+  closeSheet();
+  toast('已部分批准 ¥' + amt.toLocaleString() + '（' + lv.lv + '）\n余 ¥' + rest.toLocaleString() + ' 已升级为 ' + nid + (up ? '\n转交 ' + up.lv + ' 审批' : '\n已到终审层级'));
+  repaintRights();
+}
+/** 驳回：无出处即全额扣留存毛利 */
+function rsnOverReject(i){
+  const O = DB.rights.overrun, a = O.asks[i];
+  if(!a || a.st !== '待审批'){ toast('该单据已审批'); repaintRights(); return; }
+  const o = overrunState();
+  a.st = '已驳回';
+  a.done = '驳回 · ' + stampNow() + ' · 缺口全额扣留存毛利';
+  O.log.unshift({ t:stampNow(), by:overrunLevel(a.amt), d:'驳回 ' + a.id + ' ¥' + a.amt.toLocaleString() + '，缺口转留存毛利' });
+  const n = overrunState();
+  toast('超支调剂已驳回 · ' + a.id + '\n¥' + a.amt.toLocaleString() + ' 无出处，直接扣留存毛利' +
+    (n.fuse ? '\n⚠ 未覆盖比例破熔断线，新批次铸造转「待财务放行」' : ''));
+  repaintRights();
+}
+
+/* ---------- 协议变更审批（v1.8）：批准即改协议价，成本自动重算 ---------- */
+function agrOpenN(){ return DB.rights.contracts.filter(function(c){ return c.st === '待审批'; }).length; }
+function agrCards(){
+  const C = DB.rights.contracts;
+  if(!C.length) return '<div class="rsn-card" style="text-align:center;color:var(--sub);font-size:10.5px;padding:20px">暂无协议变更单</div>';
+  const cut = C[0].to - C[0].from;
+  return C.map(function(c, i){
+    const open = c.st === '待审批';
+    const down = c.to < c.from;
+    const col = open ? '#b26a00' : c.st === '已生效' ? '#0f7a46' : '#8a94a6';
+    const m = DB.rights.merchants.filter(function(x){ return x.n === c.m; })[0];
+    const cnt = m ? m.cnt : 0;
+    const per = m ? cnt * (c.to - c.from) : 0;
+    return `
+    <div class="ovs-card agr${open ? ' open' : ''}">
+      <div class="oc-top">
+        <span class="oc-id">${c.id}</span>
+        <b>${c.m} · ${c.r}</b>
+        <span class="oc-st" style="background:${open ? '#fff4e8' : c.st === '已生效' ? '#e7f6ee' : '#f1f3f6'};color:${col}">${c.st}</span>
+      </div>
+      <div class="oc-meta">发起 ${c.by} · ${c.at}${c.mid ? ' · 商户端账号 ' + c.mid : ''}</div>
+      <div class="oc-why">${c.why}</div>
+      <div class="agr-price">
+        <span class="from">¥${c.from}</span>
+        <span class="arw">${down ? '↓' : '↑'}</span>
+        <span class="to">¥${c.to}</span>
+        <span class="unit">${c.unit}</span>
+        <span class="eff" style="color:${down ? '#0f7a46' : '#c92a2a'}">${down ? '每期省' : '每期增'} ¥${Math.abs(per).toLocaleString()}（按本期 ${cnt} 次核销测算）</span>
+      </div>
+      ${open ? `<div class="oc-btns">
+        <button class="oc-btn pri" onclick="agrApprove(${i})">同意变更并生效</button>
+        <button class="oc-btn ghost" onclick="agrReject(${i})">驳回</button>
+      </div>` : `<div class="oc-done">${ic('i-check')} ${c.st === '已生效' ? '已生效，本期结算按新单价计算' : '已驳回，维持原协议价'}</div>`}
+      ${(c.lg||[]).length ? `<div class="agr-lg">${c.lg.map(function(l){ return `<div><b>${l.by}</b> · ${l.t}<br><span>${l.d}</span></div>`; }).join('')}</div>` : ''}
+    </div>`; }).join('') + `
+    <div class="note" style="padding:12px 16px 4px">协议变更一旦<b>同意即生效</b>：结算条线单价、权益实付成本、单均实绩、「一单 ¥298」分账的权益预留行与留存毛利行<b>同时重算</b>，超支缺口同步收窄。不存在「谈好了但系统里还是老价」的两套账。</div>`;
+}
+function agrApprove(i){
+  const C = DB.rights.contracts, c = C[i];
+  if(!c || c.st !== '待审批'){ toast('该变更单已处理'); repaintRights(); return; }
+  const m = DB.rights.merchants.filter(function(x){ return x.n === c.m; })[0];
+  const before = rightsRealized().net;
+  const oldAmt = m ? m.amt : 0;
+  c.st = '已生效';
+  c.lg = (c.lg || []).concat([{ t:stampNow(), by:'运营 · 王璐', d:'同意，自下一账期起按 ¥' + c.to + ' / 次结算' }]);
+  /* 协议生效即重算账实：应收额 = 核销次数 × 新协议单价 */
+  if(m){ m.amt = m.cnt * c.to; }
+  const after = rightsRealized().net;
+  const o = overrunState();
+  toast(c.m + ' 协议价 ¥' + c.from + ' → ¥' + c.to + ' 已生效\n该条线应收 ¥' + oldAmt.toLocaleString() + ' → ¥' + (m ? m.amt : 0).toLocaleString() +
+    '\n本期权益成本 ¥' + before.toLocaleString() + ' → ¥' + after.toLocaleString() +
+    '（' + (after - before >= 0 ? '+' : '−') + '¥' + Math.abs(Math.round((after - before) * 100) / 100).toLocaleString() + '）\n分账权益行与留存毛利已同步重算' +
+    (o.fuse ? '\n⚠ 超支率仍破熔断线，需先批超支调剂' : '\n超支率回落至 ' + (o.rate * 100).toFixed(1) + '%，投放可恢复'));
+  repaintRights();
+}
+function agrReject(i){
+  const C = DB.rights.contracts, c = C[i];
+  if(!c || c.st !== '待审批'){ toast('该变更单已处理'); repaintRights(); return; }
+  c.st = '已驳回';
+  c.lg = (c.lg || []).concat([{ t:stampNow(), by:'运营 · 王璐', d:'驳回：维持原协议价 ¥' + c.from + ' / 次' }]);
+  toast(c.m + ' 协议变更已驳回 · 维持 ¥' + c.from + ' / 次\n本期成本不变，超支缺口不变');
+  repaintRights();
+}
+
+function rsnMerchantCard(m, i){
+  const stMap = { '已确认':['#e7f6ee','#0f7a46'], '待确认':['#fff4e8','#b26a00'], '差异':['#fdeceb','#c92a2a'], '申诉中':['#fdeceb','#c92a2a'] };
+  const st = stMap[m.st] || stMap['待确认'];
+  const aps = DB.rights.appeals.filter(function(a){ return a.m === m.n && a.st === '待受理'; });
+  const dfs = DB.rights.diffs.filter(function(d){ return d.m === m.n && d.st === '待处置'; });
+  const btn = m.st === '已确认'
+    ? `<button class="rm-btn off" onclick="rsnConfirm(${i})">已确认 · ¥${rightsLineNet(m).toLocaleString()} 可结算${m.by ? '（' + m.by + '）' : ''}</button>`
+    : m.st === '差异' || m.st === '申诉中'
+      ? `<button class="rm-btn off" onclick="rsnConfirm(${i})">先处置差异/申诉再确认</button>`
+      : `<button class="rm-btn pri" onclick="rsnConfirm(${i})">登记商家确认（线下盖章回传）</button>`;
+  const net = rightsLineNet(m);
+  const ap = agrPrice(m), chg = ap !== m.price;
+  return `
+  <div class="rsn-card">
+    <div class="rm-top">
+      <div class="rm-ic" style="background:${m.c}14;color:${m.c}">${ic(m.ic)}</div>
+      <div class="rm-b"><b>${m.n}</b><span>${m.op ? m.op + ' · ' : ''}${m.r} · 协议单价 ¥${ap} / 次${chg ? '（已由 ¥' + m.price + ' 调价生效）' : ''}</span></div>
+      <span class="rm-st" style="background:${st[0]};color:${st[1]}">${m.st}</span>
+    </div>
+    <div class="rm-nums">
+      <span>核销 <b>${m.cnt}</b> 次</span>
+      <span>单价 <b>¥${ap}</b></span>
+      <b class="rm-amt">¥${net.toLocaleString()}</b>
+    </div>
+    ${net !== m.amt ? `<div style="font-size:9px;color:#e03131;margin-top:2px">协议应收 ¥${m.amt.toLocaleString()} − 已核减 ¥${(m.amt - net).toLocaleString()} = 实结 ¥${net.toLocaleString()}</div>` : ''}
+    ${aps.length ? `<div style="font-size:9.5px;color:#b26a00;margin-top:5px">${ic('i-alert')} 商家发起申诉 ${aps.length} 条 · 合计主张 ¥${aps.reduce(function(a,x){return a+x.amt;},0).toLocaleString()}，待受理</div>` : ''}
+    ${dfs.length ? `<div style="font-size:9.5px;color:#c92a2a;margin-top:5px">${ic('i-alert')} 差异单 ${dfs.length} 条 · 合计 ¥${dfs.reduce(function(a,x){return a+x.amt;},0).toLocaleString()}，待处置</div>` : ''}
+    ${btn}
+  </div>`;
+}
+/* 商户端发起的申诉卡（运营端受理） */
+function rsnAppealCard(a, i){
+  const off = a.st !== '待受理';
+  return `
+  <div class="rsn-diff${off?' off':''}" style="border-left-color:${a.st==='已受理'?'#0f9d58':a.st==='已驳回'?'#8a94a6':'#e87722'}">
+    <div class="rd-h"><span class="rd-id">${a.id}</span><b>${a.m} · ${a.n}</b>
+      <span class="rm-st" style="background:${a.st==='已受理'?'#e7f6ee':a.st==='已驳回'?'#f1f3f6':'#fff4e8'};color:${a.st==='已受理'?'#0f7a46':a.st==='已驳回'?'#8a94a6':'#b26a00'}">${a.st}</span></div>
+    <div class="rd-d">${a.d}</div>
+    <div class="rd-f">
+      <span class="rd-amt">主张 ¥${a.amt.toLocaleString()}</span>
+      <span style="font-size:8.5px;color:var(--faint)">${a.at} · 商户端发起</span>
+      ${off ? `<span class="rd-ok">${ic('i-check')} ${a.done || '已处理'}</span>`
+            : `<button class="rd-btn" style="background:#2f6f9f" onclick="rsnAcceptAppeal(${i})">按商家主张调整</button>
+               <button class="rd-btn" style="background:#8a94a6;margin-left:0" onclick="rsnRejectAppeal(${i})">驳回</button>`}    </div>
+  </div>`;
+}
+function rsnDiffCard(d, i){
+  const off = d.st !== '待处置';
+  return `
+  <div class="rsn-diff${off?' off':''}">
+    <div class="rd-h"><span class="rd-id">${d.id}</span><b>${d.m} · ${d.n}</b></div>
+    <div class="rd-d">${d.d}</div>
+    <div class="rd-f">
+      <span class="rd-amt">影响 ¥${d.amt.toLocaleString()}</span>
+      ${off ? `<span class="rd-ok">${ic('i-check')} ${d.done}</span>`
+            : `<button class="rd-btn" onclick="rsnResolve(${i})">按平台口径核减</button>`}
+    </div>
+  </div>`;
+}
+function rsnBillBox(){
+  const R = DB.rights, s = rsnSum(), B = R.bill;
+  const confirmCnt = R.merchants.filter(function(m){ return m.st === '已确认'; }).length;
+  let btn, cls, label;
+  if(B.st === '待生成'){ cls = ''; label = '生成本期对账单'; }
+  else if(B.st === '已入分账'){ cls = ' off'; label = '已并入分账 · ' + B.voucher; }
+  else if(s.wait || s.open || s.ap){ cls = ' g'; label = '还有 ' + (s.wait + s.open + s.ap) + ' 项未清，暂不能入分账'; }
+  else { cls = ''; label = '并入本期分账'; }
+  return `
+  <div class="bill-box">
+    <div class="bill-h">${ic('i-doc')} 本期对账单 · ${R.period}</div>
+    <div class="bill-no">${B.no}</div>
+    <div class="bill-d">${B.st === '待生成' ? '尚未生成。生成后按商户逐笔核算核销次数与协议单价，推送对方确认。'
+      : '生成于 ' + B.at + ' · 已推送 ' + R.merchants.length + ' 家商户。商户可在商户端「我的权益对账单」自行核对、确认或申诉，平台也可线下代录。'}</div>
+    <div class="bill-3">
+      <div><b>¥${s.total.toLocaleString()}</b><span>本期应结</span></div>
+      <div><b>${confirmCnt} / ${R.merchants.length}</b><span>商户已确认</span></div>
+      <div><b style="color:${s.pending?'#ffd8a8':'#8ce99a'}">¥${s.pending.toLocaleString()}</b><span>待结</span></div>
+    </div>
+    <button class="bill-btn${cls}" onclick="${B.st==='待生成'?'rsnMakeBill()':(s.wait||s.open||s.ap?'rsnRemind()':'rsnPushSplit()')}">${label}</button>
+    ${B.st !== '待生成' && (s.wait || s.open || s.ap) ? `<div style="font-size:9px;opacity:.82;margin-top:8px;line-height:1.6">未清项：${s.wait} 家未确认 · ${s.open} 条差异 · ${s.ap} 条申诉待受理${B.remind ? '（已催办 ' + B.remind + ' 次）' : ''}</div>` : ''}
+  </div>`;
+}
+/** 催办：记录催办次数，通知未确认商户 */
+function rsnRemind(){
+  const R = DB.rights, s = rsnSum();
+  R.bill.remind = (R.bill.remind || 0) + 1;
+  const names = R.merchants.filter(function(m){ return m.st !== '已确认'; })
+    .map(function(m){ return m.n; }).join('、');
+  toast('已催办 ' + s.wait + ' 家未确认商户 · 累计 ' + R.bill.remind + ' 次\n通知：' + names +
+    (s.ap ? '\n另有 ' + s.ap + ' 条申诉待受理' : ''));
+  repaintRights();
+}
+function rightsHtml(){
+  const R = DB.rights, s = rsnSum(), B = R.bill;
+  const payPct = Math.round(s.settled / s.total * 100);
+  return `
+  <div class="nfo-hero">
+    <div class="nfo-tag">${ic('i-ticket')} 运营侧 · 核销与对账</div>
+    <div class="nfo-t">权益核销与结算</div>
+    <div class="nfo-s">藏品与凭证挂的线下权益，核销一次、记一次账、结一次款——这是把「数字藏品」变成「可结算权益」的那一跳。</div>
+    <div class="nfo-stats">
+      <div><b class="num">${s.cnt.toLocaleString()}</b><span>本期核销次数</span></div>
+      <div><b class="num">¥${s.total.toLocaleString()}</b><span>权益成本</span></div>
+      <div><b class="num">¥${s.pending.toLocaleString()}</b><span>待结算</span></div>
+    </div>
+    <div class="nfo-prog">
+      <div class="np-h"><span>已确认可结算</span><b>${payPct}%</b></div>
+      <div class="nfo-bar"><i style="width:${payPct}%"></i></div>
+    </div>
+  </div>
+
+  <div class="nfo-kpi">
+    <div class="nk"><b class="num">89.9%</b><span>领取率</span></div>
+    <div class="nk"><b class="num">63.1%</b><span>核销率</span></div>
+    <div class="nk"><b class="num" style="color:${s.ap?'#e03131':'#0f9d58'}">${s.ap}</b><span>待受理申诉</span></div>
+    <div class="nk"><b class="num" style="color:${R.merchants.length-rsnConfirmN()?'#b26a00':'#0f9d58'}">${R.merchants.length-rsnConfirmN()}</b><span>未清商家</span></div>
+  </div>
+
+  <div class="sec-title">核销漏斗 <span class="more">发行 → 领取 → 激活 → 核销 → 复购</span></div>
+  <div class="rsn-card">
+    <div class="rsn-h"><b>从发行到复购，每一层都在掉人</b><span>复购率 19.9%</span></div>
+    ${R.funnel.map(function(f){ return `
+      <div class="fs-row">
+        <span class="fs-n">${f.n}</span>
+        <div class="fs-bar"><i style="width:${f.p}%;background:${f.c}"></i></div>
+        <span class="fs-v">${f.v.toLocaleString()}</span>
+        <span class="fs-p">${f.p}%</span>
+      </div>`; }).join('')}
+    <div style="font-size:9px;color:var(--faint);line-height:1.6;margin-top:8px">核销率 63.1% 是行业偏上水平（文旅类数字权益通常在 35–55%）；真正的问题是<b style="color:#e87722">复购只有 19.9%</b>——权益兑完了没有第二件事可做。</div>
+  </div>
+
+  <div class="sec-title">本期对账单 <span class="more">生成 → 商家确认 → 入分账</span></div>
+  ${rsnBillBox()}
+
+  <div class="sec-title">按商家逐笔对账 <span class="more">${R.merchants.length} 家 · ${s.cnt.toLocaleString()} 次核销</span></div>
+  ${R.merchants.map(function(m,i){ return rsnMerchantCard(m,i); }).join('')}
+
+  <div class="sec-title">商家申诉 <span class="more">${R.appeals.filter(function(a){ return a.st === '待受理'; }).length} 条待受理 · 商户端发起</span></div>
+  ${R.appeals.length ? R.appeals.map(function(a,i){ return rsnAppealCard(a,i); }).join('')
+    : '<div class="rsn-card" style="text-align:center;color:var(--sub);font-size:10.5px;padding:20px">本期暂无商家申诉</div>'}
+  ${(R.appealLog||[]).length ? R.appealLog.map(function(a){ return rsnAppealCard(a, -1); }).join('') : ''}
+
+  <div class="sec-title">差异单 <span class="more">${s.open} 条待处置 · 商家与平台口径不一致</span></div>
+  ${R.diffs.map(function(d,i){ return rsnDiffCard(d,i); }).join('')}
+
+  <div class="sec-title">下期预算预测 · 事前预警 <span class="more">按周节奏外推 · 破线前干预</span></div>
+  ${fcBox()}
+
+  <div class="sec-title">这笔钱从哪出 · 已回流到分账 <span class="more">预算口径 vs 实绩口径</span></div>
+  ${rsnOverrunBox()}
+  <div class="spl-real" style="margin:0 14px 10px">
+    <div class="rh">${ic('i-calc')} 实绩已回写到「一单 ¥298 怎么分」</div>
+    <div class="rd">${splitRealNote().text}。分账页的「权益预留」行显示实绩单均 <b>¥${splitRowsReal().rows.filter(function(w){return w.g==='pool';})[0].v.toFixed(2)}</b>，「留存毛利」行同步扣减 <b>¥${Math.abs(splitRowsReal().gap).toFixed(2)}</b>，五口径合计恒为 ¥298 —— 权益超支不会凭空消失，只会从平台留存里扣。</div>
+    <div class="spl-row-real"><span>合伙人端 / 运营端两处分账视图同源</span><b>合计 ¥298.0</b></div>
+  </div>
+  <div class="note" style="padding:0 16px 12px">权益成本不是「白送的营销费用」，而是<b>有协议单价的应付账款</b>：先有核销、再有对账、最后才入分账。池子不够就走超支审批调剂或协议调价，绝不靠超发旅豆填坑——这是积分与权益两条账必须分开的原因。</div>
+
+  <div class="sec-title">协议变更审批 <span class="more">${agrOpenN()} 条待审批 · 商户端发起</span></div>
+  ${agrCards()}
+
+  <div class="sec-title">核销风控 <span class="more">四条硬约束</span></div>
+  <div class="nfo-rule">
+    ${RSN_RISK.map(function(r,i){ return `
+      <div class="nr-row">
+        <div class="nr-no">${i+1}</div>
+        <div class="nr-b"><b>${r.n}</b><span>${r.d}</span></div>
+      </div>`; }).join('')}
+  </div>
+  <div class="note" style="padding:12px 16px 16px">本期数据为演示示例（期间 ${R.period}）。核销与对账口径与运营端风控页预算池、示范闭环分账同源：权益预留 5%（¥14.9 / 单）先计入成本，实报实销、差额调剂。</div>`;
+}
+function rsnMakeBill(){
+  const R = DB.rights;
+  if(R.bill.st !== '待生成'){ toast('对账单已生成 · 单号 ' + R.bill.no); repaintRights(); return; }
+  R.bill.st = '已生成';
+  R.bill.no = 'ST-20261019-01';
+  R.bill.at = nftNow();
+  toast('对账单已生成并推送 ' + R.merchants.length + ' 家商户\n单号 ST-20261019-01 · 线下盖章后回传确认');
+  repaintRights();
+}
+function rsnConfirm(i){
+  const m = DB.rights.merchants[i];
+  if(!m) return;
+  if(m.st === '已确认'){
+    toast(m.n + ' 本期已确认' + (m.by ? '（' + m.by + '）' : '') + ' · ¥' + rightsLineNet(m).toLocaleString());
+    repaintRights(); return; }
+  if(m.st === '差异' || m.st === '申诉中'){
+    const openD = DB.rights.diffs.filter(function(d){ return d.m === m.n && d.st === '待处置'; }).length;
+    const openA = DB.rights.appeals.filter(function(a){ return a.m === m.n && a.st === '待受理'; }).length;
+    toast(m.n + ' 有 ' + openD + ' 条差异 / ' + openA + ' 条申诉待处理，不能直接确认');
+    repaintRights(); return; }
+  m.st = '已确认';
+  m.by = m.by || '平台代录';
+  toast(m.n + ' 对账已确认 · ¥' + rightsLineNet(m).toLocaleString() + ' 转入可结算');
+  repaintRights();
+}
+function rsnResolve(i){
+  const d = DB.rights.diffs[i];
+  if(!d) return;
+  if(d.st === '已处置'){ toast('该差异已处置'); repaintRights(); return; }
+  d.st = '已处置';
+  d.done = '核减 ¥' + d.amt + ' · ' + nftNow();
+  const left = DB.rights.diffs.filter(function(x){ return x.m === d.m && x.st === '待处置'; }).length;
+  if(!left){
+    DB.rights.merchants.forEach(function(m){ if(m.n === d.m && m.st === '差异') m.st = '待确认'; });
+  }
+  toast('已按平台口径核减 ¥' + d.amt + ' · 账单同步' +
+    (left ? '\n' + d.m + ' 还有 ' + left + ' 条差异待处置' : '\n' + d.m + ' 差异清零，可登记确认'));
+  repaintRights();
+}
+function rsnPushSplit(){
+  const R = DB.rights, s = rsnSum();
+  if(R.bill.st === '待生成'){ toast('请先生成本期对账单'); repaintRights(); return; }
+  if(R.bill.st === '已入分账'){ toast('本期已并入分账 · 凭证 ' + R.bill.voucher); repaintRights(); return; }
+  if(s.wait || s.open || s.ap){
+    toast('还不能入分账：' + s.wait + ' 家未确认 · ' + s.open + ' 条差异待处置' + (s.ap ? ' · ' + s.ap + ' 条申诉待受理' : ''));
+    repaintRights(); return;
+  }
+  R.bill.st = '已入分账';
+  R.bill.voucher = 'SV-20261019-03';
+  toast('已并入本期分账 · 凭证 SV-20261019-03\n权益成本 ¥' + s.total.toLocaleString() + ' 计入结算引擎');
+  repaintRights();
+}
+''
+/* ===== 商家申诉受理（v1.7） ===== */
+/** 受理：按商家主张调整应付 → 该条线金额上浮，权益成本与分账视图同步变化 */
+function rsnAcceptAppeal(i){
+  const a = DB.rights.appeals[i];
+  if(!a) return;
+  if(a.st !== '待受理'){ toast('该申诉已处理'); repaintRights(); return; }
+  const m = DB.rights.merchants.filter(function(x){ return x.n === a.m; })[0];
+  if(!m){ toast('未找到对应结算条线'); repaintRights(); return; }
+  const before = m.amt;
+  m.amt = m.amt + a.amt;
+  a.st = '已受理';
+  a.done = '按主张调整 +¥' + a.amt + ' · ' + nftNow();
+  if(m.st === '申诉中') m.st = '待确认';
+  toast(a.m + ' 申诉已受理 · 应付 ¥' + before.toLocaleString() + ' → ¥' + m.amt.toLocaleString() +
+    '\n权益成本 +¥' + a.amt.toLocaleString() + '，分账视图实绩已同步');
+  repaintRights();
+}
+/** 驳回：维持原额，商家可继续核对 */
+function rsnRejectAppeal(i){
+  const a = DB.rights.appeals[i];
+  if(!a) return;
+  if(a.st !== '待受理'){ toast('该申诉已处理'); repaintRights(); return; }
+  a.st = '已驳回';
+  a.done = '维持协议价 · ' + nftNow();
+  const m = DB.rights.merchants.filter(function(x){ return x.n === a.m; })[0];
+  if(m && m.st === '申诉中') m.st = '待确认';
+  toast('申诉已驳回 · 维持协议价 ¥' + (m ? m.price : '—') + ' / 次\n商家可继续核对或线下补充材料');
+  repaintRights();
+}
+
+/* ===== 启动欢迎 ===== */
+setTimeout(()=>{ if(S.loggedIn) toast('演示原型 · 右侧面板可播放四端数据联动'); }, 900);
+</script>
+</body>
+</html>

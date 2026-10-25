@@ -1,0 +1,181 @@
+<script>
+/* ==========================================================================
+   视觉资产生成器 · 数据图表 / 徽章 / 票据
+   ========================================================================== */
+let _vid = 0;
+const _u = p => p + (++_vid);
+
+/* 柱状图 */
+function barsSVG(data, opt){
+  opt = opt || {};
+  const W = opt.w || 320, H = opt.h || 110, pad = 6;
+  const max = Math.max.apply(null, data.map(d=>d.v)) * 1.18 || 1;
+  const bw = (W - pad*2) / data.length;
+  const id = _u('bg');
+  let out = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+(opt.c1||'#14b8a6')+'"/><stop offset="1" stop-color="'+(opt.c2||'#0f766e')+'"/></linearGradient></defs>';
+  data.forEach(function(d,i){
+    const bh = Math.max(4, (d.v/max)*(H-22));
+    const x = pad + i*bw + bw*0.16, w = bw*0.68;
+    const hi = opt.hi === i;
+    out += '<rect x="'+x.toFixed(1)+'" y="'+(H-16-bh).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="'+(w/2.6).toFixed(1)+'" fill="'+(hi?(opt.hc||'#e87722'):'url(#'+id+')')+'" opacity="'+(hi?1:0.92)+'"/>';
+    if(opt.labels !== false){
+      out += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-size="8.5" fill="currentColor" opacity=".5">'+d.l+'</text>';
+    }
+    if(opt.vals){
+      out += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(H-20-bh).toFixed(1)+'" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" opacity=".75">'+d.v+'</text>';
+    }
+  });
+  return out + '</svg>';
+}
+
+/* 面积折线 */
+function sparkSVG(data, opt){
+  opt = opt || {};
+  const W = opt.w || 320, H = opt.h || 90, pad = 4;
+  const max = Math.max.apply(null, data) * 1.1 || 1, min = Math.min.apply(null, data) * 0.9;
+  const step = (W - pad*2) / Math.max(1, data.length - 1);
+  const pts = data.map(function(v,i){
+    const x = pad + i*step, y = H - 14 - ((v-min)/(max-min||1))*(H-26);
+    return [x, y];
+  });
+  let line = '';
+  pts.forEach(function(p,i){
+    if(i===0) line += 'M'+p[0].toFixed(1)+' '+p[1].toFixed(1);
+    else {
+      const q = pts[i-1], cx = (q[0]+p[0])/2;
+      line += ' C '+cx.toFixed(1)+' '+q[1].toFixed(1)+' '+cx.toFixed(1)+' '+p[1].toFixed(1)+' '+p[0].toFixed(1)+' '+p[1].toFixed(1);
+    }
+  });
+  const area = line + ' L'+(W-pad)+' '+H+' L'+pad+' '+H+' Z';
+  const id = _u('sp'), col = opt.c || '#e87722';
+  let out = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity=".32"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs>'
+    + '<path d="'+area+'" fill="url(#'+id+')"/>'
+    + '<path d="'+line+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round"/>';
+  const last = pts[pts.length-1];
+  out += '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="3.4" fill="#fff" stroke="'+col+'" stroke-width="2"/>';
+  if(opt.labels){
+    opt.labels.forEach(function(l,i){
+      if(pts[i]) out += '<text x="'+pts[i][0].toFixed(1)+'" y="'+(H-2)+'" text-anchor="middle" font-size="8" fill="currentColor" opacity=".45">'+l+'</text>';
+    });
+  }
+  return out + '</svg>';
+}
+
+/* 环形占比 */
+function donutSVG(parts, opt){
+  opt = opt || {};
+  const S = opt.size || 120, r = S*0.36, sw = S*0.13, cx = S/2, cy = S/2;
+  const total = parts.reduce(function(a,p){ return a + p.v; }, 0) || 1;
+  let a0 = -Math.PI/2, out = '<svg class="chart" style="width:'+S+'px;height:'+S+'px;flex:0 0 auto" viewBox="0 0 '+S+' '+S+'" xmlns="http://www.w3.org/2000/svg">';
+  out += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="currentColor" stroke-width="'+sw+'" opacity=".08"/>';
+  parts.forEach(function(p){
+    const ang = (p.v/total)*Math.PI*2, a1 = a0 + ang;
+    const x0 = cx + r*Math.cos(a0), y0 = cy + r*Math.sin(a0), x1 = cx + r*Math.cos(a1), y1 = cy + r*Math.sin(a1);
+    const la = ang > Math.PI ? 1 : 0;
+    out += '<path d="M'+x0.toFixed(2)+' '+y0.toFixed(2)+' A '+r+' '+r+' 0 '+la+' 1 '+x1.toFixed(2)+' '+y1.toFixed(2)+'" fill="none" stroke="'+p.c+'" stroke-width="'+sw+'" stroke-linecap="butt"/>';
+    a0 = a1;
+  });
+  if(opt.center){
+    out += '<text x="'+cx+'" y="'+(cy+2)+'" text-anchor="middle" font-size="'+(S*0.2)+'" font-weight="800" fill="currentColor">'+opt.center+'</text>';
+    if(opt.sub) out += '<text x="'+cx+'" y="'+(cy+S*0.16)+'" text-anchor="middle" font-size="'+(S*0.075)+'" fill="currentColor" opacity=".5">'+opt.sub+'</text>';
+  }
+  return out + '</svg>';
+}
+
+/* 漏斗 */
+function funnelSVG(steps){
+  const W = 320, rowH = 42, H = steps.length*rowH;
+  let out = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+  const max = steps[0].v || 1;
+  steps.forEach(function(s,i){
+    const wRatio = Math.max(0.32, s.v/max);
+    const bw = (W-96)*wRatio, x = 8 + (W-96-bw)/2, y = i*rowH + 6, h = rowH - 16;
+    out += '<rect x="'+x.toFixed(1)+'" y="'+(y)+'" width="'+bw.toFixed(1)+'" height="'+h+'" rx="6" fill="'+s.c+'" opacity="'+(0.95-i*0.12)+'"/>';
+    out += '<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y+h/2+3.4)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fff">'+s.n+'</text>';
+    out += '<text x="'+(W-6)+'" y="'+(y+h/2+3.4)+'" text-anchor="end" font-size="10" font-weight="800" fill="currentColor">'+s.v.toLocaleString()+'</text>';
+    if(i>0){
+      const rate = ((s.v/steps[i-1].v)*100).toFixed(1);
+      out += '<text x="'+(W-6)+'" y="'+(y+h/2+14)+'" text-anchor="end" font-size="7.5" fill="currentColor" opacity=".45">转化 '+rate+'%</text>';
+    }
+  });
+  return out + '</svg>';
+}
+
+/* 圆环进度 */
+function ringSVG(pct, opt){
+  opt = opt || {};
+  const S = opt.size || 64, r = S*0.38, sw = S*0.11, cx=S/2, cy=S/2;
+  const C = 2*Math.PI*r, off = C*(1-pct/100);
+  let out = '<svg class="chart ring" style="width:'+S+'px;height:'+S+'px;flex:0 0 auto" viewBox="0 0 '+S+' '+S+'" xmlns="http://www.w3.org/2000/svg">';
+  out += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="currentColor" stroke-width="'+sw+'" opacity=".12"/>';
+  out += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+(opt.c||'#e87722')+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+  out += '<text x="'+cx+'" y="'+(cy+S*0.055)+'" text-anchor="middle" font-size="'+(S*0.24)+'" font-weight="800" fill="currentColor">'+pct+'%</text>';
+  return out + '</svg>';
+}
+
+/* 徽章（金属质感六边/盾形） */
+function medalSVG(c1, c2, icon, opt){
+  opt = opt || {};
+  const S = 64, id = _u('md'), locked = !!opt.locked;
+  const g1 = locked ? '#cfd6de' : c1, g2 = locked ? '#eef2f6' : c2;
+  let out = '<svg class="medal-svg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs>'
+    + '<linearGradient id="'+id+'a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+g1+'"/><stop offset="1" stop-color="'+g2+'"/></linearGradient>'
+    + '<linearGradient id="'+id+'b" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="1" stop-color="#ffffff" stop-opacity=".55"/></linearGradient>'
+    + '</defs>'
+    + '<path d="M32 2 58 17 58 47 32 62 6 47 6 17 Z" fill="url(#'+id+'a)"/>'
+    + '<path d="M32 2 58 17 58 47 32 62 6 47 6 17 Z" fill="url(#'+id+'b)" opacity=".35"/>'
+    + '<path d="M32 9 51 20 51 44 32 55 13 44 13 20 Z" fill="#fff" opacity=".16"/>'
+    + '<path d="M32 9 51 20 51 44 32 55 13 44 13 20 Z" fill="none" stroke="#fff" stroke-width="1" opacity=".45"/>';
+  if(icon){
+    out += '<g transform="translate(20,20)" opacity="'+(locked?.45:.95)+'"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#'+icon+'"/></svg></g>';
+  }
+  return out + '</svg>';
+}
+
+/* 头像 */
+function avatarSVG(name, c1, c2, size){
+  const s = size || 40, id = _u('av');
+  return '<svg class="avatar-svg" viewBox="0 0 40 40" width="'+s+'" height="'+s+'" xmlns="http://www.w3.org/2000/svg">'
+    + '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+c1+'"/><stop offset="1" stop-color="'+c2+'"/></linearGradient></defs>'
+    + '<rect width="40" height="40" rx="13" fill="url(#'+id+')"/>'
+    + '<circle cx="20" cy="15.5" r="5.4" fill="#fff" opacity=".92"/>'
+    + '<path d="M8.5 34c1.6-6.2 6-9.2 11.5-9.2S30 27.8 31.5 34Z" fill="#fff" opacity=".92"/>'
+    + '</svg>';
+}
+
+/* 核销盖章 */
+function stampSVG(){
+  return '<svg class="stamp-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'
+    + '<circle cx="60" cy="60" r="52" fill="none" stroke="#c92a2a" stroke-width="3" opacity=".9"/>'
+    + '<circle cx="60" cy="60" r="44" fill="none" stroke="#c92a2a" stroke-width="1.2" opacity=".7" stroke-dasharray="3 3"/>'
+    + '<text x="60" y="54" text-anchor="middle" font-size="17" font-weight="900" fill="#c92a2a" letter-spacing="1">已核销</text>'
+    + '<text x="60" y="72" text-anchor="middle" font-size="8.5" fill="#c92a2a" opacity=".85">VERIFIED · 链上存证</text>'
+    + '<text x="60" y="86" text-anchor="middle" font-size="7" fill="#c92a2a" opacity=".6">向往的自由 · 向往自由链</text>'
+    + '</svg>';
+}
+
+/* 票券缺口（用于优惠券/门票） */
+function ticketNotch(){
+  return '<span class="tk-notch l"></span><span class="tk-notch r"></span>';
+}
+
+/* 人物剪影（角色卡用） */
+function figureSVG(type, color){
+  const c = color || 'rgba(12,18,30,.55)';
+  const bodies = {
+    /* 持账本：站立 + 前臂托物 */
+    ledger: '<circle cx="50" cy="24" r="8.6"/><path d="M42 34 h16 q 5 0 5 5 l-2 30 h-22 l-2 -30 q 0 -5 5 -5 Z"/><path d="M41 40 q -8 6 -7 18 q 0 4 3 4 q 3 0 3 -4 q 0 -8 5 -13 Z"/><rect x="58" y="44" width="13" height="16" rx="2"/><path d="M43 69 l-4 24 h8 l4 -20 l4 20 h8 l-4 -24 Z"/>',
+    /* 长袖裙装：侧身 */
+    opera: '<circle cx="53" cy="23" r="8.4"/><path d="M46 33 q 8 -3 14 2 l 6 22 l -6 4 l 12 26 q -14 5 -26 1 l 8 -27 l -8 -6 Z" transform="rotate(6 50 50)"/><path d="M62 36 q 10 8 12 20" stroke="'+c+'" stroke-width="4.5" fill="none" stroke-linecap="round"/>',
+    /* 伙计：围裙 + 托盘 */
+    waiter: '<circle cx="48" cy="25" r="8.4"/><path d="M40 35 h16 q 4 0 4 4 l -1 28 h-22 l -1 -28 q 0 -4 4 -4 Z"/><path d="M38 40 q -9 8 -6 20" stroke="'+c+'" stroke-width="4.2" fill="none" stroke-linecap="round"/><ellipse cx="31" cy="62" rx="11" ry="2.6"/><path d="M41 67 l -3 26 h 8 l 3 -18 l 3 18 h 8 l -3 -26 Z"/>',
+    /* 记者：风衣 + 持笔 */
+    press: '<circle cx="50" cy="23" r="8.4"/><path d="M41 33 h18 q 4 0 4 5 l -1 12 l 5 22 h-10 l -4 -16 l -4 16 h-10 l 5 -22 l -1 -12 q 0 -5 4 -5 Z"/><path d="M66 38 q 9 7 9 19" stroke="'+c+'" stroke-width="4.2" fill="none" stroke-linecap="round"/><path d="M76 56 l 3 10 l -3 2 l -3 -2 Z"/><path d="M43 68 l -3 27 h 9 l 3 -18 l 3 18 h 9 l -3 -27 Z"/>'
+  };
+  return '<svg class="figure" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="fill:'+c+'">'+(bodies[type]||bodies.ledger)+'</svg>';
+}
+</script>
+

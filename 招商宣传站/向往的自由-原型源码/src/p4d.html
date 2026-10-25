@@ -1,0 +1,609 @@
+<script>
+/* ==========================================================================
+   扩展演示数据（内容层）· 首页 / 商城 / 旅豆 / 合伙人 / 商户 / 运营
+   ========================================================================== */
+DB.x = {
+  weather:{ t:'21°', d:'多云转晴', city:'上海', aqi:'优 32' },
+  checkin:[1,1,1,1,0,0,0],
+  groups:[
+    { tid:6, left:2, total:8, when:'10/20 周三', avs:['张','李','王'] },
+    { tid:1, left:3, total:10, when:'10/22 周五', avs:['陈','吴'] },
+    { tid:8, left:1, total:6, when:'11/02 周六', avs:['周','林','赵'] },
+  ],
+  rank:[
+    { tid:6, v:2547, tag:'本周冠军' },
+    { tid:1, v:2143, tag:'瑜伽类 1' },
+    { tid:2, v:3891, tag:'红色类 1' },
+    { tid:3, v:1520, tag:'姐姐系列' },
+    { tid:5, v:1104, tag:'竞技新晋' },
+  ],
+  notes:[
+    { n:'朱家角这一夜，我把剧本杀玩成了真探案', a:'Vivi', av:'#0e9f8a', lk:328, sc:'watertown', h:'c', tag:'攻略', seed:31 },
+    { n:'竹林晨课｜在安吉把呼吸调回自己的节奏', a:'阿茶', av:'#d6336c', lk:216, sc:'bamboo', h:'b', tag:'瑜伽', seed:47 },
+    { n:'带娃去莫干山的两天，他学会了看云识天气', a:'老周', av:'#1c7ed6', lk:184, sc:'mountain', h:'a', tag:'亲子', seed:53 },
+    { n:'太湖桨板翻船三次，最后我站起来了', a:'Kai', av:'#e8590c', lk:97, sc:'lake', h:'b', tag:'运动', seed:61 },
+    { n:'婺源晒秋，一年只这一次的调色盘', a:'林小满', av:'#c92a2a', lk:452, sc:'autumn', h:'a', tag:'旅拍', seed:71 },
+    { n:'在崇明听了一夜潮水，没有信号也很好', a:'Momo', av:'#7048e8', lk:263, sc:'camp', h:'c', tag:'露营', seed:83 },
+  ],
+  beanTrend:[10, 19, -80, 30, -200, 50, 120],
+  beanTrendL:['一','二','三','四','五','六','日'],
+  tasks:[
+    { n:'发布 1 篇旅行笔记', s:'+30 旅豆 · UGC 内容池', done:false, act:'pushCreateCenter()' },
+    { n:'完成 1 场剧本任务', s:'+15 旅豆 · 打卡换线索', done:true, act:'' },
+    { n:'邀请 1 位好友出行', s:'+80 旅豆 · 双向奖励', done:false, act:'pushPosterPage()' },
+  ],
+  footprints:['沪','苏','浙','皖','赣','闽','粤','京'],
+  partnerTrend:{ v:[860, 1120, 980, 1340, 1180, 1520, 1280], l:['一','二','三','四','五','六','日'] },
+  /* 一单 ¥298 的分账口径（与演示页一致，数字自洽）
+     g: out=付给合作方 / keep=平台留存 / pool=权益预留（v1.4.3 按收款对象分组） */
+  waterfall:[
+    { n:'履约成本',   v:172.8, c:'#0f9d58', p:58,  g:'out',  to:'景区 / 酒店 / 地接社', d:'场地、NPC 演绎、服务履约' },
+    { n:'合伙人分润', v:23.8,  c:'#2f6f9f', p:8,   g:'out',  to:'线路合伙人',           d:'真实成交计佣 · T+7 结算' },
+    { n:'平台服务费', v:35.8,  c:'#e87722', p:12,  g:'keep', to:'平台',                 d:'支付通道、系统、客服与保障' },
+    { n:'留存毛利',   v:50.7,  c:'#8a94a6', p:17,  g:'keep', to:'平台留存',             d:'覆盖运营、技术与获客成本' },
+    { n:'权益预算',   v:14.9,  c:'#f59f00', p:5,   g:'pool', to:'旅豆预算池',           d:'履约后发行给游客与创作者；实绩按核销成本回填' },
+  ],
+  teamRank:[
+    { n:'张敏·黄金', v:32, gmv:18600, av:'#2f6f9f' },
+    { n:'李伟·白银', v:21, gmv:12400, av:'#0e9f8a' },
+    { n:'王芳·白银', v:17, gmv:9800, av:'#d6336c' },
+    { n:'陈磊·青铜', v:9, gmv:5200, av:'#e87722' },
+  ],
+  merchTrend:{ v:[12, 18, 9, 22, 16, 28, 21], l:['一','二','三','四','五','六','日'] },
+  stockWarn:[
+    { n:'安吉竹径 · 瑜伽随行套装', left:8, safe:30 },
+    { n:'朱家角文创茶礼「谜案」限定', left:12, safe:40 },
+  ],
+  merchInsight:'本周二销环比 +18%：剧本游带动茶礼与旅拍套餐销售，建议在「大夫第」出口增设茶礼陈列，并同步上线剧本同款套餐。',
+  funnel:[
+    { n:'曝光', v:48200, c:'#1c7ed6' },
+    { n:'详情浏览', v:19600, c:'#2f9e8f' },
+    { n:'下单', v:5240, c:'#e87722' },
+    { n:'核销完成', v:4810, c:'#0f9d58' },
+  ],
+  channels:[
+    { n:'主题游', v:46, c:'#e87722' },
+    { n:'剧本闯关', v:24, c:'#7048e8' },
+    { n:'商城复购', v:18, c:'#0c8599' },
+    { n:'权益兑换', v:12, c:'#0f9d58' },
+  ],
+  /* 方案 §2 四条业务线（收入结构口径） */
+  bizLines:[
+    { n:'文旅交易平台',  v:62, c:'#0f766e', d:'交易佣金 · 旅游产品经营毛利' },
+    { n:'主题内容与体验', v:21, c:'#e87722', d:'剧本设计费 · 活动运营 · 内容授权' },
+    { n:'生态技术服务',  v:12, c:'#2f6f9f', d:'SaaS 服务费 · 系统实施 · 技术服务' },
+    { n:'国际生态服务',  v:5,  c:'#7b5aa6', d:'跨境订单服务费 · 系统对接与运营' },
+  ],
+  cityRank:[
+    { n:'上海·青浦', gmv:486200, n2:1240, up:18 },
+    { n:'湖州·安吉', gmv:312400, n2:860, up:26 },
+    { n:'苏州·姑苏', gmv:268900, n2:742, up:9 },
+    { n:'上饶·婺源', gmv:124600, n2:318, up:41 },
+  ],
+  auditQueue:[
+    { n:'安麓大夫第', t:'商户准入', d:'营业执照、食品经营许可、场地安全责任书齐全，景区背书函已上传', c:'#7b5aa6', ic:'i-store' },
+    { n:'《江南谜案》剧本内容', t:'内容审核', d:'剧情涉及历史人物演绎，已完成史实核对与合规意见，无敏感表述', c:'#7048e8', ic:'i-mask' },
+    { n:'达人「Vivi」商单素材', t:'UGC 授权', d:'旅拍素材授权范围：平台内展示 + 景区线下物料，期限 24 个月', c:'#0e9f8a', ic:'i-pen' },
+  ],
+};
+/* 签到状态 */
+function doCheckin(){
+  const i = DB.x.checkin.indexOf(0);
+  if(i < 0){ toast('本周已签满 7 天，明天再来'); return; }
+  DB.x.checkin[i] = 1;
+  const add = [10,10,15,15,20,20,50][i];
+  DB.wallet += add;
+  toast('签到成功 · +' + add + ' 旅豆');
+  renderBase();
+}
+function checkinBar(){
+  const days = DB.x.checkin, got = days.filter(x=>x).length;
+  const labels = ['一','二','三','四','五','六','日'];
+  return `<div class="ck">
+    <div class="ckh"><b>${ic('i-calendar')} 连续签到</b><span>本周已签 <b>${got}</b>/7 天 · 第 7 天 +50</span></div>
+    <div class="ckd">${days.map((v,i)=>`
+      <div class="cd ${v?'on':''} ${i===got&&!v?'today':''}">
+        <i>${v?ic('i-check'):(i===got?ic('i-spark'):'')}</i>
+        <span>${labels[i]}</span>
+      </div>`).join('')}</div>
+    <button class="ck-btn" onclick="doCheckin()">${got>=7?'本周已签满':'立即签到 +10'}</button>
+  </div>`;
+}
+
+/* ============================================================
+   六大引擎 · 运行时数据（v1.3 新增）
+   —— Reward / Contribution / Settlement / Gateway 四条可玩链路
+   —— 全部基于真实 DB（wallet / budget / txLog），无独立影子数据
+   ============================================================ */
+
+/* 引擎页公用工具 */
+function fmtNum(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* --- 激励引擎：发行批次与生命周期台账（方案 §9 六机制 + 四本账） --- */
+DB.engine = {
+  /* 发行批次：每一笔发放都要挂在批次下，占用预算池 */
+  batches:[
+    { id:'B-2510', n:'10 月消费奖励批次', t:'issue', amt:120000, used:86400, st:'进行中', d:'2026-10-01 ~ 2026-10-31' },
+    { id:'B-2511', n:'11 月消费奖励批次', t:'issue', amt:150000, used:0,     st:'待启用', d:'2026-11-01 ~ 2026-11-30' },
+  ],
+  /* 待发放任务（真实执行后会写入 txLog 与 wallet） */
+  tasks:[
+    { id:'R-01', n:'安吉瑜伽谷 · 履约完成', amt:120, to:'U-8842', st:'pending', d:'履约确认后发放', why:'真实消费按订单贡献利润比例发放' },
+    { id:'R-02', n:'UGC 游记被推荐',       amt:50,  to:'U-1207', st:'pending', d:'审核通过后发放', why:'内容贡献计入 CS 并给奖励' },
+    { id:'R-03', n:'红色剧本闯关完成',     amt:30,  to:'U-3311', st:'pending', d:'体验完成自动发放', why:'体验引擎回流激励' },
+    { id:'R-04', n:'商城消费返豆',         amt:19,  to:'U-5518', st:'frozen',  d:'T+7 售后期满',     why:'售后期内冻结，防退款未冲正' },
+    { id:'R-05', n:'合伙人返佣（黄金 8%）', amt:238, to:'P-0128', st:'pending', d:'对账通过后发放',   why:'按可核验订单计酬' },
+    { id:'R-06', n:'过期未使用权益回收',   amt:200, to:'U-7719', st:'recycle', d:'有效期届满',       why:'回收后不重新发行，避免超发' },
+  ],
+  /* 四本账：分别建账不可混同（方案 §9）—— 口径与 DB.admin.budget 一致：issued=已发行 / used=已核销 */
+  recycled: 3200,
+  books:[
+    { n:'发行账',   d:'预算池 → 已发行额度',       v:'312,800', c:'#e87722' },
+    { n:'流通账',   d:'用户账户实际持有量',        v:'128,000', c:'#0c8599' },
+    { n:'核销账',   d:'已兑换权益消耗量',          v:'189,400', c:'#0f9d58' },
+    { n:'回收账',   d:'过期/作废回收不再发行',     v:'3,200',   c:'#8a94a6' },
+  ],
+  log:[ { t:'刚刚', d:'预算池校验通过：min(已批准营销预算 50 万, 可承受贡献利润 312,800) = 312,800', lv:'ok' } ],
+};
+
+/* --- 贡献引擎：内容归因与反作弊（方案 §4 B 层 + §14） --- */
+DB.contrib = {
+  items:[
+    { id:'C-01', n:'《朱家角谜案通关攻略》图文', a:'旅行家小满', q:92, s:88, r:74, st:'已确认', cs:87, bad:false, earn:0, d:'点击 12,480 · 收藏 2,140 · 被采纳 86' },
+    { id:'C-02', n:'朱家角实拍短视频 3 支',     a:'Vivi',      q:88, s:91, r:69, st:'已确认', cs:85, bad:false, earn:0, d:'点击 9,320 · 收藏 1,760 · 被采纳 61' },
+    { id:'C-03', n:'安吉瑜伽谷避坑指南',       a:'匿名用户',   q:61, s:12, r:3,  st:'待复核', cs:0,  bad:true,  earn:0, d:'点击 340 · 收藏 2 · 同一 IP 批量注册 46 账号' },
+    { id:'C-04', n:'莫干山亲子营真实反馈',      a:'球球妈',     q:85, s:79, r:88, st:'待确认', cs:0,  bad:false, earn:0, d:'点击 4,210 · 收藏 890 · 被采纳 33' },
+  ],
+  /* CS = 0.5Q + 0.3S + 0.2R，分润按 CS 占比池 */
+  pool: 3864,
+  dist:[],
+  logs:[],
+};
+
+/* --- 结算引擎：分账 / 冲正 / 对账（方案 §8.2 + §11 一单 ¥298 分账） --- */
+DB.settle = {
+  orders:[
+    { id:'S-1041', merch:'安麓大夫第',      amt:298, st:'已对账', st2:'正常', split:null, refund:0, d:'2026-10-19 14:02' },
+    { id:'S-1042', merch:'安吉瑜伽谷民宿',  amt:688, st:'已对账', st2:'正常', split:null, refund:0, d:'2026-10-19 11:20' },
+    { id:'S-1043', merch:'一大会址·星文旅创', amt:168, st:'待对账', st2:'待处理', split:null, refund:0, d:'2026-10-19 09:41' },
+  ],
+  /* 一单 ¥298 的分账口径（与演示页一致，数字自洽） */
+  ratio:[
+    { k:'履约成本', pct:58,  c:'#0f9d58', to:'商户/供应商' },
+    { k:'平台服务费', pct:12,  c:'#2f6f9f', to:'平台' },
+    { k:'合伙人分润', pct:8,   c:'#e87722', to:'线路合伙人' },
+    { k:'预算池注入', pct:5,   c:'#7048e8', to:'旅豆预算池' },
+    { k:'留存毛利',   pct:17,  c:'#8a94a6', to:'平台留存' },
+  ],
+  stmts:[],
+};
+
+/* --- 生态网关：API 目录、密钥、配额（方案 §10.1） --- */
+DB.gateway = {
+  apis:[
+    { id:'/v1/tour/search',   n:'线路检索',       m:'GET',  q:5000, used:1820, st:'正常', d:'按目的地/主题/日期检索在售线路' },
+    { id:'/v1/order/create',  n:'创建订单',       m:'POST', q:3000, used:1140, st:'正常', d:'需签名，幂等键防重复下单' },
+    { id:'/v1/verify/redeem', n:'核销验签',       m:'POST', q:8000, used:7250, st:'接近阈值', d:'核销码验签并回写履约状态', hot:true },
+    { id:'/v1/bean/redeem',   n:'权益兑换',       m:'POST', q:2000, used:640,  st:'正常', d:'旅豆兑换权益，需预算池校验' },
+    { id:'/v1/contrib/report',n:'贡献上报',       m:'POST', q:1000, used:945,  st:'接近阈值', d:'UGC 归因与 CS 计算上报', hot:true },
+  ],
+  keys:[
+    { id:'AK-SZ-8823', n:'朱家角景区运营方', sk:'****7f2a', q:'境内', st:'启用', d:'累计调用 1.2 万 · 最近 5 分钟前' },
+    { id:'AK-HK-4471', n:'香港 City Pass 代理', sk:'****c9b4', q:'境外', st:'启用', d:'走 Voyage Token 通道，与境内账本隔离' },
+    { id:'AK-SH-1092', n:'安吉民宿联盟', sk:'****3e77', q:'境内', st:'已停用', d:'配额用尽后未续期' },
+  ],
+  logs:[],
+};
+
+/* 把引擎数据并入重置快照：否则 resetDemo() 会把 v1.3 新增的四个引擎数据清空 */
+/* --- Web3 资产层：可验证凭证（VC）/ 链上区块 / NFT 藏品（v1.4.4）--- */
+DB.web3 = {
+  chainInfo:{ name:'链数根联盟链', height:8442193, tps:'1,240', nodes:12, cons:'PBFT 共识', gas:'联盟链免 Gas' },
+  /* 四种可验证凭证（W3C VC 数据模型） */
+  vcs:[
+    { id:'VC-IDN-0921', n:'实名身份凭证', en:'IdentityCredential', ic:'i-verified', c:'#0f766e',
+      issuer:'向往自由平台 · 可信签发节点',
+      claims:[['认证等级','L2 实名认证'],['姓名','张*（脱敏存储）'],['国籍/地区','中国大陆'],['签发时间','2025-03-18'],['有效期','长期 · 随 DID 有效']],
+      proof:[['签名算法','Ed25519'],['锚定交易','0x7b3e9c…c91f'],['区块高度','#8,442,150'],['确认数','1,204']] },
+    { id:'VC-MBR-0418', n:'会员等级凭证', en:'MembershipCredential', ic:'i-crown', c:'#e87722',
+      issuer:'向往自由平台 · 会员中心',
+      claims:[['当前等级','城市探索官（第 3 级）'],['升级依据','真实消费 6 条线路 + 12 次有效体验'],['权益范围','专属线路 · 双倍旅豆 · 优先预订'],['重算周期','每月 1 日按真实行为重算'],['有效期','2026-12-31']],
+      proof:[['签名算法','Ed25519'],['锚定交易','0x2f81ab…3d7e'],['区块高度','#8,441,907'],['确认数','1,455']] },
+    { id:'VC-TRP-1130', n:'旅行资历凭证', en:'TravelRecordCredential', ic:'i-route', c:'#2f6f9f',
+      issuer:'向往自由平台 · 履约存证',
+      claims:[['已行城市','6 城 · 4 条线路'],['累计消费','¥2,846（可核验订单）'],['履约完成率','100%（0 次退款）'],['最近行程','2026-08-09 苏州园林剧本游'],['隐私边界','只证明完成过，不暴露行程细节']],
+      proof:[['签名算法','Ed25519'],['锚定交易','0x91c4d2…7a05'],['区块高度','#8,440,613'],['确认数','1,712']] },
+    { id:'VC-CTB-0037', n:'贡献凭证', en:'ContributionCredential', ic:'i-spark', c:'#7048e8',
+      issuer:'向往自由平台 · 贡献引擎',
+      claims:[['CS 贡献分','74.8 / 100（0.5Q+0.3S+0.2R）'],['有效推荐','7 人 · 归因可审计'],['内容采纳','3 篇攻略被平台推荐'],['用途边界','仅用于评级激励，不对应股权/收益'],['重算周期','每月 1 日']],
+      proof:[['签名算法','Ed25519'],['锚定交易','0x5ad83f…b216'],['区块高度','#8,439,882'],['确认数','1,948']] },
+  ],
+  /* 链上区块（演示数据） */
+  blocks:[
+    { h:8442193, tx:18, t:'21:58:06', node:'上海数据集团 · 节点 03', hash:'0x8ac1…4f2b',
+      evts:[['旅豆发行','6 笔','#e87722'],['凭证核销','9 笔','#0f9d58'],['授权变更','3 笔','#2f6f9f']] },
+    { h:8442192, tx:11, t:'21:57:38', node:'璟宬文旅 · 节点 07', hash:'0x3b77…9e01',
+      evts:[['订单存证','5 笔','#0f9d58'],['贡献归因','4 笔','#7048e8'],['退款冲正','2 笔','#8a94a6']] },
+    { h:8442191, tx:24, t:'21:57:12', node:'支付宝鲸探 · 节点 01', hash:'0x9d24…1c68',
+      evts:[['NFT 铸造','2 笔','#f59f00'],['数字票根','14 笔','#2f6f9f'],['会员升级','8 笔','#e87722']] },
+  ],
+  /* NFT 藏品（鲸探联盟链 · 演示） */
+  nfts:[
+    { id:'nft1', n:'朱家角 · 江南谜案', sub:'数字纪念票', no:'#0187 / 999', rare:'传说', rc:'#f59f00',
+      c1:'#0d3b5c', c2:'#1f7a8c', ic:'i-map', tag:'对应 1 个线下入园名额',
+      contract:'0x4a9e2c…7b31', token:'#187', chain:'鲸探联盟链', st:'持有中',
+      mint:'2026-04-12 14:22', hash:'0x6f0a3d…d815',
+      rights:['朱家角剧本游入园名额 ×1','可收藏 · 鲸探内可转赠','不参与二级交易炒作'] },
+    { id:'nft2', n:'沈砚秋 · 角色卡', sub:'NPC 数字卡牌', no:'#0031 / 300', rare:'稀有', rc:'#a97fd1',
+      c1:'#2a1b5c', c2:'#7048e8', ic:'i-mask', tag:'集齐 6 张解锁隐藏剧情线',
+      contract:'0x4a9e2c…7b31', token:'#031', chain:'鲸探联盟链', st:'持有中',
+      mint:'2026-05-02 19:40', hash:'0x1bc8e0…4a72',
+      rights:['解锁「漕港夜话」隐藏剧情','兑换线下剧本游 9 折','卡牌本身不炒作'] },
+    { id:'nft3', n:'四季 · 秋枫红叶', sub:'季节限定藏品', no:'#0521 / 1,000', rare:'限定', rc:'#e87722',
+      c1:'#5c2310', c2:'#e87722', ic:'i-tree', tag:'集齐四季解锁年度探索者',
+      contract:'0x4a9e2c…7b31', token:'#521', chain:'鲸探联盟链', st:'持有中',
+      mint:'2026-10-06 10:15', hash:'0x8e2f41…b903',
+      rights:['集齐四季 → 次年免费入园 ×1','专属「年度探索者」称号','限时限量 · 过期不补'] },
+    { id:'nft4', n:'金山农民画 · 非遗联名', sub:'大师联名藏品', no:'#0072 / 200', rare:'珍藏', rc:'#0f9d58',
+      c1:'#12352b', c2:'#0f766e', ic:'i-pen', tag:'非遗传承人签名版',
+      contract:'0x4a9e2c…7b31', token:'#072', chain:'鲸探联盟链', st:'持有中',
+      mint:'2026-08-09 16:08', hash:'0x37d5c9…2f18',
+      rights:['非遗传承人数字签名','部分收益与艺术家分成','线下展览优先预约'] },
+  ],
+};
+
+/* --- 数字藏品发行侧（运营端发行中台）· v1.5 --- */
+DB.nftOps = {
+  seq: 8841,
+  contract: '0x4a9e2c…7b31',
+  chain: '鲸探联盟链',
+  holders: 1742,
+  verifyRate: 63.1,
+  gifts: 1284,
+  plans: [
+    { id:'PL-2604', n:'金山农民画 · 非遗联名', sub:'大师联名藏品', supply:200, minted:200,
+      price:'¥199 / 件 · 含线下展优先预约', rule:'实名限购 1 件 · 售完即止',
+      st:'已结束', ic:'i-pen', c:'#0f9d58', h1:'#12352b', h2:'#0f766e' },
+    { id:'PL-2603', n:'四季 · 秋枫红叶', sub:'季节限定藏品', supply:1000, minted:521,
+      price:'¥0 · 集满 4 枚季节章免费领', rule:'每人限 1 件 · 需 L2 实名 + 4 次履约',
+      st:'进行中', ic:'i-tree', c:'#e87722', h1:'#5c2310', h2:'#e87722' },
+    { id:'PL-2602', n:'沈砚秋 · 角色卡 第二季', sub:'NPC 数字卡牌', supply:300, minted:218,
+      price:'¥0 · 剧本游通关掉落', rule:'通关掉落 · 每人最多 3 张',
+      st:'进行中', ic:'i-mask', c:'#7048e8', h1:'#2a1b5c', h2:'#7048e8' },
+    { id:'PL-2601', n:'朱家角 · 江南谜案', sub:'数字纪念票', supply:999, minted:999,
+      price:'¥0 · 购票即赠', rule:'每单 1 张 · 履约完成后铸造',
+      st:'已结束', ic:'i-map', c:'#2f6f9f', h1:'#0d3b5c', h2:'#1f7a8c' },
+  ],
+  batches: [
+    { id:'BT-8841', plan:'PL-2603', n:240, t:'10-19 21:40', by:'运营 · 王璐', hash:'0x8ac1…4f2b', st:'已确认' },
+    { id:'BT-8840', plan:'PL-2602', n:60,  t:'10-19 18:12', by:'系统 · 通关掉落', hash:'0x3b77…9e01', st:'已确认' },
+    { id:'BT-8839', plan:'PL-2603', n:281, t:'10-18 20:05', by:'运营 · 王璐', hash:'0x9d24…1c68', st:'已确认' },
+    { id:'BT-8838', plan:'PL-2602', n:158, t:'10-17 15:33', by:'系统 · 通关掉落', hash:'0x6f0a…d815', st:'已确认' },
+    { id:'BT-8837', plan:'PL-2604', n:72,  t:'10-16 11:20', by:'运营 · 陈默', hash:'0x37d5…2f18', st:'已确认' },
+  ],
+  alerts: [
+    { id:'AL-0917', lv:'高', c:'#e03131', n:'转赠异常聚集', ic:'i-alert', st:'待处置',
+      d:'地址 0x9f2c…41ab 24 小时内接收 9 次转赠，横跨 3 个发行计划，疑似代持囤积',
+      act:'冻结该地址的权益核销' },
+    { id:'AL-0916', lv:'中', c:'#e87722', n:'挂单价格异常', ic:'i-trend', st:'待处置',
+      d:'「金山农民画」#0072 挂单 ¥1,880，近 30 天参考成交 ¥120，溢价 15.7 倍',
+      act:'下架挂单并向鲸探举报' },
+    { id:'AL-0915', lv:'高', c:'#e03131', n:'仿冒合约', ic:'i-shield', st:'待处置',
+      d:'合约 0x7c21…8e0d 以「向往自由」名义发行同名藏品，非我方授权合约',
+      act:'发律师函 + 平台侵权投诉' },
+  ],
+};
+
+/* --- 权益核销与结算对账（运营端 · v1.6）--- */
+DB.rights = {
+  period: '2026-10-01 ~ 10-19',
+  funnel: [
+    { n:'发行', v:1938, p:100,  c:'#8fb6cf' },
+    { n:'领取', v:1742, p:89.9, c:'#6aa5c6' },
+    { n:'激活', v:1506, p:77.7, c:'#2f6f9f' },
+    { n:'核销', v:1222, p:63.1, c:'#0f766e' },
+    { n:'复购', v:386,  p:19.9, c:'#e87722' },
+  ],
+  /* 权益预算池：1780 单 × ¥14.9 预留，实际核销成本超出部分需调剂 */
+  budget: { orders:1780, per:14.9, pool:26522, used:34116 },
+  bill: { st:'已生成', no:'ST-20261019-01', at:'2026-10-19 10:00', voucher:'—', remind:0 },
+  /* mid = 商户端账号 ID（DB.merch.id）：该商户在结算里的对应条线
+     by  = 确认来源：'' 未确认 / '平台代录' / '商户端线上' */
+  merchants: [
+    { n:'朱家角景区', op:'安麓大夫第 · 朱家角店', r:'入园名额', cnt:412, price:34, amt:14008, st:'待确认', ic:'i-pin',   c:'#0f766e', mid:'M20261018', by:'' },
+    { n:'漕港人家',   op:'漕港人家（餐饮）', r:'餐饮 9 折补贴', cnt:286, price:18, amt:5148,  st:'待确认', ic:'i-store', c:'#e87722', mid:'', by:'' },
+    { n:'课植园',     op:'课植园（剧本游）', r:'剧本游入园', cnt:254, price:28, amt:7112,  st:'差异',   ic:'i-map',   c:'#7048e8', mid:'', by:'' },
+    { n:'阿婆粽',     op:'阿婆粽（伴手礼）', r:'伴手礼免费兑换', cnt:174, price:12, amt:2088,  st:'已确认', ic:'i-gift',  c:'#0f9d58', mid:'', by:'平台代录' },
+    { n:'角里民宿',   op:'角里民宿', r:'房费抵扣', cnt:96, price:60, amt:5760,  st:'已确认', ic:'i-home',  c:'#2f6f9f', mid:'', by:'平台代录' },
+  ],
+  diffs: [
+    { id:'DF-0912', m:'课植园', n:'核销次数不符', amt:112, st:'待处置',
+      d:'商家主张 258 次，平台记录 254 次；差的 4 次为同一核销码重复提交，已被一次性校验拦截' },
+    { id:'DF-0911', m:'课植园', n:'结算单价不符', amt:1016, st:'待处置',
+      d:'协议价 ¥28 / 次，商家主张 ¥32（称旺季调价，但无书面确认单）' },
+  ],
+  /* 商户端发起的对账申诉（运营端受理：接受主张 → 追加应付；驳回 → 维持原额） */
+  appeals: [
+    { id:'AP-1019-01', m:'朱家角景区', n:'结算单价不符', amt:824, st:'待受理', at:'2026-10-19 18:20',
+      d:'商家主张旺季入园名额协议价应为 ¥36 / 次（412 次 × ¥2 = ¥824），平台账内仍按 ¥34 / 次结算。' },
+  ],
+  /* 已办结的申诉留档（历史单据，演示驳回态展示） */
+  appealLog: [
+    { id:'AP-1018-03', m:'漕港人家', n:'核销次数不符', amt:72, st:'已驳回', at:'2026-10-18 15:40',
+      d:'商家主张 10-18 核销 290 次，平台记录 286 次，差 4 次为同一核销码重复提交。',
+      done:'维持协议价 · 2026-10-18 16:10' },
+  ],
+  /* 协议变更单（商户端发起 → 运营端审批 → 批准后重算本期成本，v1.8） */
+  contracts: [
+    { id:'AG-1019-02', m:'朱家角景区', op:'安麓大夫第 · 朱家角店', r:'入园名额', mid:'M20261018',
+      from:34, to:30, st:'待审批', by:'商户端线上', at:'2026-10-20 09:12', unit:'元 / 次',
+      why:'金秋客流被周边低价分流，同期景区实际入园人数同比下降 12%，申请把旺季协议价下调至 ¥30 / 次，改为「基本入园保底 + 转介绍奖励上浮」。',
+      save:1648, lg:[] },
+    { id:'AG-1019-01', m:'课植园', op:'课植园（剧本游）', r:'剧本游入园', mid:'',
+      from:28, to:32, st:'已驳回', by:'商户端线上', at:'2026-10-19 15:20', unit:'元 / 次',
+      why:'剧本游改版后时长由 60 分钟延长至 90 分钟，申请按 ¥32 / 次结算。',
+      save:-1016, lg:[{ t:'2026-10-19 16:05', by:'运营 · 王璐', d:'驳回：改版时长属服务内容变更，需先出具第三方成本核算，暂按协议价 ¥28 执行' }] },
+    { id:'AG-0918-03', m:'角里民宿', op:'角里民宿', r:'房费抵扣', mid:'',
+      from:66, to:60, st:'已生效', by:'商户端线上', at:'2026-09-28 10:40', unit:'元 / 次',
+      why:'淡季入住率不足 40%，双方协商把房费抵扣单价下调 6 元换量。',
+      save:576, lg:[
+        { t:'2026-09-28 14:10', by:'运营 · 陈默', d:'同意下调，自 2026-10-01 账期起执行' },
+        { t:'2026-10-01 00:00', by:'系统', d:'新单价生效，本期结算按 ¥60 / 次计算' }] },
+  ],
+  /* 权益预留池超支审批（运营端 v1.8）：分级授权 + 封顶 + 熔断 */
+  overrun: {
+    /* 熔断线：超支率超此值，藏品新批次铸造转入「待财务放行」 */
+    limit: 0.25,
+    /* 分级授权：按申请金额落到不同审批人，超权限自动降级 */
+    grades: [
+      { lv:'运营总监 · 李思远', lim:3000,  scope:'¥3,000 以内 · 营销预算科目内调剂' },
+      { lv:'财务负责人 · 周颖', lim:8000,  scope:'¥3,001–8,000 · 跨科目须财务联签' },
+      { lv:'CEO · 赵董事长',   lim:null,   scope:'超 ¥8,000 或连续两期破熔断线' },
+    ],
+    asks: [
+      { id:'OV-1019-01', amt:7594, st:'待审批', by:'运营 · 王璐', at:'2026-10-19 21:10', lg:null,
+        src:'营销预算调剂',
+        why:'本期核销 1,222 次、实付权益成本 ¥34,116，超出 1,780 单 × ¥14.9 的预留池 ¥26,522。缺口主要来自两点：① 朱家角景区入园名额协议价 ¥34 高于同类均值；② 课植园旺季调价争议（已按协议价核减）。申请从 Q4 营销预算调剂。' },
+      { id:'OV-1018-02', amt:2140, st:'已批准', by:'运营 · 王璐', at:'2026-10-18 16:40', lg:'运营总监 · 李思远',
+        src:'营销预算调剂',
+        why:'10-18 当日核销 412 次超出日均 1.7 倍，申请当日调剂。',
+        done:'已批准 ¥2,140 · 2026-10-18 17:05 · 营销预算科目内' },
+    ],
+    log: [
+      { t:'2026-10-18 17:05', by:'运营总监 · 李思远', d:'批准 OV-1018-02 ¥2,140（¥3,000 以内权限内直接批）' },
+    ],
+    /* 滚动预测（v1.9）：把「事后审批」前移成「事前预警」
+       —— 全期均速是后视镜，近周节奏才是前挡风；成本控制要按最坏的准备 */
+    fc: {
+      days: 19,            // 本期已过天数（账期 10-01 ~ 10-19）
+      amber: 0.5,          // 红灯线：预测超支率超过它，必须调价 + 压投放
+      weeks: [             // 近三周逐周核销成本（元）；第三周为 5 天的不完整周，按天折算
+        { w:'W41 · 10/01–10/07', amt:10180, days:7 },
+        { w:'W42 · 10/08–10/14', amt:12150, days:7 },
+        { w:'W43 · 10/15–10/19', amt:11786, days:5 },
+      ],
+    },
+  },
+  /* 朱家角景区核销流水（商户端逐笔核对用；样例 12 条，合计 412 次） */
+  redeems: [
+    { code:'RV-1019-0001', t:'10-19 09:12', g:'张女士', nft:'#0187/999', amt:34 },
+    { code:'RV-1019-0002', t:'10-19 09:47', g:'周先生', nft:'#0256/999', amt:34 },
+    { code:'RV-1019-0003', t:'10-19 10:23', g:'李女士', nft:'#0312/999', amt:34 },
+    { code:'RV-1019-0004', t:'10-19 10:58', g:'吴先生', nft:'#0088/999', amt:34 },
+    { code:'RV-1019-0005', t:'10-19 11:35', g:'郑女士', nft:'#0421/999', amt:34 },
+    { code:'RV-1019-0006', t:'10-19 13:06', g:'陈先生', nft:'#0163/999', amt:34 },
+    { code:'RV-1019-0007', t:'10-19 13:51', g:'刘女士', nft:'#0094/999', amt:34 },
+    { code:'RV-1019-0008', t:'10-19 14:26', g:'孙先生', nft:'#0307/999', amt:34 },
+    { code:'RV-1019-0009', t:'10-19 15:14', g:'黄女士', nft:'#0145/999', amt:34 },
+    { code:'RV-1019-0010', t:'10-19 16:02', g:'徐先生', nft:'#0372/999', amt:34 },
+    { code:'RV-1019-0011', t:'10-19 16:48', g:'朱女士', nft:'#0221/999', amt:34 },
+    { code:'RV-1019-0012', t:'10-19 17:33', g:'林先生', nft:'#0059/999', amt:34 },
+  ],
+};
+
+['engine','contrib','settle','gateway','x','nftOps','web3','rights'].forEach(function(k){
+  if(DB_INIT[k] === undefined) DB_INIT[k] = JSON.parse(JSON.stringify(DB[k]));
+});
+
+/* ============================================================
+   权益结算实绩 → 一单 ¥298 分账回流（v1.7）
+   —— 把「核销对账」的真实成本回写进分账视图，两边账实一致
+   ============================================================ */
+
+/** 协议变更单当前适用的协议单价：有「已生效」变更单以新价为准，否则沿用协议原价
+    —— 变更一旦审批通过，结算成本立即按新价重算，无需人工改价 */
+function agrPrice(m){
+  const c = DB.rights.contracts.filter(function(x){ return x.m === m.n && x.st === '已生效'; })[0];
+  return c ? c.to : m.price;
+}
+/** 待审批变更单若通过可省下的成本（仅为预估，不计入实绩） */
+function agrPendingSave(m){
+  const c = DB.rights.contracts.filter(function(x){ return x.m === m.n && x.st === '待审批'; })[0];
+  return c ? m.cnt * (c.to - c.from) : 0;
+}
+/** 单条商户结算条线的实付金额 = 协议应收（m.amt，含申诉上浮）− 已处置差异核减
+    m.amt 是账实权威：协议变更生效时按新单价重算、申诉受理时按主张上浮，
+    net 只负责扣核减，避免同一笔钱在两处各算一遍 */
+function rightsLineNet(m){
+  const R = DB.rights;
+  const cut = R.diffs.filter(function(d){ return d.m === m.n && d.st === '已处置'; })
+    .reduce(function(a,d){ return a + d.amt; }, 0);
+  return m.amt - cut;
+}
+/** 结算实绩汇总：已确认 / 待确认 / 差异 / 实付合计 */
+function rightsRealized(){
+  const R = DB.rights;
+  const ok = R.merchants.filter(function(m){ return m.st === '已确认'; });
+  const wait = R.merchants.filter(function(m){ return m.st === '待确认'; });
+  const diff = R.merchants.filter(function(m){ return m.st === '差异' || m.st === '申诉中'; });
+  const net = R.merchants.reduce(function(a,m){ return a + rightsLineNet(m); }, 0);
+  const okNet = ok.reduce(function(a,m){ return a + rightsLineNet(m); }, 0);
+  const cut = R.diffs.filter(function(d){ return d.st === '已处置'; })
+    .reduce(function(a,d){ return a + d.amt; }, 0);
+  return {
+    ok: ok, wait: wait, diff: diff,
+    net: net, okNet: okNet, cut: cut,
+    cnt: R.merchants.reduce(function(a,m){ return a + m.cnt; }, 0),
+    orders: R.budget.orders,
+    perPlan: R.budget.per,
+    perReal: net / R.budget.orders,
+    perOk: okNet / R.budget.orders,
+  };
+}
+/** 分账五口径实绩行：标准口径 → 实绩口径（权益超支吃掉留存毛利，总额恒为 ¥298） */
+function splitRowsReal(){
+  const base = DB.x.waterfall.map(function(w){ return { n:w.n, c:w.c, g:w.g, to:w.to, d:w.d, v:w.v, p:w.p, plan:w.v }; });
+  const z = rightsRealized();
+  const pool = base.filter(function(w){ return w.g === 'pool'; })[0];
+  const keep = base.filter(function(w){ return w.n === '留存毛利'; })[0];
+  const FIX = 298;                              // 游客实付，五口径合计恒等
+  if(pool){
+    pool.v = Math.round(z.perReal * 100) / 100;   // 实绩权益单均（两位小数，小额申诉也可见）
+    pool.p = Math.round(pool.v / FIX * 1000) / 10;
+    pool.real = true;
+  }
+  if(keep){
+    const other = base.filter(function(w){ return w.g === 'out' || w.n === '平台服务费'; })
+      .reduce(function(a,w){ return a + w.v; }, 0);
+    keep.v = Math.round((FIX - other - pool.v) * 100) / 100;   // 差额由留存毛利吸收
+    keep.p = Math.round(keep.v / FIX * 1000) / 10;
+    keep.gap = Math.round((pool.v - z.perPlan) * 100) / 100;
+    keep.real = true;
+  }
+  /* 分组汇总（按收款对象） */
+  const grp = { out:{ sum:0, plan:0 }, keep:{ sum:0, plan:0 }, pool:{ sum:0, plan:0 } };
+  base.forEach(function(w){
+    grp[w.g].sum = Math.round((grp[w.g].sum + w.v) * 100) / 100;
+    grp[w.g].plan = Math.round((grp[w.g].plan + w.plan) * 100) / 100;
+  });
+  Object.keys(grp).forEach(function(k){
+    grp[k].pct = Math.round(grp[k].sum / FIX * 1000) / 10;
+    grp[k].planPct = Math.round(grp[k].plan / FIX * 1000) / 10;
+  });
+  return { rows: base, z: z, gap: keep ? keep.gap : 0, sum: Math.round(base.reduce(function(a,w){ return a + w.v; }, 0) * 10) / 10, grp: grp };
+}
+/** 回流说明：为什么实绩权益单均比预算高，差额从哪来 */
+function splitRealNote(){
+  const z = rightsRealized();
+  const gap = Math.round((z.perReal - z.perPlan) * 100) / 100;
+  const total = Math.round(gap * z.orders);
+  return { z: z, gap: gap, total: total,
+    text: gap > 0
+      ? '本期实绩权益单均 ¥' + z.perReal.toFixed(2) + '，高于预算预留 ¥' + z.perPlan.toFixed(2) + '，缺口 ¥' + gap.toFixed(2) + '/单；全期合计 ¥' + total.toLocaleString() + ' 先由平台留存毛利吸收'
+      : (gap < 0 ? '本期实绩权益单均 ¥' + z.perReal.toFixed(2) + '，低于预算预留 ¥' + z.perPlan.toFixed(2) + '，节余 ¥' + Math.abs(gap).toFixed(2) + '/单 回补留存毛利'
+      : '本期实绩权益单均 ¥' + z.perReal.toFixed(2) + '，与预算预留一致，无差额') };
+}
+
+/* ============================================================
+   权益预留池 · 超支审批动作流（v1.8）
+   —— 把「池子不够」从一句建议变成有授权、有额度、有熔断的审批链
+   ============================================================ */
+
+/** 分级授权：按金额判定该谁批（限额 null = 终审，无上限） */
+function overrunNeed(amt){
+  const G = DB.rights.overrun.grades;
+  for(let i = 0; i < G.length; i++){
+    if(G[i].lim === null || amt <= G[i].lim) return { g:G[i], i:i };
+  }
+  return { g:G[G.length - 1], i:G.length - 1 };
+}
+/** 当前审批层级名称 */
+function overrunLevel(amt){ return overrunNeed(amt).g.lv; }
+/** 上一级审批人（部分批准后余量升级用） */
+function overrunUp(amt){
+  const G = DB.rights.overrun.grades, i = overrunNeed(amt).i;
+  return G[i + 1] || null;
+}
+/** 超支全局状态：缺口 / 已批 / 待批 / 未覆盖 / 熔断 / 资金来源 */
+function overrunState(){
+  const R = DB.rights, O = R.overrun, z = rightsRealized();
+  const gap = Math.max(0, Math.round((z.net - R.budget.pool) * 100) / 100);
+  const rate = R.budget.pool ? Math.round(gap / R.budget.pool * 1000) / 1000 : 0;
+  const okAmt = O.asks.filter(function(a){ return a.st === '已批准' || a.st === '部分批准'; })
+    .reduce(function(a,x){ return a + (x.got || x.amt); }, 0);
+  const open = O.asks.filter(function(a){ return a.st === '待审批'; });
+  const openAmt = open.reduce(function(a,x){ return a + x.amt; }, 0);
+  /* 已被审批覆盖的缺口走「营销预算调剂」，未覆盖部分直接从留存毛利扣 —— 总额不变 */
+  const fromMkt = Math.min(okAmt, gap);
+  const fromKeep = Math.max(0, gap - fromMkt);
+  /* 熔断：超支率破线，且缺口尚未拿到「已批准的处置」（批了调剂或签了协议变更）
+     —— 破线说明成本失控，无处置说明钱没着落，两者同时成立才冻结新增投放 */
+  const fuse = rate > O.limit && okAmt < gap;
+  return {
+    gap: gap, rate: rate, okAmt: okAmt, openAmt: openAmt, open: open.length,
+    fromMkt: fromMkt, fromKeep: fromKeep, uncovered: Math.max(0, gap - okAmt),
+    fuse: fuse, limit: O.limit, net: z.net, pool: R.budget.pool,
+    perReal: z.perReal, perPlan: z.perPlan,
+  };
+}
+/** 下期建议预留单价：按实绩上浮并留 3% 缓冲 */
+function overrunNextPer(){
+  const z = rightsRealized();
+  return Math.round(z.perReal * 1.03 * 100) / 100;
+}
+
+/* ============================================================
+   下期预算预测 · 事前预警（v1.9）
+   —— 不等结算完才发现超支：按周节奏外推，破线前干预
+   ============================================================ */
+
+/** 滚动周节奏：本期逐周成本、日均与环比（不完整周按天折算，避免短周被低估） */
+function fcWeeks(){
+  const W = DB.rights.overrun.fc.weeks;
+  return W.map(function(w, i){
+    const perDay = w.days > 0 ? w.amt / w.days : 0;
+    const prev = i > 0 ? W[i-1] : null;
+    const prevPer = prev && prev.days > 0 ? prev.amt / prev.days : 0;
+    return {
+      w: w.w, amt: w.amt, days: w.days,
+      perDay: Math.round(perDay * 100) / 100,
+      wow: prevPer > 0 ? perDay / prevPer - 1 : null,   // 日均环比，非金额环比
+    };
+  });
+}
+/** 下期预算预测：全期均速是后视镜，近周节奏才是前挡风
+    周节奏是历史事实（不随协议变更回溯漂移），账实是当前账面 —— 两者分开，预测 = 账面 × 节奏倍数
+    协议变更一旦生效（m.amt 被重算），net 自动下降 → 预测同步下降，无需二次适配 */
+function fcState(){
+  const R = DB.rights, F = R.overrun.fc, O = R.overrun, z = rightsRealized();
+  const net = z.net;                                        // 本期实绩成本
+  const daysAll = F.weeks.reduce(function(a,w){ return a + w.days; }, 0);
+  const amtAll  = F.weeks.reduce(function(a,w){ return a + w.amt; }, 0);
+  const perDayAll = daysAll > 0 ? amtAll / daysAll : 0;    // 全期日均（由周节奏汇总，历史事实恒定）
+  const last = F.weeks[F.weeks.length - 1] || { amt:0, days:1 };
+  const perDayLast = last.days > 0 ? last.amt / last.days : 0;   // 近周日均
+  const trend = perDayAll > 0 ? perDayLast / perDayAll - 1 : 0;  // 趋势增速（恒定，不随账面变更漂移）
+  const fcNext = Math.round(net * (1 + trend));             // 下期预测成本
+  const pool = R.budget.pool;                               // 下期预留池（沿用本期口径）
+  const fcGap = Math.max(0, Math.round((fcNext - pool) * 100) / 100);
+  const fcRate = pool ? fcGap / pool : 0;
+  const bottom = perDayLast > 0 ? pool / perDayLast : Infinity;  // 池子见底天数
+  const fcPer = R.budget.orders ? fcNext / R.budget.orders : 0;  // 预测单均成本
+  const fcPerBuf = Math.round(fcPer * 1.03 * 100) / 100;         // 建议预留单价（+3% 缓冲）
+  /* 待审批协议变更的潜在影响（已生效的已体现在 net 里，不重复计）
+     what-if 与真实模型同式：先降账面、再乘节奏倍数，保证「预览值 = 批准后的实际值」 */
+  const agrSave = R.contracts.filter(function(c){ return c.st === '待审批' && c.to < c.from; })
+    .reduce(function(a,c){ const m = R.merchants.filter(function(x){ return x.n === c.m; })[0];
+      return a + (m ? m.cnt * (c.from - c.to) : 0); }, 0);
+  const fcNextAgr = Math.max(0, Math.round((net - agrSave) * (1 + trend)));
+  const fcRateAgr = pool ? Math.max(0, fcNextAgr - pool) / pool : 0;
+  /* 收缩新增投放 10% 的影响（验证「单靠压投放救不回来」） */
+  const fcNextCut = Math.round(fcNext * 0.9);
+  const fcRateCut = pool ? Math.max(0, fcNextCut - pool) / pool : 0;
+  /* 预警分级：绿 ≤ 熔断线 < 黄 ≤ 50% < 红 */
+  const lv = fcRate > F.amber ? 'red' : fcRate > O.limit ? 'amber' : 'green';
+  return {
+    net:net, days:F.days, perDayAll:perDayAll, perDayLast:perDayLast, trend:trend,
+    fcNext:fcNext, pool:pool, fcGap:fcGap, rate:fcRate,
+    bottom:bottom, fcPer:fcPer, fcPerBuf:fcPerBuf,
+    agrSave:agrSave, fcNextAgr:fcNextAgr, fcRateAgr:fcRateAgr,
+    fcNextCut:fcNextCut, fcRateCut:fcRateCut,
+    lv:lv, limit:O.limit, amber:F.amber, weeks:fcWeeks(),
+  };
+}
+
+</script>

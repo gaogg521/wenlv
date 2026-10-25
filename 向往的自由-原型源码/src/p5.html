@@ -1,0 +1,538 @@
+<style>
+.sb-dark .statusbar{ color:#fff; }
+.login{ display:none; }
+.login.on{ display:flex; }
+</style>
+<script>
+/* ===== 视图注册表 ===== */
+const VIEWS = {};
+const PAGES = {};
+
+/* ===== 状态栏明暗：自动探测当前首屏底色 ===== */
+function _lum(r,g,b){ return (0.299*r + 0.587*g + 0.114*b) / 255; }
+/* 返回当前最上层滚动容器 */
+function topScrollEl(){
+  if(S.stack.length) return S.stack[S.stack.length-1].el.querySelector('.page-body');
+  return $('#baseScroll');
+}
+/** 沿祖先链向上找出首屏顶部实际生效的底色 */
+function probeTopBg(el){
+  if(!el) return { dark:false, bleed:false };
+  /* 首元素自身：图片/插画容器（.gal / .imgwrap / .scene / svg）→ 视为深底，白字 */
+  const selfImg = /(^|\s)(gal|imgwrap|scene|gslides)(\s|$)/.test(el.className || '') || el.tagName === 'SVG' || (el.querySelector && el.querySelector('svg.scene'));
+  let dark = selfImg ? true : null, node = selfImg ? null : el;
+  while(node && node.id !== 'screen'){
+    const cs = getComputedStyle(node);
+    if(cs.backgroundImage && cs.backgroundImage !== 'none'){ dark = true; break; }
+    const m = cs.backgroundColor && cs.backgroundColor.match(/[\d.]+/g);
+    if(m && (m.length < 4 || +m[3] > 0.5)){ dark = _lum(+m[0], +m[1], +m[2]) < 0.55; break; }
+    node = node.parentElement;
+  }
+  if(dark === null) dark = false;
+  /* 只有「通栏 + 深底」才沉浸顶格；带左右外边距的浮层卡片上方仍是浅色 --bg，状态栏必须用深色字 */
+  const cs0 = getComputedStyle(el);
+  const fullBleed = parseFloat(cs0.marginLeft) < 1 && parseFloat(cs0.marginRight) < 1;
+  if(!fullBleed) return { dark:false, bleed:false };
+  return { dark:true, bleed:true };
+}
+function autoSB(){
+  /* 登录层覆盖状态栏 */
+  if($('#loginLayer').classList.contains('on')){
+    const hero = $('#loginLayer .login-hero');
+    const cs = hero ? getComputedStyle(hero) : null;
+    applySB((cs && cs.backgroundImage !== 'none') ? 'dark' : 'light');
+    return;
+  }
+  const box = topScrollEl();
+  /* 跳转返回栏在场时，页面顶部是白底，状态栏不能再跟着内容走 */
+  if(document.getElementById('appRoot') && document.getElementById('appRoot').classList.contains('has-ret')){ applySB('light'); return; }
+  /* 首屏内容头：跳过 .ptr 下拉刷新占位元素 */
+  let first = box ? box.firstElementChild : null;
+  if(first && first.classList.contains('ptr')) first = first.nextElementSibling;
+  /* push 出来的子页面顶部是半透明白 navbar（rgba(255,255,255,.92)），状态栏一律用深色字 */
+  if(S.stack.length){
+    if(window.__sbBleedEl){                      /* 从 tab 首屏切进来时先还原沉浸头部 */
+      const prev = window.__sbBleedEl;
+      prev.style.paddingTop = prev.dataset.sbPadOrig || ''; prev.style.marginTop = ''; delete prev.dataset.sbPadOrig;
+      window.__sbBleedEl = null;
+      $('#baseLayer').classList.remove('top-bleed');
+    }
+    applySB('light');
+    return;
+  }
+  const r = probeTopBg(first);
+  /* 沉浸式：头部负外边距顶回 0，并补足 44px 内边距，保持内容视觉位置不变 */
+  const host = box ? (S.stack.length ? S.stack[S.stack.length-1].el : $('#baseLayer')) : null;
+  const prev = window.__sbBleedEl;
+  if(prev && prev !== first){                      /* 上一个沉浸头部不再沉浸 → 还原 */
+    prev.style.paddingTop = prev.dataset.sbPadOrig || '';
+    prev.style.marginTop = '';
+    delete prev.dataset.sbPadOrig;
+    window.__sbBleedEl = null;
+    if(host){ host.classList.remove('top-bleed'); }
+  }
+  if(host && r.bleed && first){
+    if(!first.dataset.sbPadOrig) first.dataset.sbPadOrig = getComputedStyle(first).paddingTop;
+    first.style.paddingTop = (parseFloat(first.dataset.sbPadOrig) + 44) + 'px';
+    first.style.marginTop = '-44px';
+    host.classList.add('top-bleed');
+    window.__sbBleedEl = first;
+  }
+  applySB(r.dark ? 'dark' : 'light');
+}
+function applySB(mode){
+  $('#screen').classList.toggle('sb-dark', mode !== 'light');
+  S.sbMode = mode;
+}
+/* 兼容旧调用：显式指定则覆盖自动探测 */
+function setSB(mode){
+  if(!mode || mode === 'auto'){ autoSB(); return; }
+  applySB(mode);
+}
+
+/* ===== 页面栈 ===== */
+function push(title, html, opts={}){
+  const pg = document.createElement('div');
+  pg.className = 'page';
+  pg.innerHTML =
+    '<div class="navbar"><button class="nav-btn" onclick="pop()">'+ic('i-back')+'</button>' +
+    '<div class="nav-title">'+title+'</div><div class="nav-right"></div></div>' +
+    '<div class="scroll page-body">'+html+'</div>' +
+    (opts.bottom ? '<div class="bottom-bar">'+opts.bottom+'</div>' : '');
+  $('#pageStack').appendChild(pg);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>pg.classList.add('in')));
+  $('#baseLayer').classList.add('pushed');
+  S.stack.push({ title, el:pg, sb:opts.sb || 'auto' });
+  if(opts.sb && opts.sb !== 'auto') applySB(opts.sb); else autoSB();
+  if(typeof renderRet === 'function') renderRet();   /* 进了子页就把 tab 层的返回浮标收起，避免压在二级页上 */
+  pg.querySelector('.page-body').addEventListener('scroll', onSbScroll, { passive:true });
+  runCounters(pg.querySelector('.page-body'));
+  return pg;
+}
+let sbRaf = 0;
+function onSbScroll(){ if(sbRaf) return; sbRaf = requestAnimationFrame(()=>{ sbRaf = 0; autoSB(); }); }
+function pop(){
+  const top = S.stack.pop(); if(!top) return;
+  top.el.classList.add('out'); top.el.classList.remove('in');
+  setTimeout(()=>top.el.remove(), 380);
+  const prev = S.stack[S.stack.length-1];
+  if(prev){ if(prev.sb && prev.sb !== 'auto') applySB(prev.sb); else autoSB(); }
+  else { $('#baseLayer').classList.remove('pushed'); autoSB(); }
+  /* 退回 tab 层时，把「跳转返回」浮标恢复出来（push 期间它是隐藏的） */
+  if(!S.stack.length) setTimeout(renderRet, 20);
+}
+function clearStack(){ S.stack.forEach(p=>p.el.remove()); S.stack = []; $('#baseLayer').classList.remove('pushed'); }
+
+/* ===== 端与 Tab ===== */
+function setEnd(end){
+  clearStack();
+  S.ret = null;                 /* 换端了，「返回上一个 tab」就没有意义了 */
+  S.end = end;
+  $('#screen').dataset.end = end;
+  renderBase(); renderPanel(); renderRet();
+  const l = $('#baseLayer');
+  l.style.opacity = '0';
+  requestAnimationFrame(()=>{ l.style.transition = 'opacity .2s'; l.style.opacity = '1'; });
+}
+function setTab(k){
+  /* 底部 tab 栏 / 代码里的普通切换：不保留「远处跳过来」的返回痕迹 */
+  S.ret = null;
+  /* 防御：非法 tab key 自动回落到首屏，避免出现「建设中」空页 */
+  const endDef = ENDS[S.end];
+  if(endDef && !endDef.tabs.some(function(t){ return t.k === k; })) k = endDef.tabs[0].k;
+  if(S.tab[S.end] === k && !S.stack.length){ renderBase(); renderRet(); return; }
+  clearStack();
+  S.tab[S.end] = k;
+  renderBase();
+  renderRet();
+}
+/* 「我的」里的入口跳到别的 tab —— 记下来路，给用户一个回去的键 */
+function jumpTab(k){
+  const from = S.tab[S.end];
+  setTab(k);
+  if(from === k) return;
+  const def = ENDS[S.end].tabs.find(function(t){ return t.k === from; });
+  S.ret = { tab: from, label: (def && def.l) || '上一页' };
+  renderRet();
+}
+function retBack(){
+  const t = S.ret && S.ret.tab;
+  S.ret = null;
+  if(t) setTab(t); else renderRet();
+}
+function renderRet(){
+  const el = document.getElementById('retChip');
+  if(!el) return;
+  const root = document.getElementById('appRoot');
+  const hide = !S.ret || S.stack.length;
+  if(hide){ el.classList.remove('on'); el.innerHTML = ''; if(root) root.classList.remove('has-ret'); return; }
+  el.innerHTML = '<button onclick="retBack()" aria-label="返回">' + ic('i-back') + '<span>返回 ' + S.ret.label + '</span></button>';
+  el.classList.add('on');
+  if(root) root.classList.add('has-ret');
+  /* 清掉「沉浸头」的负边距 —— 否则头部会往上钻 44px，压住返回栏 */
+  if(window.__sbBleedEl){
+    const p = window.__sbBleedEl;
+    p.style.paddingTop = p.dataset.sbPadOrig || ''; p.style.marginTop = ''; delete p.dataset.sbPadOrig;
+    window.__sbBleedEl = null;
+    const bl = document.getElementById('baseLayer'); if(bl) bl.classList.remove('top-bleed');
+  }
+  /* 返回栏把内容顶下去 36px，页面顶部变成白底 —— 状态栏必须跟着改深色字，否则白字压白看不见 */
+  applySB('light');
+}
+/* 二级页内的分类/筛选切换：只重画最上层子页，不能调 renderBase（那会重画 tab 首屏、把子页盖住） */
+function rerenderTop(){
+  const top = S.stack[S.stack.length-1];
+  if(top && typeof top.el.__rerender === 'function'){ top.el.__rerender(); return; }
+  renderBase();
+}
+function renderBase(){
+  const end = ENDS[S.end];
+  $('#tabBar').innerHTML = end.tabs.map(t =>
+    '<div class="tab '+(S.tab[S.end]===t.k?'on':'')+'" onclick="setTab(\''+t.k+'\')">'+ic(t.i)+'<span>'+t.l+'</span></div>').join('');
+  const scroll = $('#baseScroll');
+  const fn = VIEWS[S.end] && VIEWS[S.end][S.tab[S.end]];
+  scroll.innerHTML = '<div class="ptr"></div>' + (fn ? fn() : '<div class="empty">建设中</div>');
+  scroll.scrollTop = 0;
+  runCounters(scroll);
+  bindPullRefresh(scroll, ()=>{ renderBase(); toast('已刷新 · 四端数据已同步'); });
+  scroll.addEventListener('scroll', onSbScroll, { passive:true });
+  autoSB();
+}
+
+/* ===== 登录流 =====
+   依据定稿 §2.2 / D1：**4 种角色 = 3 个客户端**。
+   推广服务商、创作者不是独立身份 —— 他们是小程序 A 里同一个微信身份的功能视图，
+   从「我的 → 推广中心 / 创作中心」进入，不换身份、不换数据。 */
+const LOGIN_ROLES = [
+  {k:'tourist', n:'我是游客',     d:'报名主题游 · 赚旅豆 · 集徽章 · 玩剧本闯关', ic:'i-compass', c:'#e87722', c2:'#f5a623'},
+  {k:'merch',   n:'我是商家',     d:'接单核销 · 库存对账 · 货源铺货 · 旅豆兑换', ic:'i-store',   c:'#7b5aa6', c2:'#a97fd1'},
+  {k:'admin',   n:'平台运营',     d:'经营驾驶舱 · 积分风控 · 准入审核 · 单城测算', ic:'i-chart',  c:'#0f766e', c2:'#14b8a6'},
+];
+let codeTimer = null, codeLeft = 0;
+/* 两种登录方式平级并列：一键体验身份（演示最短路径）/ 手机号 + 验证码（真实链路）。
+   早前版本把手机号登录缩成底部一行小字，等于藏起来 —— 验证码那一步本身是有说服力的产品细节，不该藏。 */
+function setLoginMode(m){
+  if(m === 'role' && S.loginStep === 'role') return;
+  if(m === 'phone' && (S.loginStep === 'phone' || S.loginStep === 'code')) return;
+  S.loginStep = m;
+  if(m === 'role') S.code = '';
+  renderLogin();
+}
+function renderLogin(){
+  const L = $('#loginLayer');
+  let body = '';
+  if(S.loginStep === 'phone'){
+    body = `
+      <div class="login-step on">
+        <div class="login-title">手机号登录</div>
+        <div class="login-desc">未注册的手机号将自动创建 Travel ID 数字身份</div>
+        <div class="field"><span class="pre">+86</span><input id="phoneInput" maxlength="11" placeholder="请输入手机号" value="${S.phone}" oninput="S.phone=this.value.replace(/\\D/g,'')"></div>
+        <button class="btn" id="btnGetCode" onclick="sendCode()">获取验证码</button>
+        <div style="margin-top:18px">
+          <div class="login-desc" style="margin-bottom:12px">其他方式</div>
+          <div style="display:flex;gap:10px">
+            <button class="btn ghost" style="flex:1" onclick="openDidLoginSheet()">${ic('i-chain')} 数字身份登录</button>
+            <button class="btn ghost" style="flex:1" onclick="openQrLoginSheet()">${ic('i-qr')} 扫码登录</button>
+          </div>
+        </div>
+      </div>`;
+  } else if(S.loginStep === 'code'){
+    body = `
+      <div class="login-step on">
+        <div class="login-title">输入验证码</div>
+        <div class="login-desc">验证码已发送至 +86 ${S.phone}</div>
+        <div class="code-boxes" id="codeBoxes">
+          ${[0,1,2,3,4,5].map(i=>'<div class="code-box" id="cb'+i+'"></div>').join('')}
+        </div>
+        <input id="codeInput" maxlength="6" inputmode="numeric" style="opacity:0;position:absolute;width:1px;height:1px" oninput="onCodeInput(this.value)">
+        <div style="text-align:right;margin-bottom:18px"><span style="font-size:11.5px;color:var(--sub)" id="resendTip">${codeLeft>0 ? codeLeft+'s 后重新获取' : '<a style=\"color:var(--brand-deep)\" onclick=\"resendCode()\">重新获取验证码</a>'}</span></div>
+        <button class="btn" onclick="submitCode()">验证并进入</button>
+        <div class="login-desc" style="margin-top:14px;text-align:center">演示环境 · 任意 6 位数字即可进入</div>
+      </div>`;
+  } else {
+    body = `
+      <div class="login-step on">
+        <div class="login-title">选择你的身份</div>
+        <div class="login-desc">四个业务角色 = 三个客户端：游客 / 商家 / 平台运营。推广服务商与创作者是游客端里的功能视图（我的 → 推广中心），同一个 Travel ID，数据同源</div>
+        ${LOGIN_ROLES.map(r=>`
+          <button class="role-card" onclick="pickRole('${r.k}')">
+            <div class="ri" style="background:${r.c}18;color:${r.c}">${ic(r.ic)}</div>
+            <div style="flex:1;min-width:0">
+              <b>${r.n}<em class="rl-layer" style="background:${r.c}18;color:${r.c}">${ENDS[r.k].sub.split(' · ')[0]}</em></b>
+              <span>${r.d}</span>
+              <div class="rl-mods">${ENDS[r.k].tabs.length} 个模块　${ENDS[r.k].tabs.map(t=>t.l).join(' <i>·</i> ')}</div>
+            </div>
+            <div class="go">${ic('i-arrow')}</div>
+          </button>`).join('')}
+      </div>`;
+  }
+  L.innerHTML = `
+    <div class="login-hero">
+      ${S.loginStep==='code' ? '<button class="login-back" onclick="loginBack()">'+ic('i-back')+'</button>' : ''}
+      <div class="logo-mark">
+        <svg width="34" height="34" viewBox="0 0 64 64"><path d="M20 44V24l12-8 12 8v20" fill="none" stroke="#e87722" stroke-width="5" stroke-linejoin="round"/><path d="M28 44v-8h8v8" fill="none" stroke="#e87722" stroke-width="4"/></svg>
+      </div>
+      <h1>向往的自由</h1>
+      <div class="slogan">世 界 就 是 我 的 游 乐 场</div>
+      <div class="sub">TOURISM WEB3 OS · 文旅生态操作系统</div>
+    </div>
+    <div class="login-body">
+      <div class="login-seg">
+        <button id="segRole"  class="${S.loginStep==='role'?'on':''}"  onclick="setLoginMode('role')">一键体验身份</button>
+        <button id="segPhone" class="${S.loginStep==='role'?'':'on'}" onclick="setLoginMode('phone')">手机号 + 验证码</button>
+      </div>
+      ${body}
+    </div>
+    <div class="login-foot">
+      <div class="agree">登录即代表同意 <a onclick="toast('演示环境')">《用户协议》</a> 与 <a onclick="toast('演示环境')">《隐私政策》</a></div>
+      <p>境内：向往自由链 · 旅豆链上权益凭证闭环<br>境外：独立主体 · 稳定币 + 法币 · 与境内完全隔离（演示说明）</p>
+    </div>`;
+  L.classList.add('on');
+  if(S.loginStep === 'phone') setTimeout(()=>{ const i=$('#phoneInput'); i&&i.focus(); }, 250);
+  if(S.loginStep === 'code') setTimeout(()=>{ const i=$('#codeInput'); i&&i.focus(); renderCodeBoxes(''); }, 250);
+}
+function sendCode(){
+  if(!/^1\d{10}$/.test(S.phone)){ toast('请输入正确的 11 位手机号'); return; }
+  S.loginStep = 'code'; codeLeft = 60; startCodeTimer(); renderLogin();
+  toast('验证码已发送（演示 · 任意 6 位）');
+}
+function startCodeTimer(){
+  clearInterval(codeTimer);
+  codeTimer = setInterval(()=>{
+    codeLeft--;
+    const tip = $('#resendTip');
+    if(codeLeft <= 0){ clearInterval(codeTimer); if(tip) tip.innerHTML = '<a style="color:var(--brand-deep)" onclick="resendCode()">重新获取验证码</a>'; }
+    else if(tip) tip.textContent = codeLeft + 's 后重新获取';
+  }, 1000);
+}
+function resendCode(){ codeLeft = 60; startCodeTimer(); const tip=$('#resendTip'); if(tip) tip.textContent='60s 后重新获取'; toast('验证码已重新发送'); }
+function onCodeInput(v){
+  v = v.replace(/\D/g,'').slice(0,6);
+  $('#codeInput').value = v;
+  renderCodeBoxes(v);
+  if(v.length === 6) setTimeout(submitCode, 350);
+}
+function renderCodeBoxes(v){
+  for(let i=0;i<6;i++){
+    const b = $('#cb'+i); if(!b) continue;
+    b.textContent = v[i] || '';
+    b.classList.toggle('filled', !!v[i]);
+    b.classList.toggle('focus', i === v.length);
+  }
+}
+function submitCode(){
+  const v = ($('#codeInput')||{}).value || '';
+  if(v.length < 6){ toast('请输入 6 位验证码'); return; }
+  S.loginStep = 'role'; renderLogin();
+}
+function loginBack(){
+  if(S.loginStep === 'code'){ S.loginStep = 'phone'; renderLogin(); }
+  else if(S.loginStep === 'role'){ S.loginStep = 'code'; renderLogin(); }
+}
+
+/* ===== DID 数字身份登录 ===== */
+function openDidLoginSheet(){
+  openSheet(`
+    <div class="sheet-title">${ic('i-chain')} 数字身份登录</div>
+    <div class="sheet-sub">DID 钱包授权 · 无需手机号与验证码</div>
+    <div class="tid-card" style="margin:0 0 14px">
+      <div class="th">
+        <div class="logo">${ic('i-user')}</div>
+        <b>旅行家·小满</b>
+        <span class="vc">${DB.travelId.vcStandard}</span>
+      </div>
+      <div class="didline">
+        ${ic('i-code')}
+        <span class="dv">${DB.travelId.did}</span>
+      </div>
+      <div class="tmeta">
+        <span class="ok">${ic('i-check')} ${DB.travelId.chain}已存证</span>
+        <span>${ic('i-clock')} ${DB.travelId.createdAt} 创建</span>
+        <span>${ic('i-shield')} 可验证 · 跨系统互认</span>
+      </div>
+    </div>
+    <div style="font-size:10.5px;color:var(--sub);line-height:1.75;margin-bottom:14px">授权后平台仅获得：<b style="color:var(--ink)">脱敏手机号、会员等级、有效凭证状态</b>；不会获得完整身份档案与消费明细。授权记录上链，可随时撤回。</div>
+    <button class="btn" style="width:100%" onclick="didLogin()">${ic('i-check')} 授权登录</button>
+    <button class="btn ghost" style="width:100%;margin-top:10px" onclick="closeSheet()">取消</button>
+  `);
+}
+function openQrLoginSheet(){
+  openSheet(`
+    <div class="sheet-title">${ic('i-qr')} 扫码登录</div>
+    <div class="sheet-sub">使用「向往的自由」App 扫描二维码</div>
+    <div class="vc-mock">${qrSvg('login-qr')}</div>
+    <div style="text-align:center;font-size:9.5px;color:var(--sub);line-height:1.7;margin-bottom:14px">扫码后将在 App 端完成 DID 授权<br>二维码 60 秒内有效（演示）</div>
+    <button class="btn" style="width:100%" onclick="didLogin()">${ic('i-phone')} 模拟 App 扫码确认</button>
+    <button class="btn ghost" style="width:100%;margin-top:10px" onclick="closeSheet()">取消</button>
+  `);
+}
+function didLogin(){
+  closeSheet();
+  S.phone = '13800006666';
+  S.loginStep = 'role';
+  renderLogin();
+  toast('DID 授权成功 · 欢迎回来，旅行家·小满');
+}
+function pickRole(k){
+  S.role = k; S.loggedIn = true; S.end = k;
+  $('#loginLayer').classList.remove('on');
+  $('#screen').dataset.end = k;
+  setEnd(k);
+}
+function loginAs(k){ S.loggedIn = true; $('#loginLayer').classList.remove('on'); setEnd(k); }
+
+/* ===== 切换身份 ===== */
+function switchIdentity(){
+  openSheet(
+    '<div class="sheet-title">切换身份</div>' +
+    '<div class="sheet-sub">三个客户端 · 同一个 Travel ID · 底层数据实时互通</div>' +
+    LOGIN_ROLES.map(r=>`
+      <button class="role-card" style="margin-bottom:10px" onclick="doSwitch('${r.k}')">
+        <div class="ri" style="background:${r.c}18;color:${r.c}">${ic(r.ic)}</div>
+        <div><b>${r.n}${S.end===r.k?' · 当前身份':''}</b><span>${r.d}</span></div>
+        ${S.end===r.k ? '<div class="go" style="color:var(--brand)">'+ic('i-check')+'</div>' : '<div class="go">'+ic('i-arrow')+'</div>'}
+      </button>`).join('') +
+    '<button class="btn ghost" style="margin-top:4px" onclick="closeSheet()">取消</button>');
+}
+function doSwitch(k){
+  closeSheet();
+  if(k === S.end){ toast('当前已处于 ' + ENDS[k].name); return; }
+  setEnd(k);
+  toast('已切换至 ' + ENDS[k].name + '\n' + ENDS[k].sub);
+}
+
+/* ===== 右侧架构面板 ===== */
+function renderPanel(){
+  const order = ['tourist','merch','admin'];
+  const archName = { tourist:'小程序 A', merch:'小程序 B', admin:'PC 后台' };
+  const archSub  = { tourist:'游客 / 推广 / 创作', merch:'老板 / 店长 / 核销员', admin:'运营 / 财务 / 审核 / 风控' };
+  const archC    = { tourist:'#e87722', merch:'#7b5aa6', admin:'#0f766e' };
+  $('#infoPanel').innerHTML = `
+    <h2><span class="lp2">${ic('i-globe')}</span>向往的自由 · 文旅生态操作系统</h2>
+    <div class="arch">
+      ${order.map(k=>'<div class="arch-box '+(S.end===k?'live':'')+'" style="background:'+archC[k]+'">'+archName[k]+'<small>'+archSub[k]+'</small></div>').join('')}
+    </div>
+    <div class="arch-note">C 层全球 Web3 网络（境外稳定币独立运营）不在本演示范围 · 三个客户端共用同一 Travel ID</div>
+    <div class="panel-sec">
+      <h4>${ic('i-chain')} 数字身份（Travel ID · DID/VC）</h4>
+      <div class="panel-flow">
+        手机号或 <b>DID 钱包授权登录</b> → 统一数字身份（会员 · 旅行经历 · 数字凭证 · 隐私授权）
+        → <b>Travel Pass</b> 链上发行、可核销可追踪 → 授权变更即时上链 · 三端一号通行
+      </div>
+    </div>
+    <div class="cur-end-banner">
+      <div class="ce" style="background:${archC[S.end]}">${ic(ENDS[S.end].tabs[0].i)}</div>
+      <div><b>当前体验：${ENDS[S.end].name}</b><span>${ENDS[S.end].sub} · 手机内实时演示</span></div>
+    </div>
+    <div class="panel-sec">
+      <h4>生态闭环（朱家角剧本游示范）</h4>
+      <div class="panel-flow">
+        创作者发内容带<b>归因链接</b>获客 → 游客人民币下单 → 线下剧本体验 → 平台核验贡献 →
+        按公式向<b>商家 / 创作者 / 推广服务商分账</b> → 旅豆权益回流 → 复购与裂变
+      </div>
+    </div>
+    <div class="panel-sec">
+      <h4>演示控制</h4>
+      <div class="panel-btns">
+        <button class="btn" onclick="playDemo()">${ic('i-play')} 播放三端数据联动</button>
+        <button class="btn ghost" onclick="resetDemo()">${ic('i-refresh')} 重置演示数据</button>
+      </div>
+    </div>
+    <div class="compliance">
+      <h4>${ic('i-shield')} 业务铁律（依据总体方案 · 已落到产品界面）</h4>
+      <ul>
+        <li>旅豆为向往自由链发行的链上权益凭证：人民币充值 → 权益兑换 → 核销结算</li>
+        <li>预算驱动发行：积分预算上限 = min（已批准营销预算， 可承受的订单贡献利润比例）</li>
+        <li>商家收豆兑换平台资源与服务，纳入平台权益预算统一核算</li>
+        <li>贡献分（CS）仅用于评级、推荐与服务激励</li>
+        <li>境内旅豆与境外 Voyage Token 完全隔离，独立运营</li>
+        <li>合伙人只对真实服务与有效交易计酬，不依靠新用户购买 Token 支付旧用户奖励</li>
+      </ul>
+    </div>
+    <div class="panel-foot">
+      本原型为高保真交互演示：数据均为示例假设（依据《「向往的自由」Web3 文旅生态商业与技术总体方案》经营测算参数），
+      产品形态依据《项目总方案定稿 V3.0》§2.2 重构为<b>三个客户端</b>（4 种业务角色 · 3 个客户端），推广服务商与创作者并入小程序 A。
+    </div>`;
+}
+function playDemo(){
+  if(!S.loggedIn){ loginAs('tourist'); }
+  /* 非游客端先确认，绝不静默把用户从当前端拽走（v1.4.3） */
+  if(S.end !== 'tourist'){
+    openDialog('播放三端数据联动',
+      '联动演示从游客端「主题游」下单开始，将切换到游客端。当前端的演示数据不受影响，可随时切回。',
+      '切换并播放', function(){ startPlayDemo(); });
+    return;
+  }
+  startPlayDemo();
+}
+function startPlayDemo(){
+  setEnd('tourist'); setTab('theme');
+  setTimeout(()=>{
+    const pg = pushTourDetail(6);
+    setTimeout(()=>{
+      const cta = pg.querySelector('.bottom-bar .btn');
+      if(cta){ cta.classList.add('highlight-pulse'); }
+      toast('点击「立即报名」，体验三端数据实时联动');
+    }, 300);
+  }, 260);
+}
+function resetDemo(){
+  const fresh = JSON.parse(JSON.stringify(DB_INIT));
+  Object.keys(fresh).forEach(k=>{ DB[k] = fresh[k]; });
+  S.tab = { tourist:'home', merch:'work', admin:'dash' };
+  setEnd(S.end);
+  toast('演示数据已重置');
+}
+
+/* ===== 演示模式：大窗口自适应铺满一屏（免上下滚动，方便投屏演示） =====
+   触发条件：视口 ≥ 1200×700 且用户未手动退出。
+   验收工具的视口是 430×920，永不触发 → 对自动化零影响。 */
+var FIT_KEY = 'wf-demo-fit-off';
+function fitRead(){ try{ return localStorage.getItem(FIT_KEY) === '1'; }catch(e){ return false; } }
+function fitWrite(v){ try{ localStorage.setItem(FIT_KEY, v ? '1' : '0'); }catch(e){} }
+function fitStage(){
+  var stage = document.getElementById('stage');
+  if(!stage) return;
+  var off = fitRead();
+  var big = window.innerWidth >= 1200 && window.innerHeight >= 700;
+  var on = !off && big;
+  if(on){
+    var W = stage.offsetWidth, H = stage.offsetHeight;
+    if(W > 0 && H > 0){
+      var s = Math.min((window.innerWidth - 40) / W, (window.innerHeight - 40) / H);
+      s = Math.max(0.35, Math.min(2, s));
+      stage.style.transformOrigin = 'top center';
+      stage.style.transform = 'scale(' + s.toFixed(4) + ')';
+      /* 补偿缩放后的视觉高度：布局盒仍是 H，视觉是 H×s，用负外距收掉差值，避免出现页面滚动条 */
+      stage.style.marginBottom = Math.round(H * s - H) + 'px';
+    }
+    document.body.classList.add('fit-on');
+  } else {
+    stage.style.transform = '';
+    stage.style.marginBottom = '';
+    document.body.classList.remove('fit-on');
+  }
+  var btn = document.getElementById('fitBtn'), txt = document.getElementById('fitBtnTxt');
+  if(btn) btn.style.display = (big || off) ? 'inline-flex' : 'none';
+  if(txt) txt.textContent = on ? '退出演示模式' : '演示模式';
+}
+function toggleFit(){
+  var off = fitRead();
+  fitWrite(!off);
+  fitStage();
+  toast(off ? '已开启演示模式 · 页面自适应铺满一屏' : '已退出演示模式 · 恢复原始尺寸（可上下滚动）');
+}
+
+/* ===== 初始化 ===== */
+renderLogin();
+renderPanel();
+autoSB();
+fitStage();
+window.addEventListener('resize', fitStage);
+if(window.ResizeObserver){
+  try{
+    var _ro = new ResizeObserver(function(){ fitStage(); });
+    _ro.observe(document.getElementById('stage'));
+  }catch(e){}
+}
+</script>

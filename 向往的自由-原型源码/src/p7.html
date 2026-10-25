@@ -1,0 +1,1285 @@
+<script>
+/* =====================================================
+   推广中心（小程序 A 内的功能视图 · 依据定稿 §2.2 / D1）
+   推广服务商不是独立客户端：同一个微信身份在「我的 → 推广中心」
+   切换功能视图，不换身份、不换数据。原「合伙人端」的四个 tab
+   改为推广中心内的三个分段 + 一个「我的推广」页。
+===================================================== */
+function promoCenterHtml(){
+  const p = DB.partner;
+  const seg = PROMO_TABS.map(t=>'<button class="chip '+(S.promoTab===t.k?'on':'')+'" onclick="promoTabSwitch(\''+t.k+'\')">'+t.l+'</button>').join('');
+  const body = S.promoTab==='earn' ? promoEarnHtml() : (S.promoTab==='invite' ? promoInviteHtml() : promoTeamHtml());
+  return `
+  <div class="promo-idcard">
+    <div class="avatar" style="background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">合</div>
+    <div class="pi"><b>${p.level} · 陈姐</b>
+      <span class="plv">${ic('i-crown')} 分润比例 ${p.rate}% · 推广服务商</span>
+      <div class="did">${ic('i-code')} 推广服务商ID：P20261018-007</div>
+    </div>
+    <div class="promo-idcard-go" onclick="pushPromoMePage()">我的推广 ${ic('i-arrow')}</div>
+  </div>
+  <div class="chips" style="padding-top:12px">${seg}</div>
+  ${body}`;
+}
+function pushPromoCenter(){
+  const pg = push('推广中心', promoCenterHtml());
+  pg.__promo = true;
+  pg.__rerender = function(){ pg.querySelector('.page-body').innerHTML = promoCenterHtml(); };
+  return pg;
+}
+/* 从别处点「推荐客户 / 邀请收客」：已在推广中心内就地切换，否则先打开推广中心 */
+function openPromoTab(k){
+  S.promoTab = k;
+  const top = S.stack[S.stack.length-1];
+  if(top && top.el.__promo){ top.el.__rerender(); return; }
+  pushPromoCenter();
+}
+function promoTabSwitch(k){ S.promoTab = k; rerenderTop(); }
+
+function promoEarnHtml(){
+    const p = DB.partner;
+    return `
+    <div class="partner-hero">
+      <div class="ph-l">${ic('i-money')} 本月分润收益（按等级比例）</div>
+      <div class="ph-b num">¥${p.monthEarn.toLocaleString()}</div>
+      <div class="ph-lv">${ic('i-crown')} ${p.level} · 分润比例 ${p.rate}%</div>
+      <div class="ph-row">
+        <div class="ph-cell"><b>${p.downline}</b><span>下线用户</span></div>
+        <div class="ph-cell"><b class="num">¥${p.totalEarn.toLocaleString()}</b><span>累计返佣</span></div>
+        <div class="ph-cell"><b>${p.rate}%</b><span>当前比例</span></div>
+      </div>
+      <button class="btn" style="margin-top:14px;background:#fff;color:#2f6f9f" onclick="openWithdrawSheet()">${ic('i-cash')} 提现 ¥${p.withdrawable.toLocaleString()}</button>
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>近 7 日分润</b><span class="cv">${ic('i-trend')} 合计 ¥${DB.x.partnerTrend.v.reduce(function(a,b){return a+b;},0).toLocaleString()} · 日均 ¥${Math.round(DB.x.partnerTrend.v.reduce(function(a,b){return a+b;},0)/7)}</span></div>
+      ${sparkSVG(DB.x.partnerTrend.v, { c:'#2f6f9f', labels:DB.x.partnerTrend.l, h:92 })}
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>一单 ¥298 · 平台侧怎么分</b><span class="cv">游客实付 · 平台归集后分流</span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:4px 0 12px">
+        <span style="font-size:9.5px;font-weight:800;background:#eef4fb;color:#1c7ed6;padding:5px 10px;border-radius:9px;white-space:nowrap">游客实付 ¥298</span>
+        <b style="color:var(--sub);font-size:11px">→</b>
+        <span style="font-size:9.5px;font-weight:800;background:#f2f4f7;color:var(--ink2);padding:5px 10px;border-radius:9px;white-space:nowrap">平台结算账户归集</span>
+        <b style="color:var(--sub);font-size:11px">→</b>
+        <span style="font-size:9.5px;font-weight:800;background:#fff3e8;color:#e87722;padding:5px 10px;border-radius:9px;white-space:nowrap">按合同分流三方</span>
+      </div>
+      ${(()=>{
+        const R = splitRowsReal();
+        const G = R.grp;
+        const note = splitRealNote();
+        return [
+          { g:'out',  t:'付给合作方', s:'流出 · 按合同与履约结算', c:'#0f9d58' },
+          { g:'keep', t:'平台留存',   s:'留下 · 覆盖成本与经营',   c:'#e87722' },
+          { g:'pool', t:'权益预留',   s:'预提 · 实绩按核销成本回填', c:'#f59f00' },
+        ].map(function(grp){
+          const rows = R.rows.filter(function(w){ return w.g === grp.g; });
+          const gg = G[grp.g];
+          return `
+          <div style="border:1.5px solid ${grp.c}22;border-radius:12px;padding:10px 11px;margin-bottom:9px">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="width:8px;height:8px;border-radius:3px;background:${grp.c}"></span>
+              <b style="font-size:12px">${grp.t}</b>
+              <span style="font-size:9px;color:var(--sub)">${grp.s}</span>
+              <b style="font-size:12.5px;color:${grp.c};margin-left:auto">¥${gg.sum.toFixed(2)}</b>
+              <span style="font-size:9px;color:var(--sub)">${gg.pct}%</span>
+            </div>
+            ${rows.map(function(w){ return `
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 0 2px;border-top:1px dashed #eef0f3;margin-top:7px">
+                <span style="width:6px;height:6px;border-radius:50%;background:${w.c};flex-shrink:0"></span>
+                <div style="flex:1;min-width:0">
+                  <b style="font-size:11px">${w.n} <span style="color:var(--sub);font-weight:600">${w.p}%</span>${w.real ? `<span style="font-size:8.5px;font-weight:800;color:#b26a00;background:#fff4e8;padding:1px 5px;border-radius:6px;margin-left:4px">实绩</span>` : ''}</b>
+                  <div style="font-size:9px;color:var(--sub);margin-top:1px">收款方：${w.to} · ${w.d}</div>
+                </div>
+                <b style="font-size:12px;color:${w.c}">¥${w.v.toFixed(2)}</b>
+              </div>`; }).join('')}
+            ${gg.sum !== gg.plan ? `<div class="spl-row-real"><span>预算口径 ¥${gg.plan.toFixed(2)}（${gg.planPct}%）</span><b>→ 实绩 ¥${gg.sum.toFixed(2)}（${gg.pct}%）</b></div>` : ''}
+          </div>`;
+        }).join('') + `
+        <div class="spl-real">
+          <div class="rh">${ic('i-calc')} 权益成本已从核销结算回流本页</div>
+          <div class="rd">${note.text}。下期动作：入园名额 ¥34 → ¥30 重谈（412 笔 × ¥4，每期省 ¥1,648），单均预留提到 ¥18.2 即可覆盖重谈后成本。</div>
+          <div class="spl-row-real"><span>本期核销 ${R.z.cnt.toLocaleString()} 次 · ${R.z.orders.toLocaleString()} 单</span><b>合计 ¥${R.z.net.toLocaleString()}</b></div>
+        </div>`;
+      })()}
+      <div class="legend" style="margin-top:2px"><i>${ic('i-shield')} 面向平台经营视角：分账四方独立建账，T+7 结算，退款按原比例冲正</i></div>
+    </div>
+    <div class="sec-title">等级分润体系 <span class="more" onclick="pushLevelRulePage()">规则说明 ${ic('i-arrow')}</span></div>
+    <div class="card"><div class="level-ladder">
+      ${DB.partnerLevels.map(l=>`<div class="level-row ${l.cur?'cur':''}">
+        <div class="level-medal" style="background:${l.c}18;color:${l.c}">${ic(l.ic)}</div>
+        <div class="li"><b>${l.n}${l.cur?' · 当前等级':''}</b><span>${l.cond}</span></div>
+        <div class="lp">${l.rate}%<small>分润比例</small></div>
+      </div>`).join('')}
+    </div></div>
+    <div class="sec-title">下线消费关联返佣 <span class="more" onclick="pushEarnDetailPage()">收益明细 ${ic('i-arrow')}</span></div>
+    <div class="card">
+      ${p.referrals.map((r,i)=>`<div class="row" onclick="pushDownlineDetail(${i})">
+        <div class="ric" style="background:${r.c}18;color:${r.c};border-radius:11px;padding:6px">${ic(r.ic)}</div>
+        <div class="rt"><b>${r.n}</b><span>${r.role} · 关联 GMV ¥${r.gmv.toLocaleString()} · ${r.orders} 单</span></div>
+        <div style="text-align:right"><b style="color:#2f6f9f;font-size:14px">+¥${r.v}</b><div style="font-size:9px;color:var(--sub)">本月返佣</div></div>
+      </div>`).join('')}
+    </div>
+    <div class="sec-title">内容策划分润</div>
+    <div class="card" style="padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:38px;height:38px;border-radius:11px;background:#eaf3f9;color:#2f6f9f;display:flex;align-items:center;justify-content:center">${ic('i-pen')}</div>
+        <div style="flex:1"><b style="font-size:13.5px">参与剧本 / 攻略策划赚分润</b><div style="font-size:10px;color:var(--sub);margin-top:3px">本月内容分润 ¥100 · CS 贡献分 86</div></div>
+        <button class="btn sm" onclick="pushMissionsPage()">去约稿</button>
+      </div>
+    </div>
+    <div class="note">返佣仅对真实服务与有效交易计酬，按可核验订单 T+7 结算；不按发展下级层级计酬。</div>`;
+}
+function promoTeamHtml(){
+    const p = DB.partner;
+    return `
+    <div class="partner-hero" style="background:linear-gradient(135deg,#243b55,#3a5a78)">
+      <div class="ph-l">${ic('i-users')} 贡献经济共同体 · 我的团队</div>
+      <div class="ph-b">${p.downline} 人</div>
+      <div class="ph-lv">导游 / 店员 / 大学生 / 领队 / 司机 / 非遗老师 / NPC</div>
+    </div>
+    <div class="rank">
+      <div class="rh"><b>${ic('i-trophy')} 团队本月榜</b><span>按有效订单</span></div>
+      ${p.referrals.slice().sort((a,b)=>b.orders-a.orders).slice(0,4).map((m,i)=>`
+        <div class="ri ${i===0?'top1':i===1?'top2':i===2?'top3':''}">
+          <div class="no">${i+1}</div>
+          <div class="rimg imgwrap flat" style="border-radius:50%">${avatarSVG(m.n, m.c, m.c)}</div>
+          <div class="rt2"><b>${m.n}</b><span>关联 GMV ¥${m.gmv.toLocaleString()}</span></div>
+          <div class="rv2">${m.orders} 单<em>有效订单</em></div>
+        </div>`).join('')}
+      <div class="rf">${ic('i-shield')} 取自团队 ${p.referrals.length} 人的真实服务订单 · 按有效订单排序 · 不按层级计酬</div>
+    </div>
+    <div class="sec-title">团队成员 <span class="more" onclick="pushTypesPage()">合伙人图鉴 ${ic('i-arrow')}</span></div>
+    <div class="card">
+      ${p.referrals.map((r,i)=>`<div class="row" onclick="pushDownlineDetail(${i})">
+        <div class="ric" style="background:${r.c}18;color:${r.c};border-radius:50%;padding:7px">${ic(r.ic)}</div>
+        <div class="rt"><b>${r.n}</b><span>${r.role} · 本月 ${r.orders} 单</span></div>
+        <div style="text-align:right"><b style="font-size:13.5px">${r.orders} 单</b><div style="font-size:9px;color:var(--sub)">返佣 ¥${r.v}</div></div>
+      </div>`).join('')}
+    </div>
+    <div class="sec-title">贡献分（CS）计算规则</div>
+    <div class="info-block" style="margin:0 14px 12px">
+      <h4>${ic('i-chart')} CS = 0.5 × 成交 + 0.3 × 内容 + 0.2 × 留存</h4>
+      <p>Q 为有效成交贡献标准化得分，S 为内容服务质量标准化得分，R 为真实用户留存与复购贡献标准化得分；权重为设计假设，由业务数据校准。</p>
+      <p style="margin-top:7px;color:#b98a2f"><b>${ic('i-shield')} 贡献分仅用于评级与激励，不直接对应股权、投资收益或可交易 Token。</b></p>
+    </div>
+    <div class="sec-title">内容贡献奖励</div>
+    <div class="card" style="padding:14px;font-size:12px;color:var(--ink2);line-height:1.9">
+      团队成员输出主题游剧本、攻略、视频，按贡献分计酬。景点内容由景点相关人员与线路批发合伙人按模板填充，平台以返佣激励，不依赖统一策划。
+    </div>`;
+}
+function promoInviteHtml(){
+    const p = DB.partner;
+    return `
+    <div class="hero" style="padding-bottom:34px">
+      <b style="font-size:18px;font-weight:900">${ic('i-invite')} 邀请收客</b>
+      <div style="font-size:10.5px;opacity:.85;margin-top:5px">邀请用户 / 门店 / 校园成为下线 · 消费关联返佣</div>
+    </div>
+    <div class="qr-card" style="margin-top:-22px;position:relative;z-index:3">
+      <div class="qr-wrap">${qrSvg(p.inviteCode)}</div>
+      <div class="qr-code-big num">${p.inviteCode}</div>
+      <div style="font-size:10.5px;color:var(--sub);margin-top:8px">我的专属邀请码 · 下线消费关联返佣 ${p.rate}%</div>
+      <div style="font-size:9.5px;color:var(--faint);margin-top:5px">${p.inviteLink}</div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn ghost" style="flex:1" onclick="copyText('${p.inviteLink}')">${ic('i-copy')} 复制链接</button>
+        <button class="btn" style="flex:1" onclick="pushPosterPage()">${ic('i-image')} 生成海报</button>
+      </div>
+    </div>
+    <div class="sec-title">邀请转化 <span class="more">近 30 天</span></div>
+    <div class="inv-stat">
+      <div class="is"><b>1,286</b><span>海报曝光</span></div>
+      <div class="is"><b>86</b><span>扫码访问</span></div>
+      <div class="is"><b>12</b><span>注册成线</span></div>
+      <div class="is"><b>9.4%</b><span>注册转化</span></div>
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>邀请漏斗</b><span class="cv">曝光 → 注册 → 首单</span></div>
+      ${funnelSVG([
+        { n:'海报曝光', v:1286, c:'#2f6f9f' },
+        { n:'扫码访问', v:86,  c:'#3f86b8' },
+        { n:'注册成线', v:12,  c:'#5ba8c9' },
+        { n:'完成首单', v:7,   c:'#0e9f8a' },
+      ])}
+    </div>
+    <div class="sec-title">邀请三步曲</div>
+    <div class="info-block" style="margin:0 14px 12px">
+      <div class="flow-steps">
+        <div class="flow-step"><div class="fsn">1</div><div><b>分享邀请码 / 海报</b><span>发给线下客户、门店顾客或校园社群</span></div></div>
+        <div class="flow-step"><div class="fsn">2</div><div><b>好友注册成为下线</b><span>同一 Travel ID 体系，消费自动关联</span></div></div>
+        <div class="flow-step"><div class="fsn">3</div><div><b>消费返佣到账</b><span>按等级比例 T+7 结算，可提现至微信</span></div></div>
+      </div>
+    </div>
+    <div class="sec-title">团队策划内容 <span class="more" onclick="openPromoTab('team')">推荐客户 ${ic('i-arrow')}</span></div>
+    <div class="plan-list">
+      ${[
+        {n:'《朱家角谜案》隐藏支线', t:'剧本策划 · 导游·陈姐', sc:'watertown', seed:53},
+        {n:'安吉竹海晨瑜伽引导词', t:'内容授权 · 瑜伽馆·李店长', sc:'bamboo', seed:97},
+        {n:'校园推广短视频脚本', t:'UGC 策划 · 大学生·小林', sc:'city', seed:141},
+      ].map(function(x,i){ return `<div class="plan-item">
+        <div class="plan-cover imgwrap flat">${sceneSVG(x.sc, x.seed)}</div>
+        <div class="plan-t"><b>${x.n}</b><span>${x.t}</span></div>
+        <span class="tag">策划返佣</span>
+      </div>`; }).join('')}
+    </div>
+    <div class="note">内容授权费与策划返佣按合同结算，仅对真实产出与实际使用计酬。</div>`;
+}
+/* 「我的推广」：原合伙人端「我的」页，收进推广中心 */
+function promoMeHtml(){
+    const p = DB.partner;
+    return `
+    <div class="profile" style="background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">
+      <div class="avatar">合</div>
+      <div class="pi"><b>黄金合伙人 · 陈姐</b>
+        <span class="plv">${ic('i-crown')} ${p.role} · 分润比例 ${p.rate}%</span>
+        <div class="did">${ic('i-code')} 合伙人ID：P20261018-007</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b class="num">¥${p.monthEarn}</b><span>本月收益</span></div>
+      <div class="stat"><b>${p.downline}</b><span>下线人数</span></div>
+      <div class="stat"><b class="num">¥${p.totalEarn.toLocaleString()}</b><span>累计返佣</span></div>
+      <div class="stat"><b>${p.rate}%</b><span>分润比例</span></div>
+    </div>
+    <div class="card" style="padding:15px;display:flex;align-items:center;gap:12px" onclick="pushLevelRulePage()">
+      <div style="width:42px;height:42px;border-radius:12px;background:#eaf3f9;color:#2f6f9f;display:flex;align-items:center;justify-content:center">${ic('i-crown')}</div>
+      <div style="flex:1"><b style="font-size:13.5px">升级钻石合伙人（12%）</b><div style="font-size:10px;color:var(--sub);margin-top:3px">还需下线 13 人 · 月关联 GMV ¥38,200</div>
+        <div class="prog blue-light" style="margin-top:8px"><div class="prog-bar" style="width:48%"></div></div>
+      </div>
+      <div style="color:var(--faint)">${ic('i-arrow')}</div>
+    </div>
+    <div class="sec-title">我的合伙人徽章 <span class="more" onclick="pushLevelRulePage()">等级体系 ${ic('i-arrow')}</span></div>
+    <div class="pm-medals">
+      ${[['黄金合伙人','#d9a521','i-crown',true],['团队之星','#2f6f9f','i-trophy',true],['金牌导游','#0e9f8a','i-compass',true],['钻石合伙人','#7b5aa6','i-spark',false]].map(function(m){
+        return `<div class="pm-medal ${m[3]?'':'lock'}">${medalSVG(m[1], '#ffffff', m[2], { locked: !m[3] })}<span>${m[0]}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="sec-title">合伙人权益</div>
+    <div class="benefit-grid">
+      ${[['专属顾问','1v1 运营陪跑','i-user'],['优先派单','高毛利线路优先','i-bolt'],['素材中心','海报 / 文案 / 视频','i-image'],['免费培训','导游与剧本实训','i-doc'],['团队看板','实时业绩与排行','i-chart'],['结算优先','T+7 提前至 T+3','i-cash']].map(function(b){
+        return `<div class="bf-item"><div class="bf-ic">${ic(b[2])}</div><b>${b[0]}</b><span>${b[1]}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">收益与团队</div>
+      <div class="row" onclick="pushEarnDetailPage()"><div class="ric">${ic('i-doc')}</div><div class="rt"><b>收益明细 / 返佣账单</b><span>按月结算 · T+7 到账</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="openWithdrawSheet()"><div class="ric">${ic('i-cash')}</div><div class="rt"><b>提现</b><span>可提现 ¥${p.withdrawable.toLocaleString()}</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="openPromoTab('team')"><div class="ric">${ic('i-users')}</div><div class="rt"><b>推荐客户</b><span>${p.downline} 位关联用户 · 贡献分规则</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushPosterPage()"><div class="ric">${ic('i-qr')}</div><div class="rt"><b>我的邀请码 / 海报</b></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushTypesPage()"><div class="ric">${ic('i-map')}</div><div class="rt"><b>合伙人类型图鉴</b><span>零工 / 门店 / 高校 / 景点 / 城市</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">通用</div>
+      <div class="row" onclick="pushRolePage()"><div class="ric">${ic('i-user')}</div><div class="rt"><b>我的角色 · 生态位</b><span>${ENDS.tourist.sub} · 五环中的第 1·3 环 · 能做什么 / 不做什么</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="switchIdentity()"><div class="ric">${ic('i-switch')}</div><div class="rt"><b>切换身份</b></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="confirmLogout()"><div class="ric" style="color:#e5484d">${ic('i-logout')}</div><div class="rt"><b style="color:#e5484d">退出登录</b></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>`;
+}
+function pushPromoMePage(){ return push('我的推广', promoMeHtml()); }
+
+/* ===== 二维码（演示图形） ===== */
+function qrSvg(seed){
+  let s = 0; for(const ch of seed) s += ch.charCodeAt(0);
+  const rnd = ()=>{ s = (s*9301+49297)%233280; return s/233280; };
+  let cells = '';
+  for(let y=0;y<11;y++) for(let x=0;x<11;x++){
+    const inEye = (x<3&&y<3)||(x>7&&y<3)||(x<3&&y>7);
+    if(inEye) continue;
+    if(rnd()>0.52) cells += '<rect x="'+(x*10)+'" y="'+(y*10)+'" width="10" height="10"/>';
+  }
+  const eye = (x,y)=>'<rect x="'+x+'" y="'+y+'" width="30" height="30" fill="none" stroke="#1a2233" stroke-width="6"/><rect x="'+(x+10)+'" y="'+(y+10)+'" width="10" height="10"/>';
+  return '<svg viewBox="0 0 110 110" style="width:100%;height:100%"><g fill="#1a2233">'+cells+'</g>'+eye(0,0)+eye(80,0)+eye(0,80)+'</svg>';
+}
+
+/* ===== 合伙人端子页面 ===== */
+function pushEarnDetailPage(){
+  const html = `
+    <div class="sec-title" style="padding-top:16px">月度账单</div>
+    <div class="card">
+      ${DB.partnerBills.map(b=>`<div class="row"><div class="rt"><b>${b.m} 账单</b><span>${b.d}</span></div>
+        <div style="text-align:right"><b style="font-size:14px">¥${b.amt}</b><div style="font-size:9px;color:${b.st==='已结算'?'#0f9d58':'#f59f00'}">${b.st}</div></div></div>`).join('')}
+    </div>
+    <div class="sec-title">提现记录</div>
+    <div class="card">
+      ${DB.withdrawLog.map(w=>'<div class="row"><div class="rt"><b>'+w.d+'</b><span>'+w.t+'</span></div><b style="color:#e5484d">'+w.a+'</b><span class="tag green" style="margin-left:8px">'+w.st+'</span></div>').join('')}
+    </div>
+    <div class="note">佣金按可核验订单结算：T+7 到账；提现支持微信 / 银行卡。贡献分（CS）与现金佣金分别建账。</div>
+    <div style="padding:0 14px 20px"><button class="btn" onclick="openWithdrawSheet()">${ic('i-cash')} 申请提现</button></div>`;
+  return push('返佣账单', html, {});
+}
+function pushLevelRulePage(){
+  const html = `
+    <div class="card" style="margin-top:14px"><div class="level-ladder">
+      ${DB.partnerLevels.map(l=>`<div class="level-row ${l.cur?'cur':''}">
+        <div class="level-medal" style="background:${l.c}18;color:${l.c}">${ic(l.ic)}</div>
+        <div class="li"><b>${l.n}</b><span>晋升条件：${l.cond}</span></div>
+        <div class="lp">${l.rate}%<small>分润比例</small></div>
+      </div>`).join('')}
+    </div></div>
+    <div class="info-block"><h4>${ic('i-doc')} 结算规则</h4>
+      <p>返佣基数为下线关联订单的实际成交金额；订单核销且过退款观察期后计入，T+7 结算至可提现余额；退款订单同步冲正。</p>
+    </div>
+    <div class="info-block"><h4>${ic('i-shield')} 合规声明</h4>
+      <p>合伙人只对真实服务和有效交易计酬，<b>不按发展下级层级计酬</b>；等级依据真实关联 GMV 与下线人数评定，不接受购买积分升级。</p>
+    </div>
+    <div class="note">分润比例与晋升条件为演示假设，实际以合伙人协议为准。</div>`;
+  return push('等级分润规则', html, {});
+}
+function pushDownlineDetail(i){
+  const r = DB.partner.referrals[i];
+  const orders = [
+    {n:'朱家角剧本游 · 江南谜案', d:'今天 14:00', a:'¥298'},
+    {n:'安吉瑜伽谷 · 2天1夜',    d:'10-16 09:30', a:'¥688'},
+    {n:'周庄夜游 · 灯影剧本宴',  d:'10-14 19:00', a:'¥228'},
+  ];
+  const html = `
+    <div class="profile" style="padding:24px 18px 52px;background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">
+      <div class="avatar" style="background:${r.c}26;border-color:${r.c}66;color:${r.c}">${ic(r.ic)}</div>
+      <div class="pi"><b>${r.n}</b><span class="plv">${r.role}</span></div>
+    </div>
+    <div class="stats" style="margin-top:-32px;position:relative;z-index:3">
+      <div class="stat"><b class="num">¥${r.gmv.toLocaleString()}</b><span>关联 GMV</span></div>
+      <div class="stat"><b>${r.orders}</b><span>本月订单</span></div>
+      <div class="stat"><b class="num">¥${r.v}</b><span>本月返佣</span></div>
+      <div class="stat"><b>${DB.partner.rate}%</b><span>分润比例</span></div>
+    </div>
+    <div class="sec-title">本月关联订单</div>
+    <div class="card">${orders.map(o=>'<div class="row"><div class="rt"><b>'+o.n+'</b><span>'+o.d+'</span></div><b>'+o.a+'</b></div>').join('')}</div>
+    <div class="sec-title">贡献分（CS）</div>
+    <div class="info-block" style="margin:0 14px 12px"><p>当前 CS = <b>72</b>（成交 0.5×38 + 内容 0.3×22 + 留存 0.2×12）。贡献分仅用于评级、推荐与服务激励。</p></div>
+    <div style="padding:0 14px 20px"><button class="btn ghost" onclick="openCollabSheet()">${ic('i-comment')} 联系协作</button></div>`;
+  return push(r.n, html, {});
+}
+function pushTypesPage(){
+  const figs = ['waiter','press','ledger','opera','waiter'];
+  return push('合伙人图鉴', `
+    <div class="type-hint">${ic('i-users')} 5 类合伙人 · 均为真实服务计酬，不按层级计酬</div>
+    <div class="type-grid">
+      ${DB.partnerTypes.map(function(t,i){ return `<div class="type-card">
+        <div class="tc-fig" style="background:linear-gradient(160deg,${t.c}1f,${t.c}08)">${figureSVG(figs[i%figs.length], t.c)}</div>
+        <div class="tc-body">
+          <div class="tc-h"><span class="tc-ic" style="background:${t.c}18;color:${t.c}">${ic(t.ic)}</span><b>${t.n}</b></div>
+          <p>${t.d}</p>
+          <div class="tc-tags"><span>真实服务</span><span>有效交易</span><span>合同结算</span></div>
+        </div>
+      </div>`; }).join('')}
+    </div>
+    <div class="note">城市合伙人负责区域招商与运营，按合同约定收取服务费与业绩佣金；线路批发合伙人分销主题游产品。各类合伙人均只对真实服务与有效交易计酬。</div>`, {});
+}
+function pushPosterPage(){
+  const p = DB.partner;
+  const posters = [
+    {sc:'watertown', seed:211, t:'江南水乡 · 剧本之夜', s:'朱家角 · 漕港夜话'},
+    {sc:'bamboo',    seed:307, t:'竹海晨瑜伽 · 山野静修', s:'安吉 · 瑜伽谷'},
+    {sc:'redhall',   seed:409, t:'百年初心 · 红色闯关',   s:'上海 · 一大会址'},
+  ];
+  let pi = 0;
+  const html = `
+    <div id="posterBox">
+      ${posterHtml(posters[0], p)}
+    </div>
+    <div class="poster-switch">
+      ${posters.map(function(x,i){ return '<button class="ps-dot '+(i===0?'on':'')+'" onclick="switchPoster('+i+')"></button>'; }).join('')}
+      <span class="ps-tip">左右切换海报主题</span>
+    </div>
+    <div style="padding:6px 14px 20px;display:flex;gap:10px">
+      <button class="btn ghost" style="flex:1" onclick="copyText('${p.inviteLink}')">${ic('i-copy')} 复制链接</button>
+      <button class="btn" style="flex:1" onclick="toast('海报已保存至相册')">${ic('i-image')} 保存图片</button>
+    </div>
+    <div class="note">海报转化归因通过专属邀请码完成，佣金按有效交易结算，不按层级计酬。</div>`;
+  window.__posters = posters;
+  return push('邀请海报', html, {});
+}
+function posterHtml(x, p){
+  return `<div class="poster">
+    <div class="poster-scene imgwrap">${sceneSVG(x.sc, x.seed, 'scene-slow')}
+      <div class="ps-mask"></div>
+      <div class="ps-brand"><svg width="17" height="17" viewBox="0 0 64 64"><path d="M20 44V24l12-8 12 8v20" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg> 向往的自由</div>
+      <div class="ps-title">${x.t}</div>
+      <div class="ps-sub">${x.s}</div>
+      <div class="ps-slogan">世 界 就 是 我 的 游 乐 场</div>
+    </div>
+    <div class="poster-body">
+      <div class="ps-invite">扫码注册，消费关联返佣 <b>${p.rate}%</b></div>
+      <div class="ps-qr">${qrSvg(p.inviteCode)}</div>
+      <div class="qr-code-big num" style="font-size:18px;letter-spacing:2px">${p.inviteCode}</div>
+      <div class="ps-link">${p.inviteLink}</div>
+      <div class="poster-steps">
+        <div class="poster-step"><div class="pn">1</div><b>分享海报</b><span>门店 / 社群</span></div>
+        <div class="poster-step"><div class="pn">2</div><b>好友注册</b><span>绑定关系</span></div>
+        <div class="poster-step"><div class="pn">3</div><b>消费返佣</b><span>T+7 结算</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+function switchPoster(i){
+  const box = $('#posterBox'); if(!box || !window.__posters) return;
+  box.innerHTML = posterHtml(window.__posters[i], DB.partner);
+  const dots = document.querySelectorAll('.ps-dot');
+  Array.prototype.forEach.call(dots, function(d,k){ d.classList.toggle('on', k===i); });
+}
+function openWithdrawSheet(){
+  const p = DB.partner;
+  openSheet(`
+    <div class="sheet-title">提现到微信</div>
+    <div class="sheet-sub">可提现余额 ¥${p.withdrawable.toLocaleString()} · T+7 已结算部分</div>
+    <div class="field" style="margin-top:6px"><span class="pre">¥</span><input id="wdAmt" type="number" placeholder="输入提现金额" value="${p.withdrawable}"></div>
+    <div class="calc-row"><span>到账方式</span><b>微信零钱 · 尾号 6621</b></div>
+    <div class="calc-row"><span>手续费</span><b style="color:#0f9d58">平台承担</b></div>
+    <div class="calc-row total"><span>预计到账</span><b id="wdReal">¥${p.withdrawable.toLocaleString()}</b></div>
+    <button class="btn" style="margin-top:14px" onclick="confirmWithdraw()">确认提现</button>
+    <div style="font-size:9.5px;color:var(--faint);text-align:center;margin-top:9px">反作弊校验通过后 2 小时内到账</div>
+  `);
+  setTimeout(()=>{ const i=$('#wdAmt'); i&&i.addEventListener('input',()=>{ $('#wdReal').textContent='¥'+Number(i.value||0).toLocaleString(); }); },100);
+}
+function confirmWithdraw(){
+  const amt = Number(($('#wdAmt')||{}).value || 0);
+  if(amt <= 0 || amt > DB.partner.withdrawable){ toast('请输入正确的提现金额'); return; }
+  closeSheet();
+  toast('提现申请已提交 · 预计 2 小时到账');
+  setTimeout(()=>{
+    DB.partner.withdrawable -= amt;
+    DB.withdrawLog.unshift({d:'提现到微信 · 尾号6621', t:'刚刚', a:'-¥'+amt.toLocaleString(), st:'处理中'});
+    setTab('earn');
+    toast('提现成功 · 返佣账单已更新');
+  }, 1200);
+}
+
+/* =====================================================
+   商户端（履约层 · 核销与供给）
+===================================================== */
+VIEWS.merch = {
+  work(){
+    const m = DB.merch;
+    const mWeek = '¥' + (DB.x.merchTrend.v.reduce(function(a,b){ return a+b; },0)).toFixed(1) + ' 千';
+    return `
+    <div class="merch-hero">
+      <div class="bh"><span class="bdot"></span>营业中 · ${m.name}</div>
+      <div class="bn">今日 ${m.today} 单 · 流水 ${money(m.gmv)}</div>
+      <div class="brow">
+        <div><div class="bv">${m.pending}</div><div class="bl">待核销</div></div>
+        <div><div class="bv">${m.beans.toLocaleString()}</div><div class="bl">已收旅豆</div></div>
+        <div><div class="bv">${m.rating}</div><div class="bl">履约评分</div></div>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-item"><b class="num">${m.pending}</b><span>待核销</span><div class="trend" style="color:#e65100">今日共 ${m.today} 单</div></div>
+      <div class="kpi-item"><b class="num">${money(m.gmv)}</b><span>今日流水</span><div class="trend up">近 7 日 ${mWeek}</div></div>
+      <div class="kpi-item"><b class="num">${m.beans.toLocaleString()}</b><span>已收旅豆</span><div class="trend up">可兑换平台资源</div></div>
+      <div class="kpi-item"><b class="num">${m.monthOrders}</b><span>本月订单</span><div class="trend up">评分 ${m.rating}</div></div>
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>近 7 日流水</b><span class="cv">${ic('i-trend')} ${mWeek} · 日均 ¥${(DB.x.merchTrend.v.reduce(function(a,b){return a+b;},0)/7).toFixed(1)} 千</span></div>
+      ${barsSVG(DB.x.merchTrend.v.map((v,i)=>({ l:DB.x.merchTrend.l[i], v:v })), { c1:'#a97fd1', c2:'#7b5aa6', hc:'#e87722', hi:5, h:104, vals:false })}
+    </div>
+    <div class="sec-title">库存预警 <span class="more" onclick="pushStockPage()">库存管理 ${ic('i-arrow')}</span></div>
+    <div class="card" style="padding:4px 14px">
+      ${DB.x.stockWarn.map(w=>`
+        <div class="row" style="padding:11px 0">
+          <div class="ric" style="background:#fdeced;color:#e5484d;border-radius:10px;padding:6px">${ic('i-alert')}</div>
+          <div class="rt"><b>${w.n}</b><span>安全库存 ${w.safe} 件 · 建议补货 ${w.safe - w.left} 件</span></div>
+          <button class="btn sm" onclick="toast('补货申请已提交 · 村级仓 24h 内发运')">一键补货</button>
+        </div>`).join('')}
+    </div>
+    <div class="sec-title">待核销订单 <span class="more" onclick="jumpTab('order')">全部订单 ${ic('i-arrow')}</span></div>
+    ${m.orders.filter(o=>o.status==='待核销').map((o,i)=>orderCard(m.orders.indexOf(o))).join('')}
+    ${sbcTodoBlock()}
+    <div class="insight gr">
+      <div class="ih">${ic('i-spark')} 经营洞察</div>
+      <p>${DB.x.merchInsight}</p>
+    </div>
+    <div class="card" style="padding:14px;font-size:11.5px;color:var(--ink2);line-height:1.9">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="tag">履约评分 ${m.rating}</span>
+        <span class="tag green">保证金充足</span>
+        <span class="tag">${ic('i-shield')} 准入合规</span>
+      </div>
+      <div style="margin-top:8px;color:var(--sub);font-size:10.5px">核销后资金 T+1 结算 · 旅豆部分按平台结算价兑付</div>
+    </div>`;
+  },
+  order(){
+    const m = DB.merch;
+    const filters = [['all','全部'],['待核销','待核销'],['已核销','已核销'],['退款','退款']];
+    const cnt = function(k){ return k==='all' ? m.orders.length : m.orders.filter(function(o){ return o.status===k; }).length; };
+    return `
+    <div class="merch-hero" style="padding-bottom:30px">
+      <div class="bh"><span class="bdot"></span>订单中心 · ${m.name}</div>
+      <div class="bn">近期 ${m.orders.length} 笔订单 · ${cnt('待核销')} 笔待核销 · 本月累计 ${m.monthOrders} 笔</div>
+      <div class="brow">
+        <div><div class="bv">${cnt('待核销')}</div><div class="bl">待核销</div></div>
+        <div><div class="bv">${cnt('已核销')}</div><div class="bl">已核销</div></div>
+        <div><div class="bv">${cnt('退款')}</div><div class="bl">退款</div></div>
+      </div>
+    </div>
+    <div class="chips" style="margin-top:-20px;position:relative;z-index:3;background:transparent">
+      ${filters.map(function(f){ return '<button class="chip '+(moFilter===f[0]?'on':'')+'" onclick="moFilter=\''+f[0]+'\';renderBase()">'+f[1]+' <em style="font-style:normal;opacity:.6">'+cnt(f[0])+'</em></button>'; }).join('')}
+    </div>
+    <div style="height:6px"></div>
+    ${DB.merch.orders.map(function(o,i){ return (moFilter==='all'||o.status===moFilter) ? orderCard(i) : ''; }).join('')}
+    <div class="note">核销后资金 T+1 结算至商户账户；旅豆部分按平台结算价兑付，商户收豆可兑换平台资源与服务。</div>`;
+  },
+  supply(){
+    const m = DB.merch;
+    const listed = m.supply.filter(function(s){ return s.listed; });
+    const unlisted = m.supply.filter(function(s){ return !s.listed; });
+    return `
+    <div class="merch-hero" style="background:linear-gradient(135deg,#6b4f96,#a97fd1)">
+      <div class="bh"><span class="bdot"></span>货源中心 · 平台爆品铺货</div>
+      <div class="bn">严选 SKU · 零库存压力</div>
+      <div class="brow">
+        <div><div class="bv">${listed.length}</div><div class="bl">在售 SKU</div></div>
+        <div><div class="bv">${listed.reduce(function(a,s){ return a+s.sold; },0)}</div><div class="bl">本月销量</div></div>
+        <div><div class="bv">28%</div><div class="bl">平均毛利率</div></div>
+      </div>
+    </div>
+    <div class="supply-note">${ic('i-shield')} 源头厂家直供 · 村级仓储前置 · 旅豆结算通道 · 平台不压货</div>
+    <div class="sec-title">已铺货商品 <span class="more">${listed.length} 件在售</span></div>
+    <div class="goods-grid">
+      ${listed.map(function(s,i){ return `<div class="goods-card">
+        <div class="goods-cover imgwrap flat">${sceneSVG(s.sc||'bamboo', i*61+17)}<span class="goods-st">在售</span></div>
+        <div class="goods-body">
+          <b class="goods-n">${s.n}</b>
+          <div class="goods-meta">¥${s.price} · 月销 ${s.sold}</div>
+          <div class="goods-earn">毛利 ¥${Math.round(s.price*0.28)}/件</div>
+          <div class="goods-acts">
+            <button class="btn sm ghost" onclick="restockGoods('${s.n}')">补货</button>
+            <button class="btn sm ghost" onclick="delistGoods('${s.n}')">下架</button>
+          </div>
+        </div>
+      </div>`; }).join('')}
+    </div>
+    <div class="sec-title">可铺货爆品 <span class="more" onclick="pushGoodsPoolPage()">全部 ${ic('i-arrow')}</span></div>
+    <div class="goods-grid">
+      ${unlisted.map(function(s,i){ return `<div class="goods-card">
+        <div class="goods-cover imgwrap flat">${sceneSVG(s.sc||'autumn', i*83+41)}<span class="goods-st gray">未铺货</span></div>
+        <div class="goods-body">
+          <b class="goods-n">${s.n}</b>
+          <div class="goods-meta">建议售价 ¥${s.price}</div>
+          <div class="goods-earn" style="color:var(--sub)">适配你的客群</div>
+          <div class="goods-acts"><button class="btn sm" style="flex:1" onclick="applyGoods('${s.n}')">申请铺货</button></div>
+        </div>
+      </div>`; }).join('')}
+    </div>
+    <div class="note">商户收旅豆可兑换平台流量位 / 策划服务 / 供应链资源等；商城收益按周对账。</div>`;
+  },
+  mme(){
+    const m = DB.merch;
+    return `
+    <div class="profile" style="background:linear-gradient(135deg,#7b5aa6,#a97fd1)">
+      <div class="avatar" style="background:rgba(255,255,255,.2)">${ic('i-store')}</div>
+      <div class="pi"><b>${m.name}</b>
+        <span class="plv">${ic('i-shield')} 平台认证商户</span>
+        <div class="did">${ic('i-code')} 商户号 ${m.id} · 评分 ${m.rating}</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b class="num">${m.today}</b><span>今日单量</span></div>
+      <div class="stat"><b class="num">${m.beans.toLocaleString()}</b><span>旅豆余额</span></div>
+      <div class="stat"><b class="num">${money(m.gmv)}</b><span>今日流水</span></div>
+      <div class="stat"><b>${m.rating}</b><span>履约评分</span></div>
+    </div>
+    <div class="chart-box">
+      <div class="ch"><b>近 7 日流水</b><span class="cv">${ic('i-trend')} 合计 ¥${(DB.x.merchTrend.v.reduce(function(a,b){return a+b;},0)).toFixed(1)} 千</span></div>
+      ${sparkSVG(DB.x.merchTrend.v, { c:'#7b5aa6', labels:DB.x.merchTrend.l, h:88 })}
+    </div>
+    <div class="sec-title">履约评分构成</div>
+    <div class="card" style="padding:14px">
+      ${[['核销及时率',96,'#7b5aa6'],['游客满意度',98,'#0f9d58'],['投诉处理',92,'#f59f00'],['资料完整度',100,'#2f6f9f']].map(function(x){
+        return `<div class="rate-row"><div class="rr-t"><span>${x[0]}</span><b>${x[1]}</b></div><div class="sk-bar"><i style="width:${x[1]}%;background:${x[2]}"></i></div></div>`;
+      }).join('')}
+      <div style="font-size:9.5px;color:var(--sub);margin-top:10px;line-height:1.6">评分影响派单权重与结算周期；连续 3 个月 ≥4.8 分可申请保证金减免。</div>
+    </div>
+    <div class="pm-medals" style="padding-bottom:14px">
+      ${[['平台认证','#7b5aa6','i-verified',true],['高分商户','#d9a521','i-trophy',true],['金牌履约','#0e9f8a','i-shield',true],['年度优选','#c92a2a','i-crown',false]].map(function(x){
+        return `<div class="pm-medal ${x[3]?'':'lock'}">${medalSVG(x[1], '#ffffff', x[2], { locked: !x[3] })}<span>${x[0]}</span></div>`;
+      }).join('')}
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">经营管理</div>
+      <div class="row" onclick="jumpTab('order')"><div class="ric">${ic('i-box')}</div><div class="rt"><b>订单与核销</b><span>待核销 ${m.pending} · 今日 ${m.today}</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushStockPage()"><div class="ric">${ic('i-layers')}</div><div class="rt"><b>库存盘点</b><span>4 个在售排期 · 1 个紧张</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="jumpTab('supply')"><div class="ric">${ic('i-bag')}</div><div class="rt"><b>货源中心</b><span>平台爆品铺货 · 二销增收</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushRedeemPage()"><div class="ric">${ic('i-gift')}</div><div class="rt"><b>旅豆兑换权</b><span>余额 ${m.beans.toLocaleString()} 豆 · 权益兑换</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushStatementPage()"><div class="ric">${ic('i-doc')}</div><div class="rt"><b>对账单</b><span>周对账 · 佣金与旅豆分账</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushSettleBillPage()"><div class="ric" style="background:#e8f0f7;color:#2f6f9f">${ic('i-ticket')}</div><div class="rt"><b>我的权益对账单</b><span>${sbcBillBadge()}</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="pushContractChangePage()"><div class="ric" style="background:#eaf3ee;color:#0f766e">${ic('i-doc')}</div><div class="rt"><b>协议变更申请</b><span>${agrMyOpen() ? agrMyOpen() + ' 条待平台审批' : '调整 ' + sbcMyLine().r + ' 单价 ¥' + sbcMyLine().price + ' / 次'}</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="menu-group">
+      <div class="mg-title">通用</div>
+      <div class="row" onclick="pushRolePage()"><div class="ric">${ic('i-user')}</div><div class="rt"><b>我的角色 · 生态位</b><span>${ENDS.merch.sub} · 五环中的第 4 环 · 能做什么 / 不做什么</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="switchIdentity()"><div class="ric">${ic('i-switch')}</div><div class="rt"><b>切换身份</b></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="confirmLogout()"><div class="ric" style="color:#e5484d">${ic('i-logout')}</div><div class="rt"><b style="color:#e5484d">退出登录</b></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>`;
+  },
+};
+let moFilter = 'all';
+function orderCard(i){
+  const o = DB.merch.orders[i];
+  const stCls = o.status==='待核销' ? 'gold' : o.status==='已核销' ? 'green' : 'red';
+  return `
+  <div class="ocard mcard" onclick="pushMerchOrderDetail(${i})">
+    <div class="ocard-top">
+      <div class="ocard-thumb imgwrap flat">${sceneSVG(o.sc||'watertown', i*97+29)}</div>
+      <div class="ocard-info">
+        <b class="ocard-name">${o.n}</b>
+        <div class="ocard-meta">${ic('i-user')} ${o.visitor} · ${o.tm}</div>
+        <div class="ocard-meta">${ic('i-qr')} 核销码 <b class="num" style="color:var(--ink);letter-spacing:1px">${o.code}</b></div>
+        <div class="ocard-price">${o.paid}<small>${o.bean && String(o.bean).startsWith('-') ? '豆抵 '+String(o.bean).slice(1) : '全额支付'}</small></div>
+      </div>
+      <span class="tag ${stCls} ocard-tag">${o.status}</span>
+    </div>
+    <div class="ocard-foot">
+      <div class="ocard-code">${o.status==='待核销'?'资金已在监管账户 · 核销后 T+1 结算':o.status==='已核销'?'已完成结算 · 可查看流水':'已按规则退款'}</div>
+      <div class="ocard-acts">
+        ${o.status==='待核销' ? '<button class="btn sm" onclick="event.stopPropagation();openVerifySheet('+i+')">核销</button>' : '<button class="btn sm ghost" onclick="event.stopPropagation();pushMerchOrderDetail('+i+')">详情</button>'}
+      </div>
+    </div>
+  </div>`;
+}
+function pushMerchOrderDetail(i){
+  const o = DB.merch.orders[i];
+  const html = `
+    <div class="sec-title" style="padding-top:16px">订单信息</div>
+    <div class="card">
+      <div class="row"><div class="rt"><b>${o.n}</b><span>${o.tm} 预约</span></div><span class="tag ${o.status==='待核销'?'gold':o.status==='已核销'?'green':'red'}">${o.status}</span></div>
+      <div class="row"><div class="rt"><b>游客</b><span>${o.visitor} · 138****6621</span></div></div>
+      <div class="row"><div class="rt"><b>订单金额</b><span>${o.paid}${o.bean&&String(o.bean).startsWith('-')?' · 旅豆抵扣 '+String(o.bean).slice(1)+' 豆':''}</span></div></div>
+      <div class="row"><div class="rt"><b>履约商户</b><span>${DB.merch.name}</span></div></div>
+    </div>
+    <div class="sec-title">核销码</div>
+    <div class="code-display"><span style="font-size:11px;color:var(--sub)">6 位动态核销码</span><span class="cd num">${o.code}</span></div>
+    <div class="sec-title">状态流转</div>
+    <div class="info-block" style="margin:0 14px 12px">
+      <div class="flow-steps">
+        <div class="flow-step"><div class="fsn" style="background:#e7f6ee;color:#0f9d58">✓</div><div><b>游客下单支付</b><span>资金进入监管账户</span></div></div>
+        <div class="flow-step"><div class="fsn" style="background:${o.status!=='待核销'?'#e7f6ee;color:#0f9d58':'#f2f3f5;color:#8a919c'}">${o.status!=='待核销'?'✓':'2'}</div><div><b>到店核销</b><span>验证核销码或扫码</span></div></div>
+        <div class="flow-step"><div class="fsn" style="background:${o.status==='已核销'||o.status==='退款'?'#e7f6ee;color:#0f9d58':'#f2f3f5;color:#8a919c'}">3</div><div><b>资金结算与旅豆发放</b><span>T+1 结算 · 旅豆链上发放</span></div></div>
+      </div>
+    </div>
+    <div style="padding:0 14px 20px;display:flex;gap:10px">
+      ${o.status==='待核销' ? `<button class="btn" style="flex:1" onclick="openVerifySheet(${i})">${ic('i-scan')} 确认核销</button>` : ''}
+      <button class="btn ghost" style="flex:1" onclick="callVisitor()">${ic('i-phone')} 联系游客</button>
+    </div>`;
+  return push('订单详情', html, {});
+}
+function openVerifySheet(i){
+  const o = DB.merch.orders[i];
+  openSheet(`
+    <div class="sheet-title">核销验证</div>
+    <div class="sheet-sub">${o.n} · ${o.visitor}</div>
+    <div class="code-display" style="margin-top:4px"><span style="font-size:11px;color:var(--sub)">订单核销码</span><span class="cd num">${o.code}</span></div>
+    <div class="form-label">${ic('i-scan')} 输入游客出示的 6 位核销码</div>
+    <div class="code-boxes">${[0,1,2,3,4,5].map(k=>'<div class="code-box" id="vb'+k+'"></div>').join('')}</div>
+    <input id="verifyInput" maxlength="6" inputmode="numeric" style="opacity:0;position:absolute;width:1px;height:1px" oninput="onVerifyInput(this.value)">
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn ghost" style="flex:1" onclick="simulateScan(${i})">${ic('i-camera')} 模拟扫码</button>
+      <button class="btn" style="flex:1" onclick="confirmVerify(${i})">确认核销</button>
+    </div>
+    <div style="font-size:9.5px;color:var(--faint);text-align:center;margin-top:10px">核销后平台为游客链上发放旅豆 · 资金 T+1 结算</div>
+  `);
+  setTimeout(()=>{ const inp=$('#verifyInput'); inp&&inp.focus(); }, 250);
+}
+function onVerifyInput(v){
+  v = v.replace(/\D/g,'').slice(0,6);
+  $('#verifyInput').value = v;
+  for(let k=0;k<6;k++){ const b=$('#vb'+k); if(b){ b.textContent=v[k]||''; b.classList.toggle('filled',!!v[k]); b.classList.toggle('focus',k===v.length); } }
+  if(v.length===6) setTimeout(()=>confirmVerify(currentVerifyIdx), 300);
+}
+let currentVerifyIdx = 0;
+function simulateScan(i){
+  currentVerifyIdx = i;
+  const o = DB.merch.orders[i];
+  const sheet = $('#sheet');
+  sheet.insertAdjacentHTML('beforeend','<div id="scanning" style="position:absolute;inset:0;background:rgba(255,255,255,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px"><div class="spinner" style="margin:0"></div><div style="font-size:13px;font-weight:700">扫码识别中</div><div style="font-size:10.5px;color:var(--sub)">动态码防截图 · 每 60 秒刷新</div></div>');
+  setTimeout(()=>{ $('#scanning') && $('#scanning').remove(); onVerifyInput(o.code); }, 900);
+}
+function confirmVerify(i){
+  const v = ($('#verifyInput')||{}).value || '';
+  if(v.length < 6){ toast('请输入 6 位核销码'); return; }
+  const o = DB.merch.orders[i];
+  if(v !== o.code){ toast('核销码不正确，请与游客确认'); return; }
+  applyVerify(o);
+  confetti.fire();
+  closeSheet();
+  toast('核销成功 · 已为游客发放 '+Math.round(parseInt(o.paid.replace(/\D/g,''))/10)+' 旅豆');
+  setTimeout(()=>{ renderBase(); }, 350);
+}
+function applyVerify(o){
+  o.status = '已核销';
+  DB.merch.pending = Math.max(0, DB.merch.pending-1);
+  if(o.bean && String(o.bean).startsWith('-')) DB.merch.beans += parseInt(String(o.bean).slice(1));
+  const vo = DB.visitorOrders.find(x=>x.code===o.code);
+  if(vo){ vo.status='已完成'; }
+  DB.admin.stream.unshift({t:'刚刚', d:'核销成功 · '+o.n+' · 旅豆已发放', c:'#f5a623'});
+  /* 同步回写底账当日核销数 —— 否则商户端核销了，驾驶舱核销率却一动不动 */
+  const L = DB.x.ledger[DB.x.ledger.length - 1];
+  if(L && L.vf < L.ord){ L.vf += 1; }
+  DB.admin.verifyRate = L ? Math.round(L.vf / L.ord * 1000) / 10 : DB.admin.verifyRate;
+}
+function pushStockPage(){
+  const m = DB.merch;
+  const totalSeats = m.stock.reduce(function(a,s){ return a+s.total; },0);
+  const leftSeats = m.stock.reduce(function(a,s){ return a+s.left; },0);
+  const warnCnt = m.stock.filter(function(s){ return s.warn; }).length;
+  return push('库存盘点', `
+    <div class="kpi-grid" style="padding-top:14px">
+      <div class="kpi-item"><b class="num">${totalSeats}</b><span>总席位</span><div class="trend">4 个排期</div></div>
+      <div class="kpi-item"><b class="num">${leftSeats}</b><span>剩余可售</span><div class="trend up">售出率 ${Math.round((1-leftSeats/totalSeats)*100)}%</div></div>
+      <div class="kpi-item"><b class="num">${warnCnt}</b><span>紧张排期</span><div class="trend" style="color:#e5484d">建议补位</div></div>
+      <div class="kpi-item"><b class="num">${DB.merch.pending}</b><span>待核销</span><div class="trend up">今日 ${m.today} 单</div></div>
+    </div>
+    <div class="sec-title">在售排期 <span class="more">点击查看详情</span></div>
+    ${m.stock.map(function(s,i){
+      const pct = Math.round(s.left/s.total*100);
+      const sold = 100-pct;
+      return `<div class="stock-card ${s.warn?'warn':''}" onclick="pushStockDetail(${i})">
+        <div class="sk-h">
+          <div class="sk-t"><b>${s.n}</b><span>${s.date} · 单价 ¥${s.price}</span></div>
+          <div class="sk-n"><b class="${s.warn?'warn':''}">余 ${s.left} 席</b><span>共 ${s.total}</span></div>
+        </div>
+        <div class="sk-bar"><i style="width:${sold}%;background:${s.warn?'linear-gradient(90deg,#e5484d,#ff922b)':'linear-gradient(90deg,#7b5aa6,#a97fd1)'}"></i></div>
+        <div class="sk-f">
+          <span>已售 ${sold}%</span>
+          ${s.warn?'<span class="tag red">库存紧张 · 建议加开</span>':'<span style="color:var(--faint)">售罄自动下架</span>'}
+        </div>
+      </div>`;
+    }).join('')}
+    <div class="insight gr">${ic('i-spark')}<div><b>库存即排期</b>线路按日期排期售卖，售罄自动下架避免超卖；紧张排期建议及时加开或调价，减少空位损失。</div></div>
+    <div class="note">库存与预约数据实时同步至游客端，售罄自动下架；紧张库存将提醒运营补位。</div>`, {});
+}
+function pushStockDetail(i){
+  return push('库存详情', stockDetailBody(i), {});
+}
+/** 排期详情内容（抽出以便调价/加场后原地重绘） */
+function stockDetailBody(i){
+  const s = DB.merch.stock[i];
+  const pct = Math.round(s.left/s.total*100);
+  return `
+    <div class="sec-title" style="padding-top:16px">${s.n}</div>
+    <div class="card" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink2)"><span>剩余席位</span><b class="num">${s.left} / ${s.total}</b></div>
+      <div style="height:9px;background:#f0f2f5;border-radius:5px;margin-top:10px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${s.warn?'#e65100':'linear-gradient(90deg,#7b5aa6,#a97fd1)'};border-radius:5px"></div></div>
+      <div class="calc-row" style="margin-top:10px"><span>预约日期</span><b>${s.date}</b></div>
+      <div class="calc-row"><span>单价</span><b>¥${s.price}</b></div>
+      <div class="calc-row"><span>预计流水</span><b>${money(s.left*s.price)}</b></div>
+      ${s.addedAt?'<div class="calc-row"><span>最近加场</span><b style="color:var(--green)">'+s.addedAt+' +10 席</b></div>':''}
+    </div>
+    <div class="sec-title">快捷操作</div>
+    <div class="card">
+      <div class="row" onclick="addSession(${i})"><div class="rt"><b>申请加场</b><span>新增 10 席 · 平台协助导流</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="changePrice(${i})"><div class="rt"><b>调整价格</b><span>当前 ¥${s.price} / 人</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="closeSession(${i})"><div class="rt"><b>下架排期</b><span>${s.left<s.total?'尚有已售席位，需先退款':'下架后游客端同步不可见'}</span></div><div class="arr">${ic('i-arrow')}</div></div>
+    </div>
+    <div class="note">售罄自动下架避免超卖；紧张排期建议及时加开或调价，减少空位损失。</div>`;
+}
+function pushRedeemPage(){
+  const m = DB.merch;
+  return push('旅豆兑换权', `
+    <div class="merch-hero" style="margin-top:14px">
+      <div class="mh-l">${ic('i-gift')} 我的旅豆余额</div>
+      <div class="mh-b num">${m.beans.toLocaleString()}</div>
+      <div class="mh-l">兑换平台资源与服务</div>
+    </div>
+    <div class="sec-title">可兑换权益</div>
+    ${m.redeemOptions.map((r,i)=>`<div class="order-card"><div style="display:flex;gap:11px;align-items:center">
+      <div style="width:44px;height:44px;border-radius:12px;background:#f3edf9;color:#5f4484;display:flex;align-items:center;justify-content:center">${ic(r.ic)}</div>
+      <div style="flex:1"><b style="font-size:13.5px">${r.n}</b><div style="font-size:10px;color:var(--sub);margin-top:3px">${r.d}</div></div>
+      <div style="text-align:right"><b style="font-size:13px;color:#7b5aa6">${r.cost.toLocaleString()} 豆</b><button class="btn sm ghost" style="margin-top:6px" onclick="redeem(${i})">兑换</button></div>
+    </div></div>`).join('')}
+    <div class="note">商家收取的旅豆可兑换平台资源与服务，兑换记录纳入平台权益预算统一核算。</div>`, {});
+}
+function redeem(i){
+  const r = DB.merch.redeemOptions[i];
+  openSheet(`
+    <div class="sheet-title">确认兑换</div>
+    <div class="sheet-sub">${r.n}</div>
+    <div class="calc-row"><span>消耗旅豆</span><b style="color:#7b5aa6">${r.cost.toLocaleString()} 豆</b></div>
+    <div class="calc-row"><span>当前余额</span><b>${DB.merch.beans.toLocaleString()} 豆</b></div>
+    <div class="calc-row total"><span>兑换后余额</span><b>${(DB.merch.beans-r.cost).toLocaleString()} 豆</b></div>
+    <button class="btn" style="margin-top:14px;background:#7b5aa6" onclick="confirmRedeem(${i})">确认兑换</button>
+  `);
+}
+function confirmRedeem(i){
+  const r = DB.merch.redeemOptions[i];
+  if(DB.merch.beans < r.cost){ toast('旅豆余额不足'); return; }
+  DB.merch.beans -= r.cost;
+  closeSheet();
+  toast('兑换成功 · '+r.n+'\n平台将在 24 小时内联系对接');
+  renderBase();
+}
+function pushStatementPage(){
+  const m = DB.merch;
+  return push('对账单', `
+    <div class="sec-title" style="padding-top:16px">本周对账（10.12 – 10.18）</div>
+    <div class="card">
+      <div class="row"><div class="rt"><b>核销流水</b><span>38 单</span></div><b>¥11,286</b></div>
+      <div class="row"><div class="rt"><b>待核销流水</b><span>6 单</span></div><b>¥1,554</b></div>
+      <div class="row"><div class="rt"><b>旅豆结算</b><span>抵扣部分由平台承担</span></div><b>-162 豆</b></div>
+      <div class="row"><div class="rt"><b>商城分账</b><span>3 件</span></div><b>¥168</b></div>
+      <div class="row"><div class="rt"><b>应结金额</b><span>T+1 至结算账户</span></div><b style="color:#0f9d58">¥11,454</b></div>
+    </div>
+    <div class="sec-title">资金与积分分账原则</div>
+    <div class="info-block" style="margin:0 14px 12px"><p>积分、现金佣金、商家应收款、支付资金分别建账；退款订单同步冲正旅豆与佣金，防刷单与串通核销由平台风控模型联合验证。</p></div>
+    <div style="padding:0 14px 20px"><button class="btn ghost" onclick="exportStatement()">${ic('i-doc')} 导出对账单</button>
+      <div id="stExportTip" style="font-size:9.5px;color:#0f7a46;margin-top:8px;line-height:1.6"></div>
+    </div>`, {});
+}
+/* =====================================================
+   商户端：我的对账单 · 权益结算（v1.7 闭环）
+   —— 商户自己看账单、逐笔核销核对、确认或申诉
+   —— 状态直接写回 DB.rights，运营端同步可见
+   ===================================================== */
+/** 当前商户对应的结算条线（按商户号 mid 关联） */
+function sbcMyLine(){
+  const R = DB.rights, mid = DB.merch.id;
+  let m = R.merchants.filter(function(x){ return x.mid === mid; })[0];
+  if(!m) m = R.merchants[0];
+  return m;
+}
+/** 我这条线上的申诉 */
+function sbcMyAppeals(m){
+  return DB.rights.appeals.filter(function(a){ return a.m === m.n; });
+}
+/** 我的差异单（平台侧登记的） */
+function sbcMyDiffs(m){
+  return DB.rights.diffs.filter(function(d){ return d.m === m.n; });
+}
+function sbcMyRedeems(m){
+  return DB.rights.redeems;
+}
+function pushSettleBillPage(){
+  return push('我的对账单', sbcBillHtml(), {});
+}
+/** 「我的」菜单里的状态摘要 */
+function sbcBillBadge(){
+  const m = sbcMyLine();
+  const ap = sbcMyAppeals(m).filter(function(a){ return a.st === '待受理'; }).length;
+  if(ap) return '有 ' + ap + ' 条申诉待平台受理';
+  if(m.st === '已确认') return '本期已确认 · ¥' + rightsLineNet(m).toLocaleString();
+  if(DB.rights.bill.st === '待生成') return '平台账单尚未生成';
+  return '待确认 · ¥' + rightsLineNet(m).toLocaleString() + '（' + m.cnt + ' 笔核销）';
+}
+/** 工作台待办块：有账单待确认/申诉时置顶提醒 */
+function sbcTodoBlock(){
+  const m = sbcMyLine();
+  const ap = sbcMyAppeals(m).filter(function(a){ return a.st === '待受理'; }).length;
+  if(m.st === '已确认' && !ap) return '';
+  const t = ap ? '有 ' + ap + ' 条申诉待平台受理' : (DB.rights.bill.st === '待生成' ? '平台账单尚未生成' : '本期对账单待你确认');
+  const c = ap ? '#b26a00' : '#2f6f9f';
+  return `
+  <div class="sbc-st" style="margin-top:11px;border-left:3px solid ${c}">
+    <div class="sh"><b style="color:${c}">${ic('i-bell')} ${t}</b>
+      <span class="cnt">应结 ¥${rightsLineNet(m).toLocaleString()}</span></div>
+    <div style="font-size:9.5px;color:var(--ink2);line-height:1.65">
+      平台已推送 ${DB.rights.period} 对账单，${m.cnt} 笔核销 · 协议单价 ¥${agrPrice(m)}/次。核对无误请确认，有异议先申诉。
+    </div>
+    <button class="sbc-btn" style="margin-top:10px" onclick="pushSettleBillPage()">${m.st === '已确认' ? '查看本期对账单' : '去核对并确认'}</button>
+    <button class="sbc-btn ghost" style="margin-top:8px" onclick="pushContractChangePage()">${ic('i-doc')} 对单价有异议？发起协议变更</button>
+  </div>`;
+}
+function repaintSettleBill(){ repaintCurrentPage(sbcBillHtml); }
+function sbcBillHtml(){
+  const R = DB.rights, B = R.bill;
+  const m = sbcMyLine();
+  const appeals = sbcMyAppeals(m);
+  const diffs = sbcMyDiffs(m);
+  const openAppeal = appeals.filter(function(a){ return a.st === '待受理'; });
+  const net = rightsLineNet(m);
+  const openDiff = diffs.filter(function(d){ return d.st === '待处置'; });
+  const canConfirm = B.st !== '待生成' && m.st !== '已确认' && !openDiff.length;
+  const stMap = { '已确认':['#e7f6ee','#0f7a46'], '待确认':['#fff4e8','#b26a00'], '差异':['#fdeceb','#c92a2a'], '申诉中':['#fdeceb','#c92a2a'] };
+  const st = stMap[m.st] || stMap['待确认'];
+  return `
+  <div class="sbc-hero">
+    <div class="tag">${ic('i-doc')} 平台推送 · 权益结算对账单</div>
+    <div class="t">${m.op}</div>
+    <div class="s">${R.period} · ${m.r} · 协议单价 ¥${m.price} / 次 · ${B.st === '待生成' ? '平台账单尚未生成' : '账单号 ' + B.no}</div>
+    <div class="row">
+      <div><b class="num">${m.cnt.toLocaleString()}</b><span>本期核销次数</span></div>
+      <div><b class="num">¥${net.toLocaleString()}</b><span>应结金额</span></div>
+      <div><b style="font-size:13px">${m.st}</b><span>${m.by ? '确认来源 ' + m.by : '待你确认'}</span></div>
+    </div>
+  </div>
+
+  <div class="sbc-st">
+    <div class="sh"><b>逐笔核销明细</b><span class="cnt">展示最近 ${sbcMyRedeems(m).length} 笔 · 合计 ${m.cnt} 笔</span></div>
+    ${sbcMyRedeems(m).map(function(r){ return `
+      <div class="sbc-rd">
+        <span class="cd">${r.code}</span>
+        <span class="nm">${r.g}</span>
+        <span class="tm">${r.t} · 藏品 ${r.nft}</span>
+        <b class="amt">¥${r.amt}</b>
+      </div>`; }).join('')}
+    <div class="sbc-bar"><i style="width:${Math.round(sbcMyRedeems(m).length / m.cnt * 100)}%;background:linear-gradient(90deg,#2f6f9f,#0f766e)"></i></div>
+    <div style="font-size:9px;color:var(--sub);margin-top:6px;line-height:1.6">每笔核销都有唯一核销码，链上不可重复提交；你可在商户端核销台对任意一笔发起复核。</div>
+  </div>
+
+  ${openAppeal.length || appeals.length ? `
+  <div class="sec-title">我的申诉 <span class="more">${openAppeal.length} 条待平台受理</span></div>
+  ${appeals.map(function(a){ return `
+    <div class="sbc-appeal${a.st === '已受理' ? ' ok' : ''}">
+      <div class="ah"><span class="aid">${a.id}</span><b>${a.n}</b>
+        <span class="sbc-tag" style="background:${a.st === '已受理' ? '#e7f6ee' : a.st === '已驳回' ? '#f1f3f6' : '#fff4e8'};color:${a.st === '已受理' ? '#0f7a46' : a.st === '已驳回' ? '#8a94a6' : '#b26a00'}">${a.st}</span>
+      </div>
+      <div class="ad">${a.d}</div>
+      <div class="af">
+        <span class="am">主张差额 ¥${a.amt.toLocaleString()}</span>
+        <span style="font-size:9px;color:var(--sub)">${a.at}</span>
+        ${a.st === '已受理' ? `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#0f9d58">${ic('i-check')} ${a.done || '平台已按你的主张调整'}</span>`
+          : a.st === '已驳回' ? `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#8a94a6">${ic('i-close')} ${a.done || '平台已驳回'}</span>`
+          : `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#b26a00">等待平台受理</span>`}
+      </div>
+    </div>`; }).join('')}` : ''}
+
+  ${diffs.length ? `
+  <div class="sec-title">平台登记的差异 <span class="more">${openDiff.length} 条待处置</span></div>
+  ${diffs.map(function(d){ return `
+    <div class="sbc-appeal${d.st === '已处置' ? ' ok' : ''}">
+      <div class="ah"><span class="aid">${d.id}</span><b>${d.n}</b>
+        <span class="sbc-tag" style="background:${d.st === '已处置' ? '#e7f6ee' : '#fdeceb'};color:${d.st === '已处置' ? '#0f7a46' : '#c92a2a'}">${d.st}</span>
+      </div>
+      <div class="ad">${d.d}</div>
+      <div class="af"><span class="am">影响 ¥${d.amt.toLocaleString()}</span>
+        ${d.st === '已处置' ? `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#0f9d58">${ic('i-check')} ${d.done || '已核减'}</span>` : ''}
+      </div>
+    </div>`; }).join('')}` : ''}
+
+  <div class="sec-title">确认与申诉 <span class="more">确认后进入本期结算</span></div>
+  <div class="sbc-st">
+    <div class="sh"><b>${m.st === '已确认' ? '你已确认本期对账' : '请核对后确认'}</b>
+      <span class="sbc-tag" style="background:${st[0]};color:${st[1]};margin-left:auto">${m.st}</span></div>
+    <div style="font-size:9.5px;color:var(--ink2);line-height:1.7">
+      ${m.st === '已确认'
+        ? '本期对账已确认，金额将随本期结算单划入你的结算账户（T+1 到账）。如需复核，请联系平台运营重新出具账单。'
+        : '确认表示你认可「核销次数 × 协议单价」的金额口径。若某笔核销有异议，请先提交申诉，平台受理前不影响你确认其他部分。'}
+    </div>
+  </div>
+  <div class="sbc-two">
+    <button class="sbc-btn${canConfirm ? '' : ' off'}" onclick="sbcConfirm()">${m.st === '已确认' ? '已确认' : '确认本期对账'}</button>
+    <button class="sbc-btn ghost" onclick="sbcAppealSheet()">${ic('i-alert')} 提出申诉</button>
+  </div>
+  <div style="padding:0 14px 20px"><button class="sbc-btn ghost" onclick="sbcExportBill()">${ic('i-doc')} 导出本期对账单</button>
+    <div id="sbcExportTip" style="font-size:9.5px;color:#0f7a46;margin-top:8px;line-height:1.6"></div>
+  </div>
+  <div class="note">对账对象：平台统一归集后按合同分账付款；权益成本单列「旅豆预算池」科目，不与订单佣金混账。本页数字与运营端结算页同源。</div>`;
+}
+/** 确认：写回结算条线，运营端同步可见 */
+function sbcConfirm(){
+  const R = DB.rights;
+  const m = sbcMyLine();
+  if(R.bill.st === '待生成'){ toast('平台账单尚未生成，暂不能确认'); repaintSettleBill(); return; }
+  if(m.st === '已确认'){ toast('本期已确认 · ¥' + rightsLineNet(m).toLocaleString()); repaintSettleBill(); return; }
+  if(sbcMyDiffs(m).some(function(d){ return d.st === '待处置'; })){
+    toast('有差异单待平台处置，暂不能确认'); repaintSettleBill(); return; }
+  const ap = sbcMyAppeals(m).filter(function(a){ return a.st === '待受理'; });
+  m.st = '已确认';
+  m.by = '商户端线上';
+  toast('本期对账已确认 · ¥' + rightsLineNet(m).toLocaleString() +
+    (ap.length ? '\n另有 ' + ap.length + ' 条申诉待平台受理，不影响本次确认' : '\n平台已同步，结算单将于 T+1 生成'));
+  repaintSettleBill();
+}
+/** 申诉：写入运营端待受理队列 */
+function sbcAppealSheet(){
+  const m = sbcMyLine();
+  openSheet(`
+    <div class="sheet-title">${ic('i-alert')} 提出对账申诉</div>
+    <div class="sheet-sub">${m.op} · ${m.r} · 本期核销 ${m.cnt} 次</div>
+    <div class="form-label">${ic('i-tag')} 申诉类型</div>
+    <div class="chips" style="background:transparent">
+      ${['核销次数不符','结算单价不符','其他'].map(function(t,i){ return '<button class="chip'+(i===0?' on':'')+'" onclick="sbcPickType(this)">'+t+'</button>'; }).join('')}
+    </div>
+    <div class="form-label" style="margin-top:12px">${ic('i-money')} 主张差额（元）</div>
+    <input class="form-input num" id="sbcAmt" value="0" inputmode="decimal" />
+    <div class="form-label" style="margin-top:12px">${ic('i-doc')} 说明</div>
+    <textarea class="form-input" id="sbcDesc" rows="3" placeholder="请写明哪几笔、依据是什么"></textarea>
+    <div class="note" style="padding:12px 2px 4px">申诉提交后进入平台受理队列；受理前你仍可确认本期对账。平台若接受你的主张，应结金额按主张金额调整，差额计入当期权益成本。</div>
+    <button class="btn" onclick="sbcSubmitAppeal()">提交申诉</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="closeSheet()">取消</button>
+  `);
+}
+function sbcPickType(btn){
+  const box = btn.parentNode;
+  [].slice.call(box.querySelectorAll('.chip')).forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+}
+function sbcSubmitAppeal(){
+  const m = sbcMyLine();
+  const amt = parseFloat((($('#sbcAmt')||{}).value||'').replace(/[^0-9.]/g,'')) || 0;
+  const desc = (($('#sbcDesc')||{}).value||'').trim();
+  const box = $('#sbcAmt') ? $('#sbcAmt').parentNode.parentNode.querySelector('.chips') : null;
+  let type = '核销次数不符';
+  if(box){ const on = box.querySelector('.chip.on'); if(on) type = on.textContent; }
+  if(amt <= 0){ toast('请填写主张差额金额'); return; }
+  if(!desc){ toast('请填写申诉说明'); return; }
+  const id = 'AP-1019-' + String(DB.rights.appeals.length + 1).padStart(2,'0');
+  DB.rights.appeals.push({ id:id, m:m.n, n:type, amt:amt, st:'待受理', at:stampNow(), d:desc });
+  m.st = '申诉中';
+  closeSheet();
+  toast('申诉已提交 · ' + id + '\n平台运营将在 1 个工作日内受理');
+  repaintSettleBill();
+}
+/** 导出对账单 CSV（真实下载） */
+function sbcExportBill(){
+  const m = sbcMyLine();
+  const rows = [['核销码','时间','游客','藏品','单次金额(元)'],
+    ['核销次数合计','','','',m.cnt],
+    ['协议单价(元/次)','','','',m.price],
+    ['本期应结(元)','','','',rightsLineNet(m)],
+    ['账单状态','','','',m.st]];
+  sbcMyRedeems(m).forEach(function(r){ rows.push([r.code, r.t, r.g, r.nft, r.amt]); });
+  const csv = '\ufeff' + rows.map(function(r){ return r.join(','); }).join('\n');
+  const fname = '向往的自由-商户权益对账单-' + m.n + '.csv';
+  try{
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+    toast('对账单已导出 · ' + rows.length + ' 行明细');
+  }catch(e){ toast('导出失败：' + e.message); return; }
+  /* 页面级回执：导出后在页面上留痕，方便核对与复核 */
+  const tip = document.querySelector('#sbcExportTip');
+  if(tip){
+    tip.innerHTML = ic('i-check') + ' 已导出 <b>' + fname + '</b> · ' + rows.length + ' 行 · ' + stampNow() + ' 生成（含核销码与藏品编号，可直接回传给平台核验）';
+    tip.style.display = 'block';
+  }
+}
+/* ===== 商户端：协议变更申请（v1.8）—— 调价不再靠线下谈完再补录 ===== */
+/** 我发起的协议变更单 */
+function agrMyContracts(m){
+  return DB.rights.contracts.filter(function(c){ return c.m === (m ? m.n : ''); });
+}
+function agrMyOpen(){
+  const m = sbcMyLine();
+  return agrMyContracts(m).filter(function(c){ return c.st === '待审批'; }).length;
+}
+function pushContractChangePage(){ return push('协议变更申请', agrChangeHtml(), {}); }
+function repaintContractChange(){ repaintCurrentPage(agrChangeHtml); }
+function agrChangeHtml(){
+  const m = sbcMyLine();
+  const list = agrMyContracts(m);
+  const cur = agrPrice(m);
+  const cnt = m.cnt;
+  return `
+  <div class="sbc-hero">
+    <div class="tag">${ic('i-doc')} 商户端 · 协议条款变更</div>
+    <div class="t">${m.op}</div>
+    <div class="s">当前协议：${m.r} · ¥${m.price} / 次${cur !== m.price ? '（已由 ¥' + m.price + ' 变更为 ¥' + cur + '）' : ''}</div>
+    <div class="row">
+      <div><b class="num">¥${cur}</b><span>现行单价</span></div>
+      <div><b class="num">${cnt.toLocaleString()}</b><span>本期核销次数</span></div>
+      <div><b class="num">¥${(cnt * cur).toLocaleString()}</b><span>本期应结</span></div>
+    </div>
+  </div>
+
+  <div class="sec-title">我的变更申请 <span class="more">${list.length} 条</span></div>
+  ${list.length ? list.map(function(c){
+    const open = c.st === '待审批';
+    const done = c.st === '已生效';
+    const col = open ? '#b26a00' : done ? '#0f7a46' : '#8a94a6';
+    return `
+    <div class="sbc-appeal${done ? ' ok' : ''}" style="border-left:3px solid ${col}">
+      <div class="ah"><span class="aid">${c.id}</span><b>${c.r}</b>
+        <span class="sbc-tag" style="background:${open ? '#fff4e8' : done ? '#e7f6ee' : '#f1f3f6'};color:${col};margin-left:auto">${c.st}</span></div>
+      <div class="ad">申请把 ${c.r} 单价由 <b>¥${c.from}</b> 调整为 <b>¥${c.to}</b> ${c.unit}。${c.why}</div>
+      <div class="af">
+        <span class="am">${c.to < c.from ? '每期省' : '每期增'} ¥${Math.abs(cnt * (c.to - c.from)).toLocaleString()}</span>
+        <span style="font-size:9px;color:var(--sub)">${c.at}</span>
+        ${done ? `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#0f7a46">${ic('i-check')} 已生效</span>`
+          : open ? `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#b26a00">等待平台审批</span>`
+          : `<span style="margin-left:auto;font-size:9px;font-weight:800;color:#8a94a6">${ic('i-close')} 平台已驳回，维持 ¥${c.from}</span>`}
+      </div>
+      ${(c.lg||[]).length ? `<div class="agr-lg" style="margin-top:8px">${c.lg.map(function(l){ return `<div><b>${l.by}</b> · ${l.t}<br><span>${l.d}</span></div>`; }).join('')}</div>` : ''}
+    </div>`; }).join('') : '<div class="rsn-card" style="text-align:center;color:var(--sub);font-size:10.5px;padding:20px">暂无变更申请</div>'}
+
+  <div class="sec-title">发起变更 <span class="more">提交后进入平台审批队列</span></div>
+  <div class="sbc-st">
+    <div class="sh"><b>${ic('i-tag')} 调整 ${m.r} 协议单价</b><span class="cnt">现行 ¥${m.price} / 次</span></div>
+    <div style="font-size:9.5px;color:var(--ink2);line-height:1.7">
+      平台<b>同意后立即生效</b>：后续结算按新单价计算，权益实付成本、单均实绩、「一单 ¥298」分账的权益预留行与留存毛利行会<b>同步重算</b>，不存在「谈好了但系统里还是老价」。
+    </div>
+  </div>
+  <div style="padding:12px 14px 0"><button class="sbc-btn" onclick="agrSheet()">${ic('i-doc')} 发起 ${m.r} 变更申请</button></div>
+  <div class="note">变更走的是<b>协议条款</b>，不是改单个账单——影响的是后续每一期，不只是本期对账。若被驳回，原协议价继续执行，本期账单不受影响。</div>`;
+}
+/** 发起变更表单 */
+function agrSheet(){
+  const m = sbcMyLine();
+  openSheet(`
+    <div class="sheet-title">${ic('i-doc')} 发起协议变更申请</div>
+    <div class="sheet-sub">${m.op} · ${m.r} · 现行 ¥${m.price} / 次</div>
+    <div class="form-label">${ic('i-money')} 申请调整后单价（元 / 次）</div>
+    <input class="form-input num" id="agrTo" value="${m.price}" inputmode="decimal" />
+    <div class="form-label" style="margin-top:12px">${ic('i-doc')} 变更理由</div>
+    <textarea class="form-input" id="agrWhy" rows="3" placeholder="请写明客流、成本或经营变化，以及期望的对价"></textarea>
+    <div class="note" style="padding:12px 2px 4px">提交后平台运营将在 1 个工作日内审批。<b>同意即从下一账期生效</b>，本期已发生核销仍按原协议价结算。</div>
+    <button class="btn" onclick="agrSubmit()">提交变更申请</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="closeSheet()">取消</button>
+  `);
+}
+function agrSubmit(){
+  const m = sbcMyLine();
+  const cur = agrPrice(m);
+  const to = parseFloat(((($('#agrTo')||{}).value)||'').replace(/[^0-9.]/g,'')) || 0;
+  const why = ((($('#agrWhy')||{}).value)||'').trim();
+  if(!to || to <= 0){ toast('请填写申请单价'); return; }
+  if(to === cur){ toast('申请单价与现行一致，无需变更'); return; }
+  if(!why){ toast('请填写变更理由'); return; }
+  if(agrMyContracts(m).some(function(c){ return c.st === '待审批'; })){
+    toast('你已有一条变更申请在审批中，请等待平台答复'); return; }
+  const id = 'AG-1019-' + String(DB.rights.contracts.length + 1).padStart(2,'0');
+  DB.rights.contracts.unshift({ id:id, m:m.n, op:m.op, r:m.r, mid:(DB.merch && DB.merch.id) || m.mid || '',
+    from:cur, to:to, st:'待审批', by:'商户端线上', at:stampNow(), unit:'元 / 次', why:why, save:m.cnt * (to - cur), lg:[] });
+  closeSheet();
+  toast('变更申请已提交 · ' + id + '\n' + m.r + ' ¥' + cur + ' → ¥' + to + '，待平台审批');
+  repaintContractChange();
+}
+/* ===== 商户端：商品与排期的真实操作（状态真实变化） ===== */
+/** 补货：真实增加库存并记录时间 */
+function restockGoods(name){
+  const g = (DB.merch.supply||[]).find(function(x){ return x.n===name; });
+  if(!g){ toast('商品不存在'); return; }
+  g.stock = (g.stock == null ? 30 : g.stock) + 50;
+  g.restockAt = '刚刚';
+  renderBase();
+  toast('补货申请已提交 · '+name+' +50 件\n村级仓 24h 内发运');
+}
+/** 下架商品：真实从在售移出（游客端同步不可见） */
+function delistGoods(name){
+  const g = (DB.merch.supply||[]).find(function(x){ return x.n===name; });
+  if(!g){ toast('商品不存在'); return; }
+  g.listed = false;
+  renderBase();
+  toast('已下架 · '+name+'\n游客端商城同步不可见');
+}
+/** 申请铺货：真实进入已铺货列表 */
+function applyGoods(name){
+  const g = (DB.merch.supply||[]).find(function(x){ return x.n===name; });
+  if(!g){ toast('商品不存在'); return; }
+  g.listed = true; g.stock = g.stock == null ? 30 : g.stock;
+  renderBase();
+  toast('铺货申请已提交 · '+name+'\n平台 24h 内审核，通过后计入你的毛利');
+}
+/** 爆品池：完整可选商品列表（不是死链） */
+function pushGoodsPoolPage(){
+  const all = DB.merch.supply || [];
+  const unlisted = all.filter(function(s){ return !s.listed; });
+  const html = `
+    <div class="sec-title" style="padding-top:16px">可铺货爆品池 <span class="more">${all.length} 款</span></div>
+    ${unlisted.length ? '<div class="goods-grid">'+unlisted.map(function(s,i){
+      return `<div class="goods-card">
+        <div class="goods-cover imgwrap flat">${sceneSVG(s.sc||'autumn', i*83+41)}<span class="goods-st gray">未铺货</span></div>
+        <div class="goods-body">
+          <b class="goods-n">${s.n}</b>
+          <div class="goods-meta">建议售价 ¥${s.price}</div>
+          <div class="goods-earn" style="color:var(--sub)">毛利约 ¥${Math.round(s.price*0.28)}/件</div>
+          <div class="goods-acts"><button class="btn sm" style="flex:1" onclick="applyGoods('${s.n}')">申请铺货</button></div>
+        </div>
+      </div>`; }).join('')+'</div>'
+      : '<div class="empty">'+ic('i-check')+'爆品已全部铺货<br>新商品上架后会在这里推荐</div>'}
+    <div class="insight gr" style="margin:12px 14px">${ic('i-spark')}<div><b>选品建议</b>平台按你的客群画像（亲子 / 瑜伽 / 剧本）推荐适配商品，铺货后可在商城与线路页同步曝光。</div></div>
+    <div class="note">平台不压货、不囤货：铺货商品由源头厂家直供，村级仓储前置发货，售出后按周结算。</div>`;
+  return push('爆品池', html, {});
+}
+/** 加场：真实增加席位 */
+function addSession(idx){
+  const s = (DB.merch.stock||[])[idx];
+  if(!s){ toast('排期不存在'); return; }
+  s.total = s.total + 10; s.addedAt = '刚刚';
+  const pg = S.stack[S.stack.length-1];
+  if(pg){ pg.el.querySelector('.page-body').innerHTML = stockDetailBody(idx); autoSB(); }
+  toast('已开放加场 · 新增 10 个席位\n平台已同步协助导流');
+}
+/** 调价：真实改价并重算预计流水 */
+function changePrice(idx){
+  const s = (DB.merch.stock||[])[idx];
+  if(!s){ toast('排期不存在'); return; }
+  openSheet(`
+    <div class="sheet-title">${ic('i-doc')} 调整价格</div>
+    <div class="sheet-sub">${s.n} · ${s.date} · 剩余 ${s.left}/${s.total}</div>
+    <div class="form-label">${ic('i-money')} 新单价（元 / 人）</div>
+    <input class="form-input num" id="npPrice" value="${s.price}" inputmode="decimal" />
+    <div class="note" style="padding:14px 2px 4px">当前 ¥${s.price}，剩余 ${s.left} 席位，预计流水 ${money(s.left*s.price)}。调价将同步至游客端；已支付订单不受影响，差价按退改政策处理。</div>
+    <button class="btn" onclick="confirmPrice(${idx})">确认调价</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="closeSheet()">取消</button>
+  `);
+}
+function confirmPrice(idx){
+  const s = (DB.merch.stock||[])[idx];
+  const v = parseFloat((($('#npPrice')||{}).value||''));
+  if(!v || v <= 0){ toast('请输入正确的价格'); return; }
+  const old = s.price; s.price = v;
+  closeSheet();
+  const pg = S.stack[S.stack.length-1];
+  if(pg){ pg.el.querySelector('.page-body').innerHTML = stockDetailBody(idx); autoSB(); }
+  toast('价格已调整 ¥'+old+' → ¥'+v+'\n游客端已同步');
+}
+/** 下架排期：真实关闭该排期（有已售席位时拦截） */
+function closeSession(idx){
+  const s = (DB.merch.stock||[])[idx];
+  if(!s){ toast('排期不存在'); return; }
+  if(s.left < s.total){ toast('尚有已售席位，请先处理退款再下架'); return; }
+  s.closed = true;
+  renderBase();
+  toast('排期已下架 · 游客端同步不可见');
+}
+/** 导出对账单：真实生成可下载 CSV */
+function exportStatement(){
+  const rows = [['项目','单量','金额(元)','说明'],
+    ['核销流水','38','11286','本周已完成核销'],
+    ['待核销流水','6','1554','已支付待核销'],
+    ['旅豆结算','-','162','抵扣部分由平台权益预算承担'],
+    ['商城分账','3','168','爆品售出分账'],
+    ['应结金额','44','11454','T+1 结算至商户账户']];
+  const csv = '\ufeff' + rows.map(r=>r.join(',')).join('\n');
+  try{
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '向往的自由-商户对账单-20261019.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+    toast('对账单已导出 · 6 行明细\n已保存为 CSV 文件');
+  }catch(e){ toast('导出失败：'+e.message); return; }
+  const tip = document.querySelector('#stExportTip');
+  if(tip){
+    tip.innerHTML = ic('i-check') + ' 已导出 <b>向往的自由-商户对账单-20261019.csv</b> · 6 行 · ' + stampNow() + ' 生成';
+    tip.style.display = 'block';
+  }
+}
+/** 联系游客：真实展示隐私号联系方式 */
+function callVisitor(phone, name){
+  openSheet(`
+    <div class="sheet-title">${ic('i-phone')} 联系游客</div>
+    <div class="sheet-sub">订单已支付 · 请在出发前确认行程</div>
+    <div class="pay-detail" style="margin-bottom:14px">
+      <div class="calc-row"><span>游客昵称</span><b>${name||'旅行家·小满'}</b></div>
+      <div class="calc-row"><span>隐私号</span><b class="num">${phone||'0571-8800 6621'}</b></div>
+      <div class="calc-row"><span>出行日期</span><b>10-25 周六</b></div>
+      <div class="calc-row"><span>人数</span><b>2 人</b></div>
+    </div>
+    <button class="btn" onclick="toast('已发起隐私号呼叫 · 游客将收到确认')">${ic('i-phone')} 拨打隐私号</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="toast('已发送站内消息')">${ic('i-comment')} 发送站内消息</button>
+    <button class="btn ghost" style="margin-top:9px" onclick="closeSheet()">取消</button>
+    <div class="note" style="padding:12px 2px 0">通话经平台隐私号中转，双方真实手机号不互露；通话记录不用于营销用途。</div>
+  `);
+}
+/** 联系协作：真实列出协作方与职责 */
+function openCollabSheet(){
+  const parts = [
+    {n:'安麓大夫第 · 场景方', r:'实景场地 · NPC 演绎', ic:'i-mask', c:'#7048e8'},
+    {n:'徐泾文旅 · 线路批发', r:'线路采购 · 售后履约', ic:'i-route', c:'#0e9f8a'},
+    {n:'鲸探 · 数字权益',     r:'数字票根发行与核销', ic:'i-crown', c:'#f5a623'},
+    {n:'平台运营 · 结算',     r:'分账 · 合规 · 风控',     ic:'i-chart', c:'#0f766e'},
+  ];
+  openSheet(`
+    <div class="sheet-title">${ic('i-comment')} 项目协作方</div>
+    <div class="sheet-sub">朱家角剧本游示范项目 · 各方职责与分账口径</div>
+    ${parts.map(function(p){ return `<div class="row" style="padding:12px 2px">
+      <div class="ric" style="width:30px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${p.c}18;color:${p.c}">${ic(p.ic)}</div>
+      <div class="rt"><b>${p.n}</b><span>${p.r}</span></div>
+      <button class="btn sm ghost" onclick="toast('已向${p.n}发起协作消息')">联系</button>
+    </div>`; }).join('')}
+    <button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">${ic('i-back')} 关闭</button>
+  `);
+}
+</script>

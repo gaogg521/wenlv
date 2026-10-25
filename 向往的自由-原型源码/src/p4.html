@@ -1,0 +1,564 @@
+<script>
+/* =====================================================
+   「向往的自由」Web3 文旅生态操作系统 · 四端高保真原型
+   数据为演示示例（依据总体方案假设参数），非真实经营数据
+===================================================== */
+const DB = {
+  user:{ name:'旅行家·小满', initial:'满', level:'城市探索官', lvRank:3, did:'did:cn:86:9f3a2c2b…4e21b', phone:'138****6621', lvProgress:62, lvNeed:6 },
+  wallet:1280, channel:'all',
+  /* ===== Travel ID 数字身份（DID/VC · 向往自由链存证）===== */
+  travelId:{
+    did:'did:cn:86:9f3a2c2b7d41…4e21b',
+    chain:'向往自由链',
+    createdAt:'2025-03-18',
+    vcStandard:'W3C DID / VC 兼容',
+    passes:[
+      {n:'朱家角剧本游 · 江南谜案', t:'Travel Pass · 服务使用权', ic:'i-mask', c:'#7048e8', st:'有效', d:'含 4 幕剧情任务 · 双人成行', exp:'2026-12-31 前有效', act:'核销入园'},
+      {n:'安吉瑜伽谷 · 2天1夜', t:'Travel Pass · 服务使用权', ic:'i-yoga', c:'#0e9f8a', st:'已核销', d:'2026-05-02 于安吉云上草原核销', exp:'已完成体验', act:''},
+      {n:'城市探索官 · 数字成就', t:'Travel Pass · 数字成就', ic:'i-crown', c:'#e87722', st:'有效', d:'完成 6 城主题游解锁 · 联盟权益', exp:'长期有效', act:''},
+    ],
+    footprints:[
+    {c:'上海 · 朱家角', n:'江南谜案剧本游', d:'2026-04-12', ic:'i-pin'},
+    {c:'浙江 · 安吉', n:'瑜伽谷 2天1夜', d:'2026-05-02', ic:'i-pin'},
+    {c:'江西 · 婺源', n:'晒秋旅拍线', d:'2026-06-18', ic:'i-pin'},
+    {c:'江苏 · 苏州', n:'园林剧本游', d:'2026-08-09', ic:'i-pin'},
+    {c:'上海 · 黄浦', n:'一大会址红色剧本闯关', d:'2026-10-08', ic:'i-pin'},
+    {c:'浙江 · 德清', n:'莫干山亲子自然课', d:'2026-10-02', ic:'i-pin'},
+    {c:'上海 · 崇明', n:'单身露营 3天2夜', d:'2026-09-28', ic:'i-pin'},
+    {c:'浙江 · 舟山', n:'东极岛跳岛露营', d:'2026-09-14', ic:'i-pin'},
+    {c:'江苏 · 昆山', n:'周庄灯影剧本宴', d:'2026-08-24', ic:'i-pin'},
+    {c:'浙江 · 嘉兴', n:'乌镇姐姐夜宴', d:'2026-07-06', ic:'i-pin'},
+  ],
+    privacy:[
+      {n:'位置信息授权', d:'剧本 AR 任务与实地打卡必需', on:true, lock:true},
+      {n:'消费记录上链存证', d:'订单核验与贡献分计算依据', on:true, lock:true},
+      {n:'贡献数据分润计算', d:'推荐归因与合伙人佣金核算', on:true, lock:false},
+      {n:'个性化内容推荐', d:'基于偏好的线路与爆品推荐', on:false, lock:false},
+      {n:'营销活动推送', d:'新品与活动通知（可随时撤回）', on:false, lock:false},
+    ],
+  },
+  channels:[
+    {k:'all',     n:'全部分类',   mini:'向往的自由',        ic:'i-globe',  c:'#243b55'},
+    {k:'yoga',    n:'瑜伽之旅',   mini:'向往的自由·瑜伽纪',  ic:'i-yoga',   c:'#0e9f8a'},
+    {k:'sister',  n:'姐姐系列',   mini:'向往的自由·姐姐会',  ic:'i-dress',  c:'#d6336c'},
+    {k:'single',  n:'单身社交',   mini:'向往的自由·单身星球',ic:'i-heart',  c:'#e85d75'},
+    {k:'script',  n:'剧本闯关',   mini:'向往的自由·谜案社',  ic:'i-mask',   c:'#7048e8'},
+    {k:'sport',   n:'体育竞技',   mini:'向往的自由·竞技场',  ic:'i-run',    c:'#1c7ed6'},
+    {k:'family',  n:'亲子主题',   mini:'向往的自由·亲子营',  ic:'i-family', c:'#f59f00'},
+    {k:'red',     n:'红色文旅',   mini:'向往的自由·红色印记',ic:'i-flag',   c:'#c92a2a'},
+    {k:'abroad',  n:'出境主题',   mini:'向往的自由·世界线',  ic:'i-plane',  c:'#0c8599'},
+  ],
+  cats:[
+    {k:'yoga',   n:'瑜伽之旅', ic:'i-yoga',   c:'#0e9f8a'},
+    {k:'sister', n:'姐姐系列', ic:'i-dress',  c:'#d6336c'},
+    {k:'single', n:'单身社交', ic:'i-heart',  c:'#e85d75'},
+    {k:'script', n:'剧本闯关', ic:'i-mask',   c:'#7048e8'},
+    {k:'sport',  n:'体育竞技', ic:'i-run',    c:'#1c7ed6'},
+    {k:'family', n:'亲子主题', ic:'i-family', c:'#f59f00'},
+    {k:'red',    n:'红色文旅', ic:'i-flag',   c:'#c92a2a'},
+    {k:'abroad', n:'出境主题', ic:'i-plane',  c:'#0c8599'},
+  ],
+  tours:[
+    {id:1, cat:'yoga',  title:'安吉瑜伽谷 · 2天1夜',    c1:'#0e9f8a', c2:'#63e6be', ic:'i-yoga',   loc:'湖州·安吉',   days:'2天1夜', price:688,  earn:120, sold:2143, flags:['hot'],  desc:'竹林冥想 + 晨间流瑜伽 + 山野素食，学员互助社群', merch:'安吉瑜伽谷民宿'},
+    {id:2, cat:'script',title:'一大会址 · 红色剧本闯关', c1:'#c92a2a', c2:'#ff8787', ic:'i-mask',   loc:'上海·黄浦',   days:'半日',   price:168,  earn:30,  sold:3891, flags:['hot'],  desc:'扫码选角色 · AR 任务 · 沉浸解谜，红色文旅实景体验', merch:'一大会址·星文旅创'},
+    {id:3, cat:'sister',title:'苏州园林 · 姐姐茶会',    c1:'#d6336c', c2:'#faa2c1', ic:'i-dress',  loc:'苏州·姑苏',   days:'1天',    price:398,  earn:60,  sold:1520, flags:[],       desc:'旗袍拍摄 + 园林茶会 + 花艺，精致姐姐出片专场', merch:'苏州园林文旅'},
+    {id:4, cat:'single',title:'崇明岛单身露营 · 3天2夜', c1:'#e85d75', c2:'#ffc9c9', ic:'i-heart',  loc:'上海·崇明',   days:'3天2夜', price:1288, earn:200, sold:876,  flags:['new'],  desc:'破冰游戏 + 素人综艺 + 篝火晚会，单身社交实验', merch:'崇明营地联盟'},
+    {id:5, cat:'sport', title:'太湖皮划艇 · 竞技一日',   c1:'#1c7ed6', c2:'#74c0fc', ic:'i-run',    loc:'苏州·太湖',   days:'1天',    price:588,  earn:90,  sold:1104, flags:[],       desc:'水上闯关 + 团队接力 + 颁奖素人综艺', merch:'太湖水上运动中心'},
+    {id:6, cat:'script',title:'朱家角剧本游 · 江南谜案', c1:'#243b55', c2:'#7048e8', ic:'i-mask',   loc:'上海·青浦',   days:'1天',    price:298,  earn:50,  sold:2547, flags:['hot'],  desc:'实景搜证 · NPC 互动 · 多结局，样板景区深度剧本', merch:'安麓大夫第', script:true},
+    {id:7, cat:'family',title:'莫干山亲子自然课 · 2天1夜',c1:'#f59f00', c2:'#ffe066', ic:'i-family', loc:'湖州·德清',   days:'2天1夜', price:758,  earn:130, sold:967,  flags:[],       desc:'分龄自然课 + 农庄手作 + 亲子任务打卡', merch:'莫干山生态农庄'},
+    {id:8, cat:'sister',title:'婺源晒秋旅拍 · 3天2夜',   c1:'#e8590c', c2:'#ffd8a8', ic:'i-camera', loc:'上饶·婺源',   days:'3天2夜', price:1588, earn:260, sold:534,  flags:['new'],  desc:'晒秋大场景旅拍 + 徽派古村 + 后期精修交付', merch:'婺源旅拍工作室'},
+    {id:9, cat:'abroad',title:'巴厘岛瑜伽静修 · 6天5夜', c1:'#0c8599', c2:'#66d9e8', ic:'i-plane',  loc:'境外·巴厘岛', days:'6天5夜', price:6880, earn:800, sold:128,  flags:[],       desc:'海外静修营 · 境外主体独立结算（演示占位）', merch:'境外合作营地'},
+    {id:10,cat:'red',   title:'井冈山红色研学 · 3天2夜', c1:'#c92a2a', c2:'#f03e3e', ic:'i-flag',   loc:'江西·吉安',   days:'3天2夜', price:1098, earn:180, sold:412,  flags:[],       desc:'革命旧址研学 + 专题剧本 + 结业证书', merch:'井冈山红培中心'},
+    {id:11, cat:'sister', title:'上海武康路 · 姐姐街拍', c1:'#16233d', c2:'#b197fc', ic:'i-compass', loc:'上海·黄浦', days:'1天', price:268, earn:45, sold:1204, flags:['hot'], desc:'武康路梧桐线 + 老洋房讲解 + 街拍出片', merch:'上海城市行走社'},
+    {id:12, cat:'family', title:'武夷山 · 茶文化研学亲子营', c1:'#37542f', c2:'#8fb387', ic:'i-gift', loc:'南平·武夷山', days:'3天2夜', price:1888, earn:280, sold:342, flags:['new'], desc:'采茶制茶 + 焙火工艺 + 亲子茶席，含手工茶饼', merch:'武夷岩茶合作社'},
+    {id:13, cat:'sister', title:'乌镇水乡 · 姐姐夜宴', c1:'#4b3557', c2:'#a97fd1', ic:'i-dress', loc:'嘉兴·乌镇', days:'1天', price:598, earn:90, sold:1043, flags:['hot'], desc:'夜宴妆造 + 摇橹船 + 水幕剧场', merch:'乌镇文旅'},
+    {id:14, cat:'family', title:'崇明湿地 · 观鸟亲子', c1:'#a8e0f0', c2:'#7fc6cf', ic:'i-family', loc:'上海·崇明', days:'1天', price:428, earn:65, sold:712, flags:[], desc:'候鸟观测 + 自然笔记 + 湿地手作', merch:'崇明东滩营地'},
+    {id:15, cat:'red', title:'井冈山红色研学 · 3天2夜', c1:'#dcd9cf', c2:'#8e9a8c', ic:'i-flag', loc:'江西·吉安', days:'3天2夜', price:1098, earn:180, sold:412, flags:[], desc:'革命旧址研学 + 专题剧本 + 结业证书', merch:'井冈山红培中心'},
+    {id:16, cat:'sport', title:'莫干山越野 · 山地骑行', c1:'#d3e4ea', c2:'#9cb4a7', ic:'i-run', loc:'湖州·德清', days:'1天', price:468, earn:70, sold:489, flags:['new'], desc:'山地骑行 + 林道穿越 + 补给站', merch:'野径户外俱乐部'},
+    {id:17, cat:'script', title:'周庄夜游 · 灯影剧本宴', c1:'#4b3a63', c2:'#f0a878', ic:'i-mask', loc:'苏州·周庄', days:'半日', price:228, earn:40, sold:1866, flags:['hot'], desc:'夜游灯影 + 双线剧本 + 水幕谜题', merch:'周庄古镇文旅'},
+    {id:18, cat:'abroad', title:'京都枫庭 · 和风行走', c1:'#d8e8d6', c2:'#8fb387', ic:'i-plane', loc:'境外·京都', days:'5天4夜', price:8880, earn:980, sold:96, flags:[], desc:'庭园巡礼 + 和服街拍 + 茶室体验', merch:'境外合作地接'},
+    {id:19,cat:'yoga',  title:'千岛湖 · 桨板瑜伽水上晨课', c1:'#bfe6f5', c2:'#4f92ab', ic:'i-yoga',   loc:'杭州·淳安',   days:'1天',    price:468,  earn:70,  sold:1206, flags:['hot'],  desc:'桨板平衡 + 水上晨课 + 湖畔素食，湖心岛练习', merch:'千岛湖水上营地'},
+    {id:20,cat:'yoga',  title:'莫干山晨间瑜伽营 · 3天2夜', c1:'#d3e4ea', c2:'#9cb4a7', ic:'i-yoga',   loc:'湖州·德清',   days:'3天2夜', price:1188, earn:190, sold:742,  flags:[],       desc:'晨间流瑜伽 + 呼吸法 + 山野徒步，含静默早餐', merch:'莫干山生态农庄'},
+    {id:21,cat:'single',title:'苏州平江路 · 单身茶会',     c1:'#d5e6e4', c2:'#8ba5a1', ic:'i-heart',  loc:'苏州·姑苏',   days:'1天',    price:328,  earn:50,  sold:938,  flags:['new'],  desc:'双人破冰 + 评弹茶会 + 平江路夜游，1:1 社交配对', merch:'平江路茶事空间'},
+    {id:22,cat:'single',title:'舟山跳岛 · 单身旅拍 2天1夜',c1:'#a8e0f0', c2:'#7fc6cf', ic:'i-heart',  loc:'舟山·东极',   days:'2天1夜', price:1088, earn:170, sold:516,  flags:[],       desc:'跳岛船拍 + 篝火夜谈 + 定向配对，含专业跟拍', merch:'东极岛营地'},
+    {id:23,cat:'sport', title:'环太湖骑行挑战 · 100km',    c1:'#74c0fc', c2:'#1c7ed6', ic:'i-run',    loc:'苏州·太湖',   days:'1天',    price:388,  earn:60,  sold:1364, flags:['hot'],  desc:'分段骑行 + 3 个补给站 + 完赛奖牌，含保障车', merch:'太湖骑行俱乐部'},
+    {id:24,cat:'red',   title:'沙家浜芦苇荡 · 红色实景剧', c1:'#dcd9cf', c2:'#8e9a8c', ic:'i-flag',   loc:'苏州·常熟',   days:'1天',    price:258,  earn:40,  sold:1726, flags:[],       desc:'芦苇荡实景剧 + 阿庆嫂茶馆 + 摇橹船体验', merch:'沙家浜景区'},
+    {id:25,cat:'abroad',title:'清迈亲子自然营 · 5天4夜',   c1:'#d8e8d6', c2:'#8fb387', ic:'i-plane',  loc:'境外·清迈',   days:'5天4夜', price:7680, earn:900, sold:74,   flags:['new'],  desc:'大象保护营 + 丛林飞跃 + 泰北手作，境外地接承保', merch:'境外合作地接'},
+  ],
+  scriptData:{
+    name:'江南谜案 · 一炁茶庄', place:'朱家角 · 放生桥—北大街—安麓大夫第',
+    roles:[
+      {n:'账房先生', d:'精于算计，掌管茶庄账本秘密', ic:'i-money', c:'#f59f00', clue:'ledger'},
+      {n:'戏班花旦', d:'台前幕后，人脉遍布漕港两岸', ic:'i-mask',  c:'#d6336c', clue:'opera'},
+      {n:'茶楼伙计', d:'消息灵通，听闻夜半异响',     ic:'i-store', c:'#0e9f8a', clue:'lamp'},
+      {n:'报社记者', d:'追查失踪案，手握半张船票',   ic:'i-pen',   c:'#1c7ed6', clue:'halfnews'},
+    ],
+    tasks:[
+      {n:'放生桥签到', s:'AR 扫码解锁第一章 · 获取线索「漕港夜话」', ic:'i-aim', done:true},
+      {n:'北大街暗号', s:'与 NPC 茶博士对上接头暗号，换取旧照片',   ic:'i-users', done:true},
+      {n:'大夫第搜证', s:'在安麓大夫第实景中搜证，指认真凶',       ic:'i-search', done:false},
+      {n:'邮局寄信',   s:'将真相写入密信寄出，触发多结局分支',       ic:'i-doc',   done:false},
+    ],
+    reward:'通关获数字徽章「江南谜案人」+ 50 旅豆，集齐同系列徽章解锁隐藏剧情',
+    /* ===== 可玩链路数据（对应方案 §10.2 Travel Experience Engine：剧本任务/地图/签到/剧情分支/成就）===== */
+    nodes:[
+      {id:'bridge',  n:'放生桥',     d:'漕港河上 · 剧情起点',     x:15, y:72, sc:'watertown', clue:'ticket',  act:'签到'},
+      {id:'street',  n:'北大街',     d:'老茶馆 · NPC 茶博士',     x:41, y:44, sc:'tea',       clue:'photo',   act:'对话', npc:'tea'},
+      {id:'mansion', n:'安麓大夫第', d:'实景搜证 · 指认真凶',     x:68, y:60, sc:'garden',    clue:'seal',    act:'搜证'},
+      {id:'post',    n:'朱家角邮局', d:'寄出密信 · 触发多结局',   x:87, y:32, sc:'stage',     clue:null,      act:'抉择'},
+    ],
+    npcs:[
+      {id:'tea', n:'茶博士', d:'北大街老茶馆的说书人', ic:'i-users', c:'#0e9f8a',
+       greet:'后生，想打听一炁茶庄的事？先过老夫这一关——答对三道茶的滋味，才配听下文。',
+       q:'一炁茶庄待客，三道茶按什么次序上？',
+       opts:[
+         {t:'甜 → 苦 → 回味', r:false, fb:'不对。甜在前头，客人第三道就散场咯。'},
+         {t:'苦 → 甜 → 回味', r:true,  fb:'不错！一苦二甜三回味，正是人生三味。拿去——这张旧照片，是失踪者临走前落下的。'},
+         {t:'苦 → 苦 → 苦', r:false, fb:'胡闹！三道茶道道苦，谁还来喝茶？'},
+       ]},
+    ],
+    clues:[
+      {id:'ticket',   n:'半张船票',     d:'放生桥桥洞拾得 · 目的地写着「城外码头」',   ic:'i-doc',    c:'#243b55'},
+      {id:'photo',    n:'褪色旧照片',   d:'茶庄东家与一位外地客商在码头握手',         ic:'i-image',  c:'#1c7ed6'},
+      {id:'seal',     n:'带印泥的剪刀', d:'大夫第厢房窗台找到，剪口对着地契匣',       ic:'i-search', c:'#0f766e'},
+      {id:'ledger',   n:'半页庄账',     d:'近三月亏空，一笔银子流向城外码头',         ic:'i-money',  c:'#f59f00'},
+      {id:'opera',    n:'戏班戏单',     d:'失踪当晚有人包场，点曲《夜宴图》',         ic:'i-mask',   c:'#7048e8'},
+      {id:'lamp',     n:'打更人证词',   d:'东家夜半提桐油灯，去码头与客商会面',       ic:'i-bolt',   c:'#e8590c'},
+      {id:'halfnews', n:'未完成的稿子', d:'“……茶庄地契疑云，疑与商会有关”',         ic:'i-pen',    c:'#d6336c'},
+    ],
+    suspects:[
+      {id:'boss',   n:'茶庄大掌柜',   d:'掌管茶庄日常 · 账目亏空的经手人'},
+      {id:'troupe', n:'戏班班主',     d:'包场《夜宴图》的指使者'},
+      {id:'guild',  n:'码头商会会长', d:'觊觎茶庄地契的外地客商领头'},
+    ],
+    truth:'guild',
+    endings:[
+      {id:'truth', n:'真相大白', d:'集齐 3 条以上线索 · 指认真凶 · 寄出真相', bean:80, badge:'江南谜案人', extra:'解锁隐藏剧情「漕港夜话」'},
+      {id:'safe',  n:'明哲保身', d:'指认真凶 · 但选择私藏线索',               bean:50, badge:'江南谜案人', extra:''},
+      {id:'miss',  n:'遗憾迷途', d:'指认错误 · 真相再度沉入漕港',             bean:20, badge:'谜案参与者', extra:'集齐更多线索后可以重玩'},
+    ],
+  },
+  badges:[
+    {n:'瑜伽修行者', ic:'i-yoga', c:'#0e9f8a', got:true, date:'2026-09-20', cond:'完成任一瑜伽主题游', hash:'0x7f3a…c91d'},
+    {n:'红色传承者', ic:'i-flag', c:'#c92a2a', got:true, date:'2026-10-02', cond:'完成一大会址剧本闯关', hash:'0x2b8e…4a07'},
+    {n:'江南谜案人', ic:'i-mask', c:'#7048e8', got:true, date:'2026-10-08', cond:'通关朱家角剧本游', hash:'0x9d41…77f2'},
+    {n:'露营达人', ic:'i-heart', c:'#e85d75', got:true, date:'2026-08-15', cond:'完成任一露营主题游', hash:'0x41c0…e835'},
+    {n:'晒秋摄影师', ic:'i-camera', c:'#e8590c', got:true, date:'2026-09-20', cond:'完成婺源晒秋旅拍', hash:'0x6a52…18bd'},
+    {n:'亲子同行者', ic:'i-family', c:'#f59f00', got:true, date:'2026-10-02', cond:'完成莫干山亲子自然课', hash:'0x3c84…d027'},
+    {n:'水上玩家', ic:'i-run', c:'#1c7ed6', got:true, date:'2026-09-14', cond:'完成 2 次水上竞技线路', hash:'0x8e17…5ba9'},
+    {n:'姐姐茶客', ic:'i-dress', c:'#d6336c', got:false, date:'', cond:'完成苏州园林姐姐茶会', hash:''},
+    {n:'体育健将', ic:'i-run', c:'#1c7ed6', got:true, date:'2026-10-19', cond:'完成太湖皮划艇竞技一日', hash:'0x0f6d…e314'},
+    {n:'环球探索家', ic:'i-globe', c:'#243b55', got:false, date:'', cond:'集齐前 7 枚徽章自动解锁', hash:''},
+    {n:'夜游收藏家', ic:'i-star', c:'#4b3557', got:true, date:'2026-10-17', cond:'完成 3 场夜游剧本', hash:'0xb2f0…6c88'},
+    {n:'内容创作者', ic:'i-pen', c:'#0c8599', got:true, date:'2026-09-26', cond:'累计 5 篇内容被平台推荐', hash:'0x57ae…93f1'},
+    {n:'邀请达人', ic:'i-users', c:'#f5a623', got:false, date:'', cond:'成功邀请 10 位好友注册', hash:''},
+    {n:'碳中和旅人', ic:'i-compass', c:'#0e9f8a', got:false, date:'', cond:'完成 5 条低碳出行线路', hash:''},
+  ],
+  products:[
+    {id:1, n:'安吉竹径 · 瑜伽随行套装', d:'便携瑜伽垫 + 竹纤维毛巾 + 收纳带', price:199, op:299, ic:'i-yoga', c1:'#0e9f8a', c2:'#63e6be', bean:'豆抵 10%', sold:3261, tags:['爆品','源头直供']},
+    {id:2, n:'婺源晒秋 · 旅拍披肩', d:'民族风羊毛披肩 · 旅拍出片神器', price:129, op:169, ic:'i-camera', c1:'#e8590c', c2:'#ffd8a8', bean:'豆抵 5%', sold:1874, tags:['旅拍场景']},
+    {id:3, n:'太湖桨板 · 速干防晒套装', d:'速干衣 + 防晒冰袖 + 防水手机袋', price:259, op:329, ic:'i-run', c1:'#1c7ed6', c2:'#74c0fc', bean:'豆抵 10%', sold:1520, tags:['爆品','户外']},
+    {id:4, n:'朱家角文创茶礼「谜案」限定', d:'谜案主题茶礼 · 剧本游同款', price:168, op:198, ic:'i-gift', c1:'#7048e8', c2:'#b197fc', bean:'豆抵 8%', sold:942, tags:['景区文创']},
+    {id:5, n:'莫干山 · 亲子自然手作包', d:'分龄手作材料包 · 自然教育联名', price:89, op:119, ic:'i-family', c1:'#f59f00', c2:'#ffe066', bean:'豆抵 5%', sold:2210, tags:['亲子']},
+    {id:6, n:'户外便携 · 折叠露营灯', d:'磁吸折叠 · 营地夜话氛围灯', price:79, op:99, ic:'i-bolt', c1:'#243b55', c2:'#4a6a8a', bean:'豆抵 10%', sold:4603, tags:['爆品','露营']},
+    {id:7, n:'周庄灯影 · 手作油纸灯', d:'非遗匠人手工裱糊 · 可折叠带走', price:139, op:189, ic:'i-bolt', c1:'#4b3557', c2:'#a97fd1', bean:'豆抵 8%', sold:1176, tags:['景区文创','非遗']},
+    {id:8, n:'一大会址 · 红色研学笔记本', d:'建党主题烫金封面 · 内附研学任务页', price:49, op:69, ic:'i-doc', c1:'#c92a2a', c2:'#ff8787', bean:'豆抵 5%', sold:2847, tags:['红色文旅']},
+    {id:9, n:'武夷岩茶 · 手作肉桂礼盒', d:'正岩肉桂 250g · 采制研学同款', price:328, op:398, ic:'i-gift', c1:'#37542f', c2:'#8fb387', bean:'豆抵 12%', sold:531, tags:['源头直供']},
+    {id:10, n:'海岛防晒 · 硬核隔离喷雾', d:'SPF50+ 防水型 · 跳岛必备', price:99, op:139, ic:'i-shield', c1:'#a8e0f0', c2:'#7fc6cf', bean:'豆抵 10%', sold:1932, tags:['户外','旅拍场景']},
+    {id:11, n:'苏州园林 · 苏绣团扇', d:'手工苏绣双面绣 · 园林出片道具', price:189, op:239, ic:'i-dress', c1:'#d6336c', c2:'#faa2c1', bean:'豆抵 8%', sold:764, tags:['景区文创','非遗']},
+    {id:12, n:'徒步轻量 · 折叠登山杖', d:'铝合金三节 · 收合 36cm', price:159, op:219, ic:'i-compass', c1:'#5f8168', c2:'#9cb4a7', bean:'豆抵 10%', sold:1088, tags:['户外']},
+  ],
+  txLog:[
+    {d:'安吉瑜伽谷 · 消费奖励', t:'2026-10-16', a:'+120', p:'plus', chain:'0x8c2d…a41b'},
+    {d:'UGC 游记被推荐奖励', t:'2026-10-14', a:'+50', p:'plus', chain:'0x3e91…7d02'},
+    {d:'兑换景区门票折扣', t:'2026-10-12', a:'-200', p:'minus', chain:''},
+    {d:'红色剧本闯关完成', t:'2026-10-10', a:'+30', p:'plus', chain:'0x1a4f…9c33'},
+    {d:'解锁隐藏剧情 · 漕港夜话', t:'2026-10-06', a:'-80', p:'minus', chain:''},
+    {d:'商城购物返豆', t:'2026-10-04', a:'+19', p:'plus', chain:''},
+    {d:'每日签到任务', t:'2026-10-01', a:'+10', p:'plus', chain:'0x6d02…8b1f'},
+    {d:'周庄夜游 · 消费奖励', t:'2026-09-28', a:'+40', p:'plus', chain:'0xb713…2e64'},
+    {d:'短视频带货佣金结算', t:'2026-09-26', a:'+186', p:'plus', chain:'0x5f88…c019'},
+    {d:'兑换文创茶礼「谜案」', t:'2026-09-22', a:'-168', p:'minus', chain:''},
+    {d:'邀请好友注册奖励', t:'2026-09-18', a:'+60', p:'plus', chain:'0x93ce…4a77'},
+    {d:'莫干山亲子游 · 消费奖励', t:'2026-09-14', a:'+100', p:'plus', chain:'0x27a1…6d55'},
+    {d:'连续签到 7 天加赠', t:'2026-09-10', a:'+30', p:'plus', chain:'0x4e6b…11c8'},
+    {d:'婺源晒秋 · 消费奖励', t:'2026-09-06', a:'+260', p:'plus', chain:'0xa05d…73e2'},
+    {d:'兑换防晒冰袖', t:'2026-09-02', a:'-59', p:'minus', chain:''},
+    {d:'游记授权费结算', t:'2026-08-28', a:'+50', p:'plus', chain:'0x1c74…9a30'},
+    {d:'崇明露营 · 消费奖励', t:'2026-08-24', a:'+200', p:'plus', chain:'0x8f2e…b6d1'},
+    {d:'解锁徽章「露营达人」', t:'2026-08-15', a:'+20', p:'plus', chain:'0x30ba…5f92'},
+    {d:'商城购物返豆', t:'2026-08-09', a:'+26', p:'plus', chain:''},
+    {d:'苏州园林 · 消费奖励', t:'2026-08-02', a:'+60', p:'plus', chain:'0x7d19…ec44'},
+    {d:'每日签到任务', t:'2026-07-28', a:'+10', p:'plus', chain:'0x62f5…0a83'},
+    {d:'安吉瑜伽谷 · 消费奖励', t:'2026-07-19', a:'+120', p:'plus', chain:'0x9b4c…27de'},
+    {d:'新人礼包发放', t:'2026-07-12', a:'+200', p:'plus', chain:'0x55a8…9c1b'},
+    {d:'兑换旅拍披肩', t:'2026-07-05', a:'-129', p:'minus', chain:''},
+  ],
+  visitorOrders:[
+    {n:'朱家角剧本游 · 江南谜案', d:'今天 14:00', price:298, bean:50, status:'待核销', code:'884213', merch:'安麓大夫第', sc:'stage', ppl:2},
+    {n:'苏州园林 · 姐姐茶会', d:'明天 10:30', price:398, bean:60, status:'待核销', code:'662047', merch:'苏州园林文旅', sc:'garden', ppl:2},
+    {n:'周庄夜游 · 灯影剧本宴', d:'10-24 19:00', price:228, bean:40, status:'待核销', code:'431882', merch:'周庄古镇文旅', sc:'watertown', ppl:2},
+    {n:'太湖皮划艇 · 竞技一日', d:'10-26 08:30', price:588, bean:90, status:'待核销', code:'205719', merch:'太湖水上运动中心', sc:'lake', ppl:2},
+    {n:'太湖皮划艇 · 竞技一日', d:'10-19 09:00', price:588, bean:90, status:'已核销', code:'290671', merch:'太湖水上运动中心', sc:'lake', ppl:2},
+    {n:'安吉瑜伽谷 · 2天1夜', d:'10-12 09:00', price:688, bean:120, status:'已核销', code:'771902', merch:'安吉瑜伽谷民宿', sc:'bamboo', ppl:2},
+    {n:'一大会址 · 红色剧本闯关', d:'10-08 13:30', price:168, bean:30, status:'已完成', code:'550318', merch:'一大会址·星文旅创', sc:'redhall', ppl:1},
+    {n:'莫干山亲子自然课 · 2天1夜', d:'10-02 09:00', price:758, bean:100, status:'已完成', code:'118904', merch:'莫干山生态农庄', sc:'mountain', ppl:3},
+    {n:'崇明岛单身露营 · 3天2夜', d:'09-28 15:00', price:1288, bean:200, status:'已完成', code:'973316', merch:'崇明营地联盟', sc:'camp', ppl:1},
+    {n:'婺源晒秋旅拍 · 3天2夜', d:'09-20 08:00', price:1588, bean:260, status:'已完成', code:'842755', merch:'婺源旅拍工作室', sc:'autumn', ppl:2},
+    {n:'舟山群岛 · 跳岛露营', d:'09-14 07:30', price:988, bean:150, status:'已完成', code:'620431', merch:'东极岛营地', sc:'island', ppl:2},
+    {n:'朱家角剧本游 · 江南谜案', d:'08-30 14:00', price:298, bean:50, status:'已完成', code:'509183', merch:'安麓大夫第', sc:'stage', ppl:2},
+    {n:'苏州园林 · 姐姐茶会', d:'08-16 10:30', price:398, bean:60, status:'已完成', code:'337620', merch:'苏州园林文旅', sc:'garden', ppl:1},
+    {n:'安吉瑜伽谷 · 2天1夜', d:'07-19 09:00', price:688, bean:120, status:'已完成', code:'194502', merch:'安吉瑜伽谷民宿', sc:'bamboo', ppl:2},
+    {n:'黄山云海 · 徒步摄影', d:'06-21 06:00', price:828, bean:130, status:'已完成', code:'786134', merch:'黄山云谷山庄', sc:'mountain', ppl:2},
+    {n:'一大会址 · 红色剧本闯关', d:'05-04 13:30', price:168, bean:30, status:'退款', code:'415908', merch:'一大会址·星文旅创', sc:'redhall', ppl:1},
+  ],
+  myWorks:[
+    {n:'《朱家角谜案通关攻略》', t:'图文游记 · 被平台推荐', earn:'+50 豆', extra:'授权费待结算', ic:'i-doc', c1:'#7048e8', c2:'#b197fc'},
+    {n:'短视频：晒秋旅拍Vlog', t:'视频 · 带单转化 12 笔', earn:'+¥186', extra:'佣金已发放', ic:'i-video', c1:'#e8590c', c2:'#ffd8a8'},
+    {n:'图文：安吉瑜伽谷避坑', t:'图文游记 · 被平台推荐', earn:'+50 豆', extra:'授权费待结算', ic:'i-image', c1:'#0e9f8a', c2:'#63e6be'},
+    {n:'短视频：周庄夜游灯影宴', t:'视频 · 带单转化 8 笔', earn:'+¥124', extra:'佣金已发放', ic:'i-video', c1:'#243b55', c2:'#7048e8'},
+    {n:'《婺源晒秋机位地图》', t:'图文游记 · 收藏 1,204 次', earn:'+80 豆', extra:'平台买断已结算', ic:'i-doc', c1:'#e8590c', c2:'#ffd8a8'},
+    {n:'图文：崇明露营装备清单', t:'图文游记 · 带单转化 5 笔', earn:'+¥78', extra:'佣金已发放', ic:'i-image', c1:'#e85d75', c2:'#ffc9c9'},
+    {n:'短视频：太湖桨板翻滚教学', t:'视频 · 播放 3.2 万', earn:'+60 豆', extra:'授权费待结算', ic:'i-video', c1:'#1c7ed6', c2:'#74c0fc'},
+    {n:'《一大会址研学作业单》', t:'教育内容 · 校方采购 6 份', earn:'+¥240', extra:'已结算', ic:'i-doc', c1:'#c92a2a', c2:'#ff8787'},
+    {n:'图文：莫干山亲子三日', t:'图文游记 · 被平台推荐', earn:'+50 豆', extra:'授权费待结算', ic:'i-image', c1:'#f59f00', c2:'#ffe066'},
+    {n:'短视频：朱家角 NPC 名场面', t:'视频 · 带单转化 3 笔', earn:'+¥46', extra:'佣金已发放', ic:'i-video', c1:'#7048e8', c2:'#b197fc'},
+  ],
+  /* st: todo 待领取 / doing 进行中（已领取待交付）/ review 审核中 / done 已完成 */
+  missions:[
+    {id:1, n:'朱家角深度攻略约稿', d:'发布含归因链接的图文游记，被推荐后得 200 豆 + 内容授权费', rw:'200 豆 + 授权费', st:'todo', deadline:'11-05', need:'图文 ≥800字 · 含归因链接', by:'朱家角文旅办'},
+    {id:2, n:'素人综艺素材征集', d:'上传旅拍短视频，入选素材仓库超市得流量分成', rw:'流量分成 + 100 豆', st:'todo', deadline:'11-12', need:'竖屏短视频 ≥15s', by:'平台素材超市'},
+    {id:3, n:'亲子分龄体验反馈', d:'完成莫干山亲子游后提交分龄体验报告', rw:'80 豆', st:'todo', deadline:'11-02', need:'结构化问卷 · 200字', by:'莫干山亲子营地'},
+    {id:4, n:'周庄夜游 · 灯影机位共创', d:'提交 3 组夜景机位图与拍摄参数', rw:'120 豆 + 授权费', st:'todo', deadline:'11-08', need:'3 张原图 · 含 EXIF', by:'周庄古镇文旅'},
+    {id:5, n:'太湖桨板 · 安全指引校对', d:'校对新手安全卡文案并补充实操要点', rw:'60 豆', st:'todo', deadline:'11-10', need:'逐条批注 · 不少于 8 条', by:'太湖水上运动中心'},
+    {id:6, n:'婺源晒秋 · 旅拍路线实测', d:'实地跑通 3 条旅拍动线并标注最佳时段', rw:'300 豆 + ¥200', st:'doing', deadline:'10-28', need:'含时段表与站位图', by:'婺源旅拍工作室'},
+    {id:7, n:'安吉瑜伽谷 · 营地氛围短片', d:'拍摄 60s 营地晨间氛围短片', rw:'¥400 + 200 豆', st:'doing', deadline:'10-30', need:'4K · 含空镜 5 段', by:'安吉瑜伽谷民宿'},
+    {id:8, n:'一大会址 · 研学作业单迭代', d:'按校方反馈修订第二版研学作业单', rw:'¥240', st:'review', deadline:'10-22', need:'覆盖 3 个年级分层', by:'一大会址·星文旅创'},
+    {id:9, n:'崇明露营 · 装备清单复核', d:'复核 24 项装备清单的适用季节与替代方案', rw:'90 豆', st:'review', deadline:'10-23', need:'逐项标注替代品', by:'崇明营地联盟'},
+    {id:10, n:'黄山云海 · 徒步摄影攻略', d:'产出日出机位与徒步时间轴攻略', rw:'¥300', st:'done', deadline:'09-30', need:'含 6 处机位坐标', by:'黄山云谷山庄'},
+    {id:11, n:'苏州园林 · 旗袍拍摄指南', d:'产出园林旗袍机位与光线指南', rw:'150 豆 + ¥150', st:'done', deadline:'09-18', need:'含 8 处机位', by:'苏州园林文旅'},
+    {id:12, n:'朱家角 NPC 名场面剪辑', d:'剪辑剧本游 NPC 高光片段 12 条', rw:'¥500', st:'done', deadline:'09-05', need:'9:16 竖屏 · 带字幕', by:'安麓大夫第'},
+  ],
+  partner:{
+    /* 汇总一律与 referrals 明细对齐：16 人 / 143 单 / 月返佣 ¥13,884
+       且 totalEarn 98,340 − 已提现 78,600 = withdrawable 19,740（对账闭环） */
+    level:'黄金合伙人', rate:8, role:'导游', downline:16, monthEarn:13884, totalEarn:98340,
+    withdrawable:19740, orders:143, inviteCode:'XF2026', inviteLink:'https://xwzzy.cn/i/XF2026',
+    referrals:[
+    {n:'瑜伽馆·李店长', role:'线下收客 · 门店合伙人', gmv:15750, orders:12, v:1260, ic:'i-store', c:'#0e9f8a'},
+    {n:'咖啡店·小王', role:'门店收客 · 门店合伙人', gmv:9750, orders:8, v:780, ic:'i-store', c:'#7048e8'},
+    {n:'兼职导游·陈姐', role:'线上收客 · 零工合伙人', gmv:6500, orders:5, v:520, ic:'i-compass', c:'#1c7ed6'},
+    {n:'大学生·小林', role:'校园推广 · 高校合伙人', gmv:4500, orders:3, v:360, ic:'i-user', c:'#f59f00'},
+    {n:'领队·王哥', role:'带队转化 · 零工合伙人', gmv:8200, orders:9, v:656, ic:'i-users', c:'#0c8599'},
+    {n:'司机·老周', role:'车队收客 · 零工合伙人', gmv:3600, orders:6, v:288, ic:'i-run', c:'#495057'},
+    {n:'民宿·云栖小院', role:'住宿联动 · 门店合伙人', gmv:18400, orders:14, v:1472, ic:'i-home', c:'#5f8168'},
+    {n:'茶馆·一炁茶庄', role:'剧本联动 · 景点合伙人', gmv:22650, orders:19, v:1812, ic:'i-gift', c:'#7048e8'},
+    {n:'摄影师·阿哲', role:'旅拍收客 · 零工合伙人', gmv:11200, orders:7, v:896, ic:'i-camera', c:'#e8590c'},
+    {n:'亲子社群·豆妈', role:'社群团购 · 高校合伙人', gmv:8800, orders:11, v:704, ic:'i-users', c:'#f59f00'},
+    {n:'健身房·燃力', role:'运动客群 · 门店合伙人', gmv:6300, orders:4, v:504, ic:'i-bolt', c:'#1c7ed6'},
+    {n:'讲解员·小许', role:'景区讲解 · 零工合伙人', gmv:4200, orders:5, v:336, ic:'i-compass', c:'#2f6f9f'},
+    {n:'文创店·拾光', role:'二销联动 · 景点合伙人', gmv:5400, orders:8, v:432, ic:'i-bag', c:'#d6336c'},
+    {n:'户外俱乐部·野径', role:'线路分销 · 线路批发合伙人', gmv:26800, orders:16, v:2144, ic:'i-route', c:'#37542f'},
+    {n:'酒店·青浦雅集', role:'住宿联动 · 门店合伙人', gmv:14300, orders:10, v:1144, ic:'i-home', c:'#0c8599'},
+    {n:'瑜伽老师·Nina', role:'课程收客 · 零工合伙人', gmv:7200, orders:6, v:576, ic:'i-yoga', c:'#0e9f8a'},
+  ],
+  },
+  partnerLevels:[
+    {n:'青铜合伙人', rate:3,  cond:'注册并完成实名认证',                ic:'i-badge', c:'#b87333'},
+    {n:'白银合伙人', rate:5,  cond:'下线 ≥ 3 人 或 月关联 GMV ≥ ¥3,000',  ic:'i-badge', c:'#adb5bd'},
+    {n:'黄金合伙人', rate:8,  cond:'下线 ≥ 8 人 且 月关联 GMV ≥ ¥12,000', ic:'i-crown', c:'#f5a623', cur:true},
+    {n:'钻石合伙人', rate:12, cond:'下线 ≥ 25 人 且 月关联 GMV ≥ ¥50,000',ic:'i-star',  c:'#7048e8'},
+    {n:'黑金合伙人', rate:16, cond:'下线 ≥ 60 人 且 月关联 GMV ≥ ¥150,000',ic:'i-crown',c:'#243b55'},
+  ],
+  partnerTypes:[
+    {n:'零工合伙人',     d:'导游 / 讲解员 / 店员 / 领队 / 司机 / 非遗老师 / NPC', ic:'i-users',  c:'#2f6f9f'},
+    {n:'门店合伙人',     d:'咖啡店 / 餐饮店 / 日咖夜酒收客点，零成本挂靠',      ic:'i-store',  c:'#0e9f8a'},
+    {n:'高校合伙人',     d:'大学生兼职校园推广，寒暑假集中转化',               ic:'i-user',   c:'#f59f00'},
+    {n:'景点合伙人',     d:'景区周边实体，共建收客与二销场景',                 ic:'i-map',    c:'#c92a2a'},
+    {n:'城市合伙人',     d:'负责区域招商与运营，合同约定服务费 + 业绩佣金',     ic:'i-crown',  c:'#7048e8'},
+    {n:'线路批发合伙人', d:'掌握本地优质资源的线路供应商，分销主题游产品',     ic:'i-layers', c:'#243b55'},
+  ],
+  partnerBills:[
+    {m:'2026-10', amt:13884, st:'待结算', d:'消费返佣 ¥13,784 + 内容策划分润 ¥100'},
+    {m:'2026-09', amt:16848, st:'已结算', d:'消费返佣 ¥16,748 + 内容策划分润 ¥100'},
+    {m:'2026-08', amt:10584, st:'已结算', d:'消费返佣 ¥10,584'},
+    {m:'2026-07', amt:13392, st:'已结算', d:'消费返佣 ¥13,242 + 内容策划分润 ¥150'},
+    {m:'2026-06', amt:9288, st:'已结算', d:'消费返佣 ¥9,288'},
+    {m:'2026-05', amt:11664, st:'已结算', d:'消费返佣 ¥11,564 + 新客激励 ¥100'},
+    {m:'2026-04', amt:7776, st:'已结算', d:'消费返佣 ¥7,776'},
+    {m:'2026-03', amt:5832, st:'已结算', d:'消费返佣 ¥5,832'},
+    {m:'2026-02', amt:4104, st:'已结算', d:'消费返佣 ¥4,104'},
+    {m:'2026-01', amt:4968, st:'已结算', d:'消费返佣 ¥4,968'},
+  ],
+  withdrawLog:[
+    {d:'提现到微信 · 尾号6621', t:'2026-10-12', a:'-¥4,200', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-09-28', a:'-¥16,200', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-09-12', a:'-¥9,800', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-08-30', a:'-¥10,000', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-08-15', a:'-¥7,400', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-07-28', a:'-¥12,800', st:'成功'},
+    {d:'提现到支付宝 · 尾号0092', t:'2026-07-10', a:'-¥9,200', st:'成功'},
+    {d:'提现到微信 · 尾号6621', t:'2026-06-22', a:'-¥5,856', st:'失败·账户名不符'},
+    {d:'提现到微信 · 尾号6621', t:'2026-06-20', a:'-¥9,000', st:'成功'},
+  ],
+  merch:{
+    name:'安麓大夫第 · 朱家角店', id:'M20250312', auth:true, rating:4.9,
+    /* 单店口径必须小于平台大盘：平台日均 ~46 单，头部商户约占三成 → 14 单 / ¥4,586 */
+    today:14, gmv:4586, pending:6, beans:3200, monthOrders:412,
+    orders:[
+    {n:'朱家角剧本游 · 江南谜案', visitor:'张女士', tm:'今天 14:00', status:'待核销', paid:'¥298', code:'884213', bean:0, sc:'watertown'},
+    {n:'苏州园林 · 姐姐茶会', visitor:'沈女士', tm:'今天 13:20', status:'待核销', paid:'¥398', code:'662047', bean:'-60', sc:'garden'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'周先生', tm:'今天 11:26', status:'待核销', paid:'¥256', code:'774512', bean:'-42', sc:'stage'},
+    {n:'周庄夜游 · 灯影剧本宴', visitor:'许先生', tm:'今天 10:05', status:'待核销', paid:'¥228', code:'431882', bean:0, sc:'watertown'},
+    {n:'太湖皮划艇 · 竞技一日', visitor:'陆先生', tm:'今天 09:12', status:'待核销', paid:'¥588', code:'205719', bean:0, sc:'lake'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'钱女士', tm:'今天 08:40', status:'待核销', paid:'¥298', code:'913674', bean:'-50', sc:'stage'},
+    {n:'太湖皮划艇 · 竞技一日', visitor:'郑先生', tm:'昨天 16:10', status:'已核销', paid:'¥588', code:'290671', bean:0, sc:'lake'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'冯女士', tm:'昨天 15:32', status:'已核销', paid:'¥298', code:'607155', bean:'-50', sc:'stage'},
+    {n:'安吉瑜伽谷 · 2天1夜', visitor:'李女士', tm:'昨天 16:40', status:'已核销', paid:'¥688', code:'771902', bean:'-120', sc:'bamboo'},
+    {n:'周庄夜游 · 灯影剧本宴', visitor:'吴女士', tm:'昨天 19:02', status:'已核销', paid:'¥228', code:'330918', bean:0, sc:'watertown'},
+    {n:'乌镇水乡 · 姐姐夜宴', visitor:'韩女士', tm:'10-17 19:40', status:'已核销', paid:'¥598', code:'258013', bean:'-90', sc:'watertown'},
+    {n:'苏州园林 · 姐姐茶会', visitor:'杨女士', tm:'10-17 11:05', status:'已核销', paid:'¥398', code:'742889', bean:'-60', sc:'garden'},
+    {n:'太湖皮划艇 · 竞技一日', visitor:'郑先生', tm:'10-16 09:30', status:'已核销', paid:'¥588', code:'221746', bean:0, sc:'lake'},
+    {n:'莫干山亲子自然课 · 2天1夜', visitor:'陈女士', tm:'10-15 10:12', status:'退款', paid:'¥758', code:'908341', bean:0, sc:'mountain'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'朱先生', tm:'10-14 14:20', status:'已核销', paid:'¥298', code:'516402', bean:'-50', sc:'stage'},
+    {n:'安吉瑜伽谷 · 2天1夜', visitor:'何女士', tm:'10-13 09:00', status:'已核销', paid:'¥688', code:'380176', bean:'-120', sc:'bamboo'},
+    {n:'周庄夜游 · 灯影剧本宴', visitor:'吕先生', tm:'10-12 18:36', status:'已核销', paid:'¥228', code:'675930', bean:0, sc:'watertown'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'施女士', tm:'10-11 15:48', status:'已核销', paid:'¥298', code:'492017', bean:'-50', sc:'stage'},
+    {n:'苏州园林 · 姐姐茶会', visitor:'孔女士', tm:'10-10 11:22', status:'已核销', paid:'¥398', code:'168845', bean:'-60', sc:'garden'},
+    {n:'黄山云海 · 徒步摄影', visitor:'曹先生', tm:'10-08 06:40', status:'已核销', paid:'¥828', code:'786134', bean:'-130', sc:'mountain'},
+    {n:'婺源晒秋旅拍 · 3天2夜', visitor:'严女士', tm:'10-06 08:15', status:'退款', paid:'¥1588', code:'842755', bean:0, sc:'autumn'},
+    {n:'朱家角剧本游 · 江南谜案', visitor:'华先生', tm:'10-05 13:50', status:'已核销', paid:'¥298', code:'529308', bean:'-50', sc:'stage'},
+    {n:'一大会址 · 红色剧本闯关', visitor:'金先生', tm:'10-04 13:30', status:'已核销', paid:'¥168', code:'550318', bean:'-30', sc:'redhall'},
+    {n:'太湖皮划艇 · 竞技一日', visitor:'魏先生', tm:'10-03 08:20', status:'退款', paid:'¥588', code:'205718', bean:0, sc:'lake'},
+  ],
+    stock:[
+    {n:'朱家角剧本游 · 江南谜案', left:32, total:80, date:'10-25 周六', price:298},
+    {n:'周庄夜游 · 灯影剧本宴', left:48, total:100, date:'10-26 周日', price:228},
+    {n:'安吉瑜伽谷 · 2天1夜', left:6, total:40, date:'11-01 周六', price:688, warn:true},
+    {n:'太湖皮划艇 · 竞技一日', left:18, total:50, date:'10-26 周日', price:588},
+    {n:'苏州园林 · 姐姐茶会', left:12, total:60, date:'10-24 周六', price:398, warn:true},
+    {n:'婺源晒秋旅拍 · 3天2夜', left:26, total:40, date:'11-08 周六', price:1588},
+    {n:'莫干山亲子自然课 · 2天1夜', left:22, total:50, date:'11-02 周日', price:758},
+    {n:'乌镇水乡 · 姐姐夜宴', left:34, total:80, date:'10-31 周六', price:598},
+    {n:'崇明岛单身露营 · 3天2夜', left:9, total:30, date:'11-06 周五', price:1288, warn:true},
+    {n:'朱家角剧本游 · 江南谜案', left:56, total:120, date:'10-26 周日', price:298},
+    {n:'一大会址 · 红色剧本闯关', left:88, total:160, date:'10-25 周六', price:168},
+    {n:'黄山云海 · 徒步摄影', left:15, total:40, date:'10-27 周二', price:828},
+  ],
+    supply:[
+    {n:'安吉竹径 · 瑜伽随行套装', price:199, sold:86, listed:true, ic:'i-yoga', c1:'#0e9f8a', c2:'#63e6be', sc:'bamboo'},
+    {n:'太湖桨板 · 速干防晒套装', price:259, sold:52, listed:true, ic:'i-run', c1:'#1c7ed6', c2:'#74c0fc', sc:'lake'},
+    {n:'朱家角文创茶礼「谜案」', price:168, sold:31, listed:true, ic:'i-gift', c1:'#7048e8', c2:'#b197fc', sc:'tea'},
+    {n:'婺源晒秋 · 旅拍披肩', price:129, sold:0, listed:false, ic:'i-camera', c1:'#e8590c', c2:'#ffd8a8', sc:'autumn'},
+    {n:'莫干山 · 亲子自然手作包', price:89, sold:64, listed:true, ic:'i-family', c1:'#f59f00', c2:'#ffe066', sc:'mountain'},
+    {n:'周庄灯影 · 手作油纸灯', price:139, sold:47, listed:true, ic:'i-bolt', c1:'#4b3557', c2:'#a97fd1', sc:'watertown'},
+    {n:'一大会址 · 红色研学笔记本', price:49, sold:112, listed:true, ic:'i-doc', c1:'#c92a2a', c2:'#ff8787', sc:'redhall'},
+    {n:'武夷岩茶 · 手作肉桂礼盒', price:328, sold:18, listed:true, ic:'i-gift', c1:'#37542f', c2:'#8fb387', sc:'tea'},
+    {n:'海岛防晒 · 硬核隔离喷雾', price:99, sold:73, listed:true, ic:'i-shield', c1:'#a8e0f0', c2:'#7fc6cf', sc:'island'},
+    {n:'苏州园林 · 苏绣团扇', price:189, sold:26, listed:true, ic:'i-dress', c1:'#d6336c', c2:'#faa2c1', sc:'garden'},
+    {n:'徒步轻量 · 折叠登山杖', price:159, sold:39, listed:false, ic:'i-compass', c1:'#5f8168', c2:'#9cb4a7', sc:'mountain'},
+  ],
+    redeemOptions:[
+      {n:'平台流量位 / 推广曝光', d:'类比平台币抵广告，精准垂直客流',   cost:2000, ic:'i-bolt'},
+      {n:'主题游策划服务',       d:'专业策划团队定制剧本与活动',       cost:3500, ic:'i-pen'},
+      {n:'供应链资源对接',       d:'源头厂家直供，村级仓储前置',       cost:5000, ic:'i-layers'},
+      {n:'客源数据分析报告',     d:'分客群消费与复购洞察',             cost:1500, ic:'i-chart'},
+      {n:'联合活动策划权',       d:'平台联名活动优先申报名额',         cost:2500, ic:'i-gift'},
+    ],
+  },
+  admin:{
+    todayGmv:16842, todayOrders:42, monthGmv:119700, monthOrders:3000,
+    verifyRate:63.1, repurchase:41.2, natural:35.6, cac:38, ltv:216,
+    trend:[8.2, 10.5, 9.1, 12.4, 11.8, 15.6, 16.8], trendLabels:'一二三四五六日'.split(''),
+    cities:[
+      {n:'上海 · 青浦朱家角', gmv:'¥42,180', growth:'+18%', ic:'i-map', c:'#0f766e'},
+      {n:'苏州 · 吴江汾湖',   gmv:'¥28,640', growth:'+12%', ic:'i-map', c:'#2f6f9f'},
+      {n:'湖州 · 安吉',       gmv:'¥19,320', growth:'+9%',  ic:'i-map', c:'#0e9f8a'},
+      {n:'上饶 · 婺源',       gmv:'¥12,860', growth:'+6%',  ic:'i-map', c:'#f59f00'},
+    ],
+    stream:[
+    {t:'刚刚', d:'新订单 · 朱家角剧本游 ¥298 · 游客端', c:'#4ade80'},
+    {t:'2分钟前', d:'核销成功 · 安吉瑜伽谷 · 旅豆发放 120', c:'#f5a623'},
+    {t:'5分钟前', d:'返佣到账 · 黄金合伙人 8% · ¥23.8', c:'#60a5fa'},
+    {t:'12分钟前', d:'UGC 推荐 · 《朱家角谜案通关攻略》 +50 豆', c:'#c084fc'},
+    {t:'18分钟前', d:'商户铺货 · 太湖桨板防晒套装 月销 52', c:'#2dd4bf'},
+    {t:'24分钟前', d:'新订单 · 周庄夜游 ¥228 · 小程序端', c:'#4ade80'},
+    {t:'31分钟前', d:'核销成功 · 苏州园林姐姐茶会 · 旅豆发放 60', c:'#f5a623'},
+    {t:'38分钟前', d:'合伙人新增 · 咖啡店·小王 关联 3 位新客', c:'#60a5fa'},
+    {t:'46分钟前', d:'库存预警 · 安吉瑜伽谷 11-01 仅剩 6 位', c:'#f59e0b'},
+    {t:'52分钟前', d:'新订单 · 莫干山亲子自然课 ¥1,516（2 大 1 小）', c:'#4ade80'},
+    {t:'1小时前', d:'内容审核通过 · 短视频《晒秋旅拍Vlog》', c:'#c084fc'},
+    {t:'1小时前', d:'商户结算 · 安麓大夫第 昨日 GMV ¥16,842 已入账', c:'#2dd4bf'},
+    {t:'2小时前', d:'风控拦截 · 设备聚集注册 9 个账号已冻结', c:'#ef4444'},
+    {t:'2小时前', d:'新订单 · 太湖皮划艇 ¥1,176（2 人）', c:'#4ade80'},
+    {t:'3小时前', d:'旅豆兑换 · 折叠露营灯 79 元抵扣 10%', c:'#f5a623'},
+    {t:'3小时前', d:'城市合伙人签约 · 上饶婺源 区域运营权', c:'#60a5fa'},
+  ],
+    budget:{ total:500000, issued:312800, used:189400 },
+    warnings:[
+    {t:'疑似刷单', lv:'高', c:'#e5484d', d:'用户 U8823 昨日 6 笔订单集中退款，返佣关系链异常，建议冻结其返佣结算并人工复核。'},
+    {t:'串通核销风险', lv:'中', c:'#e65100', d:'商户 M20250312 近 3 日核销时间集中于 23:50–00:10，与游客入园记录不符。'},
+    {t:'超发风险', lv:'中', c:'#e65100', d:'权益预算池余额低于下期预测投放额，按当前核销节奏将于第 11 天见底。'},
+    {t:'设备聚集', lv:'中', c:'#e65100', d:'同一设备 24 小时内注册 9 个新账号，均通过同一邀请码归因，疑似批量养号。'},
+    {t:'退款异常', lv:'高', c:'#e5484d', d:'商户 M20260317 近 7 日退款率 18.6%，显著高于类目均值 3.2%，建议核查履约质量。'},
+    {t:'佣金阶梯越级', lv:'低', c:'#2f6f9f', d:'3 位合伙人在单日内从青铜直升黄金，下线增长曲线异常陡峭，建议补验真实社交关系。'},
+    {t:'内容授权重叠', lv:'低', c:'#2f6f9f', d:'同一篇游记被 2 家商户重复申报授权，结算前需去重。'},
+    {t:'夜间集中下单', lv:'中', c:'#e65100', d:'湖州安吉区域 02:00–04:00 订单占比 11.4%，高于全平台均值 1.8%。'},
+  ],
+    audits:[
+    {t:'商家准入', n:'同里古镇 · 湖居民宿', st:'资质待审', c:'#f59f00', ic:'i-store', d:'旅行社合作营业部挂靠 · 经营范围与退款条款待确认'},
+    {t:'UGC 内容', n:'游记《朱家角谜案通关攻略》', st:'待审核', c:'#2f6f9f', ic:'i-doc', d:'作者：旅行家小满 · 含归因链接，推荐后奖励 50 豆'},
+    {t:'佣金核算', n:'10 月第 2 周合伙人返佣', st:'待结算', c:'#0f766e', ic:'i-money', d:'合计 ¥12,860 · 涉及 86 位合伙人 · 反作弊校验通过'},
+    {t:'商家准入', n:'朱家角 · 漕港茶室', st:'资质待审', c:'#f59f00', ic:'i-store', d:'食品经营许可证临期 42 天 · 需补充续期承诺'},
+    {t:'商家准入', n:'安吉 · 云上草原营地', st:'资质待审', c:'#f59f00', ic:'i-store', d:'特种设备（索道）检验报告缺失 · 暂缓上线'},
+    {t:'商家准入', n:'婺源 · 篁岭晒秋工坊', st:'资质待审', c:'#f59f00', ic:'i-store', d:'非遗传承人授权书待公证 · 其余材料齐全'},
+    {t:'商家准入', n:'太湖 · 水上运动中心', st:'资质待审', c:'#f59f00', ic:'i-store', d:'救生员配置 3 人待核 · 低于水域经营标准'},
+    {t:'UGC 内容', n:'短视频《太湖桨板翻滚教学》', st:'待审核', c:'#2f6f9f', ic:'i-video', d:'作者：旅行家小满 · 含安全提示，建议加免责声明'},
+    {t:'UGC 内容', n:'图文《婺源晒秋机位地图》', st:'待审核', c:'#2f6f9f', ic:'i-doc', d:'含 6 处坐标 · 其中 2 处位于村民承包地，需授权确认'},
+    {t:'UGC 内容', n:'图文《莫干山亲子三日》', st:'复审中', c:'#2f6f9f', ic:'i-image', d:'商家申诉称含未授权商业信息 · 二次人工复核'},
+    {t:'UGC 内容', n:'游记《周庄夜游避坑》', st:'待审核', c:'#2f6f9f', ic:'i-doc', d:'涉及同商户 3 次负面描述 · 需核实事实性'},
+    {t:'佣金核算', n:'10 月第 3 周合伙人返佣', st:'待结算', c:'#0f766e', ic:'i-money', d:'合计 ¥15,420 · 涉及 94 位合伙人 · 2 笔待补充凭证'},
+    {t:'佣金核算', n:'9 月内容策划分润', st:'待结算', c:'#0f766e', ic:'i-money', d:'合计 ¥3,860 · 内容 41 篇 · 需核归因链接有效性'},
+    {t:'佣金核算', n:'Q3 城市合伙人服务费', st:'待结算', c:'#0f766e', ic:'i-money', d:'合计 ¥48,000 · 4 城 · 按合同季度结算条款执行'},
+  ],
+    calc:{ orders:3000, price:399, rate:20, varCost:9, equity:2, fixed:180000 },
+  },
+};
+const DB_INIT = JSON.parse(JSON.stringify(DB));
+
+/* ===== 端定义 =====
+   依据《项目总方案定稿 V3.0》§2.2 / D1：**4 种业务角色 = 3 个客户端**。
+   推广服务商与创作者不是独立端 —— 他们是小程序 A 里同一个微信身份的功能视图
+   （「我的 → 推广中心 / 创作中心」），不换身份、不换数据。
+   游客端 tabBar 5 个（v1.14.1 赵老师拍板商城回一级位）：定稿 §9 主句「tabBar 4 个」括号里写明
+   「商城 P2 做小 SKU 后再定 tab 位」——「再定」是延后决策、不是降级；且 demo 要展示完整商业闭环
+   （旅豆抵扣 → 场景爆品 → 回流复购），商城是变现核心场景，故按 P2 后终局形态演示。微信 tabBar 5 个合规。 */
+const ENDS = {
+  tourist:{ key:'tourist', name:'小程序 A',    sub:'游客 · 会员消费生态',
+    tabs:[{k:'home',l:'首页',i:'i-home'},{k:'theme',l:'主题游',i:'i-compass'},{k:'shop',l:'商城',i:'i-shop'},{k:'wallet',l:'旅豆',i:'i-wallet'},{k:'me',l:'我的',i:'i-user'}] },
+  merch:{   key:'merch',    name:'小程序 B',    sub:'商户 · 核销与供给',
+    tabs:[{k:'work',l:'工作台',i:'i-work'},{k:'order',l:'订单',i:'i-box'},{k:'supply',l:'货源',i:'i-layers'},{k:'mme',l:'我的',i:'i-user'}] },
+  admin:{   key:'admin',    name:'PC 运营后台', sub:'平台运营 · 经营与风控',
+    tabs:[{k:'dash',l:'驾驶舱',i:'i-chart'},{k:'risk',l:'风控',i:'i-shield'},{k:'audit',l:'审核',i:'i-task'},{k:'calc',l:'测算',i:'i-calc'},{k:'ame',l:'我的',i:'i-user'}] },
+};
+/* 各端「我的」里的二级入口（原合伙人端的收益/邀请/团队，收进小程序 A 的推广中心） */
+const PROMO_TABS = [
+  {k:'earn',   l:'推广收益', i:'i-money'},
+  {k:'invite', l:'邀请收客', i:'i-invite'},
+  {k:'team',   l:'推荐客户', i:'i-users'},
+];
+
+/* ===== 会话状态 ===== */
+const S = { end:'tourist', tab:{tourist:'home', merch:'work', admin:'dash'}, loggedIn:false, stack:[], loginStep:'role',   /* 演示默认直达身份选择：开场一键进入，手机号登录作为二级入口保留 */ phone:'', code:'', role:'tourist', ret:null, promoTab:'earn' };
+
+/* ===== 工具 ===== */
+const $ = s => document.querySelector(s);
+const ic = (n, cls='') => '<svg class="ic '+cls+'"><use href="#'+n+'"></use></svg>';
+const money = n => '¥' + Number(n||0).toLocaleString('zh-CN');
+const rnd6 = () => String(Math.floor(100000 + Math.random()*900000));
+const nowStr = () => { const d = new Date(); return d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); };
+function fmtT(d){ return d; }
+/** 标准时间戳（MM-DD HH:mm），四端通用，避免各文件跨 script 块依赖 */
+function stampNow(){
+  const d = new Date(), z = function(n){ return String(n).padStart(2,'0'); };
+  return z(d.getMonth()+1) + '-' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
+}
+function copyText(t){ toast('已复制：' + t); }
+
+/* ===== Toast ===== */
+let _tt = null;
+function toast(msg, ms=2000){
+  const t = $('#toast'); t.innerHTML = msg.replace(/\n/g,'<br>'); t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+/* ===== 底部弹层 ===== */
+function openSheet(html, opts={}){
+  const mask = $('#mask'), sheet = $('#sheet');
+  sheet.innerHTML = '<div class="sheet-grab"></div>' + html;
+  sheet.style.maxHeight = opts.maxH || '80%';
+  mask.classList.add('show'); sheet.classList.add('show');
+  mask.onclick = closeSheet;
+}
+function closeSheet(){ $('#mask').classList.remove('show'); $('#sheet').classList.remove('show'); }
+
+/* ===== 居中弹窗 ===== */
+function openDialog(title, desc, okTxt, onOk, cancelTxt){
+  const d = $('#dialog'), mask = $('#mask');
+  d.innerHTML = '<h3>'+title+'</h3><p>'+desc+'</p><div class="btns">' +
+    (cancelTxt!==false ? '<button class="btn ghost" id="dlgCancel">'+(cancelTxt||'取消')+'</button>' : '') +
+    '<button class="btn" id="dlgOk">'+okTxt+'</button></div>';
+  mask.classList.add('show'); d.classList.add('show');
+  mask.onclick = ()=>{ mask.classList.remove('show'); d.classList.remove('show'); };
+  $('#dlgOk').onclick = ()=>{ mask.classList.remove('show'); d.classList.remove('show'); onOk&&onOk(); };
+  const c = $('#dlgCancel'); if(c) c.onclick = ()=>{ mask.classList.remove('show'); d.classList.remove('show'); };
+}
+
+/* ===== 数字滚动 ===== */
+function countUp(el, to, dur=800, prefix=''){
+  const from = 0, start = performance.now();
+  function step(t){
+    const p = Math.min(1, (t-start)/dur), e = 1-Math.pow(1-p,3);
+    el.textContent = prefix + Math.round(from + (to-from)*e).toLocaleString('zh-CN');
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function runCounters(root){
+  root.querySelectorAll('[data-count]').forEach(el=>{
+    if(el.dataset.done) return; el.dataset.done = '1';
+    countUp(el, parseFloat(el.dataset.count), 900, el.dataset.prefix||'');
+  });
+}
+
+/* ===== 礼花 ===== */
+const confetti = (()=>{
+  const cv = $('#confetti'), ctx = cv.getContext('2d');
+  let ps = [], raf = null;
+  function resize(){ cv.width = cv.offsetWidth; cv.height = cv.offsetHeight; }
+  window.addEventListener('resize', resize);
+  function fire(){
+    resize();
+    const colors = ['#e87722','#f5a623','#4ade80','#60a5fa','#c084fc','#f472b6'];
+    for(let i=0;i<90;i++){
+      ps.push({ x:cv.width/2 + (Math.random()-.5)*120, y:cv.height*0.42,
+        vx:(Math.random()-.5)*9, vy:-(Math.random()*11+5),
+        s:Math.random()*5+3, c:colors[i%colors.length], r:Math.random()*Math.PI, vr:(Math.random()-.5)*.3, life:1 });
+    }
+    if(!raf) tick();
+  }
+  function tick(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ps.forEach(p=>{ p.vy += 0.32; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life -= 0.012; });
+    ps = ps.filter(p=>p.life>0 && p.y < cv.height+30);
+    ps.forEach(p=>{ ctx.save(); ctx.globalAlpha = Math.max(0,p.life); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.62); ctx.restore(); });
+    if(ps.length){ raf = requestAnimationFrame(tick); } else { raf = null; ctx.clearRect(0,0,cv.width,cv.height); }
+  }
+  return { fire };
+})();
+
+/* ===== 状态栏时钟 ===== */
+function tickClock(){ $('#sbTime').textContent = nowStr(); }
+setInterval(tickClock, 20000); tickClock();
+
+/* ===== 下拉刷新 ===== */
+function bindPullRefresh(scrollEl, onRefresh){
+  if(scrollEl._ptrBound) return;
+  scrollEl._ptrBound = true;
+  let sy = 0, pulling = false, dist = 0;
+  const ptr = scrollEl.querySelector('.ptr');
+  scrollEl.addEventListener('touchstart', e=>{ if(scrollEl.scrollTop<=0){ sy = e.touches[0].clientY; pulling = true; dist=0; } }, {passive:true});
+  scrollEl.addEventListener('touchmove', e=>{
+    if(!pulling) return;
+    dist = e.touches[0].clientY - sy;
+    if(dist>0 && ptr){ ptr.style.height = Math.min(60, dist*0.5)+'px'; ptr.innerHTML = dist>70 ? '松开刷新' : '下拉刷新'; }
+  }, {passive:true});
+  scrollEl.addEventListener('touchend', ()=>{
+    if(!pulling) return; pulling = false;
+    if(dist>70 && ptr){
+      ptr.classList.add('show'); ptr.innerHTML = '<span class="spin"></span>正在刷新';
+      setTimeout(()=>{ ptr.style.height='0'; ptr.classList.remove('show'); onRefresh && onRefresh(); }, 800);
+    } else if(ptr){ ptr.style.height='0'; }
+  });
+}
+</script>

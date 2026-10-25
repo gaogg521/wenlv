@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1200px; height: 100vh; overflow: hidden; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #243b55; }
+  .card {
+    width: 1200px; height: 100vh; position: relative; color: #fff; overflow: hidden;
+    background: linear-gradient(160deg, #1d3350 0%, #243b55 52%, #38536f 100%);
+    display: flex; flex-direction: column; justify-content: center; padding: 0 90px;
+  }
+  .ring { position: absolute; border-radius: 50%; border: 2px solid rgba(255,255,255,.1); }
+  .r1 { width: 480px; height: 480px; right: -120px; top: -160px; }
+  .r2 { width: 260px; height: 260px; right: 130px; bottom: -90px; border-color: rgba(245,166,35,.25); }
+  .glow { position: absolute; width: 700px; height: 700px; border-radius: 50%; right: -260px; bottom: -380px;
+    background: radial-gradient(circle, rgba(245,166,35,.4) 0%, rgba(232,119,34,.15) 45%, rgba(232,119,34,0) 70%); }
+  .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 44px; }
+  .logo { width: 58px; height: 58px; border-radius: 15px; background: linear-gradient(135deg, #e87722, #f5a623);
+    display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 34px; height: 34px; stroke: #fff; stroke-width: 3.4; fill: none; stroke-linejoin: round; }
+  .brand b { font-size: 26px; letter-spacing: 2px; }
+  .brand span { display: block; font-size: 12px; letter-spacing: 4px; color: rgba(255,255,255,.6); font-weight: 600; }
+  h1 { font-size: 76px; font-weight: 900; letter-spacing: 5px; line-height: 1.2; }
+  h1 em { font-style: normal; color: #f5a623; }
+  p { margin-top: 26px; font-size: 22px; color: rgba(255,255,255,.85); letter-spacing: 2px; }
+  .foot { position: absolute; left: 90px; bottom: 54px; display: flex; gap: 28px; font-size: 15px; color: rgba(255,255,255,.6); letter-spacing: 1px; }
+  .foot b { color: #f5a623; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="glow"></div>
+  <div class="ring r1"></div><div class="ring r2"></div>
+  <div class="brand">
+    <span class="logo"><svg viewBox="0 0 64 64"><path d="M20 44V24l12-8 12 8v20"/></svg></span>
+    <span><b>向往的自由</b><span>TOURISM WEB3 OS</span></span>
+  </div>
+  <h1>世界就是我的<em>游乐场</em></h1>
+  <p>主题旅行 × Web3 权益 · 新文旅生态</p>
+  <div class="foot">
+    <span><b>八大主题</b>产品线</span>
+    <span><b>Travel ID</b> 一号通行</span>
+    <span><b>链上凭证</b>可核验</span>
+  </div>
+</div>
+</body>
+</html>
