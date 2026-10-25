@@ -1,0 +1,26 @@
+<view class="hero">
+  <block wx:if="{{user}}">
+    <view style="display:flex;align-items:center;gap:20rpx">
+      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image class="avatar-img {{avatarUrl ? '' : 'avatar-empty'}}" src="{{avatarUrl}}" mode="aspectFill" />
+      </button>
+      <view>
+        <input class="nick-input" type="nickname" value="{{user.nickname}}" placeholder="填写昵称" bindblur="onNickname" />
+        <view class="sub2">{{user.levelName}} · 文旅数字身份</view>
+      </view>
+    </view>
+  </block>
+  <block wx:else>
+    <view class="hi">未登录</view>
+    <view class="btn ghost" style="margin:24rpx 0 0" bindtap="login">微信一键登录</view>
+  </block>
+</view>
+<view class="card">
+  <view class="kv" bindtap="goOrders"><text>我的订单</text><text class="v">›</text></view>
+  <view class="kv" bindtap="goPromo"><text>推广中心</text><text class="v">›</text></view>
+  <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
+  <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 徽章 · 存证 ›</text></view>
+  <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
+  <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">›</text></view>
+</view>
+<view class="note">四种角色 · 三个客户端 · 同一份数据（总方案 §2）</view>

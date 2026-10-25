@@ -1,0 +1,18 @@
+<view class="hero" style="background:linear-gradient(140deg,#34c3a2 0%,#0e9f8a 55%,#0a6e5e 100%)">
+  <view class="hi">旅行商城</view>
+  <view class="sub2">在地好物 · 旅豆可抵 10% · 完整商城 P2</view>
+  <view class="hero-chip"><view class="dot"></view>商户直发 · 消费同样返旅豆</view>
+</view>
+<view style="height:12rpx"></view>
+<view class="tour-item fade-up" wx:for="{{items}}" wx:key="id">
+  <view class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
+  <view style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0">
+    <view class="tour-title">{{item.title}}</view>
+    <view class="tour-desc">{{item.bean}}</view>
+    <view style="display:flex;align-items:center;gap:16rpx">
+      <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.price / 100}}</view>
+      <view class="btn sm" bindtap="buy" data-id="{{item.id}}">立即购买</view>
+    </view>
+  </view>
+</view>
+<view class="note">P0 极简版 3–5 SKU · 更多在地好物陆续上架</view>

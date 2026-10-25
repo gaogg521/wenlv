@@ -1,0 +1,39 @@
+<view class="card fade-up" wx:for="{{list}}" wx:key="id" wx:for-item="s">
+  <view class="sec-title">{{s.period}} 周结算单
+    <text class="pill {{s.status === 3 ? 'p50' : 'p30'}}" style="margin-left:8rpx">{{s.status===3?'已完成':s.status===0?'待确认':s.status}}</text>
+  </view>
+  <view class="row" style="border-bottom:none;padding-bottom:8rpx">
+    <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
+      <view style="font-size:34rpx;font-weight:800">¥{{s.total_amount/100}}</view></view>
+    <view style="text-align:right"><view class="tiny">本店应结（履约口径）</view>
+      <view class="money" style="font-size:34rpx">¥{{s.amt_fulfill/100}}</view></view>
+  </view>
+  <view style="font-size:22rpx;color:var(--sub);margin-top:6rpx">五口径分账（总额拆分，恒等校验）</view>
+  <view class="split-bar">
+    <i style="width:{{s.amt_fulfill / s.total_amount * 100}}%;background:#7b5aa6"></i>
+    <i style="width:{{s.amt_service / s.total_amount * 100}}%;background:#a97fd1"></i>
+    <i style="width:{{s.amt_promoter / s.total_amount * 100}}%;background:#f0b429"></i>
+    <i style="width:{{s.amt_beanbudget / s.total_amount * 100}}%;background:#38bdf8"></i>
+    <i style="width:{{s.amt_retained / s.total_amount * 100}}%;background:#0f9d58"></i>
+  </view>
+  <view class="split-legend">
+    <text><em style="background:#7b5aa6"></em>履约 ¥{{s.amt_fulfill/100}}</text>
+    <text><em style="background:#a97fd1"></em>服务费 ¥{{s.amt_service/100}}</text>
+    <text><em style="background:#f0b429"></em>推广 ¥{{s.amt_promoter/100}}</text>
+    <text><em style="background:#38bdf8"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
+    <text><em style="background:#0f9d58"></em>留存 ¥{{s.amt_retained/100}}</text>
+  </view>
+  <view class="btn" wx:if="{{s.status === 0}}" bindtap="confirm" data-id="{{s.id}}">确认对账无误</view>
+  <view class="note" wx:elif="{{s.status === 1}}" style="padding:14rpx 0 0;color:var(--green)">✓ 商户已确认 · 待财务复核打款</view>
+  <view class="tiny" style="margin-top:10rpx;color:var(--brand)" bindtap="toggleDetail" data-id="{{s.id}}">
+    {{detail[s.id] ? '收起明细 ▲' : '查看订单明细（' + s.order_count + ' 单）▼'}}</view>
+  <view wx:if="{{detail[s.id]}}" class="fade-up" style="margin-top:10rpx">
+    <view class="row" wx:for="{{detail[s.id]}}" wx:for-item="it" wx:key="order_no">
+      <view style="flex:1;min-width:0"><b style="font-size:24rpx">{{it.title}}</b>
+        <view class="sub">{{it.order_no}} · {{it.completed_at}}</view></view>
+      <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
+    </view>
+  </view>
+</view>
+<view wx:if="{{!list.length && loaded}}" class="empty"><view class="e-ico">🧮</view>暂无结算单（每周一出账）</view>
+<view class="note">对单有异议？在结算单详情发起申诉（P1）· 协议变更找运营</view>

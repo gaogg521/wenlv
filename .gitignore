@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# build output
+server/build/
+
+# logs
+*.log
+
+# OS / editor
+.Dehydrated
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/

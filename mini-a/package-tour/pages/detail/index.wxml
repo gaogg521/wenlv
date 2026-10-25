@@ -1,0 +1,89 @@
+<view wx:if="{{loading}}" class="skeleton" style="height:400rpx;margin-top:20rpx"></view>
+<block wx:else>
+  <!-- 图集轮播：有实拍图用图集，无图回退品牌渐变 -->
+  <swiper wx:if="{{gallery.length}}" class="gallery" indicator-dots circular
+          bindchange="onSwiper" current="{{gIdx}}">
+    <swiper-item wx:for="{{gallery}}" wx:key="index">
+      <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load />
+    </swiper-item>
+  </swiper>
+  <view wx:if="{{gallery.length}}" class="g-count">{{gIdx + 1}}/{{gallery.length}}</view>
+  <view wx:else class="hero">
+    <view class="hi">{{p.title}}</view>
+    <view class="sub2">{{p.days_desc || p.days}} · {{p.city_code || ''}} · 履约商户：{{p.merchant_name || '—'}}</view>
+    <view style="margin-top:16rpx"><text class="tour-price" style="color:#fff;font-size:48rpx">¥{{p.priceLabel}}</text>
+      <text style="opacity:.9;font-size:24rpx;margin-left:16rpx">完成得 {{p.beanGift}} 旅豆</text></view>
+  </view>
+
+  <!-- 报名条（有图集时价格挂这里） -->
+  <view class="book-bar" wx:if="{{gallery.length}}">
+    <view><text class="tour-price" style="font-size:40rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text>
+      <text class="muted2" style="margin-left:12rpx">完成得 {{p.beanGift}} 旅豆</text></view>
+    <text class="muted2">履约商户：{{p.merchant_name || '—'}}</text>
+  </view>
+
+  <!-- 评分 + 标签行 -->
+  <view class="rating-row" wx:if="{{rv.count > 0}}">
+    <text class="star">★ {{rv.avg}}</text><text class="muted2">{{rv.count}} 条真实评价</text>
+    <text class="tag" wx:if="{{p.meeting_point}}">📍 有集合点</text>
+    <text class="tag blue">✓ 商户核验</text>
+  </view>
+
+  <view class="sec-title">选择团期</view>
+  <view class="chips">
+    <view class="chip {{sel === index ? 'on' : ''}}" wx:for="{{sessions}}" wx:key="id"
+          bindtap="pick" data-i="{{index}}">{{item.depart_date}} · 余{{item.left_seats}}</view>
+    <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
+  </view>
+
+  <view class="card">
+    <view class="kv"><text>出行人数</text>
+      <view style="display:flex;gap:24rpx;align-items:center">
+        <text bindtap="subQty">－</text><text class="v" style="min-width:40rpx;text-align:center">{{qty}}</text><text bindtap="addQty">＋</text>
+      </view></view>
+    <view class="kv"><text>旅豆抵扣（余额 {{beanBal}}）</text>
+      <text class="v" bindtap="toggleBean">{{useBean ? '使用' : '不使用'}}</text></view>
+    <view class="kv"><text>抵扣上限</text><text class="v muted2">订单金额 10%</text></view>
+    <view class="kv"><text>联系人</text>
+      <input class="v input-r" placeholder="姓名" value="{{contactName}}" bindinput="onName" /></view>
+    <view class="kv"><text>手机号</text>
+      <view style="display:flex;align-items:center;gap:16rpx">
+        <text class="v">{{contactPhone || '未验证'}}</text>
+        <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onPhone">一键获取</button>
+      </view></view>
+  </view>
+  <view class="btn" bindtap="submit">立即报名</view>
+  <view class="note">真实交易 · 支持按平台退改梯度退款 · 核销后返旅豆</view>
+
+  <!-- 内容区：行程介绍 / 亮点 / 费用包含 / 集合 / 安全 -->
+  <view class="sec-title" wx:if="{{rich.intro || rich.highlights.length}}">玩法介绍</view>
+  <view class="card" wx:if="{{rich.intro || rich.highlights.length}}">
+    <view class="hl-item" wx:for="{{rich.highlights}}" wx:key="*this"><text class="hl-dot">◆</text>{{item}}</view>
+    <view class="rich-p" wx:if="{{rich.intro}}">{{rich.intro}}</view>
+  </view>
+
+  <view class="sec-title" wx:if="{{rich.includes.length}}">费用包含</view>
+  <view class="card" wx:if="{{rich.includes.length}}">
+    <view class="hl-item" wx:for="{{rich.includes}}" wx:key="*this"><text class="hl-dot ok">✓</text>{{item}}</view>
+  </view>
+
+  <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
+  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view></view>
+
+  <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
+  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
+
+  <!-- 评价 -->
+  <view class="sec-title">真实评价 <text class="more" wx:if="{{rv.count}}">{{rv.count}} 条 · 均分 {{rv.avg}}</text></view>
+  <view class="card" wx:if="{{rv.list.length}}">
+    <view class="rv-item" wx:for="{{rv.list}}" wx:key="index">
+      <view style="display:flex;justify-content:space-between;align-items:center">
+        <text style="font-weight:600;font-size:25rpx">{{item.nickname}}</text>
+        <text class="star-sm">{{item.rating}} ★</text>
+      </view>
+      <view style="font-size:25rpx;color:var(--ink2);margin-top:8rpx">{{item.content}}</view>
+      <view class="muted2" style="margin-top:6rpx">{{item.created_at}}</view>
+    </view>
+  </view>
+  <view wx:elif="{{rv.count === 0}}" class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后第一评价就是你</view>
+</block>

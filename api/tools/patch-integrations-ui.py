@@ -1,0 +1,48 @@
+# -*- coding: utf-8 -*-
+import io
+j = io.open('admin/app.js', encoding='utf-8').read()
+
+# nav 系统组加集成中心
+j = j.replace("['security', '安全中心', 'risk']]],", "['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],")
+j = j.replace("security: '安全中心' }[page]", "security: '安全中心', integrations: '集成中心' }[page]")
+j = j.replace("attest, security }[page]", "attest, security, integrations }[page]")
+
+page = '''/* ============ 集成中心（凭据后台化）============ */
+async function integrations() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  const d = await api('GET', '/admin/integrations')
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>集成中心</h2><span class="muted">${esc(d.envNote)}</span></div>
+    <p class="muted" style="margin:-6px 0 16px">保存即热生效（10 秒缓存刷新）· AES-256-GCM 加密落库 · 仅超管可见可改 · 每次变更审计留痕</p>
+    ${d.channels.map((ch) => `
+    <div style="padding:16px 0;border-bottom:1px solid #f1f4f8">
+      <div class="row" style="margin:0 0 10px;justify-content:space-between">
+        <div><b>${esc(ch.name)}</b> <span class="muted" style="margin-left:8px">${esc(ch.desc)}</span></div>
+        ${ch.ready ? '<span class="pill ok">● 已配置（生产模式）</span>' : '<span class="pill warn">● 未配置（MOCK 联调）</span>'}
+      </div>
+      <table>${ch.fields.map((f) => `<tr>
+        <td style="width:280px"><code>${esc(f.key)}</code></td>
+        <td>${f.stored ? `<span class="pill ok">${esc(f.stored)}</span>` : f.envFallback ? '<span class="pill s20">来自 .env</span>' : '<span class="pill off">未设置</span>'}</td>
+        <td style="text-align:right">
+          <button class="btn ghost sm" onclick="setCred('${esc(f.key)}')">设置</button>
+          ${f.stored ? `<button class="btn danger sm" onclick="delCred('${esc(f.key)}')">清除</button>` : ''}
+        </td></tr>`).join('')}</table>
+    </div>`).join('')}
+  </div>`
+}
+async function setCred(key) {
+  const val = prompt('输入 ' + key + ' 的值（保存后 AES-256-GCM 加密存储）：')
+  if (!val) return
+  try { await api('POST', '/admin/integrations/' + key, { value: val }); toast(key + ' 已保存，热生效'); integrations() } catch (e) { toast(e.message, true) }
+}
+async function delCred(key) {
+  if (!confirm('清除 ' + key + '？（对应通道将回落到 MOCK 或 .env）')) return
+  try { await api('DELETE', '/admin/integrations/' + key); toast('已清除'); integrations() } catch (e) { toast(e.message, true) }
+}
+
+'''
+assert "\\nboot()" in j
+j = j.replace("\\nboot()", "\\n" + page + "boot()", 1)
+io.open('admin/app.js', 'w', encoding='utf-8', newline='\\n').write(j)
+print('integrations UI done')

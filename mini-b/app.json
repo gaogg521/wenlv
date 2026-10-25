@@ -1,0 +1,27 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/orders/index",
+    "pages/supply/index",
+    "pages/me/index",
+    "pages/verify/index",
+    "pages/records/index",
+    "pages/settlement/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#7b5aa6",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "向往的自由 · 商户端",
+    "backgroundColor": "#f4f5f7"
+  },
+  "tabBar": {
+    "color": "#8a919c", "selectedColor": "#7b5aa6", "backgroundColor": "#ffffff", "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "工作台", "iconPath": "assets/tab/index.png", "selectedIconPath": "assets/tab/index-on.png" },
+      { "pagePath": "pages/orders/index", "text": "订单", "iconPath": "assets/tab/orders.png", "selectedIconPath": "assets/tab/orders-on.png" },
+      { "pagePath": "pages/supply/index", "text": "库存", "iconPath": "assets/tab/supply.png", "selectedIconPath": "assets/tab/supply-on.png" },
+      { "pagePath": "pages/me/index", "text": "我的", "iconPath": "assets/tab/me.png", "selectedIconPath": "assets/tab/me-on.png" }
+    ]
+  },
+  "style": "v2", "sitemapLocation": "sitemap.json", "lazyCodeLoading": "requiredComponents"
+}

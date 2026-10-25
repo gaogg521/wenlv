@@ -1,0 +1,19 @@
+<view class="hero">
+  <block wx:if="{{merchant}}"><view class="hi">{{merchant.name}}</view>
+    <view class="sub2">商户号 {{merchant.merchant_no}} · {{role >= 3 ? '老板' : role === 2 ? '店长' : '核销员'}}</view></block>
+  <block wx:else><view class="hi">绑定门店</view><view class="sub2">输入门店 ID 登录（由平台运营分配）</view></block>
+</view>
+<view class="card" wx:if="{{!merchant}}">
+  <input value="{{midInput}}" bindinput="onMid" type="number" placeholder="门店 ID"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+  <view class="btn" bindtap="doLogin">绑定并登录</view>
+  <view class="note">正式版：手机号验证码 + 店员邀请码（P1）· 当前联调走门店 ID</view>
+</view>
+<block wx:else>
+  <view class="card">
+    <view class="row" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>
+    <view class="row" bindtap="storeQrcode"><text>门店码</text><text class="v">{{qr ? '查看' : '生成'}} ›</text></view>
+    <view class="row"><text>店员管理</text><text class="v">老板权限 · P1</text></view>
+    <view class="row" bindtap="logout"><text style="color:var(--red)">退出登录</text></view>
+  </view>
+</block>

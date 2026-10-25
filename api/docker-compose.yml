@@ -1,0 +1,43 @@
+services:
+  api:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      - DB_HOST=db
+      - DB_USER=wanderlust
+      - DB_PASS=${DB_PASS:-wanderlust_prod}
+      - DB_NAME=wanderlust
+      - JWT_SECRET=${JWT_SECRET:?set-in-.env}
+      - PASS_SECRET=${PASS_SECRET:?set-in-.env}
+      - ADMIN_INIT_PASSWORD=${ADMIN_INIT_PASSWORD:?set-in-.env}
+      - WX_APPID=${WX_APPID:-}
+      - WX_SECRET=${WX_SECRET:-}
+      - WX_MCHID=${WX_MCHID:-}
+      - WX_SERIAL=${WX_SERIAL:-}
+      - WX_PRIVATE_KEY_PATH=${WX_PRIVATE_KEY_PATH:-}
+      - WX_NOTIFY_URL=${WX_NOTIFY_URL:-}
+    depends_on: [db]
+    restart: unless-stopped
+  jobs:
+    build: .
+    command: node src/jobs.mjs
+    environment:
+      - DB_HOST=db
+      - DB_USER=wanderlust
+      - DB_PASS=${DB_PASS:-wanderlust_prod}
+      - DB_NAME=wanderlust
+    depends_on: [db]
+    restart: unless-stopped
+  db:
+    image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASS:-wanderlust_prod}
+      - MYSQL_DATABASE=wanderlust
+      - MYSQL_USER=wanderlust
+      - MYSQL_PASSWORD=${DB_PASS:-wanderlust_prod}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./db/migration:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+volumes: { dbdata: {} }

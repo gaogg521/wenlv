@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: wanderlust-server
+  datasource:
+    # 本地开发默认（2026-10-23 验证环境：MySQL 9.3.0 本机 root/root；生产走 RDS 8.0 由 profile 注入）
+    url: jdbc:mysql://127.0.0.1:3306/wanderlust?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 3000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.wanderlust: INFO

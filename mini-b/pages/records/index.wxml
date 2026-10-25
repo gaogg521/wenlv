@@ -1,0 +1,9 @@
+<view class="card fade-up" wx:if="{{list.length}}">
+  <view class="row" wx:for="{{list}}" wx:key="id" wx:for-item="item">
+    <view style="flex:1;min-width:0"><b>{{item.order_no || '凭证 #' + item.pass_id}}</b>
+      <view class="sub">{{item.created_at}}</view></view>
+    <view class="pill {{item.result === 1 ? 'p50' : 'p70'}}">{{item.result === 1 ? '✓ 核销成功' : '✕ 异常拦截'}}</view>
+  </view>
+  <view class="note" style="padding-bottom:8rpx">成功与拦截都留痕 · 作为结算与风控依据</view>
+</view>
+<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">🖥️</view>暂无核销记录</view>

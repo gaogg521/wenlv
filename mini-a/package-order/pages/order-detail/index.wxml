@@ -1,0 +1,48 @@
+<view wx:if="{{!o}}" class="skeleton" style="height:300rpx;margin-top:20rpx"></view>
+<block wx:else>
+  <view class="hero">
+    <view class="hi">{{o.title}}</view>
+    <view class="sub2">{{o.days_desc}} · {{o.qty}} 人 · 单号 {{o.order_no}}</view>
+    <view style="margin-top:14rpx"><text style="font-size:44rpx;font-weight:800">¥{{o.amountPayLabel}}</text>
+      <text class="st-tag">{{stName[o.status] || '—'}}</text></view>
+  </view>
+
+  <view class="card" wx:if="{{passes.length}}">
+    <view class="sec-title">入园凭证（出行当日向商户出示）</view>
+    <view class="pass-row" wx:for="{{passes}}" wx:key="id" bindtap="goCode" data-id="{{item.id}}">
+      <view style="flex:1">
+        <view class="p-name">{{item.name}}</view>
+        <view class="p-st">{{passSt[item.status]}}</view>
+      </view>
+      <view class="p-btn">{{item.status === 1 ? '出示核销码 ›' : '查看'}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="sec-title">订单进度</view>
+    <view class="tl">
+      <view class="tl-item" wx:for="{{o.events}}" wx:key="index">
+        <view class="t">{{stName[item.to_st] || item.actor}} <text class="d">{{item.created_at}}</text></view>
+        <view class="d">{{item.detail || ''}}</view>
+      </view>
+      <view wx:if="{{!o.events.length}}" class="d" style="padding:8rpx 0">暂无事件</view>
+    </view>
+  </view>
+
+  <view class="btn ghost" style="color:var(--red);border-color:var(--red)"
+        wx:if="{{[10,20,30,40].indexOf(o.status) > -1}}" bindtap="refund">申请退款</view>
+
+  <!-- 写评价：核销完成后 · 一单一评 -->
+  <view class="card" wx:if="{{o.status === 50 && !o.reviewed && !reviewDone}}">
+    <view class="sec-title">为本次出行打个分</view>
+    <view style="display:flex;gap:14rpx;margin:10rpx 0 16rpx">
+      <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="pick-star {{rating >= item ? 'on' : ''}}"
+            bindtap="setRating" data-v="{{item}}">★</text>
+    </view>
+    <textarea class="rv-input" value="{{rvText}}" bindinput="onRvText" maxlength="200"
+      placeholder="行程怎么样？说点真实的（至少 4 个字）" />
+    <view class="btn sm" style="margin:16rpx 0 0;display:block;text-align:center" bindtap="submitReview">提交评价</view>
+  </view>
+  <view class="note" wx:if="{{o.status === 50 && (o.reviewed || reviewDone)}}">✓ 已评价 · 感谢你的真实分享</view>
+  <view class="note">真实交易 · 退改按平台梯度执行 · 核销后返旅豆</view>
+</block>

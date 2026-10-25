@@ -1,0 +1,29 @@
+<view class="scan-box">
+  <view class="scan-frame">
+    <view class="corner c1"></view><view class="corner c2"></view>
+    <view class="corner c3"></view><view class="corner c4"></view>
+    <view class="beam"></view>
+    <view class="mid">🎫</view>
+  </view>
+  <view style="margin-top:32rpx;font-size:26rpx">对准游客「入园核销码」</view>
+  <view style="font-size:22rpx;opacity:.7;margin-top:8rpx">支持连续扫码 · 一码一次有效 · 异常自动拦截</view>
+</view>
+<view class="btn" bindtap="scan">📷 打开相机扫码</view>
+<view class="card fade-up">
+  <view class="sec-title">手动输码</view>
+  <view class="tiny" style="margin-bottom:16rpx">屏幕破损/码被遮挡时：输入游客展示的 6 位数字</view>
+  <view style="display:flex;gap:16rpx">
+    <input value="{{input}}" bindinput="onInput" type="number" maxlength="6" placeholder="— — — — — —"
+      style="flex:1;border:1.5rpx solid var(--line);border-radius:18rpx;padding:18rpx 26rpx;font-size:32rpx;letter-spacing:8rpx;text-align:center;font-weight:700" />
+    <view class="btn sm" style="padding:18rpx 44rpx;font-size:28rpx" bindtap="submit">核销</view>
+  </view>
+</view>
+<view class="card fade-up" wx:if="{{result}}" style="background:{{result.ok ? '#f0faf7' : '#fdf2f2'}}">
+  <view class="row">
+    <view><b style="color:{{result.ok ? 'var(--green)' : 'var(--red)'}}">{{result.ok ? '✅ 核销成功' : '❌ ' + result.reason}}</b>
+      <view class="sub">{{result.ok ? '已计入今日核销流水' : '已留痕 · 可在核销流水追溯'}}</view></view>
+    <view class="v tiny">#{{result.passId || result.payload}}</view>
+  </view>
+</view>
+<view class="note">断网时暂缓核销 · 恢复后补登（离线队列 P1）</view>
+<view class="note" wx:if="{{streak > 0}}" style="color:var(--brand);font-weight:600">🔥 连续核销 {{streak}} 单 · 800ms 自动进入下一单</view>

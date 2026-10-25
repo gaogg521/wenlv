@@ -1,0 +1,40 @@
+<view class="hero" style="background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">
+  <view class="sub2">推广服务商{{ov && ov.promoter ? ' · ' + nameMap[ov.tier] : ''}}</view>
+  <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{(ov.withdrawable / 100).toFixed(2)}}</view>
+  <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{(ov.earned / 100).toFixed(2)}} · 已提 ¥{{(ov.withdrawn / 100).toFixed(2)}}</view>
+  <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
+</view>
+<view class="chips">
+  <view class="chip {{seg === 'earn' ? 'on' : ''}}" bindtap="switchSeg" data-k="earn">推广收益</view>
+  <view class="chip {{seg === 'invite' ? 'on' : ''}}" bindtap="switchSeg" data-k="invite">邀请收客</view>
+  <view class="chip {{seg === 'cust' ? 'on' : ''}}" bindtap="switchSeg" data-k="cust">推荐客户</view>
+</view>
+<block wx:if="{{seg === 'earn'}}">
+  <view class="card" wx:if="{{ov && ov.promoter}}">
+    <view class="kv"><text>当前档位</text><text class="v">{{nameMap[ov.tier]}}</text></view>
+    <view class="kv"><text>累计有效成交（90天）</text><text class="v">滚动升级</text></view>
+    <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
+  </view>
+  <view class="btn" wx:if="{{ov && ov.withdrawable >= 10000}}" bindtap="withdraw">申请提现</view>
+  <view class="note" wx:else>可提现满 ¥100 后可申请 · 佣金 T+7 到账自动可提</view>
+</block>
+<block wx:if="{{seg === 'invite'}}">
+  <view class="card" style="text-align:center">
+    <view class="sub2" style="color:var(--sub)">我的专属推广码（海报/小程序码携带）</view>
+    <view style="font-size:56rpx;font-weight:800;color:#2f6f9f;margin:20rpx 0">{{scene || '—'}}</view>
+    <image wx:if="{{qrcode}}" src="{{qrcode}}" style="width:320rpx;height:320rpx" mode="aspectFit" />
+    <view class="btn ghost" style="margin:20rpx 0 0" bindtap="makeQrcode">{{qrcode ? '刷新小程序码' : '生成专属小程序码'}}</view>
+    <view class="btn ghost" style="margin:16rpx 0 0" bindtap="copy" wx:if="{{scene}}">复制推广码</view>
+  </view>
+  <view class="note">好友扫码进店并消费，订单自动归因到你 · 只按真实成交计酬</view>
+</block>
+<block wx:if="{{seg === 'cust'}}">
+  <view class="card" wx:if="{{customers.length}}">
+    <view class="kv" wx:for="{{customers}}" wx:key="index">
+      <text>{{item.when}} · {{item.orderNo ? '已成交' : '仅到访'}}</text>
+      <text class="v">{{item.amount ? '¥' + (item.amount / 100) : '—'}}</text>
+    </view>
+  </view>
+  <view wx:else class="empty">还没有客户记录</view>
+  <view class="note">客户身份已脱敏 · 仅显示归因统计</view>
+</block>

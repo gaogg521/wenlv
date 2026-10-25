@@ -1,0 +1,15 @@
+<view class="card fade-up" wx:if="{{list.length}}">
+  <view class="row" wx:for="{{list}}" wx:key="id">
+    <view style="flex:1;min-width:0"><b>{{item.title}}</b>
+      <view class="sub">{{item.depart_date}} · 余 {{item.left_seats}}/{{item.quota}}
+        <text wx:if="{{item.left_seats <= 2}}" style="color:var(--red)">（紧张）</text> · ¥{{item.price_adult/100}}</view></view>
+    <view style="display:flex;gap:12rpx;flex-shrink:0">
+      <view class="pill p30" bindtap="addQuota" data-id="{{item.id}}">加名额</view>
+      <view class="pill p20" bindtap="changePrice" data-id="{{item.id}}" data-price="{{item.price_adult}}">改价</view>
+      <view class="pill p90" wx:if="{{item.status === 1}}" bindtap="stopSell" data-id="{{item.id}}">停售</view>
+      <view class="pill p50" wx:else>已停售</view>
+    </view>
+  </view>
+  <view class="note" style="padding-bottom:8rpx">余量紧张自动预警 · 停售/加名额实时生效（店长权限）</view>
+</view>
+<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">📦</view>暂无团期</view>

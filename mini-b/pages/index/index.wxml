@@ -1,0 +1,58 @@
+<view class="hero">
+  <view class="hi">{{merchant ? merchant.name : '商户工作台'}}</view>
+  <view class="sub2">{{err === 'login' ? '未登录 · 在「我的」绑定门店' : greet + ' · 今日经营一目了然'}}</view>
+  <view class="hero-chip" wx:if="{{wb}}"><view class="dot"></view>营业中 · 数据实时同步</view>
+  <view class="hero-chip" wx:elif="{{err === 'login'}}">🔒 绑定门店后开启核销</view>
+</view>
+
+<view class="kpi-row fade-up" wx:if="{{wb}}">
+  <view class="kpi"><view class="ico">🧾</view><view class="v">{{wb.todayOrders}}</view><view class="l">今日订单</view></view>
+  <view class="kpi"><view class="ico">💰</view><view class="v">¥{{wb.todayGmv}}</view><view class="l">今日流水</view></view>
+  <view class="kpi"><view class="ico">🎫</view><view class="v">{{wb.pendingVerify}}</view><view class="l">待核销</view></view>
+</view>
+
+<view class="card fade-up" wx:if="{{stats}}">
+  <view class="sec-title">近 7 日经营 <text class="tiny" style="margin-left:auto">本店评分 {{stats.rating.count ? stats.rating.avg + ' ★（' + stats.rating.count + ' 评）' : '暂无评价'}}</text></view>
+  <view style="display:flex;align-items:flex-end;gap:8rpx;height:110rpx;padding:0 4rpx">
+    <view wx:for="{{bars}}" wx:key="d" style="flex:1;text-align:center">
+      <view style="height:80rpx;display:flex;align-items:flex-end">
+        <view style="width:100%;height:{{item.hp}}%;min-height:6rpx;border-radius:6rpx 6rpx 0 0;background:linear-gradient(180deg,#b79ae0,#7b5aa6)"></view>
+      </view>
+      <view class="tiny" style="font-size:18rpx">{{item.d.slice(5)}}</view>
+    </view>
+  </view>
+  <view class="tiny" style="margin-top:10rpx">本周订单 {{weekTotal}} 单 · 柱高=当日订单量</view>
+</view>
+<view class="card fade-up" wx:if="{{stats && stats.latestReview}}">
+  <view class="sec-title">游客最新评价</view>
+  <view class="row">
+    <view style="flex:1;min-width:0"><b>{{stats.latestReview.title}}</b>
+      <view class="sub">{{stats.latestReview.content}}</view>
+      <view class="sub">{{stats.latestReview.nickname}} · {{stats.latestReview.created_at}}</view></view>
+    <view style="color:var(--brand);font-weight:800">{{stats.latestReview.rating}} ★</view>
+  </view>
+  <view class="note" style="padding:12rpx 0 0;text-align:left">差评/刷评由平台统一治理 · 你无需回复刷评</view>
+</view>
+
+<view wx:if="{{err && err !== 'login'}}" class="empty"><view class="e-ico">📡</view>{{err}}</view>
+
+<view class="bigbtn fade-up" bindtap="goVerify" wx:if="{{err !== 'login'}}">
+  <view class="pulse-ring"></view><view class="pulse-ring r2"></view>
+  <view class="t">扫码核销</view>
+  <view class="s">游客出示 60 秒动态码 · 支持连续扫码</view>
+</view>
+
+<view class="quick-grid fade-up" wx:if="{{err !== 'login'}}">
+  <view class="quick" bindtap="goOrders"><view class="qi">📋</view><view class="ql">门店订单</view></view>
+  <view class="quick" bindtap="goSupply"><view class="qi">📦</view><view class="ql">名额库存</view></view>
+  <view class="quick" bindtap="goSettle"><view class="qi">🧮</view><view class="ql">对账结算</view></view>
+  <view class="quick" bindtap="goRecords"><view class="qi">🖥️</view><view class="ql">核销流水</view></view>
+</view>
+
+<view class="card fade-up" wx:if="{{wb && wb.pendingVerify > 0}}">
+  <view class="sec-title">待处理</view>
+  <view class="row"><view><b>{{wb.pendingVerify}} 张凭证待核销</b><view class="sub">游客已出票，到场请引导出示动态码</view></view>
+    <view class="btn sm" bindtap="goVerify">去核销</view></view>
+</view>
+
+<view class="note">核销即结算依据 · 异常码自动拦截并留痕<br/>商户端仅见本店数据 · 平台侧五口径自动分账</view>

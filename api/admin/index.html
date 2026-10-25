@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>向往的自由 · 运营后台</title>
+<link rel="stylesheet" href="/admin-ui/app.css">
+</head>
+<body>
+
+<!-- ===== 登录：分屏式 · 左品牌天蓝场景（含运营驾驶舱素材）+ 右浅色表单 ===== -->
+<div id="login" class="login-stage">
+  <div class="login-brand" aria-hidden="true">
+    <div class="lb-glow g1"></div><div class="lb-glow g2"></div>
+    <div class="lb-sun"></div>
+    <div class="lb-cloud c1">☁️</div><div class="lb-cloud c2">☁️</div><div class="lb-cloud c3">☁️</div>
+    <div class="lb-plane">✈️</div>
+    <svg class="lb-hills" viewBox="0 0 1440 320" preserveAspectRatio="none">
+      <path d="M0 240 C 180 170, 340 210, 520 150 S 840 100, 1020 170 S 1280 210, 1440 130 V320 H0 Z" fill="rgba(255,255,255,.14)"/>
+      <path d="M0 290 C 220 240, 420 270, 640 230 S 1000 210, 1180 260 S 1360 270, 1440 240 V320 H0 Z" fill="rgba(13,42,100,.35)"/>
+    </svg>
+
+    <div class="lb-brand">
+      <div class="brand-line"><span class="logo-dot"></span>向往的自由 <b>· 运营管理舱</b></div>
+      <div class="brand-sub">文旅生态操作系统 · Tourism Web3 OS</div>
+      <ul class="brand-points">
+        <li>四种角色 × 三个客户端 · 同一份数据</li>
+        <li>真实交易闭环 · 下单 → 核销 → 返豆 → 结算</li>
+        <li>五口径恒等 · 双分录账本 · 全链路存证</li>
+      </ul>
+    </div>
+
+    <!-- 运营素材：模拟驾驶舱看板（KPI / 成交柱图 / 航线归因） -->
+    <div class="ops-mock">
+      <div class="om-head"><span class="om-dot"></span>运营驾驶舱 · 实时经营底账 <em>LIVE</em></div>
+      <div class="om-kpis">
+        <div class="om-kpi"><div class="l">今日 GMV</div><div class="v up">¥12,480</div></div>
+        <div class="om-kpi"><div class="l">今日订单</div><div class="v up">43</div></div>
+        <div class="om-kpi"><div class="l">核销率</div><div class="v">86.2%</div></div>
+        <div class="om-kpi"><div class="l">预算水位</div><div class="v">62%</div></div>
+      </div>
+      <div class="om-chart">
+        <div class="om-bar" style="height:34%"></div><div class="om-bar alt" style="height:48%"></div>
+        <div class="om-bar" style="height:42%"></div><div class="om-bar alt" style="height:64%"></div>
+        <div class="om-bar" style="height:58%"></div><div class="om-bar alt" style="height:78%"></div>
+        <div class="om-bar" style="height:70%"></div><div class="om-bar alt" style="height:52%"></div>
+        <div class="om-bar" style="height:88%"></div><div class="om-bar alt" style="height:66%"></div>
+        <div class="om-bar" style="height:96%"></div><div class="om-bar alt" style="height:82%"></div>
+      </div>
+      <div class="om-route">
+        <svg viewBox="0 0 480 70">
+          <defs><linearGradient id="omr" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#93c5fd"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>
+          <path d="M20 52 C 120 10, 240 62, 330 26 S 430 18, 462 30" fill="none" stroke="url(#omr)"
+            stroke-width="2" stroke-dasharray="6 5" stroke-linecap="round"/>
+          <circle cx="20" cy="52" r="5" fill="#2563eb"/><circle cx="330" cy="26" r="5" fill="#0ea5e9"/>
+          <circle cx="462" cy="30" r="5" fill="#1d4ed8"/>
+          <text x="20" y="68" font-size="9.5" fill="#8595a8" text-anchor="middle">游客下单</text>
+          <text x="330" y="14" font-size="9.5" fill="#8595a8" text-anchor="middle">商户核销</text>
+          <text x="452" y="48" font-size="9.5" fill="#8595a8" text-anchor="middle">返豆·结算</text>
+          <text x="240" y="30" font-size="13" fill="#2563eb">✈</text>
+        </svg>
+        <div class="om-caption">推广归因 · 动态核销 · 旅豆账本 · 链上存证 全链路可视化</div>
+      </div>
+    </div>
+
+    <div class="brand-foot">上海璟宬文化发展有限公司</div>
+  </div>
+
+  <div class="login-right">
+    <div class="glass-wrap">
+      <form class="glass-card" id="step1" onsubmit="return false">
+        <h2>欢迎回来</h2>
+        <p class="muted" id="stepTip">运营管理舱 · 分角色授权登录</p>
+        <label>账号</label>
+        <input id="luser" placeholder="admin" autocomplete="username">
+        <label>密码</label>
+        <input id="lpass" type="password" placeholder="••••••••" autocomplete="current-password">
+        <div id="lerr" class="lerr"></div>
+        <div class="quick-accounts">
+          <span class="muted" style="font-size:12px">演示一键填充</span>
+          <button type="button" class="qa" onclick="fill('admin','admin123')">admin 超管</button>
+          <button type="button" class="qa" onclick="fill('finance','admin123')">finance 财务</button>
+          <button type="button" class="qa" onclick="fill('city310118','city123')">city 城市合伙人</button>
+        </div>
+        <button class="btn primary block" onclick="login()">登 录</button>
+      </form>
+
+      <form class="glass-card" id="step2" style="display:none" onsubmit="return false">
+        <h2>两步验证</h2>
+        <p class="muted" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
+        <input id="mfacode" class="code-input" inputmode="numeric" maxlength="6" placeholder="— — — — — —" autocomplete="one-time-code">
+        <div id="lerr2" class="lerr"></div>
+        <button class="btn primary block" onclick="mfaSubmit()">验 证</button>
+        <button type="button" class="btn ghost block" style="margin-top:10px" onclick="mfaResend()">重新发送验证码</button>
+        <button type="button" class="linklike" onclick="backToStep1()">← 返回重新登录</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主框架 ===== -->
+<div id="frame" style="display:none">
+  <aside class="side">
+    <div class="side-logo"><span class="dot"></span>向往的自由<b>运营舱</b></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <div id="paymode" class="pill-mini">支付通道检测中…</div>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div id="crumb">驾驶舱</div>
+      <div class="top-right">
+        <span class="who" id="who"></span>
+        <button class="btn ghost sm" onclick="logout()">退出登录</button>
+      </div>
+    </header>
+    <main id="app" class="content"></main>
+  </div>
+</div>
+
+<div id="toastWrap"></div>
+<div id="modalRoot"></div>
+
+<script src="/admin-ui/app.js"></script>
+</body>
+</html>

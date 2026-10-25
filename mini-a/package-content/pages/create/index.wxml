@@ -1,0 +1,17 @@
+<view class="hero" style="background:linear-gradient(135deg,#e87722,#f5a623)">
+  <view class="hi">创作中心</view>
+  <view class="sub2">发布旅行笔记 · 内容过安全检测后展示 · 好内容获旅豆奖励</view>
+</view>
+<view class="card">
+  <input value="{{title}}" bindinput="onTitle" placeholder="标题（选填）"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:16rpx 24rpx;margin-bottom:16rpx" />
+  <textarea value="{{body}}" bindinput="onBody" placeholder="分享你的旅程…" maxlength="1000"
+    style="width:100%;height:200rpx;border:1rpx solid var(--line);border-radius:16rpx;padding:16rpx 24rpx;box-sizing:border-box" />
+  <view class="btn" bindtap="publish">发布</view>
+  <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
+</view>
+<view class="sec-title">已发布（{{notes.length}}）</view>
+<view class="card" wx:if="{{notes.length}}">
+  <view class="kv" wx:for="{{notes}}" wx:key="id"><text>{{item.title || '（无题）'}}</text><text class="v">👍 {{item.like_count}}</text></view>
+</view>
+<view class="note">约稿任务与稿费（demo 任务四态机）随 P2 上线 · 当前先发内容</view>

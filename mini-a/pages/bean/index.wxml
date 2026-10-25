@@ -1,0 +1,42 @@
+<view class="hero" style="background:linear-gradient(140deg,#4a6fa5 0%,#243b55 60%,#16263c 100%)">
+  <view class="sub2" style="position:relative">我的旅豆（消费返豆 10%）</view>
+  <view class="bean-num" wx:if="{{bean}}">{{bean.balance}}</view>
+  <view class="sub2" wx:if="{{bean}}" style="position:relative">累计获得 {{bean.lifetime}} · 100 豆 ≈ ¥10</view>
+  <view class="hero-chip" wx:if="{{bean}}"><view class="dot"></view>下单时自动抵扣 · 单笔上限 10%</view>
+</view>
+
+<view class="bean-rules fade-up" wx:if="{{bean}}">
+  <view class="bean-rule"><view class="bi">🎯</view><view class="bv">返 10%</view><view class="bl">消费即返豆</view></view>
+  <view class="bean-rule"><view class="bi">⏳</view><view class="bv">12 个月</view><view class="bl">滚动有效期</view></view>
+  <view class="bean-rule"><view class="bi">🚫</view><view class="bv">不可转</view><view class="bl">不可购买</view></view>
+</view>
+
+<view class="card fade-up" wx:if="{{bean}}">
+  <view class="kv"><text>获取方式</text><text class="v">消费返豆 / 任务奖励 / 内容奖励</text></view>
+  <view class="kv"><text>价值锚定</text><text class="v">100 旅豆 ≈ ¥10</text></view>
+  <view class="kv"><text>单笔抵扣上限</text><text class="v">订单金额 10%</text></view>
+  <view class="kv"><text>有效期</text><text class="v">滚动 12 个月</text></view>
+  <view class="kv"><text>转账/购买</text><text class="v">不支持</text></view>
+</view>
+
+<view class="sec-title">会员等级 <text class="more">成长值随真实消费累积</text></view>
+<view class="card fade-up" wx:if="{{bean}}">
+  <view class="lv-row" wx:for="{{levels}}" wx:key="lv">
+    <view class="lv-badge {{level >= item.lv ? 'on' : ''}}">Lv.{{item.lv}}</view>
+    <view style="flex:1"><text style="font-weight:600;font-size:25rpx">{{item.name}}</text>
+      <text class="muted2" style="margin-left:12rpx">{{item.need}}</text></view>
+    <text wx:if="{{level === item.lv}}" class="tag" style="margin:0">当前</text>
+  </view>
+</view>
+
+<view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">双分录账本 · 每笔可溯</text></view>
+<view class="card fade-up" wx:if="{{ledger.length}}">
+  <view class="kv" wx:for="{{ledger}}" wx:key="tx_no">
+    <view>
+      <view style="font-weight:600;font-size:25rpx">{{bizName[item.biz_type] || item.biz_type}}</view>
+      <view class="muted2" style="margin-top:4rpx">{{item.created_at}}</view>
+    </view>
+    <text class="v" style="color:{{item.direction === 1 ? 'var(--green)' : 'var(--red)'}}">{{item.direction === 1 ? '+' : '−'}}{{item.amount}}</text>
+  </view>
+</view>
+<view class="note">{{bean ? bean.rule : '加载中…'}}</view>

@@ -1,0 +1,99 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/tour-list/index",
+    "pages/shop/index",
+    "pages/bean/index",
+    "pages/me/index"
+  ],
+  "subPackages": [
+    {
+      "root": "package-tour",
+      "pages": [
+        "pages/detail/index",
+        "pages/pay-result/index"
+      ]
+    },
+    {
+      "root": "package-order",
+      "pages": [
+        "pages/orders/index",
+        "pages/order-detail/index",
+        "pages/pass-code/index"
+      ]
+    },
+    {
+      "root": "package-content",
+      "pages": [
+        "pages/identity/index",
+        "pages/create/index"
+      ]
+    },
+    {
+      "root": "package-promo",
+      "pages": [
+        "pages/center/index"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/tour-list/index": {
+      "network": "all",
+      "packages": [
+        "package-tour"
+      ]
+    },
+    "pages/home/index": {
+      "network": "all",
+      "packages": [
+        "package-tour"
+      ]
+    }
+  },
+  "window": {
+    "navigationBarBackgroundColor": "#e87722",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "向往的自由",
+    "backgroundColor": "#f4f5f7"
+  },
+  "tabBar": {
+    "color": "#8a919c",
+    "selectedColor": "#e87722",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页",
+        "iconPath": "assets/tab/home.png",
+        "selectedIconPath": "assets/tab/home-on.png"
+      },
+      {
+        "pagePath": "pages/tour-list/index",
+        "text": "主题游",
+        "iconPath": "assets/tab/tour-list.png",
+        "selectedIconPath": "assets/tab/tour-list-on.png"
+      },
+      {
+        "pagePath": "pages/shop/index",
+        "text": "商城",
+        "iconPath": "assets/tab/shop.png",
+        "selectedIconPath": "assets/tab/shop-on.png"
+      },
+      {
+        "pagePath": "pages/bean/index",
+        "text": "旅豆",
+        "iconPath": "assets/tab/bean.png",
+        "selectedIconPath": "assets/tab/bean-on.png"
+      },
+      {
+        "pagePath": "pages/me/index",
+        "text": "我的",
+        "iconPath": "assets/tab/me.png",
+        "selectedIconPath": "assets/tab/me-on.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

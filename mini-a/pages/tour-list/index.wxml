@@ -1,0 +1,24 @@
+<view class="chips">
+  <view class="chip {{active === item.k ? 'on' : ''}}" wx:for="{{cats}}" wx:key="k"
+        bindtap="switchCat" data-k="{{item.k}}">{{item.n}}</view>
+</view>
+<view class="search-bar">
+  <input class="search-input" value="{{kw}}" bindinput="onKw" bindconfirm="doSearch"
+    placeholder="搜目的地 / 玩法，如：朱家角、瑜伽" confirm-type="search" />
+  <view class="search-btn" bindtap="doSearch">搜索</view>
+</view>
+<view wx:if="{{loading}}"><view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view></view>
+<block wx:else>
+  <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
+    <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+    <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
+    <view style="flex:1;min-width:0">
+      <view class="tour-title">{{item.title}}</view>
+      <view class="tour-desc">{{item.desc || item.subtitle || '实景 · 深度 · 小团'}}</view>
+      <view class="tour-price"><text class="rmb">¥</text>{{(item.price || item.price_from) / 100}}
+        <text class="u">返 {{item.beanGift || item.bean_gift}} 豆</text></view>
+    </view>
+  </view>
+  <view wx:if="{{!tours.length}}" class="empty"><view class="e-ico">🧭</view>{{kw ? '没找到「' + kw + '」相关线路' : '该分类暂无线路'}}</view>
+</block>
+<view class="note">真实交易 · 下单即锁名额 · 支持按梯度退改</view>

@@ -1,0 +1,28 @@
+<view class="hero">
+  <view class="hi">{{greet}}，旅友</view>
+  <view class="sub2">真实文旅体验 · 消费返旅豆 · 推广服务商与创作者同在游客端</view>
+  <view class="hero-chip"><view class="dot"></view>真实交易 · 履约可核销 · 链上存证</view>
+</view>
+
+<view class="sec-title">即将成团 <text class="more">全部真实商家与团期</text></view>
+
+<view wx:if="{{loading}}">
+  <view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
+</view>
+<view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
+<view wx:else>
+  <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
+    <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+    <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
+    <view style="flex:1;min-width:0">
+      <view class="tour-title">{{item.title}}</view>
+      <view class="tour-desc">{{item.desc || item.subtitle || '实景 · 深度 · 小团'}}</view>
+      <view>
+        <text class="tag">{{item.loc || item.city_code || '上海'}}</text>
+        <text class="tag blue">{{item.days || item.days_desc || '1天'}}</text>
+      </view>
+      <view class="tour-price"><text class="rmb">¥</text>{{(item.price || item.price_from) / 100}} <text class="u">完成得 {{item.beanGift || item.bean_gift}} 旅豆</text></view>
+    </view>
+  </view>
+</view>
+<view class="note">数据与后端同源 · 未连接时展示演示兜底数据<br/>下单即签发动态核销凭证 · 商户扫码核销后返旅豆</view>
