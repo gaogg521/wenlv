@@ -2,11 +2,11 @@
   <view class="hero" style="background:linear-gradient(135deg,#243b55,#0f766e)">
     <view class="sub2">文旅数字身份 · Travel ID</view>
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
-    <view class="sub2">{{['探索者','旅行家','城市探索官','环球探索家'][d.profile.memberLevel-1]}} · 成长值 {{d.profile.growth}}</view>
+    <view class="sub2">{{d.profile.levelName}} · 成长值 {{d.profile.growth}}</view>
   </view>
   <view class="sec-title">我的凭证（{{d.passes.length}}）<text class="more">核销后记录永久有效</text></view>
   <view class="card" wx:for="{{d.passes}}" wx:key="id">
-    <view class="kv"><text>{{item.name}}</text><text class="v">{{item.status===1?'待使用':item.status===2?'已核销':'已作废'}}</text></view>
+    <view class="kv"><text>{{item.name}}</text><text class="v">{{item.statusText}}</text></view>
   </view>
   <view class="sec-title">存证流水（{{d.attestations.length}}）<text class="more">消费与权益的可信记录</text></view>
   <view class="card" wx:for="{{d.attestations}}" wx:key="orderNo">
@@ -14,5 +14,5 @@
     <view class="muted2" style="word-break:break-all">哈希 {{item.hash}}</view>
   </view>
   <view class="note">存证流水作为贡献分与数字身份的依据，不对应股权或可交易 Token</view>
-</view>
+</block>
 <view wx:else class="empty">{{loadTxt}}</view>

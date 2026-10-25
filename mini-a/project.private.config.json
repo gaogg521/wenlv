@@ -16,7 +16,7 @@
     "showES6CompileOption": false,
     "compileHotReLoad": true,
     "checkInvalidKey": true,
-    "ignoreDevUnusedFiles": false,
+    "ignoreDevUnusedFiles": true,
     "bigPackageSizeSupport": false
   }
 }

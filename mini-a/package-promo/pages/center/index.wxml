@@ -1,7 +1,7 @@
 <view class="hero" style="background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">
   <view class="sub2">推广服务商{{ov && ov.promoter ? ' · ' + nameMap[ov.tier] : ''}}</view>
-  <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{(ov.withdrawable / 100).toFixed(2)}}</view>
-  <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{(ov.earned / 100).toFixed(2)}} · 已提 ¥{{(ov.withdrawn / 100).toFixed(2)}}</view>
+  <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{ov.withdrawableYuan}}</view>
+  <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>
   <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
 </view>
 <view class="chips">

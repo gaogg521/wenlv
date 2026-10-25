@@ -5,9 +5,17 @@ Page({
   async fetch() {
     try {
       await api.ensureLogin()
-      const [ov, sc, customers] = await Promise.all([
+      const [ov0, sc, customers] = await Promise.all([
         api.request('/c/promote/overview'), api.request('/c/promote/scene'), api.request('/c/promote/customers'),
       ])
+      // 金额格式化放在 JS 里做：WXML 绑定表达式不支持 (x/100).toFixed(2) 这类方法调用，
+      // 一旦写进 wxml 会导致整个分包编译失败（开发者工具只记一条“问题”，运行时表现为页面永远注册不上）
+      const yuan = (v) => (Number(v || 0) / 100).toFixed(2)
+      const ov = ov0 ? Object.assign({}, ov0, {
+        withdrawableYuan: yuan(ov0.withdrawable),
+        earnedYuan: yuan(ov0.earned),
+        withdrawnYuan: yuan(ov0.withdrawn),
+      }) : ov0
       this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers })
     } catch (e) { wx.showToast({ title: e.msg || '加载失败', icon: 'none' }) }
   },
