@@ -7,13 +7,26 @@
   <input value="{{midInput}}" bindinput="onMid" type="number" placeholder="门店 ID"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
   <view class="btn" bindtap="doLogin">绑定并登录</view>
-  <view class="note">正式版：手机号验证码 + 店员邀请码（P1）· 当前联调走门店 ID</view>
+  <view class="note">联调走门店 ID · 正式版用手机号快速验证 + 邀请码</view>
+  <view class="sec-title" style="margin-top:24rpx">凭邀请码加入</view>
+  <input value="{{inviteInput}}" bindinput="onInvite" placeholder="如 INV01234567"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+  <view class="btn ghost" bindtap="joinByInvite">加入门店</view>
+  <view class="sec-title" style="margin-top:24rpx">商户自助入驻</view>
+  <input value="{{applyName}}" bindinput="onApplyName" placeholder="门店名称"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+  <input value="{{applyContact}}" bindinput="onApplyContact" placeholder="联系人"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+  <input value="{{applyMobile}}" bindinput="onApplyMobile" type="number" placeholder="联系电话"
+    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+  <view class="btn ghost" bindtap="applyMerchant">提交入驻申请</view>
+  <view class="note">平台审核通过后发放邀请码 · 在「管理后台-生态-商户进件」可见进度</view>
 </view>
 <block wx:else>
   <view class="card">
     <view class="row" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>
     <view class="row" bindtap="storeQrcode"><text>门店码</text><text class="v">{{qr ? '查看' : '生成'}} ›</text></view>
-    <view class="row"><text>店员管理</text><text class="v">老板权限 · P1</text></view>
+    <view class="row" wx:if="{{role >= 2}}" bindtap="copyInvite"><text>店员邀请码</text><text class="v">{{inviteCode || '生成中…'}} ⧉</text></view>
     <view class="row" bindtap="logout"><text style="color:var(--red)">退出登录</text></view>
   </view>
 </block>

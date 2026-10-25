@@ -25,13 +25,13 @@ export async function hit(scene, userId) {
 
 /** 订单 50 后计佣（幂等） */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, promo_scene, amount_pay, bean_deducted FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, promo_scene, amount_pay, bean_deducted, insurance_fee FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
   if (!a) return false
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
   if (!p) return false
-  const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10
+  const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10 - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣
   const amount = Math.floor(base * p.rate_bp / 10000)
   try {
     await q(`INSERT INTO commission (order_id, promoter_id, base_amount, rate_bp, amount, status, payable_at)
@@ -54,9 +54,9 @@ export async function settleDue() {
 // ===== 结算（五口径：履约58% / 服务12% / 权益5% / 推广=实际佣金 / 留存=差额兜底）=====
 export async function generateSettlement(merchantId, period) {
   // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账
-  const orders = await q(`SELECT o.id, o.amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
+  const orders = await q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
-    WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id, o.amount_pay`, [merchantId])
+    WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id`, [merchantId])
   if (!orders.length) return -1
   let total = 0, promo = 0
   for (const o of orders) { total += Number(o.amount_pay); promo += Number(o.promo_amt) }

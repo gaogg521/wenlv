@@ -1,6 +1,13 @@
 // 核销页：在线扫码/输码 + 离线兜底（总方案 §10：本地队列 + 黄条提示 + 恢复上传二次校验，冲突进人工队列）
 const api = require('../../utils/api')
 
+// 核销语音播报（P2）：打包内合成提示音，随震动双反馈
+const voice = wx.createInnerAudioContext()
+function say(kind) {
+  voice.src = '/assets/voice/' + kind + '.wav'
+  voice.play()
+}
+
 const LIST_KEY = 'wl_offline_list'   // { syncedAt, passes, codes }
 const QUEUE_KEY = 'wl_offline_queue' // [{ payload, offlineAt }]
 
@@ -56,10 +63,12 @@ Page({
       const ok = r.ok
       wx.vibrateShort({ type: ok ? 'heavy' : 'light' })
       if (ok) {
+        say('ok')
         wx.showToast({ title: '核销成功', icon: 'success' })
         this.setData({ result: { ...r, payload }, streak: this.data.streak + 1, lastQr: payload })
         this._continuous && setTimeout(() => { if (this._continuous) this.scan() }, 800)
       } else {
+        say(String(r.reason || '').includes('重复') ? 'dup' : 'fail')
         this._continuous = false
         this.setData({ result: { ...r, payload } })
       }

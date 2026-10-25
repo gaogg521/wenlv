@@ -1,0 +1,2 @@
+/* 复用全局样式（app.wxss），仅补间距 */
+.card view { word-break: break-all; }

@@ -4,7 +4,8 @@
     "pages/tour-list/index",
     "pages/shop/index",
     "pages/bean/index",
-    "pages/me/index"
+    "pages/me/index",
+    "pages/destination/index"
   ],
   "subPackages": [
     {
@@ -26,7 +27,8 @@
       "root": "package-content",
       "pages": [
         "pages/identity/index",
-        "pages/create/index"
+        "pages/create/index",
+        "pages/note/index"
       ]
     },
     {

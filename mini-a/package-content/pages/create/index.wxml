@@ -10,8 +10,23 @@
   <view class="btn" bindtap="publish">发布</view>
   <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
 </view>
+<view class="sec-title">约稿任务</view>
+<view class="card" wx:if="{{tasks.open.length}}">
+  <view class="kv" wx:for="{{tasks.open}}" wx:key="id">
+    <view style="flex:1"><text>{{item.title}}</text><view class="note">{{item.brief}}</view></view>
+    <view class="v" bindtap="claim" data-id="{{item.id}}" style="color:var(--brand)">领 {{item.reward_beans}} 豆</view>
+  </view>
+</view>
+<view class="card" wx:if="{{tasks.mine.length}}">
+  <view class="kv" wx:for="{{tasks.mine}}" wx:key="id">
+    <text>{{item.title}}</text>
+    <view class="v">{{item.statusText}}</view>
+    <view wx:if="{{item.status === 1}}" class="v" bindtap="submitTask" data-id="{{item.id}}" style="color:var(--brand)">提交最新笔记</view>
+  </view>
+</view>
+<view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
 <view class="sec-title">已发布（{{notes.length}}）</view>
 <view class="card" wx:if="{{notes.length}}">
-  <view class="kv" wx:for="{{notes}}" wx:key="id"><text>{{item.title || '（无题）'}}</text><text class="v">👍 {{item.like_count}}</text></view>
+  <view class="kv" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">👍 {{item.like_count}} ›</text></view>
 </view>
 <view class="note">约稿任务与稿费（demo 任务四态机）随 P2 上线 · 当前先发内容</view>

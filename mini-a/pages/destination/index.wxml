@@ -1,0 +1,14 @@
+<view class="hero" style="background:linear-gradient(135deg,#2f6f9f,#243b55)">
+  <view class="hi">目的地</view>
+  <view class="sub2">一城一故事 · 在架主题游按城市聚合</view>
+</view>
+<view class="card" wx:for="{{list}}" wx:key="city_code" bindtap="goList" data-city="{{item.city_code}}">
+  <view class="row">
+    <view style="flex:1">
+      <b>{{item.cityName}}</b>
+      <view class="sub">{{item.products}} 条在架主题游 · ¥{{item.priceFromLabel}} 起</view>
+    </view>
+    <view style="color:var(--brand)">›</view>
+  </view>
+</view>
+<view wx:if="{{!list.length && !loading}}" class="empty">目的地整备中，敬请期待</view>

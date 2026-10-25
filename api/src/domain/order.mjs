@@ -40,14 +40,17 @@ export function priceForSession(s) {
 }
 
 /** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
-export async function place({ userId, sessionId, qty, wantedBeans, promoScene, beanHook }) {
+export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, beanHook }) {
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
   const goods = priceForSession(s).price * qty
+  // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
+  const prod = await one('SELECT insurance_fee, insurance_note FROM tour_product WHERE id = ?', [s.product_id])
+  const insFee = withInsurance && prod && Number(prod.insurance_fee) > 0 ? Number(prod.insurance_fee) * qty : 0
   const clampCap = Math.floor((goods * (await cfgNum('bean.deduct_max_pct'))) / 10) // 豆数上限（10 豆=1 元）
   const beans = Math.max(0, Math.min(wantedBeans || 0, clampCap))
   const dedFen = beans * 10
-  const pay = goods - dedFen
+  const pay = goods - dedFen + insFee
   // 单号 = WL + 日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
   const suffix = String(Date.now() % 100000000).padStart(8, '0') + String(Math.floor(Math.random() * 90) + 10)
   const orderNo = 'WL' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + suffix
@@ -56,14 +59,15 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, b
     const n = await c.upd('UPDATE tour_session SET booked = booked + ? WHERE id = ? AND booked + ? <= quota', [qty, sessionId, qty])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
-        amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene)
-        SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,? FROM tour_product p WHERE p.id = ?`,
-      [orderNo, userId, s.product_id, sessionId, qty, goods, dedFen, beans, pay, promoScene || null, s.product_id])
+        amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee)
+        SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,?,? FROM tour_product p WHERE p.id = ?`,
+      [orderNo, userId, s.product_id, sessionId, qty, goods, dedFen, beans, pay, promoScene || null, insFee, s.product_id])
     await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES ((SELECT id FROM orders WHERE order_no = ?),0,10,?,?)',
       [orderNo, 'user:' + userId, JSON.stringify('下单占位')])
   })
   if (beans > 0 && beanHook) await beanHook.deduct(userId, beans, orderNo)
-  return { orderNo, amountPay: pay, beanDeducted: beans }
+  return { orderNo, amountPay: pay, beanDeducted: beans, insuranceFee: insFee,
+    insuranceNote: insFee > 0 ? prod.insurance_note : null }
 }
 
 export async function byNo(orderNo) { return await one('SELECT * FROM orders WHERE order_no = ?', [orderNo]) }

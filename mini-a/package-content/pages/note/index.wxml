@@ -1,0 +1,11 @@
+<view wx:if="{{n}}">
+  <view class="hero" style="background:linear-gradient(135deg,#0f766e,#155e75)">
+    <view class="hi" style="font-size:40rpx">{{n.title || '旅行笔记'}}</view>
+    <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
+  </view>
+  <view class="card">
+    <view wx:for="{{n.paras}}" wx:key="index" style="margin-bottom:20rpx;line-height:1.8">{{item}}</view>
+    <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
+  </view>
+</view>
+<view wx:else class="empty">{{loadTxt}}</view>

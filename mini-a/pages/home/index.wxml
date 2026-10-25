@@ -4,6 +4,8 @@
   <view class="hero-chip"><view class="dot"></view>真实交易 · 履约可核销 · 链上存证</view>
 </view>
 
+<view class="hero-chip" bindtap="goDestinations" style="margin:16rpx 0"><view class="dot"></view>🗺️ 目的地 · 一城一故事，去看看 ></view>
+
 <view class="sec-title">即将成团 <text class="more">全部真实商家与团期</text></view>
 
 <view wx:if="{{loading}}">

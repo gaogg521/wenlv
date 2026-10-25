@@ -28,6 +28,7 @@ Page({
     })
   },
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
+  goDestinations() { wx.navigateTo({ url: '/pages/destination/index' }) },
   onShareAppMessage() {
     return { title: '向往的自由 · 主题游·预约制', path: '/pages/home/index', imageUrl: '' }
   },

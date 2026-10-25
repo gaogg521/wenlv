@@ -44,13 +44,13 @@ cd "$API" || exit 1
 export AUTO_WS="ws://127.0.0.1:$PORT"
 
 # ── 4. 逐页检查（脚本内部会等模拟器出首屏，不用 sleep 赌）─────────
-echo "▶ 3/4 逐页检查（全 13 页：主包 5 + 4 个分包 8）"
+echo "▶ 3/4 逐页检查（全 15 页：主包 6 + 4 个分包 9）"
 # MSYS_NO_PATHCONV=1 必须加：否则 /pages/xxx 会被 Git Bash 改写成 PortableGit 路径
 MSYS_NO_PATHCONV=1 node test/automator-check.mjs "$MINI" ./automator-shots-cli \
-  /pages/home/index /pages/tour-list/index /pages/shop/index /pages/bean/index /pages/me/index \
+  /pages/home/index /pages/tour-list/index /pages/shop/index /pages/bean/index /pages/me/index /pages/destination/index \
   /package-tour/pages/detail/index /package-tour/pages/pay-result/index \
   /package-order/pages/orders/index /package-order/pages/order-detail/index /package-order/pages/pass-code/index \
-  /package-content/pages/identity/index /package-content/pages/create/index \
+  /package-content/pages/identity/index /package-content/pages/create/index /package-content/pages/note/index \
   /package-promo/pages/center/index 2>&1 | grep -v Deprecation
 chk=${PIPESTATUS[0]}
 
