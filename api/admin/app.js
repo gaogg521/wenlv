@@ -1335,7 +1335,7 @@ async function delCred(key) {
   if (!confirm('清除 ' + key + '？（对应通道将回落到 MOCK 或 .env）')) return
   try { await api('DELETE', '/admin/integrations/' + key); toast('已清除'); integrations() } catch (e) { toast(e.message, true) }
 }
-boot()
+document.addEventListener('DOMContentLoaded', () => boot(), { once: true })
 
 // ── 后台编辑能力（V14 补齐）──
 async function handleRisk(id) {

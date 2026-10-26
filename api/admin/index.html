@@ -5,6 +5,7 @@
 <title>向往的自由 · 运营后台</title>
 <link rel="stylesheet" href="/admin-ui/app.css">
 <link rel="stylesheet" href="/admin-ui/login.css">
+<link rel="stylesheet" href="/admin-ui/workspace.css">
 </head>
 <body>
 
@@ -44,8 +45,9 @@
 
 <!-- ===== 主框架 ===== -->
 <div id="frame" style="display:none">
-  <aside class="side">
-    <div class="side-logo"><span class="dot"></span>向往的自由<b>运营舱</b></div>
+  <aside class="side" id="workspaceSide" aria-label="主导航">
+    <a class="side-logo" href="#dash"><span class="side-mark" aria-hidden="true">↗</span><span>向往的自由<small>文旅数据 · 运营工作台</small></span></a>
+    <div class="nav-search"><label for="navSearch">查找功能</label><input id="navSearch" type="search" placeholder="搜索菜单…" autocomplete="off"><p id="navEmpty" hidden>未找到相关功能</p></div>
     <nav id="nav"></nav>
     <div class="side-foot">
       <div id="paymode" class="pill-mini">支付通道检测中…</div>
@@ -53,20 +55,21 @@
   </aside>
   <div class="main">
     <header class="topbar">
-      <div id="crumb">驾驶舱</div>
+      <button class="menu-toggle" id="menuToggle" aria-label="展开导航" aria-expanded="false" aria-controls="workspaceSide">☰</button><div id="crumb">经营概览</div>
       <div class="top-right">
         <span class="who" id="who"></span>
         <button class="btn ghost sm" onclick="logout()">退出登录</button>
       </div>
     </header>
-    <main id="app" class="content"></main>
+    <div class="workspace-page-head"><div><p id="pageEyebrow">工作台 / 经营</p><h1 id="pageTitle">经营概览</h1><p id="pageDescription">关注每一段旅程的经营变化。</p></div><button id="refreshPage" class="btn ghost" type="button">↻ 刷新数据</button></div><main id="app" class="content" tabindex="-1" aria-busy="false"></main>
   </div>
 </div>
 
-<div id="toastWrap"></div>
+<div id="toastWrap" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
 <script src="/admin-ui/app.js"></script>
 <script src="/admin-ui/login.js"></script>
+<script src="/admin-ui/workspace.js"></script>
 </body>
 </html>
