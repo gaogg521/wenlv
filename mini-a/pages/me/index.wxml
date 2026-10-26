@@ -20,7 +20,8 @@
   <view class="kv" bindtap="goPromo"><text>推广中心</text><text class="v">›</text></view>
   <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
   <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 徽章 · 存证 ›</text></view>
-  <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
+  <view class="kv" bindtap="goFaq"><text>常见问题</text><text class="v">返豆 · 核销 · 退改 ›</text></view>
+    <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
   <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">›</text></view>
 </view>
 <view class="note">四种角色 · 三个客户端 · 同一份数据（总方案 §2）</view>

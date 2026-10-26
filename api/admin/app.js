@@ -28,7 +28,7 @@ const ICONS = {
 const NAV = [
   ['经营', [['dash', '驾驶舱', 'dash']]],
   ['交易', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['settlements', '结算', 'settlements']]],
-  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
+  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
   ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['audit', '审计日志', 'audit']]],
   ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
   ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分资产发行', 'budgets'], ['badges', '勋章资产发行', 'flag'], ['wallets', '用户数字钱包', 'orders'], ['contract', '合约调用账户', 'sys']]],
@@ -126,9 +126,9 @@ function go(page) {
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
     budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户' }[page]
+    web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理' }[page]
   $('#crumb').textContent = name
-  ;({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract }[page] || dash)()
+  ;({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners }[page] || dash)()
 }
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
 const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
@@ -157,11 +157,31 @@ async function dash() {
   const path = pts.length ? 'M' + pts.map((p) => p.join(',')).join(' L') : ''
   const area = path ? path + ` L${pts[pts.length - 1][0]},${H - P} L${pts[0][0]},${H - P} Z` : ''
   const w3 = await api('GET', '/admin/web3/overview').catch(() => null)
+  const ins = await api('GET', '/admin/dash/insights').catch(() => null)
   $('#app').innerHTML = `${w3 ? `<div class="card"><div class="card-head"><h3>链上权益 · 向往自由链</h3><span class="muted">${esc(w3.chainMode)}</span>
     <button class="btn ghost sm" onclick="go('web3dash')" style="margin-left:auto">WEB3 工作区 ›</button></div>
     <div class="row" style="gap:24px;margin:0"><span>锚定批次 <b>${w3.anchoredBatches}/${w3.batches}</b></span>
     <span>链上事件 <b>${w3.anchoredEvents}/${w3.events}</b></span><span>待打包 <b>${w3.pendingEvents}</b></span>
     <span>勋章发放 <b>${w3.badgeGrants}</b></span><span>积分发行 <b>${w3.beanGranted}</b></span></div></div>` : ''}
+  ${ins ? `<div class="card"><div class="card-head"><h3>待审核事项（聚合）</h3></div>
+    <div class="row" style="gap:18px;margin:0">
+      <span>📝 待审笔记 <b>${ins.pending.notes}</b></span>
+      <span>🏪 进件申请 <b>${ins.pending.merchants}</b></span>
+      <span>💰 提现待审 <b>${ins.pending.withdrawals}</b></span>
+      <span>⚠️ 离线冲突 <b>${ins.pending.conflicts}</b></span>
+      <span>📋 约稿待判 <b>${ins.pending.tasks}</b></span>
+      <span class="muted" style="margin-left:auto">合计 ${ins.pending.notes + ins.pending.merchants + ins.pending.withdrawals + ins.pending.conflicts + ins.pending.tasks} 项</span>
+    </div>
+    <div class="card-head" style="margin-top:12px"><h3>热门主题游 TOP5（已支付口径）</h3></div>
+    <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
+    ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
+    </tbody></table>
+    <div class="card-head" style="margin-top:12px"><h3>活动转化漏斗</h3></div>
+    <div class="row" style="gap:24px;margin:0">
+      <span>报名→支付 <b>${ins.funnel.payRate}</b></span>
+      <span>复购线索 <b>${ins.funnel.rebuyRate}</b></span>
+      <span>积分使用率 <b>${ins.funnel.beanUseRate}</b></span>
+    </div></div>` : ''}
   <div class="kpi-grid">${kpis.map(([ic, bg, l, v, s]) => `
     <div class="kpi"><div class="ico" style="background:${bg}">${ic}</div>
     <div><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div></div>`).join('')}
@@ -217,7 +237,7 @@ async function orders() {
   const chips = [[0, '全部'], [10, '待支付'], [20, '已支付'], [30, '已确认'], [40, '已核销'], [50, '已完成'], [70, '已退款']]
   const list = orderFilter ? rows.filter((o) => o.status === orderFilter) : rows
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>订单</h2><span class="muted">${rows.length} 笔 · 点击行查看全链路时间线</span></div>
+    <div class="card-head"><h2>订单</h2>${EXPBTN('orders', '订单 CSV')}<span class="muted">${rows.length} 笔 · 点击行查看全链路时间线</span></div>
     <div class="cfg-tabs">${chips.map(([v, n]) => `<div class="cfg-tab ${orderFilter === v ? 'on' : ''}" onclick="orderFilter=${v};orders()">${n}</div>`).join('')}</div>
     ${list.length ? `<table><thead><tr><th>单号</th><th>商品</th><th>用户</th><th>金额</th><th>旅豆抵扣</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${list.map((o) => `<tr><td class="num" style="cursor:pointer;color:var(--blue)" onclick="orderDrawer('${o.order_no}')">${esc(o.order_no)}</td>
@@ -270,7 +290,7 @@ async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
   const rows = await api('GET', '/admin/products')
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2><button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
+    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
     <div class="row" style="margin-top:0">
       <input id="p_title" placeholder="标题，如：朱家角剧本游 · 江南谜案">
       <select id="p_cat"><option value="script">剧本闯关</option><option value="yoga">瑜伽之旅</option><option value="sister">姐姐系列</option>
@@ -377,7 +397,7 @@ async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const rows = await api('GET', '/admin/merchants')
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商户（履约方）</h2><span class="muted">收付通二级商户进件后填入子商户号</span></div>
+    <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
     <div class="row" style="margin-top:0"><input id="m_name" placeholder="商户名称"><input id="m_city" placeholder="城市码（310118 青浦 / 320508 姑苏）" style="width:250px">
       <input id="m_wx" placeholder="收付通子商户号（选填）" style="width:200px"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button></div>
     ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
@@ -398,7 +418,7 @@ async function settlements() {
   const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#7c3aed', '#64748b']
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商户周结算</h2>
+    <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
       <button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button></div>
     <p class="muted" style="margin:-8px 0 14px">五口径恒等式在数据库层以 CHECK 约束强制：<code>订单额 = 履约 + 服务费 + 推广 + 权益预算 + 留存毛利</code></p>
     ${rows.length ? rows.map((s) => {
@@ -869,6 +889,86 @@ async function walletDetail(uid) {
     <div class="muted" style="margin-top:8px">${esc(d.statement)}</div>
   </div>`
 }
+/* ============ CSV 导出（低垂果实 #4）============ */
+async function downloadExport(what) {
+  try {
+    const r = await fetch('/admin/export/' + what, { headers: { Authorization: 'Bearer ' + TOKEN } })
+    const j = await r.json()
+    const blob = new Blob([j.csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob); a.download = j.filename; a.click()
+    URL.revokeObjectURL(a.href)
+    toast('已导出 ' + j.filename)
+  } catch (e) { toast('导出失败：' + e.message, true) }
+}
+const EXPBTN = (what, label) => `<button class="btn ghost sm" style="margin-left:auto" onclick="downloadExport('${what}')">⬇ 导出${label || ''}</button>`
+
+/* ============ 常见问题 / 轮播管理（低垂果实 #5）============ */
+async function faqs() {
+  $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
+  const d = await api('GET', '/admin/faqs')
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>常见问题管理</h2><span class="muted">小程序「我的-常见问题」展示位 · 按序号排序</span></div>
+    <div class="row">
+      <input id="fq" placeholder="问题" style="width:260px">
+      <input id="fa" placeholder="答案" style="width:340px">
+      <input id="fs" type="number" placeholder="序号" style="width:70px">
+      <button class="btn primary sm" onclick="addFaq()">新增</button>
+    </div>
+    <table style="margin-top:10px"><thead><tr><th>序号</th><th>问题</th><th>答案</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.map((f) => `<tr><td class="num">${f.sort}</td><td>${esc(f.question)}</td><td class="td-sub">${esc(String(f.answer).slice(0, 60))}…</td>
+      <td>${f.status === 1 ? '<span class="pill ok">上架</span>' : '<span class="pill s70">下架</span>'}</td>
+      <td><button class="btn ghost sm" onclick="toggleFaq(${f.id}, ${f.status === 1 ? 0 : 1})">${f.status === 1 ? '下架' : '上架'}</button>
+      <button class="btn ghost sm" onclick="delFaq(${f.id})">删除</button></td></tr>`).join('')}
+    </tbody></table>
+  </div>`
+}
+async function addFaq() {
+  const question = document.getElementById('fq').value.trim(), answer = document.getElementById('fa').value.trim()
+  if (!question || !answer) return toast('问题与答案必填', true)
+  await api('POST', '/admin/faqs', { question, answer, sort: Number(document.getElementById('fs').value) || 0 })
+  toast('已新增'); faqs()
+}
+async function toggleFaq(id, status) { await api('POST', '/admin/faqs/' + id + '/update', { status }); faqs() }
+async function delFaq(id) {
+  if (!confirm('确认删除该问题？')) return
+  await api('POST', '/admin/faqs/' + id + '/delete', {}); toast('已删除'); faqs()
+}
+async function banners() {
+  $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
+  const d = await api('GET', '/admin/banners')
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>轮播媒体管理</h2><span class="muted">小程序首页轮播位 · 图片支持外链或 /uploads 路径</span></div>
+    <div class="row">
+      <input id="bt" placeholder="标题" style="width:160px">
+      <input id="bi" placeholder="图片 URL" style="width:260px">
+      <input id="bl" placeholder="跳转路径（选填）" style="width:220px">
+      <input id="bs" type="number" placeholder="序号" style="width:70px">
+      <button class="btn primary sm" onclick="addBanner()">新增</button>
+    </div>
+    <table style="margin-top:10px"><thead><tr><th>预览</th><th>标题</th><th>跳转</th><th>序号</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.map((b) => `<tr><td><img src="${esc(b.image)}" style="width:72px;height:40px;object-fit:cover;border-radius:6px"></td>
+      <td>${esc(b.title)}</td><td class="td-sub">${esc(b.link || '—')}</td><td class="num">${b.sort}</td>
+      <td>${b.status === 1 ? '<span class="pill ok">上架</span>' : '<span class="pill s70">下架</span>'}</td>
+      <td><button class="btn ghost sm" onclick="toggleBanner(${b.id}, ${b.status === 1 ? 0 : 1})">${b.status === 1 ? '下架' : '上架'}</button>
+      <button class="btn ghost sm" onclick="delBanner(${b.id})">删除</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无轮播（首页将隐藏轮播位）</td></tr>'}
+    </tbody></table>
+  </div>`
+}
+async function addBanner() {
+  const title = document.getElementById('bt').value.trim(), image = document.getElementById('bi').value.trim()
+  if (!title || !image) return toast('标题与图片必填', true)
+  await api('POST', '/admin/banners', { title, image, link: document.getElementById('bl').value.trim(), sort: Number(document.getElementById('bs').value) || 0 })
+  toast('已新增'); banners()
+}
+async function toggleBanner(id, status) { await api('POST', '/admin/banners/' + id + '/update', { status }); banners() }
+async function delBanner(id) {
+  if (!confirm('确认删除该轮播？')) return
+  await api('POST', '/admin/banners/' + id + '/delete', {}); toast('已删除'); banners()
+}
+
 async function contract() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   const d = await api('GET', '/admin/web3/contract-account')

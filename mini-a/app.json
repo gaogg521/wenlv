@@ -5,7 +5,8 @@
     "pages/shop/index",
     "pages/bean/index",
     "pages/me/index",
-    "pages/destination/index"
+    "pages/destination/index",
+    "pages/faq/index"
   ],
   "subPackages": [
     {

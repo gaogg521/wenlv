@@ -1,0 +1,11 @@
+<view class="hero" style="background:linear-gradient(135deg,#1f3a5f,#243b55)">
+  <view class="hi">常见问题</view>
+  <view class="sub2">消费返豆 · 动态核销 · 退款改签 · 一站答疑</view>
+</view>
+<view class="card" wx:for="{{list}}" wx:key="id">
+  <view class="kv" bindtap="toggle" data-i="{{index + 1}}">
+    <text style="flex:1">{{item.question}}</text><text class="v">{{open === index + 1 ? '收起' : '展开'}}</text>
+  </view>
+  <view class="note" wx:if="{{open === index + 1}}">{{item.answer}}</view>
+</view>
+<view wx:if="{{!list.length}}" class="empty">暂无常见问题</view>

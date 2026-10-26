@@ -3,6 +3,7 @@ Page({
   goPromo() { wx.navigateTo({ url: '/package-promo/pages/center/index' }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/create/index' }) },
   goIdentity() { wx.navigateTo({ url: '/package-content/pages/identity/index' }) },
+  goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
   data: { user: null, avatarUrl: '' },
   onShow() {

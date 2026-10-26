@@ -20,10 +20,15 @@ async function main() {
   // 重置业务数据（保留 rule_config / bean_global_cap，issued_sum 归零）——保证可重复执行
   const dbx = await import('../src/db.mjs')
   await dbx.q('SET FOREIGN_KEY_CHECKS = 0')
-  for (const t of await dbx.q("SELECT table_name tn FROM information_schema.tables WHERE table_schema = 'wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user')")) {
+  for (const t of await dbx.q("SELECT table_name tn FROM information_schema.tables WHERE table_schema = 'wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','faq')")) {
     await dbx.q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await dbx.q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')
+  // V13 FAQ 种子（复位时如空则重建）
+  const fqCount = (await dbx.q('SELECT COUNT(*) c FROM faq'))[0].c
+  if (Number(fqCount) === 0) {
+    await dbx.q("INSERT INTO faq (question, answer, sort) VALUES ('旅豆是什么？','旅豆是消费与活动的积分奖励，100 豆=10 元，下单可抵扣最多 10%，核销完成 24 小时后到账。',1), ('核销码怎么用？','入园时向商户出示「我的-订单」里的 6 位动态码或二维码，每 60 秒自动轮换，一码一次有效。',2), ('退款规则是什么？','出发前 7 天免费退；3-7 天收 10%；72 小时内收 30%；出发后不退。拼团未成团自动全额退款。',3)")
+  }
   // 参数恢复种子值（防上轮参数中心用例的残留污染：确定性重跑）
   const { DEFAULTS } = await import('../src/config.mjs')
   for (const [k, v] of Object.entries(DEFAULTS)) {
