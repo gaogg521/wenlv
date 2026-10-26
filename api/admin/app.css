@@ -25,22 +25,22 @@ code { background: #eef2fb; border-radius: 5px; padding: 1px 6px; font: 12px/1.5
 .lb-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 /* 渐变流动底层 */
 .lb-bg::before { content: ""; position: absolute; inset: -20%;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 35%, #1e3a8a 70%, #1e40af 100%);
+  background: linear-gradient(135deg, #7c2d12 0%, #b45309 25%, #c2410c 50%, #9a3412 75%, #7c2d12 100%);
   background-size: 200% 200%; animation: bgshift 18s ease-in-out infinite alternate; }
 @keyframes bgshift { from { background-position: 0% 0% } to { background-position: 100% 100% } }
 /* 镶嵌菱形图案层 */
 .lb-bg::after { content: ""; position: absolute; inset: 0;
   background-image:
-    linear-gradient(45deg, rgba(125,211,252,.06) 25%, transparent 25.5%, transparent 50%, rgba(125,211,252,.06) 50.5%, rgba(125,211,252,.06) 75%, transparent 75.5%),
-    linear-gradient(-45deg, rgba(125,211,252,.04) 25%, transparent 25.5%, transparent 50%, rgba(125,211,252,.04) 50.5%, rgba(125,211,252,.04) 75%, transparent 75.5%);
+    linear-gradient(45deg, rgba(253,230,138,.06) 25%, transparent 25.5%, transparent 50%, rgba(253,230,138,.06) 50.5%, rgba(253,230,138,.06) 75%, transparent 75.5%),
+    linear-gradient(-45deg, rgba(253,230,138,.04) 25%, transparent 25.5%, transparent 50%, rgba(253,230,138,.04) 50.5%, rgba(253,230,138,.04) 75%, transparent 75.5%);
   background-size: 40px 40px; animation: mosaicmove 30s linear infinite; }
 @keyframes mosaicmove { from { background-position: 0 0 } to { background-position: 40px 40px } }
 
 /* 光晕层（多个 blur 圆） */
 .lb-glow { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .3; z-index: 1; }
-.lb-glow.g1 { width: 380px; height: 380px; background: #3b82f6; left: -120px; top: -80px; animation: drift1 14s ease-in-out infinite alternate; }
-.lb-glow.g2 { width: 320px; height: 320px; background: #0ea5e9; right: -80px; bottom: -60px; animation: drift2 18s ease-in-out infinite alternate; }
-.lb-glow.g3 { width: 260px; height: 260px; background: #8b5cf6; left: 40%; top: 20%; animation: drift3 22s ease-in-out infinite alternate; }
+.lb-glow.g1 { width: 380px; height: 380px; background: #f97316; left: -120px; top: -80px; animation: drift1 14s ease-in-out infinite alternate; }
+.lb-glow.g2 { width: 320px; height: 320px; background: #fbbf24; right: -80px; bottom: -60px; animation: drift2 18s ease-in-out infinite alternate; }
+.lb-glow.g3 { width: 260px; height: 260px; background: #f59e0b; left: 40%; top: 20%; animation: drift3 22s ease-in-out infinite alternate; }
 @keyframes drift1 { from { transform: translate(0,0) } to { transform: translate(80px, 60px) } }
 @keyframes drift2 { from { transform: translate(0,0) } to { transform: translate(-60px, -40px) } }
 @keyframes drift3 { from { transform: translate(0,0) } to { transform: translate(50px, -30px) } }
@@ -61,20 +61,20 @@ code { background: #eef2fb; border-radius: 5px; padding: 1px 6px; font: 12px/1.5
 .lb-sub { margin: 14px 0 32px; font-size: 14px; opacity: .85; letter-spacing: 1px; }
 .lb-feats { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .lb-feats li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; opacity: .9; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.1); }
-.lb-feats li::before { content: "✓"; flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: rgba(125,211,252,.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #bae6fd; margin-top: 2px; }
+.lb-feats li::before { content: "✓"; flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: rgba(253,230,138,.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #bae6fd; margin-top: 2px; }
 .lb-foot { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 52px; font-size: 12px; opacity: .4; z-index: 3; }
 
 /* ===== 登录页 ===== */
 
 .login-stage { display: flex; min-height: 100vh; }
 .login-brand { flex: 1.35; min-width: 0; padding: 56px 52px; color: #fff;
-  background: linear-gradient(155deg, #1e3a8a 0%, #1e40af 55%, #172554 100%); display: flex; flex-direction: column; justify-content: center; }
+  background: linear-gradient(155deg, #9a3412 0%, #b45309 50%, #7c2d12 100%); display: flex; flex-direction: column; justify-content: center; }
 .lb-logo { font-size: 28px; font-weight: 800; letter-spacing: 2px; display: flex; align-items: center; gap: 10px; }
 .lb-logo .dot { width: 10px; height: 10px; border-radius: 50%; background: #7dd3fc; box-shadow: 0 0 12px #7dd3fc; }
 .lb-sub { margin: 14px 0 32px; font-size: 14px; opacity: .8; letter-spacing: 1px; }
 .lb-feats { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .lb-feats li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; opacity: .9; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.1); }
-.lb-feats li::before { content: "✓"; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: rgba(125,211,252,.2); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #bae6fd; margin-top: 1px; }
+.lb-feats li::before { content: "✓"; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: rgba(253,230,138,.2); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #bae6fd; margin-top: 1px; }
 .lb-foot { margin-top: auto; font-size: 12px; opacity: .5; }
 .login-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: #fff; }
 .glass-wrap { width: 380px; max-width: 100%; }

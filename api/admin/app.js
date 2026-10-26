@@ -766,19 +766,29 @@ async function phrases() {
   const list = await api('GET', '/admin/phrases')
   const prods = await api('GET', '/admin/products')
   const noPhrase = prods.filter((p) => !list.some((x) => x.id === p.id))
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>暗号管理</h2><p class="muted" style="margin:-8px 0 12px">剧本游「入戏」凭证 · 用户暗号给游客 · 商家暗号核销员对答</p>
-    <span class="muted">用户暗号给游客 · 商家暗号核销员对答 · 命中即核销</span></div>
-    ${list.length ? `<table><thead><tr><th>产品</th><th>用户暗号</th><th>商家暗号</th><th>操作</th></tr></thead><tbody>
-    ${list.map((x) => `<tr><td>${esc(x.title)}</td><td>${esc(x.phrase_user)}</td><td>${esc(x.phrase_merchant || '—')}</td>
-      <td><button class="btn sm" onclick="editPhrase(${x.id},'${esc(x.phrase_user)}','${esc(x.phrase_merchant || '')}')">编辑</button>
-      <button class="btn ghost sm" onclick="editPhrase(${x.id},'','')">清除</button></td></tr>`).join('')}</tbody></table>`
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:#f1e9fd">🎭</div><div><div class="l">已配暗号产品</div><div class="v">${list.length}</div><div class="s">剧本游入戏凭证</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">待配置产品</div><div class="v">${noPhrase.length}</div><div class="s">可选配暗号</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>暗号管理</h2><span class="muted">剧本游「入戏」凭证 · 用户暗号给游客 · 商家暗号核销员对答</span></div>
+    ${list.length ? `<table><thead><tr><th>产品</th><th>用户暗号</th><th>商家暗号</th><th>频道</th><th>操作</th></tr></thead><tbody>
+    ${list.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
+      <td><code style="background:#f1e9fd;color:#6d28d9">${esc(x.phrase_user)}</code></td>
+      <td><code style="background:#e8effd;color:#1d4ed8">${esc(x.phrase_merchant || '—')}</code></td>
+      <td><span class="pill off">${esc(x.channel || 'main')}</span></td>
+      <td><div class="td-actions">
+        <button class="btn ghost sm" onclick="editPhrase(${x.id},'${esc(x.phrase_user)}','${esc(x.phrase_merchant || '')}')">编辑</button>
+        <button class="btn danger sm" onclick="editPhrase(${x.id},'','')">清除</button>
+      </div></td></tr>`).join('')}</tbody></table>`
     : emptyBox('还没有产品配暗号——下方为产品配一对口令')}
-    <div class="card-head" style="margin-top:14px"><h3>为产品配置暗号</h3></div>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      <select id="phProd" class="inp" style="max-width:280px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="phUser" class="inp" placeholder="用户暗号（如：放生桥边等船否）" style="max-width:260px">
-      <input id="phMer" class="inp" placeholder="商家暗号（如：漕港河里载秋来）" style="max-width:260px">
-      <button class="btn primary" onclick="savePhrase()">保存</button>
+    <div class="card-head" style="margin-top:16px"><h3>为产品配置暗号</h3></div>
+    <div class="row">
+      <select id="phProd" class="inp" style="width:280px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
+      <input id="phUser" class="inp" placeholder="用户暗号（如：放生桥边等船否）" style="width:280px">
+      <input id="phMer" class="inp" placeholder="商家暗号（如：漕港河里载秋来）" style="width:280px">
+      <button class="btn primary sm" onclick="savePhrase()">保存</button>
     </div></div>`
 }
 window.editPhrase = (id, u, m) => {
@@ -798,17 +808,25 @@ async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const prods = await api('GET', '/admin/products')
   const ov = await api('GET', '/admin/rate-overrides').catch(() => [])
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>逐品佣金覆盖</h2><p class="muted" style="margin:-8px 0 12px">D2 扩展 · 单品费率优先于推广商档位 · 上限 12% · 留空=恢复档位费率</p>
-    <span class="muted">单品费率优先于推广商档位 · 上限 12% · 留空=恢复档位费率</span></div>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      <select id="roProd" class="inp" style="max-width:280px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="roBp" class="inp" placeholder="费率 %（如 9.5）" style="max-width:160px">
-      <button class="btn primary" onclick="saveRate()">设置</button>
-      <button class="btn ghost" onclick="saveRate(true)">清除覆盖</button>
+  const avgRate = ov.length ? (ov.reduce((s, x) => s + Number(x.promo_rate_bp), 0) / ov.length / 100).toFixed(1) : '—'
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">📊</div><div><div class="l">已设覆盖</div><div class="v">${ov.length}</div><div class="s">单品费率覆盖</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">平均覆盖费率</div><div class="v">${avgRate}%</div><div class="s">上限 12% · 留空=恢复档位</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>逐品佣金覆盖</h2><span class="muted">D2 扩展 · 单品费率优先于推广商档位 5/8/12%</span></div>
+    <div class="row">
+      <select id="roProd" class="inp" style="width:280px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
+      <input id="roBp" class="inp" placeholder="费率 %（如 9.5）" style="width:150px">
+      <button class="btn primary sm" onclick="saveRate()">设置覆盖</button>
+      <button class="btn ghost sm" onclick="saveRate(true)">清除覆盖</button>
     </div>
-    ${ov.length ? `<table style="margin-top:12px"><thead><tr><th>产品</th><th>单品费率</th></tr></thead><tbody>
-    ${ov.map((x) => `<tr><td>${esc(x.title)}</td><td><b>${(Number(x.promo_rate_bp) / 100).toFixed(2)}%</b></td></tr>`).join('')}</tbody></table>`
-    : '<div class="muted" style="margin-top:12px">暂无单品覆盖，全部走推广商档位 5/8/12%</div>'}</div>`
+    ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>对比档位</th></tr></thead><tbody>
+    ${ov.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
+      <td class="money num"><b>${(Number(x.promo_rate_bp) / 100).toFixed(2)}%</b></td>
+      <td><span class="pill off">档位 5/8/12% → 覆盖生效</span></td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
 }
 window.saveRate = async (clear) => {
   const bp = clear ? null : Math.round(parseFloat($('#roBp').value) * 100)
@@ -819,12 +837,21 @@ async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const list = await api('GET', '/admin/kyc')
   const st = { 0: '<span class="pill warn">待审</span>', 1: '<span class="pill ok">已通过</span>', 2: '<span class="pill s70">已驳回</span>' }
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>实名认证审核</h2><p class="muted" style="margin:-8px 0 12px">身份证号加密落库 · 仅展示脱敏号</p><span class="muted">身份证号加密落库 · 仅展示脱敏号</span></div>
-    ${list.length ? `<table><thead><tr><th>用户</th><th>姓名</th><th>证件号（脱敏）</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
-    ${list.map((x) => `<tr><td>${esc(x.nickname)}</td><td>${esc(x.real_name)}</td><td class="num">${esc(x.id_no_mask)}</td>
+  const pending = list.filter((x) => x.status === 0).length
+  const passed = list.filter((x) => x.status === 1).length
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${list.filter((x) => x.status === 2).length}</div><div class="s">资料不符</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>实名认证审核</h2><span class="muted">身份证号加密落库 · 仅展示脱敏号</span></div>
+    ${list.length ? `<table><thead><tr><th>用户</th><th>姓名</th><th>证件号（脱敏）</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody>
+    ${list.map((x) => `<tr><td>${esc(x.nickname || ('用户' + x.user_id))}</td><td>${esc(x.real_name)}</td><td class="num">${esc(x.id_no_mask)}</td>
       <td>${st[x.status] || x.status}</td><td class="td-sub">${String(x.created_at).slice(0, 16)}</td>
       <td>${x.status === 0 ? `<button class="btn primary sm" onclick="kycResolve(${x.id},'pass')">通过</button>
-        <button class="btn ghost sm" onclick="kycResolve(${x.id},'reject')">驳回</button>` : (x.reject_note ? '<span class="td-sub">' + esc(x.reject_note) + '</span>' : '')}</td></tr>`).join('')}</tbody></table>`
+        <button class="btn danger sm" onclick="kycResolve(${x.id},'reject')">驳回</button>` : (x.reject_note ? `<span class="td-sub">${esc(x.reject_note)}</span>` : '')}</td></tr>`).join('')}</tbody></table>`
     : emptyBox('暂无实名认证申请')}</div>`
 }
 window.kycResolve = async (id, action) => {
@@ -840,31 +867,42 @@ async function cocreate() {
   const prods = await api('GET', '/admin/products')
   const list = await api('GET', '/admin/co-creators')
   const profits = await api('GET', '/admin/co-profits').catch(() => [])
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>共创投资分润</h2><p class="muted" style="margin:-8px 0 12px">资金商/商品商 · 结算期自动按 产品GMV占比 × 留存毛利 × share_pct 入账</p>
-    <span class="muted">结算期自动按 产品GMV占比 × 留存毛利 × share_pct 入账</span></div>
-    <div class="row" style="gap:10px;flex-wrap:wrap">
-      <select id="coProd" class="inp" style="max-width:240px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="coName" class="inp" placeholder="姓名" style="max-width:120px">
-      <input id="coMobile" class="inp" placeholder="手机号" style="max-width:150px">
-      <select id="coRole" class="inp" style="max-width:120px"><option value="1">资金商</option><option value="2">商品商</option></select>
-      <input id="coInvest" class="inp" placeholder="投资额(元)" style="max-width:120px">
-      <input id="coPct" class="inp" placeholder="分润 %（如 8）" style="max-width:120px">
-      <button class="btn primary" onclick="saveCo()">登记</button>
+  const totalInvest = list.reduce((s, c) => s + Number(c.invest_amount), 0)
+  const totalProfit = profits.reduce((s, c) => s + Number(c.amount), 0)
+  const activeCount = list.filter((c) => Number(c.status) === 1).length
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">💰</div><div><div class="l">累计投资额</div><div class="v">¥${(totalInvest / 100).toLocaleString()}</div><div class="s">共创人投入</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">🏦</div><div><div class="l">累计分润</div><div class="v">¥${(totalProfit / 100).toLocaleString()}</div><div class="s">已入账待打款</div></div></div>
+    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">👥</div><div><div class="l">活跃共创人</div><div class="v">${activeCount}/${list.length}</div><div class="s">生效中</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
+    <div class="row">
+      <select id="coProd" class="inp" style="width:240px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
+      <input id="coName" class="inp" placeholder="姓名" style="width:120px">
+      <input id="coMobile" class="inp" placeholder="手机号" style="width:150px">
+      <select id="coRole" class="inp" style="width:120px"><option value="1">资金商</option><option value="2">商品商</option></select>
+      <input id="coInvest" class="inp" placeholder="投资额(元)" style="width:120px">
+      <input id="coPct" class="inp" placeholder="分润 %（如 8）" style="width:120px">
+      <button class="btn primary sm" onclick="saveCo()">登记共创人</button>
     </div>
-    ${list.length ? `<table style="margin-top:12px"><thead><tr><th>编号</th><th>产品</th><th>姓名</th><th>角色</th><th>投资额</th><th>分润</th><th>状态</th></tr></thead><tbody>
+    ${list.length ? `<table><thead><tr><th>编号</th><th>产品</th><th>姓名</th><th>角色</th><th>投资额</th><th>分润比例</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td class="num">${esc(x.co_no)}</td><td>${esc(x.title)}</td><td>${esc(x.name)}</td>
-      <td>${Number(x.role) === 1 ? '资金商' : '商品商'}</td><td class="num">¥${(Number(x.invest_amount) / 100).toFixed(0)}</td>
-      <td class="num">${(Number(x.share_pct) / 100).toFixed(1)}%</td>
-      <td>${Number(x.status) === 1 ? '<span class="pill ok">生效</span>' : '<span class="pill off">停用</span>'}
-      <button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">${Number(x.status) === 1 ? '停用' : '启用'}</button></td></tr>`).join('')}</tbody></table>`
-    : '<div class="muted" style="margin-top:12px">暂无共创人</div>'}
-    <div class="card-head" style="margin-top:14px"><h3>共创分润台账（链上分润凭证）</h3></div>
+      <td>${Number(x.role) === 1 ? '<span class="pill s60">资金商</span>' : '<span class="pill s20">商品商</span>'}</td>
+      <td class="num">¥${(Number(x.invest_amount) / 100).toLocaleString()}</td>
+      <td class="num"><b>${(Number(x.share_pct) / 100).toFixed(1)}%</b></td>
+      <td>${Number(x.status) === 1 ? '<span class="pill ok">生效</span>' : '<span class="pill off">停用</span>'}</td>
+      <td><div class="td-actions">${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无共创人——上方登记首位共创人')}</div>
+  <div class="card">
+    <div class="card-head"><h3>共创分润台账</h3><span class="muted">链上分润凭证 · 结算期自动入账</span></div>
     ${profits.length ? `<table><thead><tr><th>期</th><th>共创人</th><th>产品</th><th>基数</th><th>分润额</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${profits.map((x) => `<tr><td>${esc(x.period)}</td><td>${esc(x.name)}（${esc(x.co_no)}）</td><td>${esc(x.title)}</td>
-      <td class="num">¥${(Number(x.base_amount) / 100).toFixed(2)}</td><td class="num"><b>¥${(Number(x.amount) / 100).toFixed(2)}</b></td>
+    ${profits.map((x) => `<tr><td>${esc(x.period)}</td><td>${esc(x.name)}</td><td>${esc(x.title)}</td>
+      <td class="num">¥${(Number(x.base_amount) / 100).toFixed(2)}</td><td class="money num"><b>¥${(Number(x.amount) / 100).toFixed(2)}</b></td>
       <td>${Number(x.status) === 1 ? '<span class="pill ok">已打款</span>' : '<span class="pill warn">待打款</span>'}</td>
-      <td>${Number(x.status) === 0 ? `<button class="btn primary sm" onclick="payCo(${x.id})">标记打款</button>` : ''}</td></tr>`).join('')}</tbody></table>`
-    : '<div class="muted">暂无分润记录——生成结算单后自动入账</div>'}</div>`
+      <td>${Number(x.status) === 0 ? `<button class="btn primary sm" onclick="payCo(${x.id})">标记打款</button>` : '<span class="td-sub">✓</span>'}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty"><div class="e-ico">📊</div>暂无分润记录——生成结算单后自动入账</div>'}</div>`
 }
 window.saveCo = async () => {
   await api('POST', '/admin/co-creators', { productId: $('#coProd').value, name: $('#coName').value, mobile: $('#coMobile').value,
@@ -886,69 +924,16 @@ const TERM_MAP = [
   ['推广服务商', '分销合约节点（Affiliate Node）', 'D2 定稿禁止层级计酬；链词仅内部运营语境'],
 ]
 async function terms() {
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>术语映射</h2><p class="muted" style="margin:-8px 0 12px">后台 Web3 口径 ↔ 小程序合规口径 · 改动任何界面文案前先对照本表</p></div>
-    <div class="muted" style="margin-bottom:10px">后台不上小程序审核，可用 Web3 真实词汇；两个小程序端一律走合规词。改动任何界面文案前先对照本表，避免口径串台。</div>
-    <table><thead><tr><th>小程序合规词（用户可见）</th><th>后台/存证链词（内部运营）</th><th>使用边界</th></tr></thead><tbody>
-    ${TERM_MAP.map((t) => `<tr><td><b>${t[0]}</b></td><td>${t[1]}</td><td class="td-sub">${t[2]}</td></tr>`).join('')}</tbody></table>
-    <div class="note" style="margin-top:10px">红线（D6）：不对应股权/Token 收益权、不按层级计酬、境内外隔离。链词仅出现在本后台与存证报告，绝不回灌小程序。</div></div>`
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>术语映射</h2><span class="muted">后台 Web3 口径 ↔ 小程序合规口径 · D6 双层口径总表</span></div>
+    <div class="muted" style="margin-bottom:12px">后台不上小程序审核，可用 Web3 真实词汇；两个小程序端一律走合规词。改动任何界面文案前先对照本表，避免口径串台。</div>
+    <table><thead><tr><th style="width:160px">小程序合规词（用户可见）</th><th style="width:220px">后台/存证链词（内部运营）</th><th>使用边界</th></tr></thead><tbody>
+    ${TERM_MAP.map((t) => `<tr><td><b style="color:var(--brand-deep)">${t[0]}</b></td><td><code>${t[1]}</code></td><td class="td-sub">${t[2]}</td></tr>`).join('')}</tbody></table>
+    <div class="note" style="margin-top:14px;padding:12px;background:#fdf3e0;border-radius:8px;color:#92400e">
+      <b>⚠ D6 红线：</b>不对应股权/Token 收益权、不按层级计酬、境内外隔离。链词仅出现在本后台与存证报告，<b>绝不回灌小程序</b>。
+    </div></div>`
 }
-
-
-/* ============ 约稿任务管理 ============ */
-async function tasks() {
-  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/content-tasks')
-  const ST = { 0: '<span class="pill warn">待领取</span>', 1: '<span class="pill s20">进行中</span>', 2: '<span class="pill s30">审核中</span>', 3: '<span class="pill ok">已完成</span>' }
-  $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>约稿任务</h2><span class="muted">四态状态机 · 待领取→进行中→审核中→已完成</span></div>
-    <div class="row"><input id="tkTitle" placeholder="任务标题"><input id="tkBrief" placeholder="任务简述" style="width:280px">
-      <input id="tkReward" placeholder="报酬(豆)" style="width:120px"><button class="btn primary sm" onclick="addTask()">新建任务</button></div>
-    ${list.length ? `<table><thead><tr><th>任务</th><th>简述</th><th>报酬</th><th>领取</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${list.map((t) => `<tr><td class="td-main">${esc(t.title)}</td><td class="td-sub">${esc(t.brief || '')}</td>
-      <td class="num">${Number(t.reward_beans)} 豆</td><td class="num">${Number(t.claimed) || 0} 人</td>
-      <td>${ST[t.status] || t.status}</td>
-      <td><div style="display:flex;gap:4px">${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
-      <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无约稿任务')}</div>`
-}
-async function addTask() {
-  const title = document.getElementById('tkTitle').value.trim()
-  if (!title) return toast('任务标题必填', true)
-  try {
-    await api('POST', '/admin/content-tasks', { title, brief: document.getElementById('tkBrief').value.trim(), rewardBeans: Number(document.getElementById('tkReward').value) || 100 })
-    toast('任务已创建'); tasks()
-  } catch (e) { toast(e.message, true) }
-}
-async function taskVerdict(id, pass) {
-  try { await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass }); toast(pass ? '任务已通过' : '任务已驳回'); tasks() } catch (e) { toast(e.message, true) }
-}
-async function deleteTask(id) {
-  if (!confirm('删除该任务？')) return
-  try { await api('POST', '/admin/content-tasks/' + id + '/delete', {}); toast('任务已删除'); tasks() } catch (e) { toast(e.message, true) }
-}
-
-/* ============ 离线核销冲突队列 ============ */
-async function conflicts() {
-  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/verify/conflicts')
-  const ST = { 0: '<span class="pill warn">待处理</span>', 1: '<span class="pill ok">已确认</span>', 2: '<span class="pill s70">已驳回</span>' }
-  $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>离线核销冲突</h2><span class="muted">断网恢复后二次校验失败的凭证 · 需人工确认或驳回</span></div>
-    ${list.length ? `<table><thead><tr><th>商户</th><th>凭证</th><th>离线载荷</th><th>原因</th><th>时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${list.map((c) => `<tr><td class="td-main">商户#${c.merchant_id}</td><td class="num">pass#${c.pass_id || '—'}</td>
-      <td class="td-sub" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.payload)}</td>
-      <td class="td-sub">${esc(c.reason)}</td><td class="td-sub">${String(c.offline_at || '').slice(0,16)}</td>
-      <td>${ST[c.status] || c.status}</td>
-      <td>${c.status === 0 ? `<button class="btn primary sm" onclick="conflictResolve(${c.id},'pass')">确认核销</button>
-        <button class="btn danger sm" onclick="conflictResolve(${c.id},'reject')">驳回</button>` : ''}</td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无离线冲突——断网核销恢复后自动入队')}</div>`
-}
-async function conflictResolve(id, action) {
-  let note = null
-  if (action === 'reject') note = prompt('驳回原因：') || '凭证异常'
-  try { await api('POST', '/admin/verify/conflicts/' + id + '/resolve', { action, note }); toast('冲突已处理'); conflicts() } catch (e) { toast(e.message, true) }
-}
-
 /* ============ WEB3 工作区 ============ */
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
