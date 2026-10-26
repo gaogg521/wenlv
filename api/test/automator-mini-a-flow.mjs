@@ -38,6 +38,11 @@ await shot(mini, 'flow-detail')
 page = await mini.currentPage()
 const btn = await page.$('.btn')
 if (btn) {
+  // V15：手机号必填（手输/组件双通道）——链路用 setData 注入测试手机号
+  try {
+    const page = await mini.currentPage()
+    await page.setData({ contactPhone: '13800001234', contactName: '链路测试' })
+  } catch (e) { log('setData 失败(继续):', e.message) }
   await btn.tap()
   log('已点击立即报名')
   await wait(4500)

@@ -70,8 +70,7 @@ Page({
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.fallback) return wx.showToast({ title: '演示数据：连上后端即可下单', icon: 'none' })
-    if (!this.data.contactName || !this.data.contactName.trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
-    if (!/^1[3-9]\d{9}$/.test(this.data.contactPhone)) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
+    if (!/^1[3-9]\d{9}$/.test(this.data.contactPhone || '')) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
     try {
       await api.ensureLogin()
       const beanBal = this.data.beanBal || 0
