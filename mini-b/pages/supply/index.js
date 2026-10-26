@@ -2,9 +2,10 @@ const api = require('../../utils/api')
 Page({
   data: { list: [], loaded: false },
   onShow() { this.fetch() },
-  fetch() {
+  onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
+  fetch(done) {
     if (!getApp().globalData.token) return this.setData({ loaded: true })
-    api.request('/m/supply').then((l) => this.setData({ list: l, loaded: true })).catch(() => this.setData({ loaded: true }))
+    api.request('/m/supply').then((l) => { this.setData({ list: l, loaded: true }); done && done() }).catch(() => { this.setData({ loaded: true }); done && done() })
   },
   stopSell(e) {
     const id = e.currentTarget.dataset.id

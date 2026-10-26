@@ -48,9 +48,17 @@ Page({
     return { label: parts[0], extra: extra.join(' · ') }
   },
 
-  pick(e) { this.setData({ sel: Number(e.currentTarget.dataset.i), selView: this.sessView(this.data.sessions[Number(e.currentTarget.dataset.i)]) }) },
-  addQty() { this.setData({ qty: Math.min(9, this.data.qty + 1) }) },
-  subQty() { this.setData({ qty: Math.max(1, this.data.qty - 1) }) },
+  pick(e) { this.setData({ sel: Number(e.currentTarget.dataset.i), qty: 1, selView: this.sessView(this.data.sessions[Number(e.currentTarget.dataset.i)]) }) },
+  addQty() {
+    const s = this.data.sessions[this.data.sel]
+    const cap = Math.min(9, s && s.left_seats ? Number(s.left_seats) : 9)
+    if (this.data.qty >= cap) return wx.showToast({ title: s && s.left_seats ? '已达该团期剩余名额（' + cap + '）' : '单单最多 9 人', icon: 'none' })
+    this.setData({ qty: this.data.qty + 1 })
+  },
+  subQty() {
+    if (this.data.qty <= 1) return
+    this.setData({ qty: this.data.qty - 1 })
+  },
   toggleBean() { this.setData({ useBean: !this.data.useBean }) },
   onName(e) { this.setData({ contactName: e.detail.value }) },
   // 微信官方手机号快速验证组件回调：code 交服务端换号

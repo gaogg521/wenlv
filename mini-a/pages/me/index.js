@@ -3,24 +3,30 @@ Page({
   goPromo() { wx.navigateTo({ url: '/package-promo/pages/center/index' }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/create/index' }) },
   goIdentity() { wx.navigateTo({ url: '/package-content/pages/identity/index' }) },
-  // KYC 实名认证：弹层提交 → 后台人工审核（V14）
+  // KYC 实名认证：内联表单（两次弹窗体验差 → 展开卡填写，可粘贴可改）
   async kyc() {
     try { await api.ensureLogin() } catch { return }
+    if (this.data.kycOpen) return this.setData({ kycOpen: false })
     const cur = await api.request('/c/kyc/mine').catch(() => ({ status: -1 }))
     if (cur.status === 1) return wx.showToast({ title: '已实名：' + cur.real_name, icon: 'none' })
-    if (cur.status === 0) return wx.showToast({ title: '审核中（' + cur.id_no_mask + '）', icon: 'none' })
-    const name = await new Promise((r) => wx.showModal({ title: '实名认证', editable: true, placeholderText: '真实中文姓名', success: (x) => r(x.confirm ? x.content : '') }))
-    if (!name) return
-    const idNo = await new Promise((r) => wx.showModal({ title: '身份证号', editable: true, placeholderText: '18 位号码（仅平台审核用）', success: (x) => r(x.confirm ? x.content : '') }))
-    if (!idNo) return
+    if (cur.status === 0) return this.setData({ kycOpen: true, kycStatus: 0, kycMask: cur.id_no_mask, kycNote: '审核中，请耐心等待' })
+    this.setData({ kycOpen: true, kycStatus: cur.status === 2 ? 2 : -1, kycMask: cur.id_no_mask || '', kycNote: cur.reject_note || '' })
+  },
+  onKycName(e) { this.setData({ kycName: e.detail.value }) },
+  onKycId(e) { this.setData({ kycId: e.detail.value }) },
+  async kycSubmit() {
+    const { kycName, kycId } = this.data
+    if (!kycName || !kycName.trim()) return wx.showToast({ title: '请填写真实姓名', icon: 'none' })
+    if (!/^[0-9Xx]{15}$|^[0-9Xx]{18}$/.test((kycId || '').trim())) return wx.showToast({ title: '身份证号 15/18 位', icon: 'none' })
     try {
-      const r = await api.request('/c/kyc/submit', 'POST', { realName: name.trim(), idNo: idNo.trim() })
-      wx.showModal({ title: '已提交', content: r.masked + ' 审核通过后可用于出行保险等场景', showCancel: false })
+      const r = await api.request('/c/kyc/submit', 'POST', { realName: kycName.trim(), idNo: kycId.trim() })
+      this.setData({ kycStatus: 0, kycMask: r.masked, kycNote: '已提交，平台人工审核（可用于出行保险等场景）', kycOpen: false })
+      wx.showToast({ title: '已提交审核', icon: 'success' })
     } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }
   },
   goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
-  data: { user: null, avatarUrl: '' },
+  data: { kycOpen: false, kycStatus: -1, kycMask: '', kycNote: '', kycName: '', kycId: '', user: null, avatarUrl: '' },
   onShow() {
     this.setData({ user: app.globalData.user })
     const api = require('../../utils/api')

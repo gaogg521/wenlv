@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "核销流水" }
+{ "navigationBarTitleText": "核销流水", "enablePullDownRefresh": true }

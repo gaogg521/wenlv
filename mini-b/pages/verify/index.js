@@ -52,7 +52,8 @@ Page({
         wx.vibrateShort({ type: res.ok ? 'heavy' : 'light' })
         if (res.ok) {
           this.setData({ streak: this.data.streak + 1, result: { ok: true, payload: '暗号·' + res.orderNo, reason: res.reason + (res.counterPhrase ? ' · 对答：' + res.counterPhrase : '') } })
-          wx.showModal({ title: '暗号对上了', content: res.counterPhrase ? '回他对上句：「' + res.counterPhrase + '」' : '已整单核销', showCancel: false })
+          // 对答句在结果卡常驻展示，这里只轻提示，避免双弹窗打断连续核销
+          wx.showToast({ title: res.counterPhrase ? '对答：' + res.counterPhrase : '已整单核销', icon: 'none', duration: 2500 })
           this.syncList()
         } else {
           this.setData({ result: { ok: false, payload: '暗号', reason: res.reason } })

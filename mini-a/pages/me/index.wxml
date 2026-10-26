@@ -21,6 +21,15 @@
   <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
   <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 徽章 · 存证 ›</text></view>
   <view class="kv" bindtap="kyc"><text>实名认证</text><text class="v">出行保险 · 合规出行 ›</text></view>
+  <view wx:if="{{kycOpen}}" class="card" style="margin:-8rpx 0 16rpx">
+    <view wx:if="{{kycStatus === 2}}" class="note" style="color:var(--red)">上次被驳回：{{kycNote || '资料不符'}}</view>
+    <input value="{{kycName}}" bindinput="onKycName" placeholder="真实中文姓名"
+      style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+    <input value="{{kycId}}" bindinput="onKycId" placeholder="身份证号（15/18 位，加密存储）"
+      style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
+    <view class="btn" bindtap="kycSubmit">提交实名审核</view>
+    <view class="note" wx:if="{{kycMask}}">已提交档案：{{kycMask}}</view>
+  </view>
   <view class="kv" bindtap="goFaq"><text>常见问题</text><text class="v">返豆 · 核销 · 退改 ›</text></view>
     <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
   <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">›</text></view>
