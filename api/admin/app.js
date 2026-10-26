@@ -28,8 +28,8 @@ const ICONS = {
 const NAV = [
   ['经营', [['dash', '驾驶舱', 'dash']]],
   ['交易', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['settlements', '结算', 'settlements']]],
-  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
-  ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
+  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
+  ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['conflicts', '离线冲突', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
   ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
   ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分资产发行', 'budgets'], ['badges', '勋章资产发行', 'flag'], ['wallets', '用户数字钱包', 'orders'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
 ]
@@ -126,9 +126,9 @@ function go(page) {
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
     budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射' }[page]
+    web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突' }[page]
   $('#crumb').textContent = name
-  ;({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms }[page] || dash)()
+  ;({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)()
 }
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
 const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
@@ -403,7 +403,7 @@ async function merchants() {
     ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td class="num">${esc(m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div></td><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() {
@@ -429,7 +429,7 @@ async function settlements() {
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待确认', '商户确认', '分账执行', '完成', '异议中'][s.status]}</span>
-          ${s.status === 0 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">复核通过并分账</button>` : ''}</div>
+          ${s.status === 0 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">复核通过并分账</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
       <div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>
       <div class="split-legend">${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
@@ -438,6 +438,10 @@ async function settlements() {
 }
 async function genSettlements() {
   try { const r = await api('POST', '/admin/settlements/generate', {}); toast('已生成 ' + r.settlementIds.length + ' 份结算单'); settlements() } catch (e) { toast(e.message, true) }
+}
+async function resolveDispute(id) {
+  const note = prompt('异议处理说明：', '商户已确认，异议解决') || '异议已处理'
+  try { await api('POST', '/admin/settlements/' + id + '/dispute', { note }); toast('异议已处理'); settlements() } catch (e) { toast(e.message, true) }
 }
 async function confirmSettle(id) {
   try { await api('POST', `/admin/settlements/${id}/confirm`, {}); toast('结算完成：分账已执行'); settlements() } catch (e) { toast(e.message, true) }
@@ -889,6 +893,62 @@ async function terms() {
     <div class="note" style="margin-top:10px">红线（D6）：不对应股权/Token 收益权、不按层级计酬、境内外隔离。链词仅出现在本后台与存证报告，绝不回灌小程序。</div></div>`
 }
 
+
+/* ============ 约稿任务管理 ============ */
+async function tasks() {
+  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
+  const list = await api('GET', '/admin/content-tasks')
+  const ST = { 0: '<span class="pill warn">待领取</span>', 1: '<span class="pill s20">进行中</span>', 2: '<span class="pill s30">审核中</span>', 3: '<span class="pill ok">已完成</span>' }
+  $('#app').innerHTML = `<div class="card">
+    <div class="card-head"><h2>约稿任务</h2><span class="muted">四态状态机 · 待领取→进行中→审核中→已完成</span></div>
+    <div class="row"><input id="tkTitle" placeholder="任务标题"><input id="tkBrief" placeholder="任务简述" style="width:280px">
+      <input id="tkReward" placeholder="报酬(豆)" style="width:120px"><button class="btn primary sm" onclick="addTask()">新建任务</button></div>
+    ${list.length ? `<table><thead><tr><th>任务</th><th>简述</th><th>报酬</th><th>领取</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${list.map((t) => `<tr><td class="td-main">${esc(t.title)}</td><td class="td-sub">${esc(t.brief || '')}</td>
+      <td class="num">${Number(t.reward_beans)} 豆</td><td class="num">${Number(t.claimed) || 0} 人</td>
+      <td>${ST[t.status] || t.status}</td>
+      <td><div style="display:flex;gap:4px">${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
+      <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无约稿任务')}</div>`
+}
+async function addTask() {
+  const title = document.getElementById('tkTitle').value.trim()
+  if (!title) return toast('任务标题必填', true)
+  try {
+    await api('POST', '/admin/content-tasks', { title, brief: document.getElementById('tkBrief').value.trim(), rewardBeans: Number(document.getElementById('tkReward').value) || 100 })
+    toast('任务已创建'); tasks()
+  } catch (e) { toast(e.message, true) }
+}
+async function taskVerdict(id, pass) {
+  try { await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass }); toast(pass ? '任务已通过' : '任务已驳回'); tasks() } catch (e) { toast(e.message, true) }
+}
+async function deleteTask(id) {
+  if (!confirm('删除该任务？')) return
+  try { await api('POST', '/admin/content-tasks/' + id + '/delete', {}); toast('任务已删除'); tasks() } catch (e) { toast(e.message, true) }
+}
+
+/* ============ 离线核销冲突队列 ============ */
+async function conflicts() {
+  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
+  const list = await api('GET', '/admin/verify/conflicts')
+  const ST = { 0: '<span class="pill warn">待处理</span>', 1: '<span class="pill ok">已确认</span>', 2: '<span class="pill s70">已驳回</span>' }
+  $('#app').innerHTML = `<div class="card">
+    <div class="card-head"><h2>离线核销冲突</h2><span class="muted">断网恢复后二次校验失败的凭证 · 需人工确认或驳回</span></div>
+    ${list.length ? `<table><thead><tr><th>商户</th><th>凭证</th><th>离线载荷</th><th>原因</th><th>时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${list.map((c) => `<tr><td class="td-main">商户#${c.merchant_id}</td><td class="num">pass#${c.pass_id || '—'}</td>
+      <td class="td-sub" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.payload)}</td>
+      <td class="td-sub">${esc(c.reason)}</td><td class="td-sub">${String(c.offline_at || '').slice(0,16)}</td>
+      <td>${ST[c.status] || c.status}</td>
+      <td>${c.status === 0 ? `<button class="btn primary sm" onclick="conflictResolve(${c.id},'pass')">确认核销</button>
+        <button class="btn danger sm" onclick="conflictResolve(${c.id},'reject')">驳回</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无离线冲突——断网核销恢复后自动入队')}</div>`
+}
+async function conflictResolve(id, action) {
+  let note = null
+  if (action === 'reject') note = prompt('驳回原因：') || '凭证异常'
+  try { await api('POST', '/admin/verify/conflicts/' + id + '/resolve', { action, note }); toast('冲突已处理'); conflicts() } catch (e) { toast(e.message, true) }
+}
+
 /* ============ WEB3 工作区 ============ */
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -1226,6 +1286,9 @@ async function editMerchant(id, name, cityCode, wxpaySubMchid) {
     <div class="field"><label>收付通子商户号（选填）</label><input id="em_wx" value="${esc(wxpaySubMchid)}"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button>
      <button class="btn primary" onclick="saveMerchantEdit(${id})">保存</button>`)
+}
+async function approveMerchant(id) {
+  try { await api('POST', '/admin/merchants/' + id + '/approve', {}); toast('商户进件已通过'); merchants() } catch (e) { toast(e.message, true) }
 }
 async function saveMerchantEdit(id) {
   try {

@@ -7,19 +7,40 @@
 </head>
 <body>
 
-<!-- ===== 登录：左品牌深蓝 + 右表单 ===== -->
+<!-- ===== 登录：左品牌深蓝背景（镶嵌图案+渐变流动+粒子飘动+光晕）+ 右表单 ===== -->
 <div id="login" class="login-stage">
   <div class="login-brand">
-    <div class="lb-logo"><span class="dot"></span>向往的自由</div>
-    <div class="lb-sub">文旅生态操作系统 · Tourism Web3 OS</div>
-    <ul class="lb-feats">
-      <li>四种角色 × 三个客户端 · 同一份数据</li>
-      <li>真实交易闭环 · 下单 → 核销 → 返豆 → 结算</li>
-      <li>五口径恒等 · 双分录账本 · 全链路存证</li>
-      <li>参数中心双人复核 · 风控事件全留痕</li>
-      <li>推广服务商一级 CPS · 共创投资分润</li>
-      <li>Web3 存证 · 链上权益凭证 · 术语双层口径</li>
-    </ul>
+    <!-- 背景层：渐变流动 + 镶嵌菱形 -->
+    <div class="lb-bg"></div>
+    <!-- 光晕层 -->
+    <div class="lb-glow g1"></div>
+    <div class="lb-glow g2"></div>
+    <div class="lb-glow g3"></div>
+    <!-- 几何装饰线 -->
+    <svg class="lb-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <path d="M0 20 L100 15" stroke="rgba(255,255,255,.06)" stroke-width=".3" fill="none"/>
+      <path d="M0 50 L100 45" stroke="rgba(255,255,255,.04)" stroke-width=".2" fill="none"/>
+      <path d="M0 80 L100 75" stroke="rgba(255,255,255,.05)" stroke-width=".3" fill="none"/>
+      <circle cx="80" cy="15" r="8" stroke="rgba(125,211,252,.1)" stroke-width=".2" fill="none"/>
+      <circle cx="15" cy="85" r="12" stroke="rgba(125,211,252,.08)" stroke-width=".2" fill="none"/>
+    </svg>
+    <!-- 粒子层（JS 动态生成） -->
+    <div class="lb-particles" id="lbParticles"></div>
+
+    <!-- 内容层 -->
+    <div class="lb-content">
+      <div class="lb-logo"><span class="dot"></span>向往的自由</div>
+      <div class="lb-sub">文旅生态操作系统 · Tourism Web3 OS</div>
+      <ul class="lb-feats">
+        <li>四种角色 × 三个客户端 · 同一份数据</li>
+        <li>真实交易闭环 · 下单 → 核销 → 返豆 → 结算</li>
+        <li>五口径恒等 · 双分录账本 · 全链路存证</li>
+        <li>参数中心双人复核 · 风控事件全留痕</li>
+        <li>推广服务商一级 CPS · 共创投资分润</li>
+        <li>Web3 存证 · 链上权益凭证 · 术语双层口径</li>
+      </ul>
+    </div>
+
     <div class="lb-foot">上海璟宬文化发展有限公司</div>
   </div>
 
@@ -80,5 +101,27 @@
 <div id="modalRoot"></div>
 
 <script src="/admin-ui/app.js"></script>
+<script>
+// 登录页粒子生成
+(function () {
+  const container = document.getElementById('lbParticles')
+  if (!container) return
+  const SIZES = [3, 4, 5, 6, 8]
+  const COLORS = ['rgba(125,211,252,.5)', 'rgba(147,197,253,.4)', 'rgba(191,219,254,.3)', 'rgba(255,255,255,.35)']
+  for (let i = 0; i < 24; i++) {
+    const p = document.createElement('div')
+    p.className = 'lb-p'
+    const size = SIZES[Math.floor(Math.random() * SIZES.length)]
+    p.style.width = size + 'px'
+    p.style.height = size + 'px'
+    p.style.left = (Math.random() * 100) + '%'
+    p.style.background = COLORS[Math.floor(Math.random() * COLORS.length)]
+    p.style.animationDuration = (12 + Math.random() * 18) + 's'
+    p.style.animationDelay = (-Math.random() * 20) + 's'
+    p.style.animationTimingFunction = 'ease-in-out'
+    container.appendChild(p)
+  }
+})()
+</script>
 </body>
 </html>

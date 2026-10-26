@@ -891,6 +891,15 @@ const admin = {
     await q('UPDATE settlement SET status = 3 WHERE id = ? AND status = 2', [req.params.id])
     return { status: 3 }
   },
+  'POST /admin/settlements/:id/dispute': async (req) => {
+    await requireAdmin(req, ['super', 'finance'])
+    const { note } = req.body
+    const row = await one('SELECT * FROM settlement WHERE id = ? AND status = 4', [req.params.id])
+    if (!row) throw new BizError(1004, '结算单不存在或不在异议中')
+    await q('UPDATE settlement SET dispute_note = ?, status = 3, dispute_resolved_at = NOW(3) WHERE id = ?', [String(note||'').slice(0,200), req.params.id])
+    return { resolved: true }  },
+
+
   'GET /admin/risk': async (req) => { await requireAdmin(req); return await q('SELECT * FROM risk_event ORDER BY id DESC LIMIT 50') },
   'GET /admin/audit-logs': async (req) => { await requireAdmin(req); return await q('SELECT * FROM audit_log ORDER BY id DESC LIMIT 100') },
   'GET /admin/attestations': async (req) => {
@@ -959,6 +968,11 @@ const admin = {
     }
     await q("UPDATE content_task SET status = 1 WHERE id = ? AND status = 2", [req.params.id])
     return { rejected: true, backTo: '进行中' }
+  },
+  'POST /admin/content-tasks/:id/delete': async (req) => {
+    await requireAdmin(req)
+    await q('DELETE FROM content_task WHERE id = ?', [req.params.id])
+    return { deleted: true }
   },
   // 离线核销冲突人工队列（治理）
   'GET /admin/verify/conflicts': async (req) => {
