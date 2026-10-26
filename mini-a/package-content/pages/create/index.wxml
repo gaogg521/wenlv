@@ -8,18 +8,16 @@
 
   <!-- 富文本编辑器：工具栏 + textarea + 预览 -->
   <view class="rt-toolbar">
-    <view class="rt-btn" bindtap="rtCmd" data-tag="h2">H2</view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="h3">H3</view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="b"><b>B</b></view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="i"><i>I</i></view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="ul">列表</view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="quote">引用</view>
-    <view class="rt-btn" bindtap="rtCmd" data-tag="br">换行</view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="h2">H2</view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="h3">H3</view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="b"><b>B</b></view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="i"><i>I</i></view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="ul">列表</view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="quote">引用</view>
+    <view class="rt-btn" catchtouchend="rtCmd" data-tag="br">换行</view>
     <view style="margin-left:auto;font-size:22rpx;color:var(--sub);align-self:center">{{bodyText.length}} 字</view>
   </view>
-  <textarea id="bodyInput" value="{{bodyHtml}}" bindinput="onBodyInput"
-    placeholder="分享你的旅程…（支持标题/粗体/列表/引用）" maxlength="2000"
-    style="width:100%;height:260rpx;border:1rpx solid var(--line);border-radius:0 0 16rpx 16rpx;padding:16rpx 24rpx;box-sizing:border-box;font-size:15rpx;line-height:1.7" />
+  <editor id="bodyEditor" class="body-editor" placeholder="写下这次旅行最值得记住的瞬间…" bindready="onEditorReady" bindinput="onEditorInput" bindstatuschange="onEditorStatus" style="min-height:320rpx;border:1rpx solid var(--line);padding:24rpx;box-sizing:border-box;font-size:28rpx;line-height:1.8"></editor>
 
   <view style="margin-top:16rpx">
     <view class="rt-btn" bindtap="togglePreview">{{showPreview ? '收起预览' : '预览效果'}}</view>
@@ -41,13 +39,13 @@
   <view class="kv" wx:for="{{tasks.mine}}" wx:key="id">
     <text>{{item.title}}</text>
     <view class="v">{{item.statusText}}</view>
-    <view wx:if="{{item.status === 1}}" class="v" bindtap="submitTask" data-id="{{item.id}}" style="color:var(--brand)">提交最新笔记</view>
+    <view wx:if="{{item.status === 1}}" class="v" bindtap="submitTask" data-id="{{item.id}}" style="color:var(--brand)">选择作品提交</view>
   </view>
 </view>
 <view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
 
-<view class="sec-title">已发布（{{notes.length}}）</view>
+<view class="sec-title">我的作品（{{notes.length}}）</view>
 <view class="card" wx:if="{{notes.length}}">
-  <view class="kv" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">👍 {{item.like_count}} ›</text></view>
+  <view class="kv" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">{{item.statusText}} ›</text></view>
 </view>
-<view class="note">约稿任务与稿费（demo 任务四态机）随 P2 上线 · 当前先发内容</view>
+<view class="note">领取任务后，选择一篇已发布的作品提交审核。审核通过后发放任务奖励。</view>

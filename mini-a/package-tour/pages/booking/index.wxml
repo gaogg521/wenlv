@@ -1,0 +1,32 @@
+<view class="hero"><view class="sub2">确认出行计划</view><view class="hi">{{p.title}}</view><view class="sub2">选择团期与人数，填写出行联系人</view></view>
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
+<block wx:elif="{{p}}">  <view class="sec-title">选择团期</view>
+  <view class="chips">
+    <view class="chip {{sel === index ? 'on' : ''}}" wx:for="{{sessions}}" wx:key="id"
+          bindtap="pick" data-i="{{index}}">{{item.depart_date}} · 余{{item.left_seats}}</view>
+    <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
+  </view>
+  <view class="muted2" wx:if="{{selView.extra}}" style="margin:8rpx 8rpx 0;font-size:22rpx;color:#1a9c6b">{{selView.extra}}</view>
+
+  <view class="card">
+    <view class="kv"><text>出行人数</text>
+      <view style="display:flex;gap:24rpx;align-items:center">
+        <text bindtap="subQty">－</text><text class="v" style="min-width:40rpx;text-align:center">{{qty}}</text><text bindtap="addQty">＋</text>
+      </view></view>
+    <view class="kv"><text>旅豆抵扣（余额 {{beanBal}}）</text>
+      <text class="v" bindtap="toggleBean">{{useBean ? '使用' : '不使用'}}</text></view>
+    <view class="kv"><text>抵扣上限</text><text class="v muted2">订单金额 10%</text></view>
+    <view class="kv"><text>联系人</text>
+      <input class="v input-r" placeholder="姓名" value="{{contactName}}" bindinput="onName" /></view>
+    <view class="kv"><text>手机号</text>
+      <view style="display:flex;align-items:center;gap:16rpx">
+        <input class="v input-r" type="number" maxlength="11" placeholder="11 位手机号"
+          value="{{contactPhone}}" bindinput="onPhoneInput" style="flex:1;min-width:0" />
+        <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onPhone">一键获取</button>
+      </view></view>
+  </view>
+  <view class="card" wx:if="{{priceSummary}}"><view class="kv"><text>活动费用</text><text>¥{{priceSummary.goods}}</text></view><view class="kv"><text>旅豆抵扣</text><text>−¥{{priceSummary.deduct}}</text></view><view class="kv"><text>预计实付</text><text class="tour-price">¥{{priceSummary.pay}}</text></view><view class="note">最终金额以提交订单时的实时价格为准</view></view>
+  <view class="btn" bindtap="submit">{{submitting ? '正在提交…' : '确认订单并支付'}}</view>
+  <view class="note">请核对日期、人数和联系人。支付结果以订单状态为准。</view>
+
+</block>

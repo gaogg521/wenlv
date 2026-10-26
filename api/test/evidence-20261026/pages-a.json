@@ -1,0 +1,23 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/tour-list/index",
+    "pages/shop/index",
+    "pages/bean/index",
+    "pages/me/index",
+    "pages/destination/index",
+    "pages/faq/index",
+    "package-tour/pages/detail/index",
+    "package-tour/pages/pay-result/index",
+    "package-tour/pages/booking/index",
+    "package-order/pages/orders/index",
+    "package-order/pages/order-detail/index",
+    "package-order/pages/pass-code/index",
+    "package-content/pages/identity/index",
+    "package-content/pages/create/index",
+    "package-content/pages/note/index",
+    "package-promo/pages/center/index"
+  ],
+  "exceptions": [],
+  "at": "2026-10-26T12:47:14.772Z"
+}

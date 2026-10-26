@@ -1,6 +1,6 @@
 // 路由层：/c 游客端 · /m 商户端 · /admin 运营后台 · /callback/wxpay 支付回调
 import { q, one, count, tx, BizError } from './db.mjs'
-import { cfgAll, cfgNum, loadConfig } from './config.mjs'
+import { cfgAll, cfgNum, cfgArr, loadConfig } from './config.mjs'
 import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from './auth.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
@@ -76,17 +76,17 @@ const c = {
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days
       FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''} ${kw ? 'AND p.title LIKE ?' : ''} ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
       [...(cat !== 'all' ? [cat] : []), ...(kw ? ['%' + kw + '%'] : []), ...(city ? [city] : [])])
-    return rows.map(r => ({ ...r, price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    return rows.map(r => ({ ...r, loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
   },
 
   'GET /c/tours/:id': async (req) => {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
-    if (!p) throw new BizError(1004, '商品不存在')
+    if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
       price_adult, early_price, early_days, status
-      FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status <> 5 ORDER BY depart_date`, [p.id])
+      FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 ORDER BY depart_date`, [p.id])
     const agg = await one(`SELECT COALESCE(AVG(rating),0) avg_rating, COUNT(*) count FROM review WHERE product_id = ? AND status = 1`, [p.id])
-    return { ...p, priceLabel: fen2yuan(p.price_from), sessions: sessions.map((s) => {
+    return { ...p, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from), sessions: sessions.map((s) => {
       const ep = order.priceForSession(s)
       return { ...s, priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
         isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
@@ -165,8 +165,12 @@ const c = {
 
   'GET /c/orders/:no': async (req) => {
     const u = requireUser(req)
-    const o = await one(`SELECT o.*, p.title, p.days_desc, p.city_code FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ?`, [req.params.no])
+    let o = await one(`SELECT o.*, p.title, p.days_desc, p.city_code FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ?`, [req.params.no])
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    if (Number(o.status) === 60) {
+      await refund.refresh(o.order_no).catch(e => console.error('[refund:query]', e.message))
+      o = { ...o, ...(await order.byNo(o.order_no)) }
+    }
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const reviewed = !!(await one('SELECT id FROM review WHERE order_id = ?', [o.id]))
@@ -184,9 +188,16 @@ const c = {
     return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions }
   },
 
+  'POST /c/orders/:no/pay': async (req) => {
+    const u = requireUser(req), o = await order.byNo(req.params.no)
+    if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    if (Number(o.status) !== 10) throw new BizError(2002, '当前订单无需支付，请刷新状态')
+    const a = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [u.uid])
+    return { payParams: await wxpay.jsapiOrder({ orderNo: o.order_no, amountFen: Number(o.amount_pay), openid: a.mini_a_openid, description: '文旅订单 ' + o.order_no }) }
+  },
   'GET /c/pass/:id/code': async (req) => {
-    requireUser(req)
-    const p = await one('SELECT * FROM travel_pass WHERE id = ?', [req.params.id])
+    const u = requireUser(req)
+    const p = await one('SELECT * FROM travel_pass WHERE id = ? AND user_id = ? AND status = 1', [req.params.id, u.uid])
     if (!p) throw new BizError(4001, '凭证不存在')
     return await pass.currentQr(Number(req.params.id))
   },
@@ -209,6 +220,7 @@ const c = {
     const acc = await one('SELECT * FROM user_account WHERE id = ?', [u.uid])
     return {
       id: acc.id, nickname: acc.nickname, avatarUrl: acc.avatar_url, memberLevel: acc.member_level, growth: acc.growth_value,
+      levelThresholds: await cfgArr('member.level.thresholds'),
       bean: await bean.balance(u.uid),
       passes: await count('SELECT COUNT(*) c FROM travel_pass WHERE user_id = ?', [u.uid]),
     }
@@ -271,17 +283,17 @@ const c = {
 const m = {
   'POST /m/auth/login': async (req) => {
     const { code, merchantId } = req.body
-    const ses = await code2Session(code || 'mock-m-default')
+    const ses = await code2Session(code || 'mock-m-default', 'b')
+    if (!ses.openid) throw new BizError(1002, '微信登录失败，请重试')
     let u = await one('SELECT * FROM user_account WHERE mini_b_openid = ?', [ses.openid])
     if (!u) {
       await q('INSERT INTO user_account (unionid, mini_b_openid, nickname) VALUES (?,?,?) ON DUPLICATE KEY UPDATE mini_b_openid = VALUES(mini_b_openid)',
         [ses.unionid || null, ses.openid, '商户员工'])
       u = await one('SELECT * FROM user_account WHERE mini_b_openid = ?', [ses.openid])
     }
-    if (merchantId) {
-      await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,1)', [merchantId, u.id])
-    }
-    const staff = await one('SELECT merchant_id, role FROM merchant_staff WHERE user_id = ? AND status = 1', [u.id])
+    if (!ses.openid) throw new BizError(1002, '微信登录失败，请重试')
+    const staff = await one(`SELECT s.merchant_id, s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
+      WHERE s.user_id = ? AND s.status = 1 AND m.status = 1 AND (? IS NULL OR s.merchant_id = ?) ORDER BY s.id LIMIT 1`, [u.id, merchantId || null, merchantId || null])
     if (!staff) {
       if (merchantId) throw new BizError(6001, '未绑定门店（先由老板在后台添加店员）')
       // P2：无参登录未绑定时发“未绑定会话”，仅供 /m/auth/join 凭邀请码加入
@@ -298,7 +310,7 @@ const m = {
       WHERE merchant_id = ? AND status IN (20,30,40,50) AND DATE(paid_at) = CURDATE()`, [mid])
     const pending = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
       WHERE o.merchant_id = ? AND tp.status = 1`, [mid])
-    return { todayOrders: Number(today.c), todayGmv: fen2yuan(today.gmv), pendingVerify: pending }
+    return { todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND DATE(created_at)=CURDATE()',[mid,u.uid]) }
   },
 
   'GET /m/qrcode': async (req) => {
@@ -339,9 +351,20 @@ const m = {
     const m = await one('SELECT id, name FROM merchant WHERE invite_code = ? AND status = 1', [String(inviteCode || '').trim()])
     if (!m) throw new BizError(1004, '邀请码无效或门店未生效')
     const exist = await one('SELECT id, role FROM merchant_staff WHERE merchant_id = ? AND user_id = ?', [m.id, u.uid])
-    if (exist) return { joined: true, merchantId: Number(m.id), role: Number(exist.role), alreadyBound: true }
+    if (exist) {
+      const active = await one('SELECT status FROM merchant_staff WHERE id = ?', [exist.id])
+      if (active.status !== 1) throw new BizError(1003, '该店员已停用，请联系门店管理员')
+      return { joined: true, merchantId: Number(m.id), role: Number(exist.role), alreadyBound: true }
+    }
     await q('INSERT INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,1)', [m.id, u.uid])
     return { joined: true, merchantId: Number(m.id), role: 1, merchantName: m.name }
+  },
+  'POST /m/settlements/:id/dispute': async (req) => {
+    const u = requireUser(req), note = String(req.body.note || '').trim()
+    if (note.length < 4 || note.length > 200) throw new BizError(1001, '请填写 4–200 字异议说明')
+    const n = await q('UPDATE settlement SET status = 4, dispute_note = ? WHERE id = ? AND merchant_id = ? AND status = 0', [note, req.params.id, u.merchantId])
+    if (n.affectedRows !== 1) throw new BizError(2002, '仅待确认结算单可发起异议')
+    return { status: 4 }
   },
   // 商户手机号登录（P2）：微信手机号快速验证组件 code → 手机号找用户 → 回报绑定状态
   'POST /m/auth/phone-login': async (req) => {
@@ -385,7 +408,7 @@ const m = {
     const u = requireUser(req)
     return await q(`SELECT v.id, v.pass_id, v.result, v.created_at, o.order_no, p.name pass_name
       FROM verification_log v JOIN travel_pass p ON p.id = v.pass_id LEFT JOIN orders o ON o.id = p.order_id
-      WHERE v.merchant_id = ? ORDER BY v.id DESC LIMIT 50`, [u.merchantId])
+      WHERE v.merchant_id = ? AND (? >= 2 OR v.staff_id = ?) ORDER BY v.id DESC LIMIT 50`, [u.merchantId, u.role, u.uid])
   },
 
   'GET /m/orders': async (req) => {
@@ -395,6 +418,16 @@ const m = {
       WHERE o.merchant_id = ? AND o.status >= 20 ORDER BY o.id DESC LIMIT 50`, [u.merchantId])
   },
 
+  'GET /m/orders/:no': async (req) => {
+    const u = requireUser(req)
+    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.created_at,o.paid_at,p.title,s.depart_date
+      FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
+    if (!o) throw new BizError(2003, '本店无此订单')
+    const phone = o.contact_phone_enc ? String(o.contact_phone_enc) : ''
+    const passes = await q('SELECT id,status FROM travel_pass WHERE order_id=?', [o.id])
+    const { contact_phone_enc, ...safe } = o
+    return { ...safe, contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
+  },
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
     return await q(`SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
@@ -407,6 +440,10 @@ const m = {
     const u = requireUser(req)
     if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
     const { action, value } = req.body
+    const owned = await one('SELECT s.id, s.booked FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
+    if (!owned) throw new BizError(1004, '团期不存在或不属于本店')
+    if (action === 'adjust_quota' && (!Number.isInteger(value) || value < owned.booked)) throw new BizError(1001, '名额必须为整数且不少于已报名人数')
+    if (action === 'price' && (!Number.isInteger(value) || value <= 0)) throw new BizError(1001, '价格必须为正整数分')
     if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid]); return { stopped: true } }
     if (action === 'adjust_quota') { await q('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid]); return { quota: value } }
     if (action === 'price') { await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [value, req.params.sid]); return { price: value } }
@@ -673,20 +710,7 @@ const admin = {
     const o = await order.byNo(req.params.no)
     if (!o) throw new BizError(2003, '订单不存在')
     if (![20, 30, 40].includes(o.status)) throw new BizError(2002, '状态不可退款')
-    const refundNo = 'RF' + Date.now()
-    await q(`INSERT INTO refunds (order_id, refund_no, amount, reason, status, operator) VALUES (?,?,?,?,0,?)`,
-      [o.id, refundNo, o.amount_pay, req.body.reason || '后台退款', 'admin:' + a.name])
-    await order.fire(o.order_no, 'REFUND_APPLY', 'admin:' + a.name)
-    await wxpay.refund({ orderNo: o.order_no, refundNo, amountFen: Number(o.amount_pay), totalFen: Number(o.amount_pay), reason: '后台退款' })
-    await order.fire(o.order_no, 'REFUND_SUCCESS', 'system', async (cc) => {
-      if (Number(o.bean_deducted) > 0) await bean.reverse(Number(o.user_id), Number(o.bean_deducted), o.order_no)
-      await pass.revokeForOrder(o.order_no)
-      await promo.invalidateCommission(o.order_no)
-      await cc.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
-      await cc.upd('UPDATE payment SET status = 4 WHERE order_id = ?', [o.id])
-      return '后台退款·冲正完成'
-    })
-    return { refunded: true }
+    return refund.fullRefund({ orderNo: o.order_no, reason: req.body.reason || '后台退款', operator: 'admin:' + a.name })
   },
 
   // 商品/团期管理（"简单内容填充"的落点）
@@ -699,6 +723,8 @@ const admin = {
     const a = await requireAdmin(req, ['super', 'ops'])
     const { title, cat, cityCode, channelId, merchantId, priceFrom, beanGift, daysDesc, subtitle, status,
       intro, includes, highlights, meetingPoint, safetyNote } = req.body
+    if (!String(title || '').trim() || !Number.isInteger(Number(priceFrom)) || Number(priceFrom) <= 0) throw new BizError(1001, '请填写线路标题与有效价格')
+    if (!(await one('SELECT id FROM merchant WHERE id=? AND status=1', [merchantId]))) throw new BizError(1001, '请选择已审核的履约商户')
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
     const rich = { intro: intro || subtitle || '', includes: arr(includes), highlights: arr(highlights) }
     const id = await tx(async (c) => {
@@ -766,19 +792,32 @@ const admin = {
   },
   'POST /admin/products/:id/status': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
+    if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
+    if (Number(req.body.status) === 1) {
+      const p = await one('SELECT * FROM tour_product WHERE id=?', [req.params.id])
+      if (!p) throw new BizError(1004, '商品不存在')
+      const rich = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
+      const issues=[]
+      if (!rich.intro || !p.meeting_point || !p.safety_note) issues.push('行程介绍、集合地点与安全告知')
+      if (!(await count('SELECT COUNT(*) c FROM tour_session WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked', [p.id]))) issues.push('可报名的未来团期')
+      if (issues.length) throw new BizError(1001, '发布前请补齐：' + issues.join('；'))
+    }
     await q('UPDATE tour_product SET status = ? WHERE id = ?', [Number(req.body.status), req.params.id])
     return { ok: true }
   },
   'POST /admin/sessions': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
     const { productId, departDate, quota, minGo, priceAdult } = req.body
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate || '') || !Number.isInteger(Number(quota)) || Number(quota) < 1 || !Number.isInteger(Number(priceAdult)) || Number(priceAdult) < 1) throw new BizError(1001, '请填写有效日期、正整数名额和价格')
+    if (Number.isNaN(Date.parse(departDate)) || departDate < new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })) throw new BizError(1001, '出发日期不可早于今天')
+    if (!(await one('SELECT id FROM tour_product WHERE id=?',[productId]))) throw new BizError(1004, '商品不存在')
     const id = await tx(async (c) => c.ins(
       'INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult) VALUES (?,?,?,?,?)',
       [Number(productId), departDate, Number(quota), Number(minGo || 10), Number(priceAdult)]))
     return { id }
   },
 
-  'GET /admin/merchants': async (req) => { await requireAdmin(req); return await q('SELECT * FROM merchant ORDER BY id') },
+  'GET /admin/merchants': async (req) => { const a = await requireAdmin(req); const sc=scopeFilter(a); return await q('SELECT * FROM merchant WHERE 1=1 '+sc.sql+' ORDER BY id',sc.params) },
   'POST /admin/merchants': async (req) => {
     const a = await requireAdmin(req, ['super'])
     const { name, cityCode, wxpaySubMchid, bizLicense } = req.body
@@ -885,18 +924,36 @@ const admin = {
     return { period, settlementIds: ids.filter(i => i > 0) }
   },
   'POST /admin/settlements/:id/confirm': async (req) => {
-    await requireAdmin(req, ['super', 'finance'])
-    await q('UPDATE settlement SET status = 1 WHERE id = ? AND status = 0', [req.params.id])
-    await q('UPDATE settlement SET status = 2 WHERE id = ?', [req.params.id])
-    await q('UPDATE settlement SET status = 3 WHERE id = ? AND status = 2', [req.params.id])
-    return { status: 3 }
+    const a = await requireAdmin(req, ['super', 'finance'])
+    return tx(async (cc) => {
+      const n = await cc.upd('UPDATE settlement SET status = 2 WHERE id = ? AND status = 1', [req.params.id])
+      if (n !== 1) throw new BizError(2002, '仅商户已确认的结算单可复核，请刷新状态')
+      await audit(cc, 'admin:' + a.name, 'settlement', 'review', 'settlement-' + req.params.id, { status: 1 }, { status: 2 })
+      return { status: 2, message: '复核通过，待实际支付并登记回单' }
+    })
+  },
+  'POST /admin/settlements/:id/payment': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance'])
+    const ref = String(req.body.paymentRef || '').trim()
+    const note = String(req.body.note || '').trim()
+    if (ref.length < 6 || ref.length > 128 || !note || note.length > 500) throw new BizError(1001, '请填写真实支付流水号及回单核对说明')
+    return tx(async (cc) => {
+      const s = await cc.one('SELECT * FROM settlement WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!s || s.status !== 2) throw new BizError(2002, '仅待支付结算单可登记回单')
+      const duplicate = await cc.one('SELECT id FROM settlement WHERE payment_ref = ? AND id <> ?', [ref, s.id])
+      if (duplicate) throw new BizError(1001, '该流水号已用于其他结算单')
+      await cc.upd('UPDATE settlement SET status = 3, payment_ref = ?, payment_note = ?, paid_by = ?, paid_at = NOW(3) WHERE id = ? AND status = 2', [ref, note, 'admin:' + a.name, s.id])
+      await audit(cc, 'admin:' + a.name, 'settlement', 'manual-payment-evidence', 'settlement-' + s.id, { status: 2 }, { status: 3, ref, note })
+      return { status: 3, paymentRef: ref, mode: 'MANUAL_RECEIPT' }
+    })
   },
   'POST /admin/settlements/:id/dispute': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
     const { note } = req.body
     const row = await one('SELECT * FROM settlement WHERE id = ? AND status = 4', [req.params.id])
     if (!row) throw new BizError(1004, '结算单不存在或不在异议中')
-    await q('UPDATE settlement SET dispute_note = ?, status = 3, dispute_resolved_at = NOW(3) WHERE id = ?', [String(note||'').slice(0,200), req.params.id])
+    if (!String(note || '').trim()) throw new BizError(1001, '请填写异议处理说明')
+    await q('UPDATE settlement SET dispute_note = ?, status = 0, dispute_resolved_at = NOW(3) WHERE id = ? AND status = 4', [String(note||'').slice(0,200), req.params.id])
     return { resolved: true }  },
 
 
@@ -953,21 +1010,20 @@ const admin = {
     return { id, taskNo }
   },
   'POST /admin/content-tasks/:id/verdict': async (req) => {
-    await requireAdmin(req)
-    const { pass } = req.body
-    const t = await one('SELECT * FROM content_task WHERE id = ?', [req.params.id])
-    if (!t) throw new BizError(1004, '任务不存在')
-    if (Number(t.status) !== 2) throw new BizError(2002, '仅审核中任务可判决')
-    if (pass) {
-      await tx(async (c) => c.upd("UPDATE content_task SET status = 3, finished_at = NOW(3) WHERE id = ? AND status = 2", [req.params.id]))
-      const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
-      if (budget && t.claimed_by) {
-        await bean.grant(Number(t.claimed_by), Number(t.reward_beans), bean.BIZ.TASK, t.task_no, budget.id)
-      }
-      return { finished: true, rewarded: Number(t.reward_beans) }
-    }
-    await q("UPDATE content_task SET status = 1 WHERE id = ? AND status = 2", [req.params.id])
-    return { rejected: true, backTo: '进行中' }
+    const a = await requireAdmin(req, ['super','ops','review'])
+    const passed = req.body.pass === true
+    return tx(async cc => {
+      const t = await cc.one('SELECT * FROM content_task WHERE id=? FOR UPDATE',[req.params.id])
+      if (!t || Number(t.status)!==2) throw new BizError(2002,'仅审核中任务可处理')
+      if (passed) {
+        const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
+        if (!budget || !t.claimed_by) throw new BizError(5002,'缺少可用奖励预算或领取人，任务保持审核中')
+        await bean.grant(Number(t.claimed_by),Number(t.reward_beans),bean.BIZ.TASK,t.task_no,budget.id,cc)
+        await cc.upd('UPDATE content_task SET status=3,finished_at=NOW(3) WHERE id=?',[t.id])
+      } else await cc.upd('UPDATE content_task SET status=1 WHERE id=?',[t.id])
+      await audit(cc,'admin:'+a.name,'content-task',passed?'approve':'reject','task-'+t.id,{status:2},{status:passed?3:1,reward:passed?Number(t.reward_beans):0})
+      return passed?{finished:true,rewarded:Number(t.reward_beans)}:{rejected:true,backTo:'进行中'}
+    })
   },
   'POST /admin/content-tasks/:id/delete': async (req) => {
     await requireAdmin(req)
@@ -1152,9 +1208,14 @@ const adminEco = {
   },
   'POST /admin/merchants/:id/approve': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
-    await q('UPDATE merchant SET status = 1, approved_at = NOW(3) WHERE id = ? AND status = 0', [req.params.id])
-    await tx(async (c) => audit(c, 'admin:' + a.name, 'merchant', 'approve', 'merchant-' + req.params.id, { status: 0 }, { status: 1 }))
-    return { approved: true }
+    return tx(async cc => {
+      const m = await cc.one('SELECT * FROM merchant WHERE id = ? AND status = 0 FOR UPDATE', [req.params.id])
+      if (!m) throw new BizError(2002, '进件已处理或不存在')
+      await cc.upd('UPDATE merchant SET status = 1, approved_at = NOW(3) WHERE id = ?', [m.id])
+      if (m.applicant_user_id) await cc.q('INSERT INTO merchant_staff (merchant_id,user_id,role) VALUES (?,?,3) ON DUPLICATE KEY UPDATE role=3,status=1', [m.id, m.applicant_user_id])
+      await audit(cc, 'admin:' + a.name, 'merchant', 'approve', 'merchant-' + m.id, { status: 0 }, { status: 1, owner: m.applicant_user_id })
+      return { approved: true }
+    })
   },
   'GET /admin/agreements': async (req) => {
     await requireAdmin(req)
@@ -1313,12 +1374,8 @@ const adminFin = {
     const w = await one('SELECT * FROM promoter_withdraw WHERE id = ? AND status = 0', [req.params.id])
     if (!w) throw new BizError(1004, '申请不存在或已处理')
     const st = passed ? 1 : 2
-    let finalRef = passed ? (payRef || 'MANUAL-' + Date.now()) : null
-    if (passed && !payRef && wxpay.isLive()) {
-      // 生产：自动商家转账（V3），流水号以转账批次号留痕
-      const t = await wxpay.merchantTransfer({ outBatchNo: 'WD' + w.id + '-' + Date.now(), totalFen: Number(w.amount), remark: '推广服务费提现' })
-      finalRef = 'WXBATCH-' + t.batchNo
-    }
+    const finalRef = passed ? String(payRef || '').trim() : null
+    if (passed && (!finalRef || finalRef.length < 6 || finalRef.length > 64)) throw new BizError(1001, '请先完成实际支付，再填写真实打款流水号')
     await q('UPDATE promoter_withdraw SET status = ?, reviewed_by = ?, reviewed_at = NOW(3), pay_ref = ? WHERE id = ?',
       [st, 'admin:' + a.name, finalRef, w.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'withdraw', passed ? 'pay' : 'reject', 'wd-' + w.id, { status: 0 }, { status: st, amount: w.amount }))
@@ -1369,7 +1426,7 @@ const integrations = {
     const { listSecretMeta } = await import('./infra/secrets.mjs')
     const { getSecrets } = await import('./infra/secrets.mjs')
     const stored = Object.fromEntries((await listSecretMeta()).map((r2) => [r2.k, r2.hint]))
-    const s = await getSecrets(['WX_APPID', 'WX_SECRET', 'WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL', 'WX_TMPL_PAY_OK',
+    const s = await getSecrets(['WX_APPID', 'WX_SECRET', 'WX_B_APPID', 'WX_B_SECRET', 'WX_API_V3_KEY', 'WX_PLATFORM_PUBLIC_KEY', 'WX_PLATFORM_SERIAL', 'WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL', 'WX_TMPL_PAY_OK',
       'SMS_TENCENT_SECRET_ID', 'SMS_TENCENT_SECRET_KEY', 'SMS_TENCENT_SDKAPPID', 'SMS_TENCENT_SIGN',
       'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'])
     const ch = (keys, name, desc) => ({ name, desc, ready: keys.every((k) => !!s[k]),
@@ -1378,6 +1435,8 @@ const integrations = {
       envNote: '.env 只保留自举：DB 连接、JWT_SECRET、ADMIN_INIT_PASSWORD；其余凭据在本页保存（AES-256-GCM 加密落库）',
       channels: [
         ch(['WX_APPID', 'WX_SECRET'], '微信小程序登录', 'code2Session（未配置=mock openid 联调）'),
+        ch(['WX_B_APPID', 'WX_B_SECRET'], '商户小程序登录', '商户端独立 AppID 与 Secret'),
+        ch(['WX_API_V3_KEY', 'WX_PLATFORM_PUBLIC_KEY', 'WX_PLATFORM_SERIAL'], '微信支付回调校验', 'APIv3 密钥、微信支付公钥与公钥 ID/证书序列号'),
         ch(['WX_TMPL_PAY_OK'], '订阅消息模板', '支付成功通知模板 ID（公众平台→订阅消息→我的模板）'),
         ch(['WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL'], '微信支付 V3', '未配置=MOCK 通道（不真实收款）'),
         ch(['SMS_TENCENT_SECRET_ID', 'SMS_TENCENT_SECRET_KEY'], '腾讯云短信', 'MFA/通知短信（未配置=MOCK 后台可见）'),
@@ -1391,6 +1450,7 @@ const integrations = {
     if (!value || String(value).length < 4) throw new BizError(1001, '凭据长度至少 4 位')
     const { setSecret } = await import('./infra/secrets.mjs')
     await setSecret(req.params.key, String(value), 'admin:' + a.name)
+    wxpay.invalidateConfig()
     await tx(async (c) => audit(c, 'admin:' + a.name, 'integration', 'set', req.params.key, null, { len: String(value).length }))
     return { key: req.params.key, saved: true }
   },
@@ -1398,6 +1458,7 @@ const integrations = {
     const a = await requireAdmin(req, ['super'])
     const { delSecret } = await import('./infra/secrets.mjs')
     await delSecret(req.params.key)
+    wxpay.invalidateConfig()
     await tx(async (c) => audit(c, 'admin:' + a.name, 'integration', 'delete', req.params.key, null, null))
     return { deleted: true }
   },
@@ -1617,9 +1678,10 @@ const cPromo = {
 
 // 用户发布笔记（msgSecCheck 机审前置 → 过=发布 / 可疑=人工队列）
 const cNotes = {
-  'GET /c/notes': async (req) => {    requireUser(req)
+  'GET /c/notes': async (req) => {
+    const u = requireUser(req)
     return await q(`SELECT c.id, c.title, c.status, c.like_count, c.published_at FROM content_note c
-      WHERE c.status = 2 ORDER BY c.published_at DESC LIMIT 20`)
+      WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 30`, [u.uid])
   },
   'POST /c/notes': async (req) => {
     const u = requireUser(req)
@@ -1735,13 +1797,34 @@ const mPhrase = {
 }
 
 const mApply = {
+  'GET /m/applications': async req => {
+    const u = requireUser(req)
+    return q('SELECT id,name,status,merchant_no,created_at,approved_at FROM merchant WHERE applicant_user_id = ? ORDER BY id DESC', [u.uid])
+  },
+  'GET /m/staff': async req => {
+    const u = requireUser(req)
+    if (u.role < 3) throw new BizError(1003, '仅老板可管理店员')
+    return q('SELECT s.id,s.user_id,s.role,s.status,u.nickname FROM merchant_staff s JOIN user_account u ON u.id=s.user_id WHERE s.merchant_id=? ORDER BY s.id', [u.merchantId])
+  },
+  'POST /m/staff/:id': async req => {
+    const u = requireUser(req)
+    if (u.role < 3) throw new BizError(1003, '仅老板可管理店员')
+    const role = Number(req.body.role), status = Number(req.body.status)
+    if (![1,2].includes(role) || ![0,1].includes(status)) throw new BizError(1001, '店员角色或状态无效')
+    const result = await q('UPDATE merchant_staff SET role=?,status=? WHERE id=? AND merchant_id=? AND role<>3 AND user_id<>?', [role,status,req.params.id,u.merchantId,u.uid])
+    if (result.affectedRows !== 1) throw new BizError(1003, '不可修改老板或其他门店员工')
+    return { saved: true }
+  },
   'POST /m/apply': async (req) => {
+    const u = requireUser(req)
     const { name, cityCode = '310118', contact, mobile, note } = req.body
-    if (!name || !contact || !mobile) throw new BizError(1001, '门店名/联系人/电话必填')
+    if (!name || !contact || !/^1[3-9]\d{9}$/.test(mobile || '')) throw new BizError(1001, '请填写门店名、联系人和有效手机号')
+    const pending = await one('SELECT id FROM merchant WHERE applicant_user_id = ? AND status = 0', [u.uid])
+    if (pending) throw new BizError(2002, '已有待审核申请，请勿重复提交')
     const mno = 'MAPPLY' + String(Date.now()).slice(-10)
-    const id = await tx(async (c) => c.ins(`INSERT INTO merchant (city_code, name, merchant_no, status, apply_contact, apply_mobile, apply_note)
-      VALUES (?,?,?,?,?,?,?)`, [cityCode, name, mno, 0, contact, mobile, note || null]))
-    return { id, merchantNo: mno, msg: '已提交，等待平台审核（审核通过后可在小程序凭邀请码加入）' }
+    const id = await tx(async cc => cc.ins(`INSERT INTO merchant (city_code,name,merchant_no,status,apply_contact,apply_mobile,apply_note,applicant_user_id)
+      VALUES (?,?,?,0,?,?,?,?)`, [cityCode,name,mno,contact,mobile,note || null,u.uid]))
+    return { id, merchantNo: mno, msg: '已提交，审核通过后重新登录即可进入门店' }
   },
 }
 
@@ -1816,26 +1899,11 @@ async function notifyMerchantStaff(merchantId, orderNo) {
 }
 
 async function handlePayNotify(orderNo, transNo, mock = false) {
-  const o = await order.byNo(orderNo)
-  if (!o) return { code: 0, ignored: true }
-  const exist = await one('SELECT id FROM payment WHERE wx_trans_no = ?', [transNo])
-  if (exist) return { code: 0, duplicated: true } // 幂等（同交易号）
-  const existOrder = await one('SELECT id FROM payment WHERE order_id = ?', [o.id])
-  if (existOrder) return { code: 0, duplicated: true } // 幂等（同订单已支付，换交易号重放也拒绝）
-  if (Number(o.amount_pay) === 0) {
-    // 全豆抵扣：无需支付回调，直接走确认链（由 place 后路由触发）；此处兜底
-  }
-  await q('INSERT INTO payment (order_id, wx_trans_no, amount, status, callback_at, raw_notify) VALUES (?,?,?,1,NOW(3),?)',
-    [o.id, transNo, o.amount_pay, JSON.stringify({ mock, orderNo, transNo })])
-  if (o.status === 10) {
-    await order.fire(orderNo, 'PAY_SUCCESS', 'system', async (c) => {
-      await c.upd('UPDATE orders SET paid_at = NOW(3), refund_deadline = NOW(3) + INTERVAL ? DAY WHERE order_no = ?', [await cfgNum('order.observe_days'), orderNo])
-      return '支付回调 ' + transNo
-    })
-    const passIds = await pass.issueForOrder(orderNo)
+  const o = await order.acceptPayment(orderNo, transNo, mock)
+  if (o.duplicated) return { code: 0, duplicated: true }
+  {
     // 商户端订阅消息（P2）：新订单通知门店（WX_TMPL_NEW_ORDER 未配置则 skipped，不阻断）
     notifyMerchantStaff(o.merchant_id, orderNo).catch((e) => console.error('[notify:merchant]', e.message))
-    await order.fire(orderNo, 'CONFIRM', 'system', async () => '确认出票·' + passIds.length + '张凭证')
     // 订阅消息：支付成功通知（官方 subscribe/send；未订阅/未配置静默失败，不阻断主链）
     wxapi.sendSubscribeMessage(
       (await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])).mini_a_openid,
@@ -1849,17 +1917,41 @@ async function handlePayNotify(orderNo, transNo, mock = false) {
 
 const callback = {
   'POST /callback/wxpay': async (req) => {
-    const v = wxpay.verifyCallback(req.headers, req.rawBody || '')
-    if (!v.ok) return { code: 'FAIL', msg: v.reason }
-    const body = req.body || {}
-    // 真实回调为加密 resource；生产解密后取 out_trade_no/transaction_id。此处兼容明文与 mock。
-    const orderNo = body.out_trade_no || body.orderNo
-    const transNo = body.transaction_id || body.transNo
-    if (!orderNo) return { code: 'FAIL', msg: 'no out_trade_no' }
+    const v = await wxpay.verifyCallback(req.headers, req.rawBody || '')
+    if (!v.ok) throw new BizError(1003, v.reason)
+    const body = v.transaction
+    const orderNo = body.out_trade_no
+    const transNo = body.transaction_id
+    const o = await order.byNo(orderNo)
+    if (!o || !transNo || body.amount?.currency !== 'CNY' || Number(body.amount.total) !== Number(o.amount_pay)) throw new BizError(1001, '支付金额或订单不匹配')
     await handlePayNotify(orderNo, transNo, false)
     return { code: 'SUCCESS', message: '成功' }
   },
 }
 
 export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
+for (const [key, handler] of Object.entries(routes)) {
+  if (key.includes('/admin/dev/')) routes[key] = req => {
+    if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
+    return handler(req)
+  }
+}
+// 商户权限在每次请求重新校验，停用员工及变更角色立即生效，禁止跨端 JWT 复用。
+for (const [key, handler] of Object.entries(routes)) {
+  if (!key.split(' ')[1]?.startsWith('/m/') || key === 'POST /m/auth/login') continue
+  routes[key] = async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
+    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications'].includes(key)) {
+      const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
+        WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])
+      if (!staff) throw new BizError(1003, '尚未加入门店或账号已停用')
+      if (Number(staff.role) !== Number(u.role)) throw new BizError(1002, '角色已变更，请重新登录')
+      const manager = /\/settlements|\/supply|\/invite|\/stats|\/orders/.test(key)
+      if (manager && staff.role < 2) throw new BizError(1003, '需要店长及以上权限')
+      if (key === 'POST /m/supply/:sid' && req.body.action === 'price' && staff.role < 3) throw new BizError(1003, '仅老板可调整价格')
+    }
+    return handler(req)
+  }
+}
 export { handlePayNotify }

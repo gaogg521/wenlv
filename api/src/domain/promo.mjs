@@ -57,7 +57,11 @@ export async function settleDue() {
 // ===== 结算（五口径：履约58% / 服务12% / 权益5% / 推广=实际佣金 / 留存=差额兜底）=====
 export async function generateSettlement(merchantId, period) {
   // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账
-  const orders = await q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
+  return await tx(async (c) => {
+  await c.one('SELECT id FROM merchant WHERE id = ? FOR UPDATE', [merchantId])
+  const existing = await c.one('SELECT id FROM settlement WHERE merchant_id = ? AND period = ?', [merchantId, period])
+  if (existing) return Number(existing.id)
+  const orders = await c.q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
     WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id`, [merchantId])
   if (!orders.length) return -1
@@ -67,12 +71,6 @@ export async function generateSettlement(merchantId, period) {
   const service = Math.round(total * 0.12)
   const beanBudget = Math.round(total * 0.05)
   const retained = total - fulfill - service - beanBudget - promo
-  return await tx(async (c) => {
-    const ex = await c.one('SELECT id FROM settlement WHERE merchant_id = ? AND period = ?', [merchantId, period])
-    if (ex) { // 重建该期结算单：释放旧挂钩订单
-      await c.q('UPDATE orders SET settlement_id = NULL WHERE settlement_id = ?', [ex.id])
-      await c.q('DELETE FROM settlement WHERE id = ?', [ex.id])
-    }
     const sid = await c.ins(`INSERT INTO settlement (merchant_id, period, order_count, total_amount,
       amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status)
       VALUES (?,?,?,?,?,?,?,?,?,0)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained])

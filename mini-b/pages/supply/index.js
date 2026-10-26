@@ -4,8 +4,10 @@ Page({
   onShow() { this.fetch() },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
   fetch(done) {
+    if (typeof done !== 'function') done = undefined
+    this.setData({ role: getApp().globalData.role || 0, error: '' })
     if (!getApp().globalData.token) return this.setData({ loaded: true })
-    api.request('/m/supply').then((l) => { this.setData({ list: l, loaded: true }); done && done() }).catch(() => { this.setData({ loaded: true }); done && done() })
+    api.request('/m/supply').then((l) => { this.setData({ list: l, loaded: true }); done && done() }).catch(e => { this.setData({ loaded: true, list: [], error: e.msg || '库存加载失败' }); done && done() })
   },
   stopSell(e) {
     const id = e.currentTarget.dataset.id

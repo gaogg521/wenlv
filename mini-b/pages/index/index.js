@@ -4,17 +4,17 @@ Page({
   onShow() {
     const h = new Date().getHours()
     this.setData({ greet: h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好',
-      merchant: getApp().globalData.merchant || wx.getStorageSync('merchant') || null })
+      role: getApp().globalData.role || 0, merchant: getApp().globalData.merchant || wx.getStorageSync('merchant') || null })
     if (!getApp().globalData.token) return this.setData({ err: 'login' })
     api.request('/m/workbench').then((wb) => this.setData({ wb, err: '' })).catch((e) => this.setData({ err: e.msg || 'error' }))
     api.request('/m/stats').then((st) => {
       const max = Math.max(...st.week.map((w) => w.orders), 1)
-      const bars = st.week.map((w) => ({ ...w, hp: Math.round(w.orders / max * 100) }))
+      const bars = st.week.map((w) => ({ ...w, dLabel: w.d.slice(5), hp: Math.round(w.orders / max * 100) }))
       const weekTotal = st.week.reduce((s, w) => s + w.orders, 0)
       this.setData({ stats: st, bars, weekTotal })
     }).catch(() => {})
   },
-  goLogin() { wx.navigateTo({ url: '/pages/me/index' }) },
+  goLogin() { wx.switchTab({ url: '/pages/me/index' }) },
   goVerify() {
     if (!getApp().globalData.token) return this.goLogin()
     wx.navigateTo({ url: '/pages/verify/index' })

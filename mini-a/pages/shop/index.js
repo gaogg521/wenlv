@@ -1,10 +1,12 @@
 const api = require('../../utils/api')
 Page({
-  data: { items: api.FALLBACK.shop, fromApi: false, icons: ['🎨', '🍵', '🍙'] },
+  data: { items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
+  retry() { this.onLoad() },
   onLoad() {
+    this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
-      if (items && items.length) this.setData({ items, fromApi: true })
-    }).catch(() => {})
+      this.setData({ items: (items || []).map(t => ({ ...t, price: t.price || t.price_from, cover: api.coverFor(t) })), fromApi: true, loading: false })
+    }).catch(e => this.setData({ loading: false, error: e.msg || '暂时无法加载商品' }))
   },
   buy(e) {
     const id = e.currentTarget.dataset.id

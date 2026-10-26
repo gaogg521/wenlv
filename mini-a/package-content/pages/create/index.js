@@ -5,12 +5,12 @@ Page({
   data: {
     notes: [], tasks: { open: [], mine: [] },
     title: '', bodyHtml: '', bodyText: '',
-    pubMsg: '', showPreview: false,
+    pubMsg: '', showPreview: false, formats: {},
   },
-  onShow() { this.fetch(); this.fetchTasks() },
+  async onShow() { await this.fetch(); this.fetchTasks() },
 
   async fetch() {
-    try { await api.ensureLogin(); this.setData({ notes: await api.request('/c/notes') }) } catch (e) {}
+    try { await api.ensureLogin(); this.setData({ notes: (await api.request('/c/notes')).map(n => ({ ...n, statusText: ({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核'})[n.status] || '处理中' })) }) } catch (e) {}
   },
   async fetchTasks() {
     try {
@@ -31,51 +31,32 @@ Page({
 
   async submitTask(e) {
     const id = e.currentTarget.dataset.id
-    if (!this.data.notes.length) return wx.showToast({ title: '先发布一篇笔记', icon: 'none' })
+    const choices = this.data.notes.filter(n => n.status === 2)
+    if (!choices.length) return wx.showToast({ title: '先发布一篇笔记', icon: 'none' })
+    const choice = await new Promise(resolve => wx.showActionSheet({ itemList: choices.map(n => n.title || '未命名笔记'), success: r => resolve(r.tapIndex), fail: () => resolve(null) }))
+    if (choice === null) return
     try {
-      await api.request('/c/tasks/' + id + '/submit', 'POST', { noteId: this.data.notes[0].id })
+      await api.request('/c/tasks/' + id + '/submit', 'POST', { noteId: choices[choice].id })
       wx.showToast({ title: '已提交审核' })
       this.fetchTasks()
     } catch (err) { wx.showToast({ title: err.msg || '提交失败', icon: 'none' }) }
   },
 
-  goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
+  goNote(e) { const n = this.data.notes.find(n => n.id === e.currentTarget.dataset.id); if (n && n.status !== 2) return wx.showToast({ title: n.statusText, icon: 'none' }); wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   onTitle(e) { this.setData({ title: e.detail.value }) },
 
-  // ── 富文本编辑器：textarea 输入时同步 bodyHtml + bodyText ──
-  onBodyInput(e) {
-    const html = e.detail.value
-    const text = html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')
-    this.setData({ bodyHtml: html, bodyText: text })
+  onEditorReady() {
+    this.createSelectorQuery().select('#bodyEditor').context(r => { this.editor = r.context }).exec()
   },
-
-  // ── 工具栏：在光标处插入 HTML 标签 ──
+  onEditorStatus(e) { this.setData({ formats: e.detail }) },
+  onEditorInput(e) { this.setData({ bodyHtml: e.detail.html, bodyText: e.detail.text }) },
   rtCmd(e) {
+    if (!this.editor) return
     const tag = e.currentTarget.dataset.tag
-    const textarea = this.selectComponent('#bodyInput')
-    if (!textarea) return
-    const start = textarea.data.selectionStart || 0
-    const end = textarea.data.selectionEnd || start
-    const before = this.data.bodyHtml.substring(0, start)
-    const sel = this.data.bodyHtml.substring(start, end) || '文字'
-    const after = this.data.bodyHtml.substring(end)
-
-    let wrap = ''
-    if (tag === 'h2') wrap = '<h2>' + sel + '</h2>'
-    else if (tag === 'b') wrap = '<b>' + sel + '</b>'
-    else if (tag === 'i') wrap = '<i>' + sel + '</i>'
-    else if (tag === 'ul') wrap = '<ul><li>' + sel + '</li></ul>'
-    else if (tag === 'quote') wrap = '<blockquote>' + sel + '</blockquote>'
-    else if (tag === 'br') wrap = '<br/>'
-    else if (tag === 'h3') wrap = '<h3>' + sel + '</h3>'
-    else wrap = sel
-
-    const newHtml = before + wrap + after
-    const text = newHtml.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')
-    this.setData({ bodyHtml: newHtml, bodyText: text })
-    textarea.setData({ value: newHtml })
+    const formats = { h2: ['header', 2], h3: ['header', 3], b: ['bold', !this.data.formats.bold], i: ['italic', !this.data.formats.italic], ul: ['list', 'bullet'], quote: ['indent', '+1'] }
+    if (tag === 'br') this.editor.insertText({ text: '\n' })
+    else if (formats[tag]) this.editor.format(...formats[tag])
   },
-
   togglePreview() {
     this.setData({ showPreview: !this.data.showPreview })
   },
@@ -83,9 +64,11 @@ Page({
   async publish() {
     if (!this.data.bodyHtml || this.data.bodyText.length < 4) return wx.showToast({ title: '至少写 4 个字', icon: 'none' })
     try {
+      await api.ensureLogin()
       // 存 HTML 原文；列表展示用纯文本
       const r = await api.request('/c/notes', 'POST', { title: this.data.title, body: this.data.bodyHtml })
       this.setData({ title: '', bodyHtml: '', bodyText: '', pubMsg: r.msg + (r.secMock ? '（联调机审直通）' : '') })
+      if (this.editor) this.editor.clear()
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '发布失败', icon: 'none' }) }
   },

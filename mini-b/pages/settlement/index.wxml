@@ -1,6 +1,7 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
 <view class="card fade-up" wx:for="{{list}}" wx:key="id" wx:for-item="s">
   <view class="sec-title">{{s.period}} 周结算单
-    <text class="pill {{s.status === 3 ? 'p50' : 'p30'}}" style="margin-left:8rpx">{{s.status===3?'已完成':s.status===0?'待确认':s.status}}</text>
+    <text class="pill {{s.status === 3 ? 'p50' : 'p30'}}" style="margin-left:8rpx">{{s.statusText}}</text>
   </view>
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
     <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
@@ -23,6 +24,8 @@
     <text><em style="background:#38bdf8"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
     <text><em style="background:#0f9d58"></em>留存 ¥{{s.amt_retained/100}}</text>
   </view>
+  <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
+  <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
   <view class="btn" wx:if="{{s.status === 0}}" bindtap="confirm" data-id="{{s.id}}">确认对账无误</view>
   <view class="note" wx:elif="{{s.status === 1}}" style="padding:14rpx 0 0;color:var(--green)">✓ 商户已确认 · 待财务复核打款</view>
   <view class="tiny" style="margin-top:10rpx;color:var(--brand)" bindtap="toggleDetail" data-id="{{s.id}}">
@@ -34,6 +37,8 @@
       <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
     </view>
   </view>
+  <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
+  <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
 </view>
 <view wx:if="{{!list.length && loaded}}" class="empty"><view class="e-ico">🧮</view>暂无结算单（每周一出账）</view>
-<view class="note">对单有异议？在结算单详情发起申诉（P1）· 协议变更找运营</view>
+<view class="note">请逐单核对本店应结金额，有差异可提交异议。财务复核后实际付款，支付回单可追溯。</view>

@@ -146,3 +146,14 @@ page {
 .lv-row:last-child { border-bottom: none; }
 .lv-badge { font-size: 20rpx; font-weight: 700; border-radius: 8rpx; padding: 6rpx 14rpx; background: #eef1f5; color: var(--sub); }
 .lv-badge.on { background: var(--brand); color: #fff; }
+
+/* 2026-10 产品体验：编辑式首页与统一状态 */
+.home-intro{padding:44rpx 36rpx 32rpx;background:#f6efe5;color:#253c35;position:relative;overflow:hidden}
+.eyebrow{font-size:19rpx;letter-spacing:3rpx;color:#786b59;font-weight:600}
+.home-title{font-size:62rpx;line-height:1.22;font-weight:800;margin:24rpx 0;letter-spacing:-2rpx}.home-title text{display:block;color:#d56b32}
+.home-caption{font-size:25rpx;line-height:1.8;color:#766c60;max-width:560rpx}
+.home-search{background:#fff;padding:25rpx 22rpx;border-radius:18rpx;margin-top:30rpx;font-size:24rpx;color:#8c8275;display:flex;justify-content:space-between}.home-search text{color:#c46430;font-weight:600}
+.home-destination{display:flex;justify-content:space-between;margin-top:25rpx;font-size:22rpx;color:#69736a}.home-destination text{color:#2f5748}
+.theme-grid{display:flex;gap:12rpx;padding:24rpx}.theme-tile{background:#fff;flex:1;min-width:0;padding:22rpx 12rpx;border:1rpx solid #eee6da;border-radius:18rpx}.theme-symbol{font-size:38rpx;color:#b86a39}.theme-name{font-size:24rpx;font-weight:700;margin-top:12rpx}.theme-sub{font-size:18rpx;color:#8a8175;margin-top:7rpx}
+.home-footer{text-align:center;padding:40rpx 24rpx 70rpx;font-size:24rpx;color:#71695d}.home-footer view{font-size:20rpx;letter-spacing:3rpx;margin-top:12rpx;color:#a59b8c}
+.btn[disabled]{opacity:.5}.state-error{padding:40rpx;text-align:center;color:#8c492f}.state-error .btn{margin-top:20rpx}

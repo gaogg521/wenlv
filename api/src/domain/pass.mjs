@@ -13,7 +13,7 @@ export function sign(passId, windowNo) {
 export function qrPayload(passId, windowNo) { return `wl://v/${passId}/${windowNo}/${sign(passId, windowNo)}` }
 export function displayCode(passId, windowNo) {
   const sig = sign(passId, windowNo)
-  return String(parseInt(sig.slice(0, 4), 16) % 1000000).padStart(6, '0')
+  return String(parseInt(sig.slice(0, 8), 16) % 1000000).padStart(6, '0')
 }
 function verifySig(passId, windowNo, sig) {
   for (let w = windowNo - 1; w <= windowNo + 1; w++) if (w >= 0 && sign(passId, w) === sig) return w
@@ -46,7 +46,8 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
   if (/^\d{6}$/.test(raw)) {
     // 手动输码兜底：6 位展示码 → 在有效凭证 × 当前窗口±1 内匹配 HMAC 展示码
     const win = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
-    const actives = await q('SELECT id FROM travel_pass WHERE status = 1')
+    const actives = await q(`SELECT tp.id FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
+      WHERE tp.status = 1 AND o.merchant_id = ? AND o.status = 30`, [merchantId])
     outer: for (const p of actives) {
       for (let w = win - 1; w <= win + 1; w++) {
         if (w >= 0 && displayCode(p.id, w) === raw) { passId = p.id; hit = w; break outer }
@@ -58,12 +59,17 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
     if (parts.length !== 6 || parts[0] !== 'wl:' || parts[2] !== 'v')
       return { ok: false, reason: '无效码（格式）' }
     passId = Number(parts[3])
-    hit = verifySig(passId, Number(parts[4]), parts[5])
+    const now = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
+    const given = Number(parts[4])
+    hit = Number.isInteger(given) && Math.abs(now - given) <= 1 && sign(passId, given) === parts[5] ? given : -1
     if (hit < 0) return { ok: false, reason: '无效码（签名/窗口）', passId }
   }
 
   const pass = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!pass) return { ok: false, reason: '凭证不存在', passId }
+  const owner = await one('SELECT merchant_id, status FROM orders WHERE id = ?', [pass.order_id])
+  if (!owner || Number(owner.merchant_id) !== Number(merchantId)) return { ok: false, reason: '非本店凭证', passId }
+  if (Number(owner.status) !== 30 && pass.status === 1) return { ok: false, reason: '订单当前不可核销', passId }
   if (pass.status !== 1) {
     await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,2,?)',
       [passId, merchantId, staffId, cityCode])
@@ -71,8 +77,10 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
   }
 
   const consumed = await tx(async (c) => {
+    const locked = await c.one('SELECT status FROM travel_pass WHERE id = ? FOR UPDATE', [passId])
+    if (!locked || locked.status !== 1) return false
     // 手输窗口可能无 pass_code 行（currentQr 只预写扫码窗口）——先补行再消费
-    c.ins('INSERT IGNORE INTO pass_code (pass_id, window_no, code_hash) VALUES (?,?,?)', [passId, hit, sign(passId, hit)])
+    await c.ins('INSERT IGNORE INTO pass_code (pass_id, window_no, code_hash) VALUES (?,?,?)', [passId, hit, sign(passId, hit)])
     const n = await c.upd('UPDATE pass_code SET consumed_at = NOW(3), consumed_by = ? WHERE pass_id = ? AND window_no = ? AND consumed_at IS NULL',
       [staffId, passId, hit])
     if (n !== 1) return false

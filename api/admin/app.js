@@ -115,10 +115,15 @@ function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  $('#nav').innerHTML = NAV.map(([g, items]) => `<div class="nav-group">${g}</div>` +
-    items.map(([k, n, ic]) => `<div class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic]}<span>${n}</span></div>`).join('')).join('')
+  const access = { ops: ['dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','conflicts','audit'] }
+  const allowed = access[ME?.role]
+  $('#nav').innerHTML = NAV.map(([g, items]) => {
+    items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
+    if (!items.length) return ''
+    return `<details class="nav-section" ${['经营','交易','生态'].includes(g) ? 'open' : ''}><summary class="nav-group">${g === 'WEB3' ? '数字资产与扩展' : g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+  }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
-  go('dash')
+  go(allowed ? allowed[0] : 'dash')
 }
 
 function go(page) {
@@ -128,7 +133,8 @@ function go(page) {
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
     web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突' }[page]
   $('#crumb').textContent = name
-  ;({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)()
+  const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)
+  Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })
 }
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
 const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
@@ -159,29 +165,25 @@ async function dash() {
   const area = path ? path + ` L${pts[pts.length - 1][0]},${H - P} L${pts[0][0]},${H - P} Z` : ''
   const w3 = await api('GET', '/admin/web3/overview').catch(() => null)
   const ins = await api('GET', '/admin/dash/insights').catch(() => null)
-  $('#app').innerHTML = `${w3 ? `<div class="card"><div class="card-head"><h3>链上权益 · 向往自由链</h3><span class="muted">${esc(w3.chainMode)}</span>
-    <button class="btn ghost sm" onclick="go('web3dash')" style="margin-left:auto">WEB3 工作区 ›</button></div>
-    <div class="row" style="gap:24px;margin:0"><span>锚定批次 <b>${w3.anchoredBatches}/${w3.batches}</b></span>
-    <span>链上事件 <b>${w3.anchoredEvents}/${w3.events}</b></span><span>待打包 <b>${w3.pendingEvents}</b></span>
-    <span>勋章发放 <b>${w3.badgeGrants}</b></span><span>积分发行 <b>${w3.beanGranted}</b></span></div></div>` : ''}
+  $('#app').innerHTML = `<div class="workspace-intro"><div><div class="workspace-eyebrow">OPERATIONS / 经营</div><h1>把每一段旅程，照顾周全。</h1><p>先处理待办，再看经营变化。当前数据范围：${esc(cityTag)}</p></div><div class="workspace-date">${new Date().toLocaleDateString('zh-CN')}<small>经营工作台</small></div></div>
   ${ins ? `<div class="card"><div class="card-head"><h3>待审核事项（聚合）</h3></div>
     <div class="row" style="gap:18px;margin:0">
-      <span>📝 待审笔记 <b>${ins.pending.notes}</b></span>
-      <span>🏪 进件申请 <b>${ins.pending.merchants}</b></span>
-      <span>💰 提现待审 <b>${ins.pending.withdrawals}</b></span>
-      <span>⚠️ 离线冲突 <b>${ins.pending.conflicts}</b></span>
-      <span>📋 约稿待判 <b>${ins.pending.tasks}</b></span>
+      <button class="task-link" onclick="go('content')"><span>内容待审</span><b>${ins.pending.notes}</b>去审核 →</button>
+      <button class="task-link" onclick="go('merchants')"><span>商户进件</span><b>${ins.pending.merchants}</b>去处理 →</button>
+      <button class="task-link" onclick="go('withdrawals')"><span>提现待审</span><b>${ins.pending.withdrawals}</b>去复核 →</button>
+      <button class="task-link" onclick="go('conflicts')"><span>核销异常</span><b>${ins.pending.conflicts}</b>去处理 →</button>
+      <button class="task-link" onclick="go('tasks')"><span>约稿待审</span><b>${ins.pending.tasks}</b>去处理 →</button>
       <span class="muted" style="margin-left:auto">合计 ${ins.pending.notes + ins.pending.merchants + ins.pending.withdrawals + ins.pending.conflicts + ins.pending.tasks} 项</span>
     </div>
     <div class="card-head" style="margin-top:12px"><h3>热门主题游 TOP5（已支付口径）</h3></div>
     <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
     ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
     </tbody></table>
-    <div class="card-head" style="margin-top:12px"><h3>活动转化漏斗</h3></div>
+    <div class="card-head" style="margin-top:12px"><h3>经营指标</h3></div>
     <div class="row" style="gap:24px;margin:0">
       <span>报名→支付 <b>${ins.funnel.payRate}</b></span>
       <span>复购线索 <b>${ins.funnel.rebuyRate}</b></span>
-      <span>积分使用率 <b>${ins.funnel.beanUseRate}</b></span>
+      <span>累计抵扣 / 累计发放 <b>${ins.funnel.beanUseRate}</b></span>
     </div></div>` : ''}
   <div class="kpi-grid">${kpis.map(([ic, bg, l, v, s]) => `
     <div class="kpi"><div class="ico" style="background:${bg}">${ic}</div>
@@ -283,7 +285,7 @@ async function refundOrder(no) {
      <button class="btn danger" onclick="doRefund('${no}')">确认退款</button>`)
 }
 async function doRefund(no) {
-  try { await api('POST', '/admin/orders/' + no + '/refund', { reason: '后台退款' }); closeModal(); toast('退款完成，冲正已执行'); orders() }
+  try { const r = await api('POST', '/admin/orders/' + no + '/refund', { reason: '后台退款' }); closeModal(); toast(r.refunded ? '退款完成，冲正已执行' : '退款已受理，待支付通道确认'); orders() }
   catch (e) { toast(e.message, true) }
 }
 async function completeOrder(no) {
@@ -294,17 +296,17 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const rows = await api('GET', '/admin/products')
+  const [rows, merchantRows] = await Promise.all([api('GET', '/admin/products'),api('GET', '/admin/merchants')])
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
-    <div class="row" style="margin-top:0">
+    <p class="muted" style="margin-bottom:16px">先保存草稿 → 完善行程与集合信息 → 添加团期 → 检查后上架。价格单位为元。</p><div class="row" style="margin-top:0">
       <input id="p_title" placeholder="标题，如：朱家角剧本游 · 江南谜案">
       <select id="p_cat"><option value="script">剧本闯关</option><option value="yoga">瑜伽之旅</option><option value="sister">姐姐系列</option>
         <option value="single">单身社交</option><option value="sport">体育竞技</option><option value="family">亲子主题</option>
         <option value="red">红色文旅</option><option value="shop">商城 SKU</option></select>
-      <input id="p_price" placeholder="价格（分）如 29800" style="width:150px">
-      <select id="p_merchant">${rows.length ? [...new Set(rows.map((r) => `<option value="${r.merchant_id}">${esc(r.merchant_name)}</option>`))].join('') : '<option value="">先建商户</option>'}</select>
-      <button class="btn primary sm" onclick="addProduct()">保存</button>
+      <input id="p_price" placeholder="价格（元），如 298" type="number" min="0.01" step="0.01" style="width:150px">
+      <select id="p_merchant">${merchantRows.filter(m => m.status === 1).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('') || '<option value="">请先审核商户</option>'}</select>
+      <button class="btn primary sm" onclick="addProduct()">保存草稿</button>
     </div>
     ${rows.length ? `<table><thead><tr><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>商户</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${rows.map((p) => `<tr>
@@ -381,19 +383,19 @@ async function addProduct() {
   try {
     if (!$('#p_title').value.trim()) return toast('请填写标题', true)
     await api('POST', '/admin/products', { title: $('#p_title').value.trim(), cat: $('#p_cat').value,
-      priceFrom: Number($('#p_price').value), merchantId: Number($('#p_merchant').value), status: 1 })
-    toast('商品已上架'); products()
+      priceFrom: Math.round(Number($('#p_price').value) * 100), merchantId: Number($('#p_merchant').value), status: 0 })
+    toast('草稿已保存，请完善素材并添加团期后上架'); products()
   } catch (e) { toast(e.message, true) }
 }
 async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
 function sessionModal(pid, price) {
-  modal('新增团期', `<div class="row"><input id="s_date" type="date" style="width:170px"><input id="s_quota" placeholder="名额" value="24" style="width:100px"><input id="s_price" placeholder="价格(分)" value="${price}" style="width:130px"></div>
+  modal('新增团期', `<div class="row"><input id="s_date" type="date" style="width:170px"><input id="s_quota" placeholder="名额" value="24" style="width:100px"><input id="s_price" placeholder="价格（元）" value="${(Number(price)/100).toFixed(2)}" style="width:130px"></div>
     <p class="muted">出发日建议选周五/周六；名额售完自动拦截（数据库 CHECK 防超卖）</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSession(${pid})">保存团期</button>`)
 }
 async function addSession(pid) {
   try {
-    await api('POST', '/admin/sessions', { productId: pid, departDate: $('#s_date').value, quota: Number($('#s_quota').value), priceAdult: Number($('#s_price').value) })
+    await api('POST', '/admin/sessions', { productId: pid, departDate: $('#s_date').value, quota: Number($('#s_quota').value), priceAdult: Math.round(Number($('#s_price').value) * 100) })
     closeModal(); toast('团期已添加')
   } catch (e) { toast(e.message, true) }
 }
@@ -409,7 +411,7 @@ async function merchants() {
     ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td class="num">${esc(m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div></td><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() {
@@ -426,7 +428,7 @@ async function settlements() {
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
       <button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button></div>
-    <p class="muted" style="margin:-8px 0 14px">五口径恒等式在数据库层以 CHECK 约束强制：<code>订单额 = 履约 + 服务费 + 推广 + 权益预算 + 留存毛利</code></p>
+    <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。</p>
     ${rows.length ? rows.map((s) => {
       const parts = [Number(s.amt_fulfill), Number(s.amt_service), Number(s.amt_promoter), Number(s.amt_beanbudget), Number(s.amt_retained)]
       const total = Number(s.total_amount) || 1
@@ -434,10 +436,11 @@ async function settlements() {
       <div class="row" style="justify-content:space-between;margin:0 0 10px">
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
-          <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待确认', '商户确认', '分账执行', '完成', '异议中'][s.status]}</span>
-          ${s.status === 0 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">复核通过并分账</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
+          <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
+          ${s.status === 1 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
       <div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>
+      ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}
       <div class="split-legend">${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
   </div>`
@@ -446,11 +449,22 @@ async function genSettlements() {
   try { const r = await api('POST', '/admin/settlements/generate', {}); toast('已生成 ' + r.settlementIds.length + ' 份结算单'); settlements() } catch (e) { toast(e.message, true) }
 }
 async function resolveDispute(id) {
-  const note = prompt('异议处理说明：', '商户已确认，异议解决') || '异议已处理'
+  const note = prompt('异议处理说明（处理后交回商户重新确认）：', '')
+  if (!note || !note.trim()) return
   try { await api('POST', '/admin/settlements/' + id + '/dispute', { note }); toast('异议已处理'); settlements() } catch (e) { toast(e.message, true) }
 }
 async function confirmSettle(id) {
-  try { await api('POST', `/admin/settlements/${id}/confirm`, {}); toast('结算完成：分账已执行'); settlements() } catch (e) { toast(e.message, true) }
+  try { await api('POST', `/admin/settlements/${id}/confirm`, {}); toast('复核通过，待实际支付并登记回单'); settlements() } catch (e) { toast(e.message, true) }
+}
+
+function paymentReceipt(id) {
+  modal('登记实际支付回单', `<p class="muted">请先核对收款商户、应结金额与实际银行/支付平台回单。本操作只登记支付证据。</p><label>支付流水号</label><input id="receiptRef" maxlength="128" placeholder="填写回单中的真实流水号"><label>核对说明</label><textarea id="receiptNote" maxlength="500" placeholder="收款方、金额、支付日期与核对说明"></textarea><div id="receiptError" class="lerr"></div>`, `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="savePaymentReceipt(${id})">确认登记</button>`)
+}
+async function savePaymentReceipt(id) {
+  try {
+    await api('POST', '/admin/settlements/' + id + '/payment', { paymentRef: $('#receiptRef').value.trim(), note: $('#receiptNote').value.trim() })
+    closeModal(); toast('回单已登记，可在审计日志追溯'); settlements()
+  } catch (e) { $('#receiptError').textContent = e.message }
 }
 
 /* ============ 旅豆预算 ============ */
@@ -701,13 +715,13 @@ async function withdrawals() {
       <td class="money num">${fen(w.amount)}</td><td class="td-sub">${esc(w.proposer_note || '')}</td>
       <td>${['<span class="pill warn">待审</span>', '<span class="pill ok">已打款</span>', '<span class="pill s70">已驳回</span>'][w.status]}</td>
       <td class="td-sub">${esc(w.reviewed_by || '—')}${w.pay_ref ? '<div>' + esc(w.pay_ref) + '</div>' : ''}</td>
-      <td>${w.status === 0 ? `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">通过并打款</button>
+      <td>${w.status === 0 ? `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>
         <button class="btn danger sm" onclick="approveWithdraw(${w.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('暂无提现申请（推广员在小程序 A「推广中心」发起）')}
   </div>`
 }
 async function approveWithdraw(id, pass) {
-  const payRef = pass ? prompt('打款流水号（商家转账单号）：', 'BANK-' + Date.now()) : null
+  const payRef = pass ? prompt('请先完成实际支付，填写回单中的真实打款流水号：', '') : null
   if (pass && !payRef) return
   try { await api('POST', '/admin/withdrawals/' + id + '/verdict', { pass, payRef }); toast(pass ? '已打款并留痕' : '已驳回'); withdrawals() } catch (e) { toast(e.message, true) }
 }
@@ -952,7 +966,7 @@ async function tasks() {
       <input id="tkReward" placeholder="报酬(豆)" style="width:120px"><button class="btn primary sm" onclick="addTask()">新建任务</button></div>
     ${list.length ? `<table><thead><tr><th>任务</th><th>简述</th><th>报酬</th><th>领取</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${list.map((t) => `<tr><td class="td-main">${esc(t.title)}</td><td class="td-sub">${esc(t.brief || '')}</td>
-      <td class="num">${Number(t.reward_beans)} 豆</td><td class="num">${Number(t.claimed) || 0} 人</td>
+      <td class="num">${Number(t.reward_beans)} 豆</td><td class="num">${t.claimed_by ? '用户 #' + Number(t.claimed_by) : '未领取'}</td>
       <td>${ST[t.status] || t.status}</td>
       <td><div style="display:flex;gap:4px">${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
       <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`

@@ -1,5 +1,6 @@
 <view wx:if="{{loading}}" class="skeleton" style="height:400rpx;margin-top:20rpx"></view>
-<block wx:else>
+<view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
+<block wx:elif="{{p}}">
   <!-- 图集轮播：有实拍图用图集，无图回退品牌渐变 -->
   <swiper wx:if="{{gallery.length}}" class="gallery" indicator-dots circular
           bindchange="onSwiper" current="{{gIdx}}">
@@ -7,7 +8,7 @@
       <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load />
     </swiper-item>
   </swiper>
-  <view wx:if="{{gallery.length}}" class="g-count">{{gIdx + 1}}/{{gallery.length}}</view>
+  <view wx:if="{{gallery.length}}" class="g-count">{{illustrated ? '主题插画' : gIdx + 1 + '/' + gallery.length}}</view>
   <view wx:else class="hero">
     <view class="hi">{{p.title}}</view>
     <view class="sub2">{{p.days_desc || p.days}} · {{p.city_code || ''}} · 履约商户：{{p.merchant_name || '—'}}</view>
@@ -29,34 +30,7 @@
     <text class="tag blue">✓ 商户核验</text>
   </view>
 
-  <view class="sec-title">选择团期</view>
-  <view class="chips">
-    <view class="chip {{sel === index ? 'on' : ''}}" wx:for="{{sessions}}" wx:key="id"
-          bindtap="pick" data-i="{{index}}">{{item.depart_date}} · 余{{item.left_seats}}</view>
-    <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
-  </view>
-  <view class="muted2" wx:if="{{selView.extra}}" style="margin:8rpx 8rpx 0;font-size:22rpx;color:#1a9c6b">{{selView.extra}}</view>
-
-  <view class="card">
-    <view class="kv"><text>出行人数</text>
-      <view style="display:flex;gap:24rpx;align-items:center">
-        <text bindtap="subQty">－</text><text class="v" style="min-width:40rpx;text-align:center">{{qty}}</text><text bindtap="addQty">＋</text>
-      </view></view>
-    <view class="kv"><text>旅豆抵扣（余额 {{beanBal}}）</text>
-      <text class="v" bindtap="toggleBean">{{useBean ? '使用' : '不使用'}}</text></view>
-    <view class="kv"><text>抵扣上限</text><text class="v muted2">订单金额 10%</text></view>
-    <view class="kv"><text>联系人</text>
-      <input class="v input-r" placeholder="姓名" value="{{contactName}}" bindinput="onName" /></view>
-    <view class="kv"><text>手机号</text>
-      <view style="display:flex;align-items:center;gap:16rpx">
-        <input class="v input-r" type="number" maxlength="11" placeholder="11 位手机号"
-          value="{{contactPhone}}" bindinput="onPhoneInput" style="flex:1;min-width:0" />
-        <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onPhone">一键获取</button>
-      </view></view>
-  </view>
-  <view class="btn" bindtap="submit">立即报名</view>
-  <view class="note">真实交易 · 支持按平台退改梯度退款 · 核销后返旅豆</view>
-
+  <view class="card"><view class="kv"><text>出行安排</text><text>{{sessions.length}} 个可选团期</text></view><view class="btn" bindtap="goBooking">选择团期 · 立即预订</view><view class="note">先了解行程，再确认日期与费用</view></view>
   <!-- 内容区：行程介绍 / 亮点 / 费用包含 / 集合 / 安全 -->
   <view class="sec-title" wx:if="{{rich.intro || rich.highlights.length}}">玩法介绍</view>
   <view class="card" wx:if="{{rich.intro || rich.highlights.length}}">

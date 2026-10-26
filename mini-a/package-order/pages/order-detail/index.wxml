@@ -1,3 +1,4 @@
+<view wx:if="{{o.status === 10}}" class="card"><view class="sec-title">订单待支付</view><view class="note">名额为你暂时保留，可继续完成支付。</view><view class="btn" bindtap="retryPay">继续支付</view></view>
 <view wx:if="{{!o}}" class="skeleton" style="height:300rpx;margin-top:20rpx"></view>
 <block wx:else>
   <view class="hero">

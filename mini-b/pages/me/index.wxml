@@ -1,13 +1,11 @@
 <view class="hero">
   <block wx:if="{{merchant}}"><view class="hi">{{merchant.name}}</view>
-    <view class="sub2">商户号 {{merchant.merchant_no}} · {{role >= 3 ? '老板' : role === 2 ? '店长' : '核销员'}}</view></block>
-  <block wx:else><view class="hi">绑定门店</view><view class="sub2">输入门店 ID 登录（由平台运营分配）</view></block>
+    <view class="sub2">商户号 {{merchant.merchant_no}} · 已安全绑定门店</view></block>
+  <block wx:else><view class="hi">绑定门店</view><view class="sub2">微信安全登录 · 凭门店邀请加入</view></block>
 </view>
+<view wx:for="{{applications}}" wx:key="id" class="card"><view class="sec-title">{{item.name}}</view><view>{{item.statusText}}</view><view class="note">申请编号 {{item.merchant_no}}</view></view>
 <view class="card" wx:if="{{!merchant}}">
-  <input value="{{midInput}}" bindinput="onMid" type="number" placeholder="门店 ID"
-    style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
-  <view class="btn" bindtap="doLogin">绑定并登录</view>
-  <view class="note">联调走门店 ID · 正式版用手机号快速验证 + 邀请码</view>
+  <view class="btn" bindtap="doLogin">微信登录已有门店</view>
   <view class="sec-title" style="margin-top:24rpx">凭邀请码加入</view>
   <input value="{{inviteInput}}" bindinput="onInvite" placeholder="如 INV01234567"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
@@ -20,7 +18,7 @@
   <input value="{{applyMobile}}" bindinput="onApplyMobile" type="number" placeholder="联系电话"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
   <view class="btn ghost" bindtap="applyMerchant">提交入驻申请</view>
-  <view class="note">平台审核通过后发放邀请码 · 在「管理后台-生态-商户进件」可见进度</view>
+  <view class="note">可在本页查看审核进度；审核通过后重新登录即可进入门店。</view>
 </view>
 <block wx:else>
   <view class="card">
@@ -30,3 +28,5 @@
     <view class="row" bindtap="logout"><text style="color:var(--red)">退出登录</text></view>
   </view>
 </block>
+
+<view wx:if="{{merchant && role >= 3}}" class="card"><view class="sec-title">店员管理</view><view class="note">通过邀请码加入的员工默认只能核销，老板可设置角色。</view><view wx:for="{{staff}}" wx:key="id" class="row" bindtap="changeStaff" data-id="{{item.id}}"><view><view>{{item.nickname}}</view><view class="tiny">{{item.roleText}} · {{item.status ? '在职' : '已停用'}}</view></view><view class="v">{{item.role === 3 ? '老板' : '管理 ›'}}</view></view></view>

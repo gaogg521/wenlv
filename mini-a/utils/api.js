@@ -1,7 +1,7 @@
 // API 客户端：token 管理 / wx.login 登录 / 交易链路接口 / 后端不可达时的演示兜底
 const g = () => getApp().globalData
 
-function request(path, method = 'GET', data = {}) {
+function request(path, method = 'GET', data = {}, retried = false) {
   return new Promise((resolve, reject) => {
     wx.request({
       url: g().apiBase + path,
@@ -10,6 +10,10 @@ function request(path, method = 'GET', data = {}) {
       header: { Authorization: 'Bearer ' + (g().token || '') },
       success: (res) => {
         if (res.data && res.data.code === 0) return resolve(res.data.data)
+        if (res.data && res.data.code === 1002 && path !== '/c/auth/login' && !retried) {
+          g().token = ''; wx.removeStorageSync('token')
+          return login().then(() => request(path, method, data, true)).then(resolve, reject)
+        }
         reject(res.data || { msg: '网络错误' })
       },
       fail: (e) => reject({ msg: '服务不可达', detail: e }),
@@ -18,7 +22,12 @@ function request(path, method = 'GET', data = {}) {
 }
 
 /** 登录：wx.login → code → POST /c/auth/login → JWT */
+let pendingLogin = null
 function login() {
+  if (!pendingLogin) pendingLogin = performLogin().finally(() => { pendingLogin = null })
+  return pendingLogin
+}
+function performLogin() {
   return new Promise((resolve, reject) => {
     wx.login({
       success: (r) => {
@@ -60,8 +69,7 @@ const FALLBACK = {
 }
 
 async function getTours(cat) {
-  try { return await request('/c/tours?cat=' + (cat || 'all')) }
-  catch (e) { return cat && cat !== 'all' ? FALLBACK.tours.filter((t) => t.cat === cat) : FALLBACK.tours }
+  return request('/c/tours?cat=' + (cat || 'all'))
 }
 
 async function getTourDetail(id) {
@@ -69,8 +77,8 @@ async function getTourDetail(id) {
 }
 
 async function getBean() {
-  try { return await request('/c/bean/account') }
-  catch (e) { return { balance: 1280, lifetime: 4620, rule: '消费返豆 10% · 100 豆≈10 元 · 12 个月有效 · 不可转账' } }
+  await ensureLogin()
+  return request('/c/bean/account')
 }
 
 /** 下单 → 支付参数（真实 V3 或 MOCK） */
@@ -105,8 +113,16 @@ function img(url) {
   return /^https?:\/\//.test(url) ? url : g().apiBase + url
 }
 
+function coverFor(product) {
+  let images = product.images || []
+  if (typeof images === 'string') { try { images = JSON.parse(images) } catch { images = [] } }
+  if (images.length) return img(images[0])
+  const scene = { script:'watertown', yoga:'bamboo', sister:'garden', single:'camp', sport:'lake', family:'mountain', red:'jinggang', shop:'tea' }[product.cat] || 'watertown'
+  return '/assets/scenes/' + scene + '.png'
+}
+
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund,
-  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, FALLBACK,
+  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, FALLBACK,
 }

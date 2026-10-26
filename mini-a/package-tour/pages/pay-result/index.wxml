@@ -1,12 +1,13 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新查询支付结果</view></view>
 <view class="pay-hero">
   <view class="pay-ico">{{status >= 20 && status !== 90 ? '✅' : '⏳'}}</view>
-  <view style="font-size:40rpx;font-weight:800">{{status >= 30 ? '报名成功 · 已出票' : status === 20 ? '支付成功 · 出票中' : status === 10 ? '待支付' : status === 70 ? '已退款' : '订单已关闭'}}</view>
+  <view style="font-size:40rpx;font-weight:800">{{statusText}}</view>
   <view class="muted2" style="margin-top:12rpx">订单号 {{orderNo}}</view>
   <view wx:if="{{amount}}" style="margin-top:16rpx;font-size:30rpx">实付 <text class="money" style="font-size:44rpx;font-weight:800">¥{{amount}}</text></view>
-  <view class="hero-chip" wx:if="{{status >= 30}}" style="margin-top:24rpx;background:var(--brand-soft);border-color:#ffd9b8;color:var(--brand-deep)">
+  <view class="hero-chip" wx:if="{{hasPass}}" style="margin-top:24rpx;background:var(--brand-soft);border-color:#ffd9b8;color:var(--brand-deep)">
     🎫 入园凭证已签发 · 出行当日出示动态核销码</view>
-  <view wx:if="{{mock}}" class="note">联调模式：支付由后台/测试触发回调</view>
+  <view wx:if="{{mock}}" class="note">本地测试支付 · 未产生真实扣款</view>
 </view>
-<view class="btn" bindtap="goOrders" wx:if="{{status >= 30}}">查看我的核销码</view>
+<view class="btn" bindtap="goOrders" wx:if="{{hasPass}}">查看我的核销码</view>
 <view class="btn ghost" bindtap="goHome">回首页继续逛</view>
 <view class="note">返豆/佣金在核销完成后入账 · 退款按平台梯度执行</view>

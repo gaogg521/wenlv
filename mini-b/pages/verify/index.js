@@ -8,8 +8,8 @@ function say(kind) {
   voice.play()
 }
 
-const LIST_KEY = 'wl_offline_list'   // { syncedAt, passes, codes }
-const QUEUE_KEY = 'wl_offline_queue' // [{ payload, offlineAt }]
+const listKey = () => 'wl_offline_list_' + ((getApp().globalData.merchant || {}).id || 'unbound')   // { syncedAt, passes, codes }
+const queueKey = () => 'wl_offline_queue_' + ((getApp().globalData.merchant || {}).id || 'unbound') // [{ payload, offlineAt }]
 
 Page({
   data: { result: null, lastQr: '', input: '', streak: 0, offline: { pending: 0, syncedAt: '', listReady: false } },
@@ -26,19 +26,19 @@ Page({
   async syncList() {
     try {
       const list = await api.request('/m/verify/offline-list')
-      wx.setStorageSync(LIST_KEY, list)
+      wx.setStorageSync(listKey(), list)
       this._list = list
-    } catch (e) { this._list = wx.getStorageSync(LIST_KEY) || null }
+    } catch (e) { this._list = wx.getStorageSync(listKey()) || null }
     this.refreshOfflineBar()
   },
   refreshOfflineBar() {
-    const q = wx.getStorageSync(QUEUE_KEY) || []
-    const l = this._list || wx.getStorageSync(LIST_KEY) || null
+    const q = wx.getStorageSync(queueKey()) || []
+    const l = this._list || wx.getStorageSync(listKey()) || null
     this.setData({ offline: { pending: q.length, syncedAt: l ? l.syncedAt.replace('T', ' ').slice(5, 16) : '', listReady: !!l } })
   },
   watchNetwork() {
     if (this._watched) return
-    this._onNet = (res) => { if (res.isConnected && (wx.getStorageSync(QUEUE_KEY) || []).length) this.uploadQueue() }
+    this._onNet = (res) => { if (res.isConnected && (wx.getStorageSync(queueKey()) || []).length) this.uploadQueue() }
     wx.onNetworkStatusChange(this._onNet)
     this._watched = true
   },
@@ -91,7 +91,8 @@ Page({
         this._continuous = false
         this.setData({ result: { ...r, payload } })
       }
-    }).catch(() => {
+    }).catch(e => {
+      if (!e.network) { this._continuous = false; return this.setData({ result: { ok: false, payload, reason: e.msg || '核销失败' } }) }
       // 网络不通 → 离线兜底（名单内放行 + 本地队列）
       this.offlineVerify(payload)
     })
@@ -99,11 +100,12 @@ Page({
 
   // ── 离线核销：仅放行名单内凭证（§10「已出票且可人工比对」），记录进本地队列 ──
   offlineVerify(payload) {
-    const list = this._list || wx.getStorageSync(LIST_KEY)
+    const list = this._list || wx.getStorageSync(listKey())
     if (!list) {
       wx.vibrateShort({ type: 'light' })
       return this.setData({ result: { ok: false, payload, offline: true, reason: '离线且无名单缓存，请恢复网络后同步' } })
     }
+    if (Date.now() - new Date(list.syncedAt).getTime() > 30 * 60000) return this.setData({ result: { ok: false, reason: '离线名单已过期，请恢复网络刷新' } })
     let passId = null, how = ''
     if (/^wl:\/\//.test(payload)) {
       passId = Number(String(payload).split('/')[3]) || null
@@ -115,22 +117,23 @@ Page({
     const hit = passId && (list.passes || []).find((p) => p.pass_id === passId)
     wx.vibrateShort({ type: hit ? 'heavy' : 'light' })
     if (!hit) return this.setData({ result: { ok: false, payload, offline: true, reason: '离线名单无此凭证（或凭证已核销）' } })
-    const q = wx.getStorageSync(QUEUE_KEY) || []
+    const q = wx.getStorageSync(queueKey()) || []
+    if (q.some(x => x.passId === passId)) return this.setData({ result: { ok: false, reason: '该凭证已在离线队列，请勿重复放行' } })
     q.push({ payload, offlineAt: new Date().toISOString(), passId })
-    wx.setStorageSync(QUEUE_KEY, q)
+    wx.setStorageSync(queueKey(), q)
     this.refreshOfflineBar()
-    this.setData({ result: { ok: true, payload, offline: true, reason: how + ' · ' + (hit.contact_name || '游客') + ' · ' + hit.title, passId },
+    this.setData({ result: { ok: false, pending: true, payload, offline: true, reason: how + ' · ' + (hit.contact_name || '游客') + ' · ' + hit.title, passId },
       streak: this.data.streak + 1, lastQr: payload })
     if (this._continuous) setTimeout(() => { if (this._continuous) this.scan() }, 800)
   },
 
   // ── 恢复上传：逐条重走服务端二次校验；失败条目服务端已进人工队列 ──
   async uploadQueue() {
-    const q = wx.getStorageSync(QUEUE_KEY) || []
+    const q = wx.getStorageSync(queueKey()) || []
     if (!q.length) return
     try {
       const r = await api.request('/m/verify/offline-batch', 'POST', { items: q })
-      wx.setStorageSync(QUEUE_KEY, [])
+      wx.setStorageSync(queueKey(), [])
       this.refreshOfflineBar()
       this.syncList()
       wx.showModal({

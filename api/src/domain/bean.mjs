@@ -27,9 +27,9 @@ export const clampDeduct = async (wanted, orderFen) =>
   Math.max(0, Math.min(wanted, Math.floor((orderFen * (await cfgNum('bean.deduct_max_pct'))) / 10)))
 
 /** 发放（1/2/3）：双闸校验 + 双分录，同事务 */
-export async function grant(userId, amount, bizType, bizRef, budgetId) {
+export async function grant(userId, amount, bizType, bizRef, budgetId, connection) {
   if (![1, 2, 3].includes(bizType)) throw new BizError(5001, '非法发放类型（无购买通道）')
-  return await tx(async (c) => {
+  const run = async (c) => {
     const aid = await acctId(c, userId)
     const acc = await c.one('SELECT balance FROM bean_account WHERE id = ? FOR UPDATE', [aid])
     const b = await c.one('SELECT total, granted, returned FROM bean_budget WHERE id = ? FOR UPDATE', [budgetId])
@@ -49,13 +49,14 @@ export async function grant(userId, amount, bizType, bizRef, budgetId) {
     await c.upd('UPDATE bean_budget SET granted = granted + ? WHERE id = ?', [amount, budgetId])
     await c.upd('UPDATE bean_global_cap SET issued_sum = issued_sum + ? WHERE id = 1', [amount])
     return Number(acc.balance) + amount
-  })
+  }
+  return connection ? run(connection) : tx(run)
 }
 
 /** 抵扣/回收（4/6/7）：借用户 */
-export async function deduct(userId, amount, bizType, bizRef) {
+export async function deduct(userId, amount, bizType, bizRef, connection) {
   if (![4, 6, 7].includes(bizType)) throw new BizError(5001, '非法扣减类型')
-  return await tx(async (c) => {
+  const run = async (c) => {
     const aid = await acctId(c, userId)
     const acc = await c.one('SELECT balance FROM bean_account WHERE id = ? FOR UPDATE', [aid])
     if (Number(acc.balance) < amount) throw new BizError(5001, '旅豆余额不足')
@@ -67,12 +68,13 @@ export async function deduct(userId, amount, bizType, bizRef) {
        txNo, pid, amount, amount, bizType, bizRef])
     await c.upd('UPDATE bean_account SET balance = balance - ?, version = version + 1 WHERE id = ?', [amount, aid])
     return Number(acc.balance) - amount
-  })
+  }
+  return connection ? run(connection) : tx(run)
 }
 
 /** 退款冲正退回（5）：不占预算与总量 */
-export async function reverse(userId, amount, bizRef) {
-  return await tx(async (c) => {
+export async function reverse(userId, amount, bizRef, connection) {
+  const run = async (c) => {
     const aid = await acctId(c, userId)
     const acc = await c.one('SELECT balance FROM bean_account WHERE id = ? FOR UPDATE', [aid])
     const pid = await virtualId(c, SENTINEL_PLATFORM)
@@ -83,7 +85,8 @@ export async function reverse(userId, amount, bizRef) {
        txNo, pid, amount, 0, bizRef])
     await c.upd('UPDATE bean_account SET balance = balance + ?, version = version + 1 WHERE id = ?', [amount, aid])
     return Number(acc.balance) + amount
-  })
+  }
+  return connection ? run(connection) : tx(run)
 }
 
 /** 日终试算：真实用户户 balance==Σcredit-Σdebit；全账本 Σ贷==Σ借 */

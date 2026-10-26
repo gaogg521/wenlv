@@ -11,8 +11,8 @@ Page({
   },
   goList(e) {
     const city = e.currentTarget.dataset.city
-    this.setData({})
+    wx.setStorageSync('tourFilter', { city, cat: 'all' })
     // 复用主题游列表页并带城市参数（列表页已支持 cat/kw，此处带 city 走同一筛选入口）
-    wx.navigateTo({ url: '/pages/tour-list/index?city=' + city })
+    wx.switchTab({ url: '/pages/tour-list/index' })
   },
 })

@@ -1,10 +1,11 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="card fade-up" wx:if="{{orders.length}}">
-  <view class="row" wx:for="{{orders}}" wx:key="order_no">
+  <view class="row" bindtap="goDetail" data-no="{{item.order_no}}" wx:for="{{orders}}" wx:key="order_no">
     <view style="flex:1;min-width:0"><b>{{item.title}}</b>
       <view class="sub">{{item.order_no}} · {{item.contact_name || '游客'}} · {{item.qty}}人</view></view>
     <view style="text-align:right;flex-shrink:0"><view class="money">¥{{item.amount_pay / 100}}</view>
-      <view class="pill p{{item.status}}" style="margin-top:8rpx">{{item.status===20?'已支付':item.status===30?'待核销':item.status===40?'已核销':item.status===50?'已完成':item.status===70?'已退款':item.status}}</view></view>
+      <view class="pill p{{item.status}}" style="margin-top:8rpx">{{item.statusText}}</view></view>
   </view>
 </view>
-<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">📋</view>暂无订单（联调数据在后台/剧本录入）</view>
+<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">📋</view>暂无已支付订单</view>
 <view class="note">仅展示本店订单 · 游客隐私已脱敏</view>

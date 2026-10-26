@@ -1,11 +1,12 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
 <view class="card fade-up" wx:if="{{list.length}}">
-  <view class="row" wx:for="{{list}}" wx:key="id">
+  <view class="row stock-row" wx:for="{{list}}" wx:key="id">
     <view style="flex:1;min-width:0"><b>{{item.title}}</b>
       <view class="sub">{{item.depart_date}} · 余 {{item.left_seats}}/{{item.quota}}
         <text wx:if="{{item.left_seats <= 2}}" style="color:var(--red)">（紧张）</text> · ¥{{item.price_adult/100}}<text wx:if="{{item.early_price}}" style="color:var(--ok)"> · 🐦早鸟 ¥{{item.early_price/100}}（提前{{item.early_days}}天）</text></view></view>
     <view style="display:flex;gap:12rpx;flex-shrink:0">
       <view class="pill p30" bindtap="addQuota" data-id="{{item.id}}">加名额</view>
-      <view class="pill p20" bindtap="changePrice" data-id="{{item.id}}" data-price="{{item.price_adult}}">改价</view>
+      <view class="pill p20" wx:if="{{role >= 3}}" bindtap="changePrice" data-id="{{item.id}}" data-price="{{item.price_adult}}">改价</view>
       <view class="pill p20" bindtap="setEarly" data-id="{{item.id}}" data-early="{{item.early_price}}" data-earlydays="{{item.early_days}}">早鸟</view>
       <view class="pill p90" wx:if="{{item.status === 1}}" bindtap="stopSell" data-id="{{item.id}}">停售</view>
       <view class="pill p50" wx:else>已停售</view>

@@ -13,7 +13,8 @@
       "root": "package-tour",
       "pages": [
         "pages/detail/index",
-        "pages/pay-result/index"
+        "pages/pay-result/index",
+        "pages/booking/index"
       ]
     },
     {

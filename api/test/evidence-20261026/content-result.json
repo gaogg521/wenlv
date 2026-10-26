@@ -1,0 +1,13 @@
+{
+  "noteId": 6,
+  "taskId": 5,
+  "nativeEditorBold": true,
+  "published": true,
+  "selectedWorkSubmitted": true,
+  "limitations": [
+    "内容通过原生 EditorContext 插入，非实体键盘输入",
+    "作品选择器通过官方自动化 API 选择索引"
+  ],
+  "adminApproved": true,
+  "rewardLedger": 200
+}

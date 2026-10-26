@@ -1,3 +1,5 @@
+<view wx:if="{{cityName}}" class="card" bindtap="clearCity">目的地：{{cityName}} <text class="more">清除筛选 ×</text></view>
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
 <view class="chips">
   <view class="chip {{active === item.k ? 'on' : ''}}" wx:for="{{cats}}" wx:key="k"
         bindtap="switchCat" data-k="{{item.k}}">{{item.n}}</view>

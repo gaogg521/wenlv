@@ -1,67 +1,52 @@
-# wanderlust — 「向往的自由」工程总仓
+# 向往的自由 · 工程与验收入口
 
-唯一设计基准：[`../向往的自由-项目总方案-定稿完整版-20261022.md`](../向往的自由-项目总方案-定稿完整版-20261022.md)（V3.1）。
-demo（`../向往的自由-原型源码/`）是交互规格与演示产物，**不是代码来源**；其旧术语/五级分润按口径分离表（总方案 §2.5 / D15）仅限演示。
+当前运行实现是 `api/` Node 服务、`mini-a/` 游客小程序、`mini-b/` 商户小程序，以及 `api/admin/` PC 后台。`server/` 与 `admin-web/` 是历史 Java / Next.js 备选实现，本轮没有迁移或发布它们。
 
-## 仓库结构
+最新整改与证据见 [整改与实际验收记录-20261026.md](整改与实际验收记录-20261026.md)。不要再把旧交接文档中的“全部完成”当成当前生产验收结论。
 
-| 目录 | 内容 | 本机验证状态（2026-10-23） |
-|---|---|---|
-| `api/` | **生产 API 服务（Node 18+，唯一依赖 mysql2）**：/c /m /admin /callback 全路由 + 管理后台 SPA + 定时任务 jobs + Docker/PM2 部署件 + 上线清单 | ✅ **HTTP 全链路 E2E 38 PASS（可重复）**；微信支付 V3 通道（填商户凭据即生产，未填=MOCK 联调） |
-| `server/` | Java/Spring Boot 3.2 版（同一套库表；团队企业栈选项） | ✅ 领域 E2E 35 PASS + 核心自检 43 PASS；DDL 红线 9 项实测拦截 |
-| `mini-a/` | 游客小程序（原生，tabBar 5 含商城·D14，交易闭环齐全） | ✅ 34 文件语法全过：首页/列表/商城/旅豆/我的 + 详情/下单/支付/订单/动态核销码 |
-| `admin-web/` | PC 运营后台（Next.js 14 版，团队可选用） | 源码骨架（**运行版后台在 `api/admin/`，随 API 服务直接访问 /admin-ui**） |
-| （P1）`mini-b/` | 商户端小程序（核销/库存/对账；`/m` API 已就绪并有 E2E 覆盖） | 待建 |
+## 当前入口
 
-## 快速验证（本机：MySQL root/root · Node 24 · JDK 17）
+- 本机演示后台：<http://127.0.0.1:8080/admin-ui>
+- 隔离验收后台：<http://127.0.0.1:8081/admin-ui>
+- 原演示数据库：`wanderlust`；本轮验收数据库：`wanderlust_qa_20261026`。
+- 升级前完整快照：`wanderlust_backup_20261026_v17`。增量迁移 `api/db/migration/V17__settlement_payment_evidence.sql` 已应用到本机演示库。
+- 三端共享 API；手机真机访问不能使用 `127.0.0.1`，需要配置实际可访问的 HTTPS 服务与微信合法域名。
 
-```bash
-cd api
-node src/index.mjs          # 起 API + 管理后台（http://127.0.0.1:8080/admin-ui，admin/admin123）
-npm run e2e                 # HTTP 全链路 38 PASS（自动重置，可重复）
-node test/scenario-populate.mjs   # 演示内容录入：23 步真实操作剧本（走真实接口，录完即可演示）
+## 本轮完成的代码
+
+- 标准二维码编码、动态窗口校验、游客凭证归属与商户核销归属、并发一次性消费。
+- 异步支付凭据读取、真实签名、验签与 AES-GCM 回调解密、金额核对；入账、出票和状态同事务提交。
+- 未支付继续支付、支付失败查询恢复、抵扣豆与下单原子提交、超时返还、退款冲正。
+- 结算必须经商户确认和财务复核；当前采用**人工支付回单登记模式**，不会把复核动作冒充真实分账。
+- 取消凭门店 ID 自动入职；商户申请审批后绑定老板；邀请码加入、店员角色和停用校验。
+- 游客发现/详情/确认预订分层，原型场景插画、失败重试、原生内容编辑器与作品选择。
+- PC 工作台、角色菜单、商品草稿与发布检查、结算回单表单、内容审核等流程完善。
+
+## 验收边界
+
+本地模拟支付和扫码回调已经验证；实际二维码屏幕截图经过独立解码。真实微信扣款、实体相机扫码、到账与电商收付通自动分账**没有完成生产验收**。配置商户凭据也不等于真实验收通过。
+
+商城当前定义为到店预约/领取流程，不包含配送实物电商。此边界已在页面说明，不能将其作为完整配送商城对外承诺。
+
+## 可重跑检查
+
+在 `api/` 中使用 PowerShell：
+
+```powershell
+$env:DB_NAME='wanderlust_qa_20261026'
+node test/remediation-core.mjs
+node test/remediation-ui.mjs
+node test/remediation-pages.mjs a
 ```
 
-上线清单（内容填充 + 凭据 + 部署 + 微信平台配置）：[`api/README.md`](api/README.md)
+`remediation-ui.mjs` 会按避坑手册彻底退出 IDE、单窗口串行验证 A/B/A，不上传、不发布。它会构建 `test/evidence-20261026/mini-b-runtime` 调试副本，借 A 端 AppID 验证商户页面；原商户工程 AppID 保留原值。
 
-## Java 版验证（可选；无 Maven 也可跑）
+切换到商户调试副本的单个 CLI 窗口后运行 `node test/remediation-pages.mjs b`，共 8 页。游客端共 17 页。创作流程使用 `test/remediation-content.mjs`；商户入驻使用 `test/remediation-onboarding.mjs apply`，在后台审批后执行 `verify`。
 
-```bash
-cd server
+既有 `api-e2e.mjs` 等部分历史测试会清空数据，只能对隔离库运行。本轮没有用这些脚本重置原演示库。
 
-# 1. 建库（一次性）
-mysql -uroot -proot < <(echo "CREATE DATABASE IF NOT EXISTS wanderlust CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci")
-mysql -uroot -proot --default-character-set=utf8mb4 wanderlust < src/main/resources/db/migration/V1__init_schema.sql
-mysql -uroot -proot --default-character-set=utf8mb4 wanderlust < src/main/resources/db/migration/V2__seed_rule_config.sql
+## 设计与调试资料
 
-# 2. 全链路 E2E（自动重置数据，可重复跑）
-java -cp "build/classes;libs/mysql-connector-j-8.4.0.jar" E2eRunner     # 35 PASS
-
-# 3. 领域核心自检（无数据库依赖）
-java -cp build/classes VerifyCore                                       # 43 PASS
-```
-
-E2E 覆盖：种子 → 归因（首触唯一）→ 下单（豆抵扣即扣·防超卖）→ 支付（幂等·防篡改）→
-出票 → 动态码核销（防重放）→ 观察期 → 返豆（预算+总量双闸）→ 佣金（幂等）→
-周结算（五口径恒等）→ 退款全量冲正 → 账本试算（Σ贷=Σ借）→ 存证队列 → 审计流。
-
-## 团队侧接入
-
-- 后端：`mvn spring-boot:run`（Flyway 自动迁移；生产 profile 注入 RDS 凭据与 WL_CRYPTO_KEY）
-- 小程序：微信开发者工具导入 `mini-a/`（联调地址 `utils/api.js` 的 apiBase）
-- 后台：`cd admin-web && npm install && npm run dev`
-
-## 已知坑（踩过的，别再踩）
-
-1. `SENSITIVE` 是 MySQL 保留字——`rule_config.\`sensitive\`` 必须反引号。
-2. `settlement.period` 需 VARCHAR(12)（`2026-10-W43` 11 字符）。
-3. JDBC URL 用 `characterEncoding=UTF-8`（驱动自动映射 utf8mb4，写 utf8mb4 会连接失败）。
-4. `wl://v/...` 二维码 split("/") 得 6 段（双斜杠产生空段）。
-5. MySQL `BIGINT UNSIGNED` 经 JDBC getObject 返回 BigInteger——一律 `((Number)x).longValue()`。
-6. 虚拟科目（平台抵扣池/预算池）用哨兵 user_id 建真实行，禁止"约定 id=1/9"（会与真实账户自增 id 撞号）。
-
-## 下一步（按总方案 §15）
-
-- server：AuthController（wx.login→JWT）/ OrdersController+收付通 channel / VerifyController 商户端扫码 / beanWorker 定时任务
-- mini-b（P1）：10 页，首屏扫码核销
-- 存证 P1 切链数根真实适配器（接口不变，替换 NoopAttestationClient）
+- [完整设计基准](招商宣传站/向往的自由-项目总方案-定稿完整版-20261022.md)
+- [原型源码与交互说明](向往的自由-DOME设计原型源码/README.md)
+- [CLI 避坑手册](CLI调试-AI交接手册.md)，尤其是 2026-10-26 新增的整 IDE 退出与双窗口串通道条目。

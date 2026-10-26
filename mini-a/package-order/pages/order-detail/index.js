@@ -4,11 +4,16 @@ Page({
     passSt: { 1: '有效 · 待核销', 2: '已核销', 3: '已撤销', 4: '已冲正' },
     rating: 5, rvText: '', reviewDone: false },
   onLoad(q) { this.no = q.no; this.fetch() },
+  onShow() { if (this.no) this.fetch() },
   async fetch() {
     try {
       const o = await api.getOrder(this.no)
       this.setData({ o, passes: o.passes })
     } catch (e) { wx.showToast({ title: e.msg || '加载失败', icon: 'none' }) }
+  },
+  async retryPay() {
+    try { const r = await api.request('/c/orders/' + this.no + '/pay', 'POST'); await api.pay(r.payParams); wx.navigateTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + this.no }) }
+    catch (e) { wx.showToast({ title: e.msg || '支付未完成', icon: 'none' }) }
   },
   goCode(e) { wx.navigateTo({ url: '/package-order/pages/pass-code/index?id=' + e.currentTarget.dataset.id }) },
   // 免费改签（未成团取消单）：同频道同价团期列表 → 选中改签
@@ -17,11 +22,11 @@ Page({
     if (!opts.length) return wx.showToast({ title: '暂无可改签团期', icon: 'none' })
     const ok = await new Promise((r) => wx.showActionSheet({
       itemList: opts.map((s) => s.depart_date + ' · ¥' + (s.price_adult / 100) + ' · 余' + s.left_seats),
-      success: r, fail: () => {},
+      success: r, fail: () => r(null),
     })).catch(() => null)
     if (ok == null) return
     try {
-      const res = await api.request('/c/orders/' + this.no + '/rebook', 'POST', { sessionId: opts[ok].id })
+      const res = await api.request('/c/orders/' + this.no + '/rebook', 'POST', { sessionId: opts[ok.tapIndex].id })
       wx.showToast({ title: '改签成功，已出票', icon: 'success' })
       wx.navigateTo({ url: '/package-order/pages/order-detail/index?no=' + res.orderNo })
     } catch (e) { wx.showToast({ title: e.msg || '改签失败', icon: 'none' }) }

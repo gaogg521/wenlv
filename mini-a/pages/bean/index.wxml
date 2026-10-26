@@ -1,7 +1,8 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="hero" style="background:linear-gradient(140deg,#4a6fa5 0%,#243b55 60%,#16263c 100%)">
   <view class="sub2" style="position:relative">我的旅豆（消费返豆 10%）</view>
   <view class="bean-num" wx:if="{{bean}}">{{bean.balance}}</view>
-  <view class="sub2" wx:if="{{bean}}" style="position:relative">累计获得 {{bean.lifetime}} · 100 豆 ≈ ¥10</view>
+  <view class="sub2" wx:if="{{bean}}" style="position:relative">100 豆 ≈ ¥10</view>
   <view class="hero-chip" wx:if="{{bean}}"><view class="dot"></view>下单时自动抵扣 · 单笔上限 10%</view>
 </view>
 
@@ -29,7 +30,7 @@
   </view>
 </view>
 
-<view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">双分录账本 · 每笔可溯</text></view>
+<view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">最近收支 · 每笔可查</text></view>
 <view class="card fade-up" wx:if="{{ledger.length}}">
   <view class="kv" wx:for="{{ledger}}" wx:key="tx_no">
     <view>

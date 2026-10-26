@@ -8,19 +8,16 @@ Page({
       wx.setStorageSync('promoScene', decodeURIComponent(q.scene))
     }
     api.getTourDetail(q.id).then((d) => {
-      const withFallbackSessions = d.sessions && d.sessions.length ? d.sessions : fallbackSessions()
+      const withFallbackSessions = d.sessions || []
       const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
-      const gallery = (d.images || []).map(api.img)
+      const gallery = (d.images || []).length ? (d.images || []).map(api.img) : [api.coverFor(d)]
+      this.setData({ illustrated: !(d.images || []).length })
       const sv = this.sessView(withFallbackSessions[0])
       this.setData({ p: d, sessions: withFallbackSessions, selView: sv, loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv })
       this.fetchReviews()
-    }).catch(() => {
-      const t = api.FALLBACK.tours.find(x => x.id === Number(q.id)) || api.FALLBACK.tours[0]
-      this.setData({ p: { ...t, priceLabel: (t.price / 100).toFixed(2), merchant_name: '演示商户', days_desc: t.days },
-        sessions: fallbackSessions(), loading: false, fallback: true })
-    })
+    }).catch(e => this.setData({ error: e.msg || '线路加载失败，请重试', loading: false }))
     api.getBean().then(b => this.setData({ beanBal: b.balance })).catch(() => {})
     // 推广服务商本人：分享自动带自己的归因 scene（好友下单即归因）
     api.request('/c/promote/scene').then((s) => { if (s.promoter) this.myScene = s.scene }).catch(() => {})
@@ -28,6 +25,7 @@ Page({
   fetchReviews() {
     api.getReviews(this.pid).then((rv) => this.setData({ rv })).catch(() => {})
   },
+  retry() { this.setData({ loading: true, error: '' }); this.onLoad({ id: this.pid }) },
   onSwiper(e) { this.setData({ gIdx: e.detail.current }) },
   onShareAppMessage() {
     const p = this.data.p || {}
@@ -75,25 +73,28 @@ Page({
     const v = String(e.detail.value || '').replace(/[^0-9]/g, '').slice(0, 11)
     this.setData({ contactPhone: v })
   },
+  goBooking() {
+    if (!this.data.sessions.length) return wx.showToast({ title: '近期暂无可预订团期', icon: 'none' })
+    wx.navigateTo({ url: '/package-tour/pages/booking/index?id=' + this.pid })
+  },
   async submit() {
     const s = this.data.sessions[this.data.sel]
-    if (this.data.fallback) return wx.showToast({ title: '演示数据：连上后端即可下单', icon: 'none' })
+    if (this.data.submitting) return
+    if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
     if (!/^1[3-9]\d{9}$/.test(this.data.contactPhone || '')) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
+    this.setData({ submitting: true })
     try {
       await api.ensureLogin()
       const beanBal = this.data.beanBal || 0
       const unit = s.priceNow || s.price_adult
-      const want = this.data.useBean ? Math.min(beanBal, Math.floor(unit * this.data.qty / 10)) : 0
+      const want = this.data.useBean ? Math.min(beanBal, Math.floor(unit * this.data.qty / 100)) : 0
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
         promoScene: wx.getStorageSync('promoScene') || undefined,
         contactName: this.data.contactName, contactPhone: this.data.contactPhone })
-      await api.pay(r.payParams).catch(() => {})
+      try { await api.pay(r.payParams) } catch (err) { wx.showToast({ title: '支付未完成，可在订单中继续支付', icon: 'none' }) }
       wx.redirectTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + r.orderNo + '&mock=' + (r.payParams.mock ? 1 : 0) })
     } catch (e) {
       wx.showToast({ title: e.msg || '下单失败', icon: 'none' })
-    }
+    } finally { this.setData({ submitting: false }) }
   },
 })
-function fallbackSessions() {
-  return [{ id: 0, depart_date: '2026-12-20', left_seats: 12, priceLabel: '298.00', price_adult: 29800 }]
-}

@@ -91,8 +91,16 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const data = await handler({ headers: req.headers, method: req.method, url: req.url, body, query, params, rawBody }, res)
+    if (pathname === '/callback/wxpay') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify(data))
+    }
     json(res, 0, data)
   } catch (e) {
+    if (pathname === '/callback/wxpay') {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ code: 'FAIL', message: '支付通知校验失败' }))
+    }
     if (e && e.code) return json(res, e.code, { message: e.message })
     console.error('[err]', req.method, pathname, e)
     json(res, 9000, { message: '系统错误：' + e.message }, 500)

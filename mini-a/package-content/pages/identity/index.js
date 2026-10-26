@@ -21,6 +21,6 @@ Page({
         }))
       }
       this.setData({ d, loadTxt: '' })
-    } catch (e) { this.setData({ loadTxt: '后端未连接（演示模式）' }) }
+    } catch (e) { this.setData({ loadTxt: e.msg || '暂时无法加载，请稍后重试' }) }
   },
 })

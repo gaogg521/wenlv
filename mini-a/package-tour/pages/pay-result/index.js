@@ -14,14 +14,19 @@ Page({
       wx.requestSubscribeMessage({ tmplIds: [t.payOk], fail: () => {} })
     } catch (e) { /* 静默：订阅是增强能力 */ }
   },
+  onUnload() { clearTimeout(this.timer) },
+  retry() { this.setData({ tries: 0, error: '' }); this.poll() },
   poll() {
     api.getOrder(this.data.orderNo).then((o) => {
-      this.setData({ status: o.status, amount: o.amountPayLabel })
+      this.setData({ status: o.status, amount: o.amountPayLabel, error: '', statusText: ({10:'订单待支付',20:'支付成功 · 出票中',30:'报名成功 · 已出票',40:'已核销',50:'行程已完成',60:'退款处理中',70:'已退款',90:'订单已关闭'})[o.status] || '正在查询订单', hasPass: [30,40,50].includes(Number(o.status)) })
       if (o.status === 10 && this.data.tries < 6) {
         this.setData({ tries: this.data.tries + 1 })
-        setTimeout(() => this.poll(), 2000)
+        this.timer = setTimeout(() => this.poll(), 2000)
       }
-    }).catch(() => this.setData({ tries: this.data.tries + 1 }))
+    }).catch(e => {
+      this.setData({ tries: this.data.tries + 1, error: e.msg || '暂时无法获取支付结果' })
+      if (this.data.tries < 6) this.timer = setTimeout(() => this.poll(), 2000)
+    })
   },
   goOrders() { wx.redirectTo({ url: '/package-order/pages/orders/index' }) },
   goHome() { wx.switchTab({ url: '/pages/home/index' }) },

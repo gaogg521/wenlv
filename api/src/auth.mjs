@@ -37,10 +37,13 @@ export function requireUser(req) {
 }
 
 /** wx.login → code2Session；未配置 appid 时返回 mock openid（开发联调模式） */
-export async function code2Session(jsCode) {
-  const appid = process.env.WX_APPID
-  const secret = process.env.WX_SECRET
+export async function code2Session(jsCode, client = 'a') {
+  const { getSecrets } = await import('./infra/secrets.mjs')
+  const keys = client === 'b' ? ['WX_B_APPID', 'WX_B_SECRET'] : ['WX_APPID', 'WX_SECRET']
+  const s = await getSecrets(keys)
+  const appid = s[keys[0]], secret = s[keys[1]]
   if (!appid || !secret || /^mock-/.test(jsCode)) {
+    if (process.env.NODE_ENV === 'production') throw Object.assign(new Error('微信登录配置缺失或登录凭据无效'), { code: 1002 })
     return { openid: 'mock-openid-' + jsCode, unionid: 'mock-union-' + jsCode }
   }
   const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${appid}&secret=${secret}&js_code=${jsCode}&grant_type=authorization_code`

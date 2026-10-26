@@ -8,5 +8,14 @@
     "start:win": "node --env-file=.env src/index.mjs",
     "e2e": "node test/api-e2e.mjs"
   },
-  "dependencies": { "mysql2": "^3.11.0" }
+  "dependencies": {
+    "mysql2": "^3.11.0"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "jsqr": "^1.4.0",
+    "miniprogram-automator": "^0.13.0",
+    "pngjs": "^7.0.0",
+    "qrcode-generator": "^2.0.4"
+  }
 }

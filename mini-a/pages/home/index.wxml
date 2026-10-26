@@ -1,21 +1,24 @@
-<view class="hero">
-  <view class="hi">{{greet}}，旅友</view>
-  <view class="sub2">真实文旅体验 · 消费返旅豆 · 推广服务商与创作者同在游客端</view>
-  <view class="hero-chip"><view class="dot"></view>真实交易 · 履约可核销 · 可信记录</view>
+<view class="home-intro">
+  <view class="eyebrow">WANDERLUST · 向往的自由</view>
+  <view class="home-title">世界就是<text>我的游乐场</text></view>
+  <view class="home-caption">去水乡入戏，去山野放空。下一段故事，由你出发。</view>
+  <view class="home-search" bindtap="goTours">⌕ 搜索目的地、线路与新体验 <text>探索 →</text></view>
+  <view class="home-destination" bindtap="goDestinations">朱家角 · 苏州 · 安吉<text>发现目的地 ↗</text></view>
 </view>
-
+<view class="theme-grid"><view wx:for="{{themes}}" wx:key="k" class="theme-tile" data-cat="{{item.k}}" bindtap="goTours"><text class="theme-symbol">{{item.icon}}</text><view class="theme-name">{{item.n}}</view><view class="theme-sub">{{item.sub}}</view></view></view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">
     <swiper-item wx:for="{{banners}}" wx:key="id">
       <image src="{{item.image}}" mode="aspectFill" style="width:100%;height:300rpx" data-i="{{index}}" bindtap="tapBanner" />
     </swiper-item>
   </swiper>
-<view class="hero-chip" bindtap="goDestinations" style="margin:16rpx 0"><view class="dot"></view>🗺️ 目的地 · 一城一故事，去看看 ></view>
 
-<view class="sec-title">即将成团 <text class="more">全部真实商家与团期</text></view>
+
+<view class="sec-title">值得出发 <text class="more" bindtap="goTours">查看全部 →</text></view>
 
 <view wx:if="{{loading}}">
   <view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
 </view>
+<view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
 <view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
 <view wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
@@ -32,4 +35,4 @@
     </view>
   </view>
 </view>
-<view class="note">数据与后端同源 · 未连接时展示演示兜底数据<br/>下单即签发动态核销凭证 · 商户扫码核销后返旅豆</view>
+<view class="home-footer">把一次出行，变成值得分享的故事。<view>主题体验 · 在地好物 · 旅行记录</view></view>

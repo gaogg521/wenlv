@@ -2,12 +2,12 @@
 <block wx:elif="{{code}}">
   <view class="code-hero">
     <view class="code-tip">向商户出示 · 动态码每 {{total}} 秒自动刷新</view>
-    <!-- 纯 CSS 二维码模拟（真实环境渲染 code.qr 字符串；商户端扫码/输码均可） -->
+    <!-- 标准 QR 编码，保留四模块静区 -->
     <view class="qr-box">
-      <view class="qr-grid">
+      <view class="qr-grid" style="grid-template-columns:repeat({{qrSize}},1fr);grid-template-rows:repeat({{qrSize}},1fr)">
         <view wx:for="{{cells}}" wx:key="*this" class="qr-cell {{item ? 'on' : ''}}"></view>
       </view>
-      <view class="qr-scanline"></view>
+
     </view>
     <view class="display-code">{{code.display}}</view>
     <view class="code-sub">商户无法扫码时，报此 6 位数字人工核销</view>
@@ -18,7 +18,7 @@
   </view>
   <view class="card" style="margin-top:-40rpx;margin-left:24rpx;margin-right:24rpx;position:relative">
     <view class="kv"><text>凭证状态</text><text class="v" style="color:var(--green)">有效 · 待核销</text></view>
-    <view class="kv"><text>防伪机制</text><text class="v" style="font-size:22rpx">HMAC 动态签名 · 一码一窗 · 防截屏重放</text></view>
+    <view class="kv"><text>防伪机制</text><text class="v" style="font-size:22rpx">每分钟更新 · 请现场出示</text></view>
   </view>
-  <view class="btn ghost" style="margin:24rpx" bindtap="markDelivered">完成核销后返回</view>
+  <view class="btn ghost" style="margin:24rpx" bindtap="markDelivered">返回订单查看进度</view>
 </block>

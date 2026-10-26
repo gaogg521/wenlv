@@ -111,3 +111,5 @@ page {
   background: linear-gradient(90deg, transparent, #b79ae0, transparent); box-shadow: 0 0 16rpx #7b5aa6; animation: beam 2.2s ease-in-out infinite; }
 @keyframes beam { 0%,100% { top: 30rpx; } 50% { top: 366rpx; } }
 .scan-frame .mid { font-size: 100rpx; opacity: .35; }
+
+.stock-row{display:block!important}.stock-row>view:last-child{margin-top:20rpx;flex-wrap:wrap;gap:14rpx}.stock-row .pill{padding:12rpx 22rpx}.stock-row b{font-size:28rpx}
