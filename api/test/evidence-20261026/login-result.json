@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-26T14:09:44.308Z",
+  "browser": "Chrome (Playwright)",
+  "checks": [
+    "required fields",
+    "password visibility",
+    "password reset help",
+    "invalid password error and retry",
+    "390/768/1440 no horizontal overflow",
+    "Enter login and authenticated workspace",
+    "MFA challenge layout / invalid code / return (simulated login challenge, no real MFA delivery)"
+  ],
+  "invalidPasswordMessage": "账号或密码错误",
+  "pageErrors": []
+}

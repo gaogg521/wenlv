@@ -4,76 +4,42 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>向往的自由 · 运营后台</title>
 <link rel="stylesheet" href="/admin-ui/app.css">
+<link rel="stylesheet" href="/admin-ui/login.css">
 </head>
 <body>
 
-<!-- ===== 登录：左品牌深蓝背景（镶嵌图案+渐变流动+粒子飘动+光晕）+ 右表单 ===== -->
+<!-- 品牌登录入口 -->
 <div id="login" class="login-stage">
-  <div class="login-brand">
-    <!-- 背景层：渐变流动 + 镶嵌菱形 -->
-    <div class="lb-bg"></div>
-    <!-- 光晕层 -->
-    <div class="lb-glow g1"></div>
-    <div class="lb-glow g2"></div>
-    <div class="lb-glow g3"></div>
-    <!-- 几何装饰线 -->
-    <svg class="lb-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <path d="M0 20 L100 15" stroke="rgba(255,255,255,.06)" stroke-width=".3" fill="none"/>
-      <path d="M0 50 L100 45" stroke="rgba(255,255,255,.04)" stroke-width=".2" fill="none"/>
-      <path d="M0 80 L100 75" stroke="rgba(255,255,255,.05)" stroke-width=".3" fill="none"/>
-      <circle cx="80" cy="15" r="8" stroke="rgba(125,211,252,.1)" stroke-width=".2" fill="none"/>
-      <circle cx="15" cy="85" r="12" stroke="rgba(125,211,252,.08)" stroke-width=".2" fill="none"/>
-    </svg>
-    <!-- 粒子层（JS 动态生成） -->
-    <div class="lb-particles" id="lbParticles"></div>
-
-    <!-- 内容层 -->
-    <div class="lb-content">
-      <div class="lb-logo"><span class="dot"></span>向往的自由</div>
-      <div class="lb-sub">文旅生态操作系统 · Tourism Web3 OS</div>
-      <ul class="lb-feats">
-        <li>四种角色 × 三个客户端 · 同一份数据</li>
-        <li>真实交易闭环 · 下单 → 核销 → 返豆 → 结算</li>
-        <li>五口径恒等 · 双分录账本 · 全链路存证</li>
-        <li>参数中心双人复核 · 风控事件全留痕</li>
-        <li>推广服务商一级 CPS · 共创投资分润</li>
-        <li>Web3 存证 · 链上权益凭证 · 术语双层口径</li>
-      </ul>
-    </div>
-
-    <div class="lb-foot">上海璟宬文化发展有限公司</div>
-  </div>
-
-  <div class="login-right">
+  <section class="login-story" aria-label="向往的自由品牌介绍">
+    <a class="login-wordmark" href="/admin-ui"><span class="brand-symbol" aria-hidden="true">↗</span><span>向往的自由<small>WANDERLUST</small></span></a>
+    <div class="story-copy"><p class="login-eyebrow">让每一份向往，都有回响</p><h1>把远方的美好，<br>带进日常。</h1><p class="story-description">连接在地体验与远方旅人，<br>一起经营有温度的旅行。</p></div>
+    <div class="story-scene" aria-hidden="true"><img src="/admin-ui/assets/watertown.png" alt=""><span class="scene-caption">在地相遇 · 自由同行</span></div>
+    <div class="story-foot"><span>文旅运营管理平台</span><span>发现 / 连接 / 共创</span></div>
+  </section>
+  <section class="login-right" aria-label="账号登录">
+    <div class="login-topline">运营工作台 <span>WORKSPACE</span></div>
     <div class="glass-wrap">
-      <form class="glass-card" id="step1" onsubmit="return false">
-        <h2>欢迎回来</h2>
-        <p class="muted" id="stepTip">运营管理舱 · 分角色授权登录</p>
-        <label>账号</label>
-        <input id="luser" placeholder="admin" autocomplete="username">
-        <label>密码</label>
-        <input id="lpass" type="password" placeholder="••••••••" autocomplete="current-password">
-        <div id="lerr" class="lerr"></div>
-        <div class="quick-accounts">
-          <span class="muted" style="font-size:12px">演示一键填充</span>
-          <button type="button" class="qa" onclick="fill('admin','admin123')">admin 超管</button>
-          <button type="button" class="qa" onclick="fill('finance','admin123')">finance 财务</button>
-          <button type="button" class="qa" onclick="fill('city310118','city123')">city 城市合伙人</button>
-        </div>
-        <button class="btn primary block" onclick="login()">登 录</button>
+      <form class="glass-card" id="step1">
+        <p class="form-eyebrow">开启今天的旅程</p><h2>欢迎回来</h2><p class="login-intro" id="stepTip">登录你的账号，继续创造美好体验。</p>
+        <div class="login-field"><label for="luser">账号</label><input id="luser" name="username" placeholder="请输入运营账号" autocomplete="username" required spellcheck="false" autocapitalize="none"></div>
+        <div class="login-field"><label for="lpass">密码</label><div class="password-field"><input id="lpass" name="password" type="password" placeholder="请输入登录密码" autocomplete="current-password" required><button id="passwordToggle" type="button" aria-label="显示密码" aria-pressed="false">显示</button></div></div>
+        <div class="login-meta"><span>账号由管理员统一开通</span><button type="button" id="loginHelp">忘记密码？</button></div>
+        <div id="loginHelpText" class="login-help" hidden>请联系所在团队的系统管理员重置密码。</div>
+        <div id="lerr" class="lerr" role="alert" aria-live="polite"></div>
+        <button id="loginSubmit" class="login-submit" type="submit"><span>登录工作台</span><span aria-hidden="true">↗</span></button>
+        <p class="login-access-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 3 5v5c0 4 7 8 7 8s7-4 7-8V5zM7 10l2 2 4-4"/></svg>登录后按账号角色开放相应权限</p>
+        <details class="demo-accounts" id="demoAccounts" hidden><summary>本地演示账号 <span>仅供体验</span></summary><div class="quick-accounts"><button type="button" class="qa" onclick="fill('admin','admin123')">超级管理员</button><button type="button" class="qa" onclick="fill('finance','admin123')">财务</button><button type="button" class="qa" onclick="fill('city310118','city123')">城市合伙人</button></div></details>
       </form>
-
-      <form class="glass-card" id="step2" style="display:none" onsubmit="return false">
-        <h2>两步验证</h2>
-        <p class="muted" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
-        <input id="mfacode" class="code-input" inputmode="numeric" maxlength="6" placeholder="— — — — — —" autocomplete="one-time-code">
-        <div id="lerr2" class="lerr"></div>
-        <button class="btn primary block" onclick="mfaSubmit()">验 证</button>
-        <button type="button" class="btn ghost block" style="margin-top:10px" onclick="mfaResend()">重新发送验证码</button>
-        <button type="button" class="linklike" onclick="backToStep1()">← 返回重新登录</button>
+      <form class="glass-card" id="step2" style="display:none">
+        <p class="form-eyebrow">账号安全验证</p><h2>再确认一下，是你本人</h2><p class="login-intro" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
+        <div class="login-field"><label for="mfacode">验证码</label><input id="mfacode" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位动态码" autocomplete="one-time-code" required></div>
+        <div id="lerr2" class="lerr" role="alert" aria-live="polite"></div>
+        <button class="login-submit" type="submit">验证并登录 <span aria-hidden="true">↗</span></button>
+        <button type="button" class="linklike" onclick="mfaResend()">重新发送验证码</button><button type="button" class="linklike" onclick="backToStep1()">返回账号登录</button>
       </form>
     </div>
-  </div>
+    <footer class="login-footer">上海璟宬文化发展有限公司<span>向往的自由 · 文旅运营平台</span></footer>
+  </section>
 </div>
 
 <!-- ===== 主框架 ===== -->
@@ -101,27 +67,6 @@
 <div id="modalRoot"></div>
 
 <script src="/admin-ui/app.js"></script>
-<script>
-// 登录页粒子生成
-(function () {
-  const container = document.getElementById('lbParticles')
-  if (!container) return
-  const SIZES = [3, 4, 5, 6, 8]
-  const COLORS = ['rgba(253,230,138,.5)', 'rgba(251,191,36,.4)', 'rgba(252,211,77,.3)', 'rgba(255,255,255,.35)']
-  for (let i = 0; i < 24; i++) {
-    const p = document.createElement('div')
-    p.className = 'lb-p'
-    const size = SIZES[Math.floor(Math.random() * SIZES.length)]
-    p.style.width = size + 'px'
-    p.style.height = size + 'px'
-    p.style.left = (Math.random() * 100) + '%'
-    p.style.background = COLORS[Math.floor(Math.random() * COLORS.length)]
-    p.style.animationDuration = (12 + Math.random() * 18) + 's'
-    p.style.animationDelay = (-Math.random() * 20) + 's'
-    p.style.animationTimingFunction = 'ease-in-out'
-    container.appendChild(p)
-  }
-})()
-</script>
+<script src="/admin-ui/login.js"></script>
 </body>
 </html>
