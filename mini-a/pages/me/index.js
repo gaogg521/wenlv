@@ -3,6 +3,21 @@ Page({
   goPromo() { wx.navigateTo({ url: '/package-promo/pages/center/index' }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/create/index' }) },
   goIdentity() { wx.navigateTo({ url: '/package-content/pages/identity/index' }) },
+  // KYC 实名认证：弹层提交 → 后台人工审核（V14）
+  async kyc() {
+    try { await api.ensureLogin() } catch { return }
+    const cur = await api.request('/c/kyc/mine').catch(() => ({ status: -1 }))
+    if (cur.status === 1) return wx.showToast({ title: '已实名：' + cur.real_name, icon: 'none' })
+    if (cur.status === 0) return wx.showToast({ title: '审核中（' + cur.id_no_mask + '）', icon: 'none' })
+    const name = await new Promise((r) => wx.showModal({ title: '实名认证', editable: true, placeholderText: '真实中文姓名', success: (x) => r(x.confirm ? x.content : '') }))
+    if (!name) return
+    const idNo = await new Promise((r) => wx.showModal({ title: '身份证号', editable: true, placeholderText: '18 位号码（仅平台审核用）', success: (x) => r(x.confirm ? x.content : '') }))
+    if (!idNo) return
+    try {
+      const r = await api.request('/c/kyc/submit', 'POST', { realName: name.trim(), idNo: idNo.trim() })
+      wx.showModal({ title: '已提交', content: r.masked + ' 审核通过后可用于出行保险等场景', showCancel: false })
+    } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }
+  },
   goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
   data: { user: null, avatarUrl: '' },

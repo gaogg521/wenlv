@@ -25,17 +25,20 @@ export async function hit(scene, userId) {
 
 /** 订单 50 后计佣（幂等） */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, promo_scene, amount_pay, bean_deducted, insurance_fee FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
   if (!a) return false
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
   if (!p) return false
+  // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
+  const prod = await one('SELECT promo_rate_bp FROM tour_product WHERE id = ?', [o.product_id])
+  const rateBp = Math.min(prod && prod.promo_rate_bp != null ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
   const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10 - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣
-  const amount = Math.floor(base * p.rate_bp / 10000)
+  const amount = Math.floor(base * rateBp / 10000)
   try {
     await q(`INSERT INTO commission (order_id, promoter_id, base_amount, rate_bp, amount, status, payable_at)
-      VALUES (?,?,?,?,?,0, NOW() + INTERVAL ? DAY)`, [o.id, a.promoter_id, base, p.rate_bp, amount, await cfgNum('commission.settle_delay_days')])
+      VALUES (?,?,?,?,?,0, NOW() + INTERVAL ? DAY)`, [o.id, a.promoter_id, base, rateBp, amount, await cfgNum('commission.settle_delay_days')])
     await q('UPDATE promoter SET valid_gmv_90d = valid_gmv_90d + ? WHERE user_id = ?', [base, a.promoter_id])
     return true
   } catch { return false }
@@ -74,6 +77,14 @@ export async function generateSettlement(merchantId, period) {
       amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status)
       VALUES (?,?,?,?,?,?,?,?,?,0)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained])
     await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
+    // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）
+    await c.q(`INSERT IGNORE INTO co_profit (settlement_id, co_creator_id, product_id, period, base_amount, amount)
+      SELECT ?, cc.id, cc.product_id, ?, ROUND(? * pg.gmv / ?), ROUND(? * pg.gmv / ? * cc.share_pct / 10000)
+      FROM co_creator cc
+      JOIN (SELECT product_id, SUM(amount_pay - insurance_fee) gmv FROM orders WHERE settlement_id = ? GROUP BY product_id) pg
+        ON pg.product_id = cc.product_id
+      WHERE cc.status = 1 AND cc.share_pct > 0`,
+      [sid, period, retained, total, retained, total, sid])
     return sid
   })
 }

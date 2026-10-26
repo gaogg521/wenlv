@@ -3,8 +3,18 @@ const api = require('../../../utils/api')
 Page({
   data: { id: 0, code: null, left: 60, total: 60, fail: false },
   onLoad(q) {
-    this.setData({ id: Number(q.id) })
+    this.setData({ id: Number(q.id), orderNo: q.orderNo || '' })
     this.refresh()
+    this.loadPhrase()
+  },
+  // 剧本游暗号（V14）：出票后显示"入戏"开场白
+  async loadPhrase() {
+    try {
+      const no = this.data.orderNo || (this.data.code && this.data.code.orderNo)
+      if (!no) return
+      const ph = await api.request('/c/orders/' + no + '/phrase')
+      if (ph && ph.enabled) this.setData({ phrase: ph.userPhrase, phraseHint: ph.hint })
+    } catch (e) { /* 非剧本游产品无暗号，静默 */ }
   },
   onUnload() { this.stop() },
   stop() { if (this._timer) { clearInterval(this._timer); this._timer = null } },

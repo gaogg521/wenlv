@@ -125,11 +125,12 @@ export async function adminConfirmPass(passId, adminId) {
   const p = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!p) throw new Error('凭证不存在')
   if (p.status !== 1) return false
+  const oc = await one('SELECT city_code FROM orders WHERE id = ?', [p.order_id])
   await tx(async (c) => {
     const n = await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ? AND status = 1', [passId])
     if (n !== 1) throw new Error('并发冲突')
-    await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,NULL,3,1,NULL)',
-      [passId, 0, adminId])
+    await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,3,1,?)',
+      [passId, 0, adminId || 0, oc && oc.city_code ? oc.city_code : '310118'])
   })
   const remaining = await one('SELECT COUNT(*) c FROM travel_pass WHERE order_id = ? AND status = 1', [p.order_id])
   if (Number(remaining.c) === 0) {

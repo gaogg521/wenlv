@@ -17,6 +17,7 @@
   <view style="font-size:22rpx;opacity:.7;margin-top:8rpx">支持连续扫码 · 一码一次有效 · 异常自动拦截</view>
 </view>
 <view class="btn" bindtap="scan">📷 打开相机扫码</view>
+<view class="btn ghost" style="margin-top:16rpx" bindtap="phraseInput">🎭 剧本游 · 对暗号核销</view>
 <view class="card fade-up">
   <view class="sec-title">手动输码</view>
   <view class="tiny" style="margin-bottom:16rpx">屏幕破损/码被遮挡时：输入游客展示的 6 位数字</view>

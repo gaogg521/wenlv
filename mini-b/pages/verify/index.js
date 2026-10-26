@@ -43,6 +43,24 @@ Page({
     this._watched = true
   },
 
+  // ── 对暗号核销（剧本游）：输入游客说出的暗号 → 命中即整单核销 ──
+  phraseInput() {
+    wx.showModal({ title: '对暗号', editable: true, placeholderText: '输入游客说出的暗号', success: async (r) => {
+      if (!r.confirm || !r.content) return
+      try {
+        const res = await api.request('/m/verify/phrase', 'POST', { phrase: r.content.trim() })
+        wx.vibrateShort({ type: res.ok ? 'heavy' : 'light' })
+        if (res.ok) {
+          this.setData({ streak: this.data.streak + 1, result: { ok: true, payload: '暗号·' + res.orderNo, reason: res.reason + (res.counterPhrase ? ' · 对答：' + res.counterPhrase : '') } })
+          wx.showModal({ title: '暗号对上了', content: res.counterPhrase ? '回他对上句：「' + res.counterPhrase + '」' : '已整单核销', showCancel: false })
+          this.syncList()
+        } else {
+          this.setData({ result: { ok: false, payload: '暗号', reason: res.reason } })
+        }
+      } catch (e) { wx.showToast({ title: e.msg || '核销失败', icon: 'none' }) }
+    }})
+  },
+
   // ── 在线核销（连续模式：成功后 800ms 自动重开相机，§10 verify 规格）──
   scan() {
     this._continuous = true
