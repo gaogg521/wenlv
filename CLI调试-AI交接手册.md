@@ -114,6 +114,18 @@ Object.keys(__wxAppCode__).filter(k => k.startsWith('package-'))
 **修完的通用口径**：WXML 绑定只做"取值 + 算术 + 单个三元"，任何**格式化 / 映射 / 方法调用**都放 JS 里预计算成字段
 （`xxxYuan`、`xxxText`、`levelName`），视图层零硬编码。这条同时也是"数据单一来源"的要求。
 
+### 坑 #7（补充实证，2026-10-26）：close 无效时必须整个 quit
+
+症状：`close --project` + 重新 `auto` 后，automator 的 WS 能 TCP 连上但协议握手永远无响应——
+`automator.connect` 成功、`currentPage()` 60s 轮询等不到首屏、`automator-check` 连"已连接"日志都打不出来。
+**`close --project` 只关项目窗口，IDE 主进程里的自动化服务还是脏的。**
+
+修法（实测有效）：`cli.bat quit` 整个 IDE 退出 → sleep 5 → 重新 `auto`。一次救活。
+
+另外两个同日实证：
+- **双项目窗口会串通道**：mini-a(9421)/mini-b(9422) 同时开时，9422 的连接可能路由到 mini-a 窗口（就绪页显示的是 mini-a 的页面）。多端调试必须一次只开一个项目窗口。
+- **automator-walk.mjs 没有连接重试预算**（check/flow 有 40×1s），冷启动必挂；或者直接改用 automator-check.mjs 跑页面巡检。
+
 ### 还有一条反模式（我踩过，别再踩）
 
 **不要用 TCP 探活自动化端口。** 该通道是单客户端语义，裸 `net.connect` 探一次就会把通道搅乱（表现为随后连上但命令全超时）。
