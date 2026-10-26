@@ -126,6 +126,12 @@ Object.keys(__wxAppCode__).filter(k => k.startsWith('package-'))
 - **双项目窗口会串通道**：mini-a(9421)/mini-b(9422) 同时开时，9422 的连接可能路由到 mini-a 窗口（就绪页显示的是 mini-a 的页面）。多端调试必须一次只开一个项目窗口。
 - **automator-walk.mjs 没有连接重试预算**（check/flow 有 40×1s），冷启动必挂；或者直接改用 automator-check.mjs 跑页面巡检。
 
+### 坑 #9（2026-10-26 实证）：touristappid 过不了 cli auto
+
+mini-b（touristappid 测试号）`cli auto` 报 `APPID_ERROR: 不存在此 AppID`——GUI 手动开项目窗口能用（游客模式），但 CLI 自动化管线要校验 AppID 详情，测试号没有。
+**修法**：临时把 `mini-b/project.config.json` 的 appid 换成 mini-a 真实 AppID 走 CLI（纯模拟器联调，不上传不发布），验完还原 touristappid。
+同日另一实证：**杀历史进程后整个 IDE 全新 `auto` 一次成功**（mini-a 16/16、mini-b 7/7）——之前反复挂是"半死会话 + 双窗口串通道"叠加。
+
 ### 还有一条反模式（我踩过，别再踩）
 
 **不要用 TCP 探活自动化端口。** 该通道是单客户端语义，裸 `net.connect` 探一次就会把通道搅乱（表现为随后连上但命令全超时）。
