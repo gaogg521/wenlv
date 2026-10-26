@@ -6,7 +6,7 @@ Page({
   async fetch() {
     try {
       const n = await api.request('/c/notes/' + this.id)
-      this.setData({ n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), paras: String(n.text || '').split(/\n+/).filter(Boolean) } })
+      this.setData({ n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
     } catch (e) { this.setData({ loadTxt: e.msg || '笔记不存在或未发布' }) }
   },
 })

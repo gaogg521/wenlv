@@ -403,7 +403,7 @@ async function merchants() {
     ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td class="num">${esc(m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() {
@@ -461,7 +461,7 @@ async function budgets() {
       return `<tr><td class="td-main">${esc(b.name)}</td><td class="num">${Number(b.total).toLocaleString()}</td>
       <td><div class="num">${Number(b.granted).toLocaleString()}</div><div style="background:#eef1f5;border-radius:4px;height:5px;width:90px;margin-top:4px"><div style="background:${pct > 80 ? 'var(--red)' : 'var(--brand)'};height:5px;border-radius:4px;width:${Math.min(pct, 100)}%"></div></div></td>
       <td class="num">${Number(b.returned).toLocaleString()}</td><td class="num">${left.toLocaleString()}</td>
-      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span></td>
+      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
       <td class="td-sub">${esc(String(b.period_start || '').slice(0, 10))} ~ ${esc(String(b.period_end || '').slice(0, 10))}</td></tr>` }).join('')}</tbody></table>` : emptyBox('暂无预算批次')}
   </div>`
 }
@@ -482,7 +482,7 @@ async function promoters() {
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
       <td class="money num">${fen(p.valid_gmv_90d)}</td><td>⭐ ${p.service_score}</td>
-      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
+      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
   </div>`
 }
 async function addPromoter() {
@@ -560,7 +560,7 @@ async function risk() {
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
       <td><code>${esc(String(r.detail).slice(0, 60))}</code></td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
-      <td>${r.handled ? '<span class="pill ok">已处理</span>' : '<span class="pill warn">待处理</span>'}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无风控事件 🎉')}
+      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">标记已处理</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无风控事件 🎉')}
   </div>`
 }
 async function audit() {
@@ -762,7 +762,7 @@ async function phrases() {
   const list = await api('GET', '/admin/phrases')
   const prods = await api('GET', '/admin/products')
   const noPhrase = prods.filter((p) => !list.some((x) => x.id === p.id))
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h3>暗号管理（剧本游「入戏」凭证）</h3>
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>暗号管理</h2><p class="muted" style="margin:-8px 0 12px">剧本游「入戏」凭证 · 用户暗号给游客 · 商家暗号核销员对答</p>
     <span class="muted">用户暗号给游客 · 商家暗号核销员对答 · 命中即核销</span></div>
     ${list.length ? `<table><thead><tr><th>产品</th><th>用户暗号</th><th>商家暗号</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td>${esc(x.title)}</td><td>${esc(x.phrase_user)}</td><td>${esc(x.phrase_merchant || '—')}</td>
@@ -794,7 +794,7 @@ async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const prods = await api('GET', '/admin/products')
   const ov = await api('GET', '/admin/rate-overrides').catch(() => [])
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h3>逐品佣金覆盖（D2 扩展）</h3>
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>逐品佣金覆盖</h2><p class="muted" style="margin:-8px 0 12px">D2 扩展 · 单品费率优先于推广商档位 · 上限 12% · 留空=恢复档位费率</p>
     <span class="muted">单品费率优先于推广商档位 · 上限 12% · 留空=恢复档位费率</span></div>
     <div class="row" style="gap:10px;flex-wrap:wrap">
       <select id="roProd" class="inp" style="max-width:280px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
@@ -815,7 +815,7 @@ async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const list = await api('GET', '/admin/kyc')
   const st = { 0: '<span class="pill warn">待审</span>', 1: '<span class="pill ok">已通过</span>', 2: '<span class="pill s70">已驳回</span>' }
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h3>实名认证审核</h3><span class="muted">身份证号加密落库 · 仅展示脱敏号</span></div>
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>实名认证审核</h2><p class="muted" style="margin:-8px 0 12px">身份证号加密落库 · 仅展示脱敏号</p><span class="muted">身份证号加密落库 · 仅展示脱敏号</span></div>
     ${list.length ? `<table><thead><tr><th>用户</th><th>姓名</th><th>证件号（脱敏）</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td>${esc(x.nickname)}</td><td>${esc(x.real_name)}</td><td class="num">${esc(x.id_no_mask)}</td>
       <td>${st[x.status] || x.status}</td><td class="td-sub">${String(x.created_at).slice(0, 16)}</td>
@@ -836,7 +836,7 @@ async function cocreate() {
   const prods = await api('GET', '/admin/products')
   const list = await api('GET', '/admin/co-creators')
   const profits = await api('GET', '/admin/co-profits').catch(() => [])
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h3>共创人（资金商/商品商 · 按产品投资分润）</h3>
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>共创投资分润</h2><p class="muted" style="margin:-8px 0 12px">资金商/商品商 · 结算期自动按 产品GMV占比 × 留存毛利 × share_pct 入账</p>
     <span class="muted">结算期自动按 产品GMV占比 × 留存毛利 × share_pct 入账</span></div>
     <div class="row" style="gap:10px;flex-wrap:wrap">
       <select id="coProd" class="inp" style="max-width:240px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
@@ -882,7 +882,7 @@ const TERM_MAP = [
   ['推广服务商', '分销合约节点（Affiliate Node）', 'D2 定稿禁止层级计酬；链词仅内部运营语境'],
 ]
 async function terms() {
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h3>术语映射表（后台 Web3 口径 ↔ 小程序合规口径）</h3></div>
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>术语映射</h2><p class="muted" style="margin:-8px 0 12px">后台 Web3 口径 ↔ 小程序合规口径 · 改动任何界面文案前先对照本表</p></div>
     <div class="muted" style="margin-bottom:10px">后台不上小程序审核，可用 Web3 真实词汇；两个小程序端一律走合规词。改动任何界面文案前先对照本表，避免口径串台。</div>
     <table><thead><tr><th>小程序合规词（用户可见）</th><th>后台/存证链词（内部运营）</th><th>使用边界</th></tr></thead><tbody>
     ${TERM_MAP.map((t) => `<tr><td><b>${t[0]}</b></td><td>${t[1]}</td><td class="td-sub">${t[2]}</td></tr>`).join('')}</tbody></table>
@@ -1214,3 +1214,37 @@ async function delCred(key) {
   try { await api('DELETE', '/admin/integrations/' + key); toast('已清除'); integrations() } catch (e) { toast(e.message, true) }
 }
 boot()
+
+// ── 后台编辑能力（V14 补齐）──
+async function handleRisk(id) {
+  try { await api('POST', '/admin/risk/' + id + '/handle', {}); toast('风控事件已标记处理'); risk() } catch (e) { toast(e.message, true) }
+}
+async function editMerchant(id, name, cityCode, wxpaySubMchid) {
+  modal('编辑商户', `
+    <div class="field"><label>商户名称</label><input id="em_name" value="${esc(name)}"></div>
+    <div class="field"><label>城市码</label><input id="em_city" value="${esc(cityCode)}"></div>
+    <div class="field"><label>收付通子商户号（选填）</label><input id="em_wx" value="${esc(wxpaySubMchid)}"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button>
+     <button class="btn primary" onclick="saveMerchantEdit(${id})">保存</button>`)
+}
+async function saveMerchantEdit(id) {
+  try {
+    await api('POST', '/admin/merchants/' + id, {
+      name: document.getElementById('em_name').value.trim(),
+      cityCode: document.getElementById('em_city').value.trim(),
+      wxpaySubMchid: document.getElementById('em_wx').value.trim()
+    })
+    closeModal(); toast('商户已更新'); merchants()
+  } catch (e) { toast(e.message, true) }
+}
+async function toggleBudget(id, status) {
+  try { await api('POST', '/admin/budgets/' + id + '/status', { status: status === 1 ? 0 : 1 }); toast(status === 1 ? '批次已停用' : '批次已启用'); budgets() } catch (e) { toast(e.message, true) }
+}
+async function togglePromoter(userId, status) {
+  try { await api('POST', '/admin/promoters/' + userId + '/status', { status: status === 1 ? 0 : 1 }); toast(status === 1 ? '推广商已冻结' : '推广商已解冻'); promoters() } catch (e) { toast(e.message, true) }
+}
+async function changePromoterTier(userId, tier) {
+  const newTier = prompt('请输入新档位（1=基础 5% / 2=优选 8% / 3=金牌 12%）：', tier)
+  if (!newTier) return
+  try { await api('POST', '/admin/promoters/' + userId + '/tier', { tier: Number(newTier) }); toast('档位已更新'); promoters() } catch (e) { toast(e.message, true) }
+}

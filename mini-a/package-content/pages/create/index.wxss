@@ -1,0 +1,5 @@
+/* 创作中心富文本编辑器 */
+.rt-toolbar { display: flex; gap: 8rpx; flex-wrap: wrap; padding: 10rpx 12rpx;
+  border: 1rpx solid var(--line); border-bottom: none; border-radius: 16rpx 16rpx 0 0; background: #fafbfc; }
+.rt-btn { padding: 6rpx 14rpx; border: 1rpx solid transparent; border-radius: 8rpx; background: none; font-size: 22rpx; cursor: pointer; }
+.rt-btn:active { background: var(--brand-soft); }

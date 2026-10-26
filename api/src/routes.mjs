@@ -1156,6 +1156,51 @@ const adminEco = {
   },
 }
 
+// ---------- 后台编辑能力（V14 补齐：风控处理/商户编辑/预算停用/推广商调档） ----------
+const adminEdit = {
+  // 风控事件处理
+  'POST /admin/risk/:id/handle': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'risk'])
+    await q('UPDATE risk_event SET handled = 1, handled_by = ?, handled_at = NOW(3) WHERE id = ?', [a.uid || 0, req.params.id])
+    return { handled: true }
+  },
+
+  // 商户编辑（名称/城市/收付通子商户号）
+  'POST /admin/merchants/:id': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const { name, cityCode, wxpaySubMchid } = req.body
+    await q('UPDATE merchant SET name = ?, city_code = ?, wxpay_sub_mchid = ? WHERE id = ?',
+      [name, cityCode, wxpaySubMchid || null, req.params.id])
+    return { updated: true }
+  },
+
+  // 预算批次停用/启用
+  'POST /admin/budgets/:id/status': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    const { status } = req.body
+    await q('UPDATE bean_budget SET status = ? WHERE id = ?', [Number(status), req.params.id])
+    return { status: Number(status) }
+  },
+
+  // 推广商冻结/解冻
+  'POST /admin/promoters/:userId/status': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const { status } = req.body
+    await q('UPDATE promoter SET status = ? WHERE user_id = ?', [Number(status), req.params.userId])
+    return { status: Number(status) }
+  },
+
+  // 推广商调档
+  'POST /admin/promoters/:userId/tier': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const { tier } = req.body
+    const rates = await cfgArr('promoter.rate_bp')
+    const rate = rates[Math.max(1, Math.min(Number(tier), rates.length)) - 1]
+    await q('UPDATE promoter SET tier = ?, rate_bp = ? WHERE user_id = ?', [Number(tier), rate, req.params.userId])
+    return { tier: Number(tier), rateBp: rate }
+  },
+}
+
 // ---------- 旧后台评估吸收：暗号/逐品佣金/KYC/共创（治理后台专用，词汇走 Web3 口径） ----------
 const adminNew = {
   // 暗号管理（产品级一对）：剧本游"入戏"凭证
@@ -1802,5 +1847,5 @@ const callback = {
   },
 }
 
-export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...callback }
+export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
 export { handlePayNotify }

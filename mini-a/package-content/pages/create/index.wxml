@@ -5,11 +5,31 @@
 <view class="card">
   <input value="{{title}}" bindinput="onTitle" placeholder="标题（选填）"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:16rpx 24rpx;margin-bottom:16rpx" />
-  <textarea value="{{body}}" bindinput="onBody" placeholder="分享你的旅程…" maxlength="1000"
-    style="width:100%;height:200rpx;border:1rpx solid var(--line);border-radius:16rpx;padding:16rpx 24rpx;box-sizing:border-box" />
-  <view class="btn" bindtap="publish">发布</view>
+
+  <!-- 富文本编辑器：工具栏 + textarea + 预览 -->
+  <view class="rt-toolbar">
+    <view class="rt-btn" bindtap="rtCmd" data-tag="h2">H2</view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="h3">H3</view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="b"><b>B</b></view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="i"><i>I</i></view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="ul">列表</view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="quote">引用</view>
+    <view class="rt-btn" bindtap="rtCmd" data-tag="br">换行</view>
+    <view style="margin-left:auto;font-size:22rpx;color:var(--sub);align-self:center">{{bodyText.length}} 字</view>
+  </view>
+  <textarea id="bodyInput" value="{{bodyHtml}}" bindinput="onBodyInput"
+    placeholder="分享你的旅程…（支持标题/粗体/列表/引用）" maxlength="2000"
+    style="width:100%;height:260rpx;border:1rpx solid var(--line);border-radius:0 0 16rpx 16rpx;padding:16rpx 24rpx;box-sizing:border-box;font-size:15rpx;line-height:1.7" />
+
+  <view style="margin-top:16rpx">
+    <view class="rt-btn" bindtap="togglePreview">{{showPreview ? '收起预览' : '预览效果'}}</view>
+  </view>
+  <rich-text wx:if="{{showPreview && bodyHtml}}" nodes="{{bodyHtml}}" style="margin-top:12rpx;padding:16rpx;background:#fafbfc;border-radius:12rpx;font-size:15rpx;line-height:1.7"></rich-text>
+
+  <view class="btn" bindtap="publish" style="margin-top:16rpx">发布</view>
   <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
 </view>
+
 <view class="sec-title">约稿任务</view>
 <view class="card" wx:if="{{tasks.open.length}}">
   <view class="kv" wx:for="{{tasks.open}}" wx:key="id">
@@ -25,6 +45,7 @@
   </view>
 </view>
 <view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
+
 <view class="sec-title">已发布（{{notes.length}}）</view>
 <view class="card" wx:if="{{notes.length}}">
   <view class="kv" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">👍 {{item.like_count}} ›</text></view>

@@ -4,7 +4,7 @@
     <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
   </view>
   <view class="card">
-    <view wx:for="{{n.paras}}" wx:key="index" style="margin-bottom:20rpx;line-height:1.8">{{item}}</view>
+    <rich-text nodes="{{n.html}}" style="font-size:15rpx;line-height:1.8;color:#16232e"></rich-text>
     <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
   </view>
 </view>
