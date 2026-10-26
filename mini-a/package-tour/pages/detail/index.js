@@ -62,9 +62,16 @@ Page({
       wx.showToast({ title: '手机号已验证', icon: 'success' })
     } catch (err) { wx.showToast({ title: err.msg || '验证失败', icon: 'none' }) }
   },
+  // 手动输入兜底：微信快速验证组件之外的常规途径（11 位格式校验）
+  onPhoneInput(e) {
+    const v = String(e.detail.value || '').replace(/[^0-9]/g, '').slice(0, 11)
+    this.setData({ contactPhone: v })
+  },
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.fallback) return wx.showToast({ title: '演示数据：连上后端即可下单', icon: 'none' })
+    if (!this.data.contactName || !this.data.contactName.trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
+    if (!/^1[3-9]\d{9}$/.test(this.data.contactPhone)) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
     try {
       await api.ensureLogin()
       const beanBal = this.data.beanBal || 0

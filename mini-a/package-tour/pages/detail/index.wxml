@@ -49,7 +49,8 @@
       <input class="v input-r" placeholder="姓名" value="{{contactName}}" bindinput="onName" /></view>
     <view class="kv"><text>手机号</text>
       <view style="display:flex;align-items:center;gap:16rpx">
-        <text class="v">{{contactPhone || '未验证'}}</text>
+        <input class="v input-r" type="number" maxlength="11" placeholder="11 位手机号"
+          value="{{contactPhone}}" bindinput="onPhoneInput" style="flex:1;min-width:0" />
         <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onPhone">一键获取</button>
       </view></view>
   </view>
