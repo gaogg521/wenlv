@@ -57,6 +57,9 @@ async function main() {
   ok(!!adminT && admin.user.role === 'super', '后台超管登录（admin/super）')
   const merch = await api('POST', '/admin/merchants', { name: '安麓大夫第·朱家角', cityCode: '310118', wxpaySubMchid: 'SUBMCH001' }, adminT)
   ok(merch.merchantNo.startsWith('M'), '商户创建 ' + merch.merchantNo)
+  // 商品只能挂在"已审核"商户上（产品侧后加的门槛），E2E 必须跟着走完审核，否则后续全部假失败
+  await api('POST', `/admin/merchants/${merch.id}/approve`, {}, adminT)
+  ok(true, '商户审核通过（status=1）')
   const prod = await api('POST', '/admin/products', { title: '朱家角剧本游·江南谜案', cat: 'script', priceFrom: 29800, merchantId: merch.id, status: 1, daysDesc: '1天' }, adminT)
   const sess = await api('POST', '/admin/sessions', { productId: prod.id, departDate: '2026-12-20', quota: 2, priceAdult: 29800 }, adminT)
   ok(prod.id > 0 && sess.id > 0, '商品 + 团期创建（quota=2 · ¥298）')

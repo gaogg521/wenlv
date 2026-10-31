@@ -57,6 +57,22 @@ const server = http.createServer(async (req, res) => {
       return res.end(fs.readFileSync(file))
     }
   }
+  // 静态：/verify → 公开复核页（给景区/政府/投资人，无登录，浏览器内自算哈希）
+  if (req.method === 'GET' && (pathname === '/verify' || pathname === '/verify/' || pathname === '/verify.html')) {
+    const file = path.join(__dirname, '..', 'static', 'verify.html')
+    if (fs.existsSync(file)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+      return res.end(fs.readFileSync(file))
+    }
+  }
+  // 静态：/vc → 数字身份验签台（给景区/合作城市/境外生态，无登录）
+  if (req.method === 'GET' && (pathname === '/vc' || pathname === '/vc/' || pathname === '/vc.html')) {
+    const file = path.join(__dirname, '..', 'static', 'vc.html')
+    if (fs.existsSync(file)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+      return res.end(fs.readFileSync(file))
+    }
+  }
   // 静态：/uploads → 用户上传文件（头像等；路径穿越已防护）
   if (req.method === 'GET' && pathname.startsWith('/uploads/')) {
     const file = path.join(__dirname, '..', 'static', pathname)
@@ -91,6 +107,8 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const data = await handler({ headers: req.headers, method: req.method, url: req.url, body, query, params, rawBody }, res)
+    // handler 已自行写出响应（PDF / 文件流）：不能再套 JSON 信封
+    if (res.writableEnded || res.headersSent) return
     if (pathname === '/callback/wxpay') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify(data))

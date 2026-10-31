@@ -1,6 +1,7 @@
 // 旅豆域：双分录 + 预算池/全局总量双闸 + 试算对账（哨兵虚拟科目，与 Java 版同规则）
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
+import { attest as attestCore } from './attest.mjs'
 
 export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7 }
 export const SENTINEL_PLATFORM = 999999000001n
@@ -48,6 +49,12 @@ export async function grant(userId, amount, bizType, bizRef, budgetId, connectio
     await c.upd('UPDATE bean_account SET balance = balance + ?, lifetime = lifetime + ?, version = version + 1 WHERE id = ?', [amount, amount, aid])
     await c.upd('UPDATE bean_budget SET granted = granted + ? WHERE id = ?', [amount, budgetId])
     await c.upd('UPDATE bean_global_cap SET issued_sum = issued_sum + ? WHERE id = 1', [amount])
+    // 发放即锚定（同事务）：biz_ref 取账本流水号，一笔发放一片叶子，绝不用业务单号（会覆盖）
+    await attestCore('bean_grant', 'bt-' + txNo, {
+      txNo, accountId: Number(aid), userId: Number(userId), amount: Number(amount),
+      bizType: Number(bizType), bizRef: bizRef || null, budgetId: Number(budgetId),
+      afterBal: Number(acc.balance) + Number(amount),
+    }, c, 1)
     return Number(acc.balance) + amount
   }
   return connection ? run(connection) : tx(run)
@@ -67,6 +74,11 @@ export async function deduct(userId, amount, bizType, bizRef, connection) {
       [txNo, aid, amount, Number(acc.balance) - amount, bizType, bizRef,
        txNo, pid, amount, amount, bizType, bizRef])
     await c.upd('UPDATE bean_account SET balance = balance - ?, version = version + 1 WHERE id = ?', [amount, aid])
+    // 抵扣/过期/风控回收同样锚定：旅豆的"减少"也必须可验证，否则"严禁超发"只证明了一半
+    await attestCore('bean_deduct', 'bt-' + txNo, {
+      txNo, accountId: Number(aid), userId: Number(userId), amount: Number(amount),
+      bizType: Number(bizType), bizRef: bizRef || null, afterBal: Number(acc.balance) - Number(amount),
+    }, c, 1)
     return Number(acc.balance) - amount
   }
   return connection ? run(connection) : tx(run)
@@ -84,6 +96,10 @@ export async function reverse(userId, amount, bizRef, connection) {
       [txNo, aid, amount, Number(acc.balance) + amount, bizRef,
        txNo, pid, amount, 0, bizRef])
     await c.upd('UPDATE bean_account SET balance = balance + ?, version = version + 1 WHERE id = ?', [amount, aid])
+    await attestCore('bean_deduct', 'bt-' + txNo, {
+      txNo, accountId: Number(aid), userId: Number(userId), amount: Number(amount),
+      bizType: 5, bizRef: bizRef || null, afterBal: Number(acc.balance) + Number(amount), reversed: true,
+    }, c, 1)
     return Number(acc.balance) + amount
   }
   return connection ? run(connection) : tx(run)

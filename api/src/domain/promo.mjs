@@ -1,6 +1,22 @@
 // 推广域（一级 CPS 三档）+ 结算域（五口径恒等）
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgArr, cfgNum } from '../config.mjs'
+import { attest } from './attest.mjs'
+
+/** 结算单锚定：version_no 默认 = 结算主状态（0生成/1商户确认/2分账/3完成/4异议），
+ *  异议解除回 0 时用 40，避免与"生成"撞同一版本号被幂等吞掉 */
+export async function attestSettlement(settlementId, conn, versionNo) {
+  const s = await one('SELECT * FROM settlement WHERE id = ?', [settlementId])
+  if (!s) return null
+  const v = versionNo != null ? Number(versionNo) : Number(s.status)
+  return attest('settlement', 'settle-' + s.id, {
+    settlementId: Number(s.id), merchantId: Number(s.merchant_id), period: s.period,
+    orderCount: Number(s.order_count), totalAmount: Number(s.total_amount),
+    amtFulfill: Number(s.amt_fulfill), amtService: Number(s.amt_service),
+    amtPromoter: Number(s.amt_promoter), amtBeanbudget: Number(s.amt_beanbudget),
+    amtRetained: Number(s.amt_retained), status: Number(s.status),
+  }, conn, v)
+}
 
 export async function register(userId, tier) {
   const rates = await cfgArr('promoter.rate_bp')
@@ -83,6 +99,12 @@ export async function generateSettlement(merchantId, period) {
         ON pg.product_id = cc.product_id
       WHERE cc.status = 1 AND cc.share_pct > 0`,
       [sid, period, retained, total, retained, total, sid])
+    // 生成即锚定（同事务）：五口径恒等的快照一旦入链，事后无法悄悄改数
+    await attest('settlement', 'settle-' + sid, {
+      settlementId: Number(sid), merchantId: Number(merchantId), period,
+      orderCount: orders.length, totalAmount: total, amtFulfill: fulfill, amtService: service,
+      amtPromoter: promo, amtBeanbudget: beanBudget, amtRetained: retained, status: 0,
+    }, c, 0)
     return sid
   })
 }

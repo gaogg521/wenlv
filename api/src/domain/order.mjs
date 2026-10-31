@@ -2,6 +2,7 @@
 import { q, one, tx, count, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import * as bean from './bean.mjs'
+import { attest } from './attest.mjs'
 
 export const ST = { WAIT_PAY: 10, PAID: 20, CONFIRMED: 30, VERIFIED: 40, COMPLETED: 50, REFUNDING: 60, REFUNDED: 70, CLOSED: 90 }
 
@@ -94,7 +95,14 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
     }
     const issued = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_id=?', [o.id])
     if (Number(issued.c) > Number(o.qty)) throw new BizError(2002, '订单凭证数量异常')
-    for (let i=Number(issued.c);i<Number(o.qty);i++) await c.ins('INSERT INTO travel_pass(user_id,order_id,kind,name,product_id,status) VALUES(?,?,1,?,?,1)', [o.user_id,o.id,'主题游通行凭证·'+orderNo,o.product_id])
+    for (let i=Number(issued.c);i<Number(o.qty);i++) {
+      const passId = await c.ins('INSERT INTO travel_pass(user_id,order_id,kind,name,product_id,status) VALUES(?,?,1,?,?,1)', [o.user_id,o.id,'主题游通行凭证·'+orderNo,o.product_id])
+      // 凭证签发即锚定（与出票同事务）：这是主出票路径，pass.issueForOrder 只在拼团重开单时使用
+      await attest('pass_issue', 'pass-' + passId, {
+        passId: Number(passId), orderNo, kind: 1, qty: Number(o.qty),
+        productId: Number(o.product_id), merchantId: Number(o.merchant_id), cityCode: o.city_code,
+      }, c, 1)
+    }
     await c.upd('UPDATE orders SET status=30,version=version+1 WHERE id=?', [o.id])
     await c.q('INSERT INTO order_event(order_id,from_st,to_st,actor,detail) VALUES(?,20,30,?,?)', [o.id,'system',JSON.stringify('确认出票·'+o.qty+'张凭证')])
     return { ...o, status:30, duplicated:false }

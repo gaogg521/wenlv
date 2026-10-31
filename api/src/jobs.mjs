@@ -30,7 +30,11 @@ export async function completeOrder(orderNo) {
   await q('INSERT INTO user_growth_log (user_id, delta, biz_type, biz_ref, after_val) VALUES (?,?,1,?,?)',
     [o.user_id, amt, orderNo, Number(ua.growth_value)])
   await promo.createCommission(orderNo)
-  await pass.attest('order', orderNo, JSON.stringify({ amount: amt, status: 50 }))
+  // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
+  await pass.attest('order', orderNo, {
+    orderNo, amountPay: amt, status: 50, merchantId: Number(o.merchant_id),
+    qty: Number(o.qty), cityCode: o.city_code,
+  }, null, 50)
   return true
 }
 
@@ -75,11 +79,31 @@ export async function tickExpire() {
   }
 }
 
-/** 存证打包（小时级）：Merkle 根批次（Noop 链记录；P1 anchorToChain 换真实链） */
+/** 存证打包（小时级）：本地 Merkle 根 + inclusion proof；随后尝试锚定（NOOP 下停留在"已打包"） */
 export async function tickAttest() {
-  const { packBatch } = await import('./domain/attest.mjs')
+  const { packBatch, reanchorPending } = await import('./domain/attest.mjs')
   const r = await packBatch()
-  if (r.leaves > 0) console.log('[job:attest] batch #' + r.batchId, 'leaves', r.leaves, 'root', String(r.root).slice(0, 12))
+  if (r.leaves > 0) console.log('[job:attest] batch #' + r.batchId, 'seq', r.seq, 'leaves', r.leaves, 'root', String(r.root).slice(0, 12))
+  const anchored = await reanchorPending(20)
+  const okN = anchored.filter((x) => x.anchored).length
+  if (okN) console.log('[job:attest:anchor]', okN, 'anchored')
+  return { ...r, anchored: okN }
+}
+
+/** 旅豆账本日终根（每日 03:10）：封存昨日账本 → 借贷恒等才打包 → 根上链 */
+export async function tickBeanDayClose() {
+  const { closeBeanDay } = await import('./domain/attest.mjs')
+  const r = await closeBeanDay()
+  console.log('[job:bean-day]', r.bizDate, r.skipped ? '已封存' : (r.ok ? 'root ' + String(r.root).slice(0, 12) + ' leaves ' + r.leaves : '拒绝封存：' + r.reason))
+  return r
+}
+
+/** 存证不变式对账（每日 04:00）：只读 + 报警，绝不改业务数据 */
+export async function tickAttestReconcile() {
+  const { reconcile } = await import('./domain/attest.mjs')
+  const r = await reconcile()
+  console.log('[job:attest-reconcile]', r.ok ? 'ALL PASS' : 'FAILED: ' + r.checks.filter((x) => !x.ok).map((x) => x.id).join(','))
+  return r
 }
 
 /** 拼团未成团自动取消（分钟级）：§4 depart_date 前 group_cancel_hours 小时未达 min_go → 取消+全额退款+通知 */
@@ -88,9 +112,15 @@ export async function tickGroupCancel() {
   if (done.length) console.log('[job:group-cancel]', done.join(','))
 }
 
+/** 严重风控告警外推（每轮）：risk_event severity>=2 未处理未通知 → webhook；未配置通道时静默 */
+async function tickRiskNotify() {
+  const { tickRiskNotify } = await import('./infra/notify.mjs')
+  return tickRiskNotify()
+}
+
 async function main() {
-  console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / settlement 周一 01:00')
-  let lastCommission = '', lastSettlement = ''
+  console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00')
+  let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = ''
   for (;;) {
     const now = new Date()
     const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
@@ -100,10 +130,13 @@ async function main() {
       await tickGroupCancel()
       await tickExpire()
       await tickAttest()
+      await tickRiskNotify()
       // 心跳：运维控制台据此判断任务进程存活
       await q(`INSERT INTO sys_job (name, last_run_at, last_status, run_count) VALUES ('main-loop', NOW(3), 'ok', 1)
                ON DUPLICATE KEY UPDATE last_run_at = NOW(3), last_status = 'ok', run_count = run_count + 1`, [])
       if (hhmm >= '02:00' && lastCommission !== now.toDateString()) { lastCommission = now.toDateString(); await tickCommission() }
+      if (hhmm >= '03:10' && lastBeanDay !== now.toDateString()) { lastBeanDay = now.toDateString(); await tickBeanDayClose() }
+      if (hhmm >= '04:00' && lastReconcile !== now.toDateString()) { lastReconcile = now.toDateString(); await tickAttestReconcile() }
       if (hhmm >= '01:00' && now.getDay() === 1 && lastSettlement !== now.toDateString()) { lastSettlement = now.toDateString(); await tickSettlement() }
     } catch (e) { console.error('[jobs:err]', e.message) }
     await sleep(60_000)

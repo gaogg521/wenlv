@@ -1,0 +1,152 @@
+[
+  {
+    "i": 0,
+    "start": 0.4,
+    "window": 2.9,
+    "raw": 2.9,
+    "tempo": 1.0,
+    "final": 2.9,
+    "fit": true,
+    "text": "每一次旅行，都值得写上链。"
+  },
+  {
+    "i": 1,
+    "start": 3.5,
+    "window": 3.2,
+    "raw": 3.62,
+    "tempo": 1.12,
+    "final": 3.22,
+    "fit": true,
+    "text": "好评会刷，销量会刷，哈希不会。"
+  },
+  {
+    "i": 2,
+    "start": 6.9,
+    "window": 3.0,
+    "raw": 2.83,
+    "tempo": 1.0,
+    "final": 2.83,
+    "fit": true,
+    "text": "八大主题，总有一款是你。"
+  },
+  {
+    "i": 3,
+    "start": 10.1,
+    "window": 3.0,
+    "raw": 3.07,
+    "tempo": 1.066,
+    "final": 2.86,
+    "fit": true,
+    "text": "一个身份，走遍所有旅程。"
+  },
+  {
+    "i": 4,
+    "start": 13.3,
+    "window": 3.0,
+    "raw": 3.17,
+    "tempo": 1.101,
+    "final": 2.86,
+    "fit": true,
+    "text": "下单瞬间，哈希指纹生成。"
+  },
+  {
+    "i": 5,
+    "start": 16.5,
+    "window": 3.0,
+    "raw": 3.29,
+    "tempo": 1.12,
+    "final": 2.92,
+    "fit": true,
+    "text": "千笔订单，一个根概括全部。"
+  },
+  {
+    "i": 6,
+    "start": 19.7,
+    "window": 3.0,
+    "raw": 3.29,
+    "tempo": 1.12,
+    "final": 2.92,
+    "fit": true,
+    "text": "借贷恒等才封账，根根相连。"
+  },
+  {
+    "i": 7,
+    "start": 22.9,
+    "window": 4.0,
+    "raw": 4.18,
+    "tempo": 1.077,
+    "final": 3.86,
+    "fit": true,
+    "text": "一键锚定：链数根、蚂蚁链、腾讯BaaS。"
+  },
+  {
+    "i": 8,
+    "start": 27.2,
+    "window": 2.8,
+    "raw": 2.69,
+    "tempo": 1.0,
+    "final": 2.69,
+    "fit": true,
+    "text": "一条证明，自证在链。"
+  },
+  {
+    "i": 9,
+    "start": 30.2,
+    "window": 3.0,
+    "raw": 3.31,
+    "tempo": 1.12,
+    "final": 2.94,
+    "fit": true,
+    "text": "本地验签，数据主权还给游客。"
+  },
+  {
+    "i": 10,
+    "start": 33.4,
+    "window": 3.1,
+    "raw": 3.5,
+    "tempo": 1.12,
+    "final": 3.11,
+    "fit": true,
+    "text": "一单旅行，让整个链条都被善待。"
+  },
+  {
+    "i": 11,
+    "start": 36.7,
+    "window": 3.4,
+    "raw": 3.67,
+    "tempo": 1.119,
+    "final": 3.26,
+    "fit": true,
+    "text": "五项分账，守恒恒等，账实一致。"
+  },
+  {
+    "i": 12,
+    "start": 40.3,
+    "window": 3.0,
+    "raw": 3.1,
+    "tempo": 1.076,
+    "final": 2.86,
+    "fit": true,
+    "text": "徽章藏品权益，一键上链。"
+  },
+  {
+    "i": 13,
+    "start": 43.5,
+    "window": 3.4,
+    "raw": 3.6,
+    "tempo": 1.098,
+    "final": 3.26,
+    "fit": true,
+    "text": "去破案、去赴宴，去认识新朋友。"
+  },
+  {
+    "i": 14,
+    "start": 47.1,
+    "window": 5.5,
+    "raw": 5.62,
+    "tempo": 1.045,
+    "final": 5.36,
+    "fit": true,
+    "text": "我们全力构建一个文旅的新生态。世界，就是我的游乐场。"
+  }
+]

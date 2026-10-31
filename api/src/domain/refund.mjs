@@ -5,6 +5,7 @@ import * as bean from './bean.mjs'
 import * as pass from './pass.mjs'
 import * as promo from './promo.mjs'
 import * as wxpay from './wxpay.mjs'
+import { attest } from './attest.mjs'
 
 /** 全额原路退款：refunds 落单 → 状态机 60 → wxpay(MOCK 自动成功) → 70 + 豆/凭证/佣金全量冲正 */
 export async function fullRefund({ orderNo, reason, operator = 'user' }) {
@@ -14,6 +15,10 @@ export async function fullRefund({ orderNo, reason, operator = 'user' }) {
   const refundNo = 'RF' + Date.now()
   await q(`INSERT INTO refunds (order_id, refund_no, amount, reason, status, operator) VALUES (?,?,?,?,0,?)`,
     [o.id, refundNo, o.amount_pay, reason, operator])
+  // 退款申请即锚定（version 0）；后续成功(2)/拒绝(3)各锚一次，形成状态演进链
+  await attest('refund', refundNo, {
+    refundNo, orderNo, amount: Number(o.amount_pay), status: 0, operator,
+  }, null, 0)
   await order.fire(orderNo, 'REFUND_APPLY', operator)
   const wxr = await wxpay.refund({ orderNo, refundNo, amountFen: Number(o.amount_pay), totalFen: Number(o.amount_pay), reason })
   if (wxr.status !== 'SUCCESS') return { refunded: false, processing: true, wxRefund: wxr.status, refundNo }
@@ -30,6 +35,9 @@ async function complete(o, refundNo, reason, status) {
     if ([20,30].includes(Number(previous?.from_st))) await cc.upd('UPDATE tour_session SET booked=GREATEST(0,booked-?) WHERE id=?', [o.qty,o.session_id])
     await cc.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
     await cc.upd('UPDATE payment SET status = 4 WHERE order_id = ?', [o.id])
+    await attest('refund', refundNo, {
+      refundNo, orderNo, amount: Number(o.amount_pay), status: 2, reason: reason || null,
+    }, cc, 2)
     return reason + '·全量冲正'
   })
   return { refunded: true, wxRefund: status }

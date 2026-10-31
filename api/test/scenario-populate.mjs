@@ -48,6 +48,11 @@ async function main() {
   const mYoga = await api('POST', '/admin/merchants', { name: '安吉瑜伽谷民宿', cityCode: '330500', wxpaySubMchid: 'SUBMCH-YOGA-002' }, admin)
   const mSZ = await api('POST', '/admin/merchants', { name: '苏州园林文旅', cityCode: '320508' }, admin)
 
+  step('运营-赵敏', '商户进件审批 → 3 家全部通过')
+  for (const m of [mZJQ, mYoga, mSZ]) {
+    try { await api('POST', '/admin/merchants/' + m.id + '/approve', {}, admin) } catch (e) { /* 已审批过则跳过 */ }
+  }
+
   step('运营-赵敏', '商品管理 → 新增 3 条线路（剧本/瑜伽/姐姐茶会）+ 3 个商城 SKU')
   const p1 = await api('POST', '/admin/products', { title: '朱家角剧本游 · 江南谜案', cat: 'script', cityCode: '310118', merchantId: mZJQ.id, priceFrom: 29800, beanGift: 298, daysDesc: '1天', status: 1 }, admin)
   const p2 = await api('POST', '/admin/products', { title: '安吉瑜伽谷 · 2天1夜', cat: 'yoga', cityCode: '330500', merchantId: mYoga.id, priceFrom: 68800, beanGift: 688, daysDesc: '2天1夜', status: 1 }, admin)
@@ -126,8 +131,8 @@ async function main() {
   const order = await api('POST', '/c/orders', { sessionId: detail.sessions[0].id, qty: 1, beanDeduct: 200, promoScene: scene, contactName: '王小满', contactPhone: '13800001111' }, buyer)
   ok(order.amountPay === 27800, '实付 278 元')
   step('游客-小满', 'wx.requestPayment 支付（联调=MOCK 参数）')
-  step('微信-回调', 'POST /callback/wxpay（真实回调路径）')
-  await api('POST', '/callback/wxpay', { out_trade_no: order.orderNo, transaction_id: 'WX' + Date.now() })
+  step('微信-回调', '支付回调（联调走 /admin/dev/mock-pay；生产由微信 V3 签名回调 /callback/wxpay）')
+  await api('POST', '/admin/dev/mock-pay', { orderNo: order.orderNo }, admin)
   const paid = await api('GET', '/c/orders/' + order.orderNo, null, buyer)
   ok(paid.status === 30, '已支付→出票 status=30')
   step('游客-小满', '订单详情看到 1 张入园凭证')
@@ -164,15 +169,22 @@ async function main() {
   step('游客-陈姐', '自己也下单瑜伽团（¥688，不抵豆）→ 支付')
   const chenT = promoLogin.token
   const order2 = await api('POST', '/c/orders', { sessionId: (await api('GET', '/c/tours/' + p2.id, null, chenT)).sessions[0].id, qty: 1 }, chenT)
-  await api('POST', '/callback/wxpay', { out_trade_no: order2.orderNo, transaction_id: 'WX' + Date.now() + 'B' })
+  await api('POST', '/admin/dev/mock-pay', { orderNo: order2.orderNo }, admin)
   step('游客-陈姐', '行程有变 → 申请退款（全量冲正）')
   const rf = await api('POST', '/c/orders/' + order2.orderNo + '/refund', { reason: '行程变更' }, chenT)
   ok(rf.refunded, '退款完成')
 
   // 周结算 + 后台总览
-  step('财务-周颖', '周一出账：生成本周结算单 → 复核通过')
+  step('财务-周颖', '周一出账：生成本周结算单')
   const gen = await api('POST', '/admin/settlements/generate', { period: '2026-10-W43' }, finance)
-  for (const id of gen.settlementIds) await api('POST', '/admin/settlements/' + id + '/confirm', {}, finance)
+  step('商户-安麓大夫第', '小程序 B 查看周账单 → 确认结算')
+  for (const id of gen.settlementIds) {
+    try { await api('POST', '/m/settlements/' + id + '/confirm', { note: '账单无误' }, merch) } catch (e) { /* 无该商户结算单则跳过 */ }
+  }
+  step('财务-周颖', '后台复核通过 → 分账执行')
+  for (const id of gen.settlementIds) {
+    try { await api('POST', '/admin/settlements/' + id + '/confirm', {}, finance) } catch (e) { /* 商户未确认的结算单跳过 */ }
+  }
   const kpi = await api('GET', '/admin/dash/kpi', null, admin)
   step('运营-赵敏', `驾驶舱：今日 GMV ¥${kpi.gmvToday} · 订单 ${kpi.ordersToday} · 核销率 ${kpi.verifyRate} · 预算水位 ${kpi.budgetUsage}`)
 

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>向往的自由 · 53 秒竖版全链路 V4</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1920px; overflow:hidden; }
+  body { font-family:'Segoe UI','Microsoft YaHei',sans-serif; background:#04060d; color:#e8f1ff; }
+  #stage { position:relative; width:1080px; height:1920px; }
+
+  #bgGrad { position:absolute; inset:0;
+    background:
+      radial-gradient(900px 600px at 50% 22%, rgba(34,211,238,.10), transparent 60%),
+      radial-gradient(800px 700px at 78% 78%, rgba(139,92,246,.10), transparent 62%),
+      linear-gradient(180deg,#04060d 0%,#060a16 55%,#030509 100%);
+  }
+  #grid { position:absolute; left:-20%; right:-20%; bottom:-260px; height:820px;
+    background-image:
+      linear-gradient(rgba(56,189,248,.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,.16) 1px, transparent 1px);
+    background-size:72px 72px;
+    transform:perspective(700px) rotateX(62deg);
+    -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 30%, transparent 92%);
+  }
+  #stars { position:absolute; inset:0; }
+  .star { position:absolute; border-radius:50%; background:#7dd3fc; }
+  #scan { position:absolute; inset:0; opacity:.05; pointer-events:none;
+    background:repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 4px); }
+  #vign { position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(1200px 1500px at 50% 46%, transparent 55%, rgba(0,0,0,.55) 100%); }
+
+  #brand { position:absolute; top:44px; left:52px; display:flex; align-items:center; gap:14px;
+    font-size:26px; letter-spacing:2px; color:#9fb6d9; z-index:50; }
+  #brand .dot { width:16px; height:16px; border-radius:4px;
+    background:linear-gradient(135deg,#22d3ee,#8b5cf6); box-shadow:0 0 14px rgba(34,211,238,.8); }
+  #brand b { color:#e8f1ff; font-weight:600; }
+  #progress { position:absolute; top:0; left:0; height:6px; width:0;
+    background:linear-gradient(90deg,#22d3ee,#8b5cf6); box-shadow:0 0 12px rgba(34,211,238,.9); z-index:60; }
+  #ticker { position:absolute; bottom:36px; left:0; right:0; height:34px; overflow:hidden; z-index:50; opacity:.55;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
+  #tickerIn { position:absolute; white-space:nowrap; font-family:Consolas,monospace; font-size:22px; color:#5b7aa6; letter-spacing:1px; }
+
+  .scene { position:absolute; inset:0; display:none; padding:0 72px; }
+  .scene.on { display:block; }
+  .ttl { font-size:62px; font-weight:800; letter-spacing:2px; line-height:1.25; }
+  .ttl .hl { background:linear-gradient(90deg,#22d3ee,#8b5cf6);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .ttl .am { background:linear-gradient(90deg,#ffb545,#ff8a3d);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .kicker { font-size:24px; letter-spacing:6px; color:#22d3ee; font-weight:700; }
+  .chip { display:inline-block; padding:10px 22px; border-radius:999px; font-size:24px;
+    border:1px solid rgba(56,189,248,.45); color:#a5e7ff; background:rgba(14,36,58,.6); letter-spacing:1px; }
+  .stamp { display:inline-block; padding:10px 24px; border-radius:8px; font-size:26px; font-weight:700;
+    color:#05202b; background:linear-gradient(90deg,#22d3ee,#67e8f9); box-shadow:0 0 24px rgba(34,211,238,.55); letter-spacing:2px; }
+  .doc { border-radius:14px; overflow:hidden; border:1px solid rgba(148,190,255,.28);
+    box-shadow:0 24px 70px rgba(0,0,0,.6); background:#fff; }
+  .doc img { display:block; width:100%; height:100%; object-fit:cover; object-position:top; }
+  .phone { border-radius:36px; overflow:hidden; border:3px solid rgba(148,190,255,.35);
+    box-shadow:0 30px 90px rgba(0,0,0,.65), 0 0 50px rgba(34,211,238,.18); background:#0b1526; }
+  .phone img { display:block; width:100%; height:100%; object-fit:cover; }
+  .fieldLab { font-size:24px; color:#6f8bb5; letter-spacing:3px; }
+  .fieldVal { font-family:Consolas,monospace; font-size:30px; color:#cfeaff; word-break:break-all; line-height:1.55;
+    border-left:4px solid #22d3ee; padding-left:18px; min-height:48px; }
+
+  /* 网站截图卡（带浏览器 chrome，暗示"这是真的网站"） */
+  .siteCard { border-radius:18px; overflow:hidden; border:1px solid rgba(148,190,255,.3);
+    box-shadow:0 28px 80px rgba(0,0,0,.65), 0 0 40px rgba(34,211,238,.12); background:#fff; }
+  .siteCard .bar { height:52px; background:#e8edf4; display:flex; align-items:center; gap:10px; padding:0 22px; }
+  .siteCard .bar i { width:16px; height:16px; border-radius:50%; display:block; }
+  .siteCard .bar .url { flex:1; margin-left:12px; height:30px; border-radius:8px; background:#fff;
+    font-family:Consolas,monospace; font-size:19px; color:#7a8ba6; display:flex; align-items:center; padding:0 16px; }
+  .siteCard img { display:block; width:100%; }
+
+  /* ── S0 hook ── */
+  #s0 .wrap { position:absolute; left:0; right:0; top:640px; display:flex; flex-direction:column; align-items:center; gap:44px; }
+  #ring1,#ring2 { position:absolute; border-radius:50%; left:50%; top:840px; }
+  #ring1 { width:820px; height:820px; margin:-410px 0 0 -410px; border:2px dashed rgba(56,189,248,.35); }
+  #ring2 { width:1020px; height:1020px; margin:-510px 0 0 -510px; border:2px dotted rgba(139,92,246,.3); }
+  #orbitTxt { position:absolute; left:540px; top:840px; font-family:Consolas,monospace;
+    font-size:24px; color:#67e8f9; opacity:.85; letter-spacing:2px; white-space:nowrap; transform-origin:0 -420px; }
+  #s0Title { font-size:118px; font-weight:900; letter-spacing:10px; display:flex; }
+  #s0Title span { display:inline-block; opacity:0; transform:translateY(46px);
+    background:linear-gradient(180deg,#fff,#9fdcff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #s0Sub { font-size:32px; color:#8fd8ff; letter-spacing:8px; opacity:0; }
+  #s0Stamp { opacity:0; transform:scale(.7); }
+  .frag { position:absolute; font-family:Consolas,monospace; font-size:20px; color:#3d6ea8; white-space:nowrap; opacity:.7; }
+
+  /* ── S1 信任 ── */
+  #s1 .wrap { position:absolute; left:72px; right:72px; top:300px; bottom:200px; display:flex; flex-direction:column; gap:48px; }
+  .duel { display:flex; gap:44px; flex:1; align-items:stretch; }
+  .duelCard { flex:1; border-radius:24px; padding:44px 36px; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:26px; overflow:hidden; opacity:0; }
+  .duelCard .big { font-size:88px; font-weight:900; }
+  .duelCard .cap { font-size:26px; letter-spacing:2px; }
+  #fakeCard { background:rgba(60,14,30,.5); border:1px solid rgba(255,77,109,.35); }
+  #fakeStars { font-size:64px; color:#ffb1c1; letter-spacing:6px; }
+  #fakeStrike { position:absolute; left:8%; right:8%; top:50%; height:8px; transform-origin:left; transform:scaleX(0) rotate(-6deg);
+    background:linear-gradient(90deg,#ff4d6d,#ff8fa3); box-shadow:0 0 22px rgba(255,77,109,.9); border-radius:4px; }
+  #fakeTag { position:absolute; top:26px; right:26px; font-size:22px; color:#ff4d6d; border:1px solid rgba(255,77,109,.6);
+    border-radius:6px; padding:4px 12px; letter-spacing:4px; font-weight:700; }
+  #hashCard { background:rgba(8,32,46,.6); border:1px solid rgba(34,211,238,.4); }
+  #hashBox { width:100%; border-radius:14px; background:rgba(3,14,24,.85); border:1px solid rgba(56,189,248,.35);
+    padding:26px 22px; font-family:Consolas,monospace; font-size:24px; color:#67e8f9; word-break:break-all; line-height:1.6;
+    box-shadow:0 0 30px rgba(34,211,238,.15) inset; }
+  #hashTag { position:absolute; top:26px; right:26px; font-size:22px; color:#22d3ee; border:1px solid rgba(34,211,238,.6);
+    border-radius:6px; padding:4px 12px; letter-spacing:4px; font-weight:700; }
+  #s1Foot { font-size:30px; color:#9fb6d9; text-align:center; line-height:1.7; }
+  #s1Foot b { color:#e8f1ff; }
+
+  /* ── S2 八大主题 ── */
+  #s2 .wrap { position:absolute; left:72px; right:72px; top:280px; bottom:180px; display:flex; flex-direction:column; gap:40px; }
+  #s2Card { transform:rotate(-1.5deg); opacity:0; }
+  #s2Tags { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; }
+  #s2Tags .chip { opacity:0; }
+
+  /* ── S3 Travel ID ── */
+  #s3 .wrap { position:absolute; left:72px; right:72px; top:420px; bottom:190px; display:flex; flex-direction:column; gap:44px; }
+  #tidCard { border-radius:24px; padding:36px 44px; background:linear-gradient(160deg,rgba(20,40,66,.92),rgba(8,18,34,.92));
+    border:1px solid rgba(56,189,248,.4); display:flex; flex-direction:column; gap:24px; opacity:0; }
+  #tidNo { display:flex; align-items:center; gap:22px; }
+  #tidNo .ic { width:74px; height:74px; border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:38px;
+    background:linear-gradient(135deg,rgba(34,211,238,.3),rgba(139,92,246,.3)); border:1px solid rgba(56,189,248,.5); }
+  #tidNoVal { font-family:Consolas,monospace; font-size:42px; font-weight:800; color:#fff; letter-spacing:2px; min-height:52px; }
+  #tidNo .lb { font-size:22px; color:#7fb8e8; letter-spacing:3px; }
+  #tidTiles { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .tTile { border-radius:16px; padding:20px 22px; border:1px solid rgba(255,255,255,.12); opacity:0; }
+  .tTile .nm { font-size:27px; font-weight:800; }
+  .tTile .ds { font-size:19px; color:rgba(255,255,255,.72); margin-top:6px; }
+  #tidClaims { display:flex; flex-direction:column; gap:16px; }
+  .claim { display:flex; gap:16px; align-items:flex-start; font-size:26px; color:#b9cdec; line-height:1.55; opacity:0; }
+  .claim .ck { color:#22d3ee; font-weight:900; }
+  .claim b { color:#fff; }
+
+  /* ── S4 下单 ── */
+  #s4 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:200px; }
+  #s4 .row { display:flex; gap:52px; align-items:center; height:100%; }
+  #s4Left { flex:1.15; display:flex; flex-direction:column; gap:36px; }
+  #s4PhoneBox { flex:1; display:flex; justify-content:center; }
+  #s4Phone { width:400px; height:858px; transform:rotate(3deg); }
+
+  /* ── S5 Merkle ── */
+  #s5 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:170px; display:flex; flex-direction:column; gap:44px; }
+  #tree { flex:1; position:relative; }
+  .trow { position:absolute; left:0; right:0; display:flex; justify-content:center; gap:22px; }
+  .node { border-radius:12px; border:1px solid rgba(56,189,248,.4); background:rgba(9,26,44,.85);
+    font-family:Consolas,monospace; font-size:22px; color:#9fdcff; padding:14px 12px; text-align:center;
+    opacity:0; transform:scale(.6); box-shadow:0 0 18px rgba(34,211,238,.12); }
+  .node.root { border-color:#8b5cf6; color:#d8c8ff; font-weight:700;
+    box-shadow:0 0 34px rgba(139,92,246,.4); background:rgba(26,14,52,.9); }
+  #s5Stats { display:flex; gap:24px; justify-content:center; }
+
+  /* ── S6 封存 ── */
+  #s6 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:180px; display:flex; flex-direction:column; gap:44px; }
+  #s6 .row { display:flex; gap:48px; flex:1; align-items:center; }
+  #s6Doc { width:430px; height:590px; transform:rotate(-3deg); flex-shrink:0; opacity:0; }
+  #s6Right { flex:1; display:flex; flex-direction:column; gap:34px; }
+  .eq { display:flex; align-items:center; gap:20px; font-size:34px; font-weight:700; }
+  .eq .num { font-family:Consolas,monospace; color:#67e8f9; }
+  .eq .ok { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(52,211,153,.15); border:2px solid #34d399; color:#34d399; font-size:30px; font-weight:900; opacity:0; }
+  .rootChain { display:flex; align-items:center; gap:18px; }
+  .rootChip { border-radius:12px; padding:14px 12px; font-family:Consolas,monospace; font-size:17px;
+    border:1px solid rgba(139,92,246,.55); background:rgba(26,14,52,.85); color:#d8c8ff; word-break:break-all; width:196px; opacity:0; }
+  .rootChip .lab { display:block; font-family:'Segoe UI','Microsoft YaHei'; font-size:16px; color:#8b7bd8; margin-bottom:6px; letter-spacing:1px; }
+  #linkLine { flex:1; height:4px; background:linear-gradient(90deg,#22d3ee,#8b5cf6); transform-origin:left;
+    box-shadow:0 0 14px rgba(34,211,238,.8); position:relative; }
+  #linkLine::after { content:''; position:absolute; right:-4px; top:-6px; border:8px solid transparent; border-left:12px solid #8b5cf6; }
+  #s6Cap { font-size:26px; color:#8fa8cc; line-height:1.7; opacity:0; }
+
+  /* ── S7 多链 ── */
+  #s7 .wrap { position:absolute; left:72px; right:72px; top:280px; bottom:200px; display:flex; flex-direction:column; gap:40px; }
+  #hub { width:300px; height:300px; border-radius:50%; margin:6px auto 0; position:relative; display:flex; align-items:center; justify-content:center; flex-shrink:0; opacity:0; }
+  #hubCore { width:190px; height:190px; border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:radial-gradient(circle at 34% 30%, #1b3b5e, #0a1626); border:2px solid rgba(56,189,248,.7);
+    box-shadow:0 0 60px rgba(34,211,238,.45); z-index:2; }
+  #hubCore .t { font-size:34px; font-weight:800; letter-spacing:3px; }
+  #hubCore .d { font-size:18px; color:#7fb8e8; letter-spacing:2px; }
+  .hubRing { position:absolute; border-radius:50%; border:1px solid rgba(56,189,248,.4); }
+  #chainList { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+  .chainCard { border-radius:20px; padding:26px 24px; opacity:0;
+    background:rgba(10,20,38,.78); border:1px solid rgba(56,189,248,.25); }
+  .chainCard .nm { font-size:30px; font-weight:800; letter-spacing:1px; display:flex; align-items:center; gap:12px; }
+  .chainCard .ic { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px;
+    background:linear-gradient(135deg,rgba(34,211,238,.25),rgba(139,92,246,.25)); border:1px solid rgba(56,189,248,.4); }
+  .chainCard .ds { font-size:21px; color:#7d97c2; margin-top:8px; }
+  .chainCard .caps { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+  .capDot { font-size:18px; padding:3px 10px; border-radius:6px; border:1px solid rgba(52,211,153,.5); color:#6ee7b7; }
+  .capDot.no { border-color:rgba(120,140,170,.35); color:#5d7396; }
+  #s7Foot { font-size:25px; color:#8fa8cc; text-align:center; line-height:1.7; opacity:0; }
+  #s7Foot code { font-family:Consolas,monospace; color:#67e8f9; }
+
+  /* ── S8 证明 ── */
+  #s8 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:180px; display:flex; flex-direction:column; gap:44px; }
+  #s8 .row { display:flex; gap:48px; flex:1; align-items:center; }
+  #s8Doc { width:430px; height:590px; transform:rotate(2.5deg); flex-shrink:0; opacity:0; }
+  #ladder { flex:1; display:flex; flex-direction:column; gap:18px; }
+  .rung { display:flex; align-items:center; gap:16px; opacity:0; }
+  .rung .dir { width:64px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-weight:900; font-size:24px; flex-shrink:0; }
+  .rung .dir.L { background:rgba(34,211,238,.14); border:1px solid rgba(34,211,238,.55); color:#67e8f9; }
+  .rung .dir.R { background:rgba(139,92,246,.14); border:1px solid rgba(139,92,246,.55); color:#c4b5fd; }
+  .rung .hv { flex:1; border-radius:10px; border:1px solid rgba(56,189,248,.35); background:rgba(9,26,44,.85);
+    font-family:Consolas,monospace; font-size:20px; color:#9fdcff; padding:12px 14px; word-break:break-all; }
+  #proofOk { align-self:flex-start; margin-top:6px; display:flex; align-items:center; gap:14px; font-size:28px; font-weight:800; color:#34d399; opacity:0; }
+  #proofOk .ok { width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(52,211,153,.15); border:2px solid #34d399; font-size:28px; }
+
+  /* ── S9 验签主权 ── */
+  #s9 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:180px; display:flex; flex-direction:column; gap:44px; }
+  #s9 .row { display:flex; gap:48px; flex:1; align-items:center; }
+  #s9Left { flex:1.1; display:flex; flex-direction:column; gap:32px; }
+  #didVal { font-family:Consolas,monospace; font-size:29px; color:#cfeaff; word-break:break-all; line-height:1.55;
+    border-left:4px solid #8b5cf6; padding-left:18px; min-height:48px; }
+  #s9Chips { display:flex; flex-wrap:wrap; gap:16px; }
+  #s9Chips .chip { opacity:0; }
+  #s9Doc { width:470px; height:536px; transform:rotate(-2.5deg); flex-shrink:0; opacity:0; }
+  #s9Cap { opacity:0; }
+
+  /* ── S10 商业链条 ── */
+  #s10 .wrap { position:absolute; left:72px; right:72px; top:290px; bottom:170px; display:flex; flex-direction:column; gap:38px; }
+  #flowWrap { position:relative; padding:32px 26px; border-radius:24px; opacity:0;
+    background:rgba(13,26,44,.72); border:1px solid rgba(56,189,248,.22); }
+  #flow { display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px 20px; }
+  .fnode { border-radius:16px; padding:20px 12px; text-align:center; background:rgba(20,40,66,.9);
+    border:1px solid rgba(56,189,248,.35); opacity:0; }
+  .fnode .ic { font-size:36px; }
+  .fnode .nm { font-size:26px; font-weight:800; margin-top:8px; }
+  .fnode .ds { font-size:18px; color:#7d97c2; margin-top:4px; }
+  .fnode.gain { border-color:rgba(255,181,69,.55); }
+  .fnode.gain .nm { color:#ffb545; }
+  #roles { display:flex; flex-direction:column; gap:16px; }
+  .role { display:flex; gap:20px; align-items:center; border-radius:18px; padding:20px 26px; opacity:0;
+    background:rgba(10,20,38,.78); border:1px solid rgba(56,189,248,.22); }
+  .role .tag { width:60px; height:60px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0;
+    background:linear-gradient(135deg,rgba(34,211,238,.22),rgba(139,92,246,.22)); border:1px solid rgba(56,189,248,.4); }
+  .role .nm { font-size:27px; font-weight:800; }
+  .role .ds { font-size:21px; color:#8fa8cc; margin-top:4px; }
+  #s10Quote { text-align:center; font-size:26px; color:#9fb6d9; line-height:1.7; opacity:0; }
+  #s10Quote b { color:#ffb545; }
+
+  /* ── S11 结算 ── */
+  #s11 .wrap { position:absolute; left:72px; right:72px; top:270px; bottom:180px; display:flex; flex-direction:column; gap:40px; }
+  #s11 .row { display:flex; gap:44px; flex:1; align-items:center; }
+  #s11Docs { display:flex; gap:26px; align-items:center; flex-shrink:0; }
+  #s11Doc { width:330px; height:452px; transform:rotate(-2.5deg); opacity:0; }
+  #s11Phone { width:230px; height:497px; transform:rotate(2.5deg); opacity:0; }
+  #s11Right { flex:1; display:flex; flex-direction:column; gap:26px; }
+  #splitBar { height:66px; border-radius:14px; overflow:hidden; display:flex; border:1px solid rgba(56,189,248,.3); }
+  #splitBar div { height:100%; transform-origin:left; transform:scaleX(0); }
+  .sRow { display:flex; align-items:center; gap:14px; font-size:26px; opacity:0; }
+  .sRow .sw { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
+  .sRow .nm { color:#b9cdec; width:190px; }
+  .sRow .amt { font-family:Consolas,monospace; color:#67e8f9; margin-left:auto; font-size:28px; }
+  #s11Eq { font-size:32px; font-weight:800; display:flex; align-items:center; gap:16px; opacity:0; }
+  #s11Eq .num { font-family:Consolas,monospace; color:#fff; }
+  #s11Eq .ok { width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:rgba(52,211,153,.15); border:2px solid #34d399; color:#34d399; font-size:26px; }
+  #s11Cap { font-size:24px; color:#8fa8cc; opacity:0; }
+
+  /* ── S12 资产 ── */
+  #s12 .wrap { position:absolute; left:72px; right:72px; top:290px; bottom:200px; display:flex; flex-direction:column; gap:56px; align-items:center; }
+  #hexRow { display:flex; gap:40px; justify-content:center; margin-top:10px; }
+  .hexBadge { width:280px; opacity:0; display:flex; flex-direction:column; align-items:center; gap:20px; }
+  .hex { width:240px; height:264px; position:relative; display:flex; align-items:center; justify-content:center;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); }
+  .hex .in { position:absolute; inset:5px; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    background:linear-gradient(160deg,#12233f,#0a1424); }
+  .hex .gl { position:absolute; inset:0; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background:linear-gradient(135deg,#22d3ee,#8b5cf6); }
+  .hex .glyph { font-size:76px; }
+  .hex .no { font-family:Consolas,monospace; font-size:22px; color:#9fdcff; letter-spacing:2px; }
+  .hexBadge .nm { font-size:28px; font-weight:800; letter-spacing:2px; }
+  .hexBadge .ch { font-size:21px; color:#7d97c2; }
+  #s12Cap { font-size:26px; color:#8fa8cc; text-align:center; line-height:1.7; opacity:0; }
+
+  /* ── S13 游乐场 ── */
+  #s13 .wrap { position:absolute; left:72px; right:72px; top:280px; bottom:180px; display:flex; flex-direction:column; gap:38px; }
+  #s13Card { transform:rotate(1.5deg); opacity:0; }
+  #s13Lines { display:flex; flex-direction:column; gap:18px; }
+  .goLine { display:flex; align-items:center; gap:18px; font-size:30px; color:#cfe4ff; opacity:0; }
+  .goLine .pin { color:#ffb545; font-weight:900; }
+  #s13Tag { font-size:26px; color:#8fd8ff; text-align:center; line-height:1.6; opacity:0; }
+  #s13Tag b { color:#fff; }
+
+  /* ── S14 收尾 ── */
+  #s14 .wrap { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:46px; padding:0 80px; }
+  #s14Kick { opacity:0; }
+  #s14Title { font-size:98px; font-weight:900; letter-spacing:8px; text-align:center; line-height:1.35; opacity:0; }
+  #s14Title .am { background:linear-gradient(90deg,#ffb545,#ff8a3d); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #s14Sub { font-size:40px; color:#cfe4ff; letter-spacing:3px; text-align:center; opacity:0; }
+  #s14Chips { display:flex; flex-wrap:wrap; gap:18px; justify-content:center; opacity:0; }
+  #s14Foot { font-size:23px; color:#5d7396; letter-spacing:2px; text-align:center; line-height:1.8; opacity:0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bgGrad"></div>
+  <div id="grid"></div>
+  <div id="stars"></div>
+  <div id="vign"></div>
+  <div id="scan"></div>
+  <div id="progress"></div>
+  <div id="brand"><span class="dot"></span><span>向往的自由 · <b>WEB3 文旅新生态</b></span></div>
+
+  <!-- S0 钩子 -->
+  <section class="scene" id="s0">
+    <div id="ring1"></div><div id="ring2"></div>
+    <div class="wrap">
+      <div id="s0Kicker" class="kicker" style="opacity:0">FULL-CHAIN PROOF · 全链路</div>
+      <div id="s0Title"></div>
+      <div id="s0Sub">世界就是我的游乐场 · TRUST BY CONSTRUCTION</div>
+      <div id="s0Stamp" class="stamp">53 秒 · 真实运行库 · 全部可验</div>
+    </div>
+    <div id="orbitTxt">WL-TRUST·MERKLE·DID·ED25519·MULTI-CHAIN·</div>
+  </section>
+
+  <!-- S1 信任 -->
+  <section class="scene" id="s1">
+    <div class="wrap">
+      <div>
+        <div class="kicker">01 · 信任战争</div>
+        <div class="ttl" style="margin-top:14px">信任，是旅游<span class="hl">最贵的成本</span></div>
+      </div>
+      <div class="duel">
+        <div class="duelCard" id="fakeCard">
+          <div id="fakeTag">可 刷</div>
+          <div id="fakeStars">★★★★★</div>
+          <div class="big" style="color:#ffd3dc">4.9 分</div>
+          <div class="cap" style="color:#c98da0">好评如潮 · 谁在说话？</div>
+          <div id="fakeStrike"></div>
+        </div>
+        <div class="duelCard" id="hashCard">
+          <div id="hashTag">链 上</div>
+          <div class="cap mono" style="color:#67e8f9">SHA-256 MERKLE ROOT</div>
+          <div id="hashBox"></div>
+          <div class="cap" style="color:#9fe8ff">改一个字节，全盘作废</div>
+        </div>
+      </div>
+      <div id="s1Foot">真实性不该由<b>评分</b>决定，应当由<b style="color:#22d3ee">数学</b>决定。</div>
+    </div>
+  </section>
+
+  <!-- S2 八大主题（宣传网站真实截图） -->
+  <section class="scene" id="s2">
+    <div class="wrap">
+      <div>
+        <div class="kicker">02 · 八大主题产品线</div>
+        <div class="ttl" style="margin-top:14px">总有一款，<span class="am">是你想去的世界</span></div>
+      </div>
+      <div class="siteCard" id="s2Card">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">向往的自由 · 宣传官网（真实页面）</span></div>
+        <img src="assets/site-themes.png">
+      </div>
+      <div id="s2Tags">
+        <span class="chip">谜案社</span><span class="chip">姐姐会</span><span class="chip">单身星球</span><span class="chip">瑜伽纪</span>
+        <span class="chip">竞技场</span><span class="chip">亲子营</span><span class="chip">红色印记</span><span class="chip">世界线</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- S3 Travel ID（宣传网站文案） -->
+  <section class="scene" id="s3">
+    <div class="wrap">
+      <div>
+        <div class="kicker">03 · TRAVEL ID · 数字身份</div>
+        <div class="ttl" style="margin-top:14px">一个身份，<span class="am">走遍所有旅程</span></div>
+      </div>
+      <div id="tidCard">
+        <div id="tidNo">
+          <div class="ic">🪪</div>
+          <div>
+            <div id="tidNoVal" class="no"></div>
+            <div class="lb">TRAVEL ID · 三端一体 · 数据互通</div>
+          </div>
+        </div>
+        <div id="tidTiles">
+          <div class="tTile" style="background:linear-gradient(135deg,rgba(255,150,60,.25),rgba(255,120,40,.15))"><div class="nm">小程序 A · 游客</div><div class="ds">会员消费生态 · 主题游 / 商城 / 旅豆</div></div>
+          <div class="tTile" style="background:linear-gradient(135deg,rgba(40,140,220,.28),rgba(40,120,220,.15))"><div class="nm">A 端推广中心</div><div class="ds">推广服务商与创作者 · 收益 / 推广 / 游客</div></div>
+          <div class="tTile" style="background:linear-gradient(135deg,rgba(150,80,240,.28),rgba(130,60,240,.15))"><div class="nm">小程序 B · 商户</div><div class="ds">核销与货俗 · 老板 / 店长 / 核销员</div></div>
+          <div class="tTile" style="background:linear-gradient(135deg,rgba(20,170,150,.28),rgba(20,150,140,.15))"><div class="nm">PC 运营后台</div><div class="ds">经营与风控 · 运营 / 财务 / 审核 / 风控</div></div>
+        </div>
+      </div>
+      <div id="tidClaims">
+        <div class="claim"><span class="ck">✓</span><span><b>一号三端通行</b> —— 共用一个身份，换端不用重新登记</span></div>
+        <div class="claim"><span class="ck">✓</span><span><b>旅行履历永久沉淀</b> —— 去过的城市、拿过的徽章，都写进数字履历</span></div>
+        <div class="claim"><span class="ck">✓</span><span><b>隐私由你掌控</b> —— 授权由你自己控制，可随时撤回</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S4 下单即指纹 -->
+  <section class="scene" id="s4">
+    <div class="wrap">
+      <div>
+        <div class="kicker">04 · 下单即存证</div>
+        <div class="ttl" style="margin-top:14px">支付成功的一瞬间，<span class="hl">指纹生成</span></div>
+      </div>
+      <div class="row" style="margin-top:36px">
+        <div id="s4Left">
+          <div>
+            <div class="fieldLab">订单号 ORDER NO</div>
+            <div class="fieldVal" id="ordNo" style="margin-top:12px"></div>
+          </div>
+          <div>
+            <div class="fieldLab">业务指纹 PAYLOAD HASH · SHA-256</div>
+            <div class="fieldVal" id="ordHash" style="margin-top:12px; font-size:25px"></div>
+          </div>
+          <div><span class="chip">游客小程序 A · 真实下单</span></div>
+        </div>
+        <div id="s4PhoneBox"><div class="phone" id="s4Phone"><img src="assets/phone-tour-pay.png"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S5 Merkle -->
+  <section class="scene" id="s5">
+    <div class="wrap">
+      <div>
+        <div class="kicker">05 · 批次打包</div>
+        <div class="ttl" style="margin-top:14px">一棵<span class="hl">默克尔树</span>，概括千笔订单</div>
+      </div>
+      <div id="tree"></div>
+      <div id="s5Stats">
+        <span class="chip">批次 #1</span><span class="chip">叶子 10 条</span><span class="chip">证明深度 4 层</span><span class="chip">根长 32 字节</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- S6 日终封存 -->
+  <section class="scene" id="s6">
+    <div class="wrap">
+      <div>
+        <div class="kicker">06 · 日终封存</div>
+        <div class="ttl" style="margin-top:14px">借贷<span class="hl">恒等</span>，才准封账</div>
+      </div>
+      <div class="row">
+        <div class="doc" id="s6Doc"><img src="assets/proof-beanday.png"></div>
+        <div id="s6Right">
+          <div class="eq">Σ 贷 <span class="num">¥678</span> ＝ Σ 借 <span class="num">¥678</span><span class="ok" id="s6Ok">✓</span></div>
+          <div class="rootChain">
+            <div class="rootChip" id="rcPrev"><span class="lab">PREV ROOT · 前根</span></div>
+            <div id="linkLine"></div>
+            <div class="rootChip" id="rcDay"><span class="lab">BEAN DAY ROOT · 今日根</span></div>
+          </div>
+          <div id="s6Cap">2026-10-26 · 6 笔旅豆流水 · 封账后才产出 root<br>根根相连 —— 改昨天，必断今天的链。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S7 多链锚定 -->
+  <section class="scene" id="s7">
+    <div class="wrap">
+      <div style="text-align:center">
+        <div class="kicker">07 · 多链锚定</div>
+        <div class="ttl" style="margin-top:14px">一套契约，<span class="hl">六种链</span>随插随用</div>
+      </div>
+      <div id="hub">
+        <div class="hubRing" id="hr1" style="inset:0"></div>
+        <div class="hubRing" id="hr2" style="inset:-34px; border-style:dashed"></div>
+        <div id="hubCore"><div class="t">可信层</div><div class="d">TRUST LAYER</div></div>
+      </div>
+      <div id="chainList">
+        <div class="chainCard"><div class="nm"><span class="ic">🏛️</span>链数根</div><div class="ds">上海数据集团 · 联盟链 · 文旅票根/一网可信</div><div class="caps"><span class="capDot">锚定</span><span class="capDot">查询</span><span class="capDot">DID</span><span class="capDot no">资产</span></div></div>
+        <div class="chainCard"><div class="nm"><span class="ic">🐜</span>蚂蚁链</div><div class="ds">蚂蚁集团 · 开放联盟链 · 存证+资产</div><div class="caps"><span class="capDot">锚定</span><span class="capDot">查询</span><span class="capDot">资产</span><span class="capDot">DID</span></div></div>
+        <div class="chainCard"><div class="nm"><span class="ic">☁️</span>腾讯云 BaaS</div><div class="ds">腾讯 · 至信链系 · 企业级托管</div><div class="caps"><span class="capDot">锚定</span><span class="capDot">查询</span><span class="capDot">资产</span><span class="capDot">DID</span></div></div>
+        <div class="chainCard"><div class="nm"><span class="ic">⛓️</span>EVM 公链</div><div class="ds">以太坊系 · L2 低成本 · 合约资产</div><div class="caps"><span class="capDot">锚定</span><span class="capDot">查询</span><span class="capDot">资产</span><span class="capDot">DID</span></div></div>
+      </div>
+      <div id="s7Foot"><code>CHAIN_PROVIDER=chaingen|antchain|tbaas|evm</code> 一行切换<br>凭据未配 → 批次停在「已打包 · 待锚定」，账实永不出错</div>
+    </div>
+  </section>
+
+  <!-- S8 包含证明 -->
+  <section class="scene" id="s8">
+    <div class="wrap">
+      <div>
+        <div class="kicker">08 · 包含证明</div>
+        <div class="ttl" style="margin-top:14px">一条证明，<span class="hl">自证在链</span></div>
+      </div>
+      <div class="row">
+        <div class="doc" id="s8Doc"><img src="assets/proof-order.png"></div>
+        <div id="ladder">
+          <div class="rung"><div class="dir" style="background:rgba(52,211,153,.14); border:1px solid rgba(52,211,153,.55); color:#6ee7b7">LEAF</div><div class="hv">idx 5 / 10 · 190f95ca…c7e9b603</div></div>
+          <div class="rung"><div class="dir L">L</div><div class="hv">6f9de8b8…0243e7d7</div></div>
+          <div class="rung"><div class="dir R">R</div><div class="hv">a15be680…951cfd1</div></div>
+          <div class="rung"><div class="dir L">L</div><div class="hv">887ffb4a…89d77f</div></div>
+          <div class="rung"><div class="dir R">R</div><div class="hv">d58f6762…af35fc · MERKLE ROOT</div></div>
+          <div id="proofOk"><span class="ok">✓</span>INCLUSION PROOF · 验证通过</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S9 验签主权 -->
+  <section class="scene" id="s9">
+    <div class="wrap">
+      <div>
+        <div class="kicker">09 · 验签主权</div>
+        <div class="ttl" style="margin-top:14px">数据主权，<span class="hl">还给游客</span></div>
+      </div>
+      <div class="row">
+        <div id="s9Left">
+          <div>
+            <div class="fieldLab">去中心化标识符 DID</div>
+            <div id="didVal" style="margin-top:12px"></div>
+          </div>
+          <div id="s9Chips">
+            <span class="chip">Ed25519 签名</span><span class="chip">JWKS 离线验签</span><span class="chip">零第三方依赖</span><span class="chip">可验证凭据 VC</span>
+          </div>
+          <div id="s9Cap" style="font-size:26px; color:#8fa8cc; line-height:1.7">游客的身份凭证由本人持有<br>换平台、换终端，<b style="color:#e8f1ff">信任跟着人走</b></div>
+        </div>
+        <div class="doc" id="s9Doc"><img src="assets/vc-verify.png"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S10 商业链条（宣传网站文案） -->
+  <section class="scene" id="s10">
+    <div class="wrap">
+      <div>
+        <div class="kicker">10 · 商业逻辑</div>
+        <div class="ttl" style="margin-top:14px">一单旅行，<span class="am">整个链条都被善待</span></div>
+      </div>
+      <div id="flowWrap">
+        <div id="flow">
+          <div class="fnode gain"><div class="ic">🎬</div><div class="nm">创作者获客</div><div class="ds">内容带回归链路</div></div>
+          <div class="fnode"><div class="ic">🧾</div><div class="nm">游客下单</div><div class="ds">人民币透明支付</div></div>
+          <div class="fnode"><div class="ic">📍</div><div class="nm">线下体验</div><div class="ds">主题游真实履约</div></div>
+          <div class="fnode"><div class="ic">🛡️</div><div class="nm">平台核验</div><div class="ds">贡献与履约可凭证</div></div>
+          <div class="fnode"><div class="ic">🔀</div><div class="nm">多方分账</div><div class="ds">商家·创作者·推广商</div></div>
+          <div class="fnode"><div class="ic">♻️</div><div class="nm">权益回流</div><div class="ds">旅豆兑换 · 复购裂变</div></div>
+        </div>
+      </div>
+      <div id="roles">
+        <div class="role"><div class="tag">🏪</div><div><div class="nm">商家</div><div class="ds">按时拿到核销与对账，订单与流量跟着生态来</div></div></div>
+        <div class="role"><div class="tag">✍️</div><div><div class="nm">创作者</div><div class="ds">按团获客拿报酬 —— 带来多少真实客源，拿多少回报</div></div></div>
+        <div class="role"><div class="tag">📣</div><div><div class="nm">推广服务商</div><div class="ds">只对真实服务与有效交易计酬 —— 不拉人头，规则透明</div></div></div>
+      </div>
+      <div id="s10Quote">这不是一场流量生意，而是<b>一把把利益分好的旅行</b>。</div>
+    </div>
+  </section>
+
+  <!-- S11 商户结算 -->
+  <section class="scene" id="s11">
+    <div class="wrap">
+      <div>
+        <div class="kicker">11 · 商户结算</div>
+        <div class="ttl" style="margin-top:14px">五项分账，<span class="hl">一分不差</span></div>
+      </div>
+      <div class="row">
+        <div id="s11Docs">
+          <div class="doc" id="s11Doc"><img src="assets/proof-settle.png"></div>
+          <div class="phone" id="s11Phone"><img src="assets/phone-merchant-settle.png"></div>
+        </div>
+        <div id="s11Right">
+          <div id="splitBar"></div>
+          <div id="splitRows"></div>
+          <div id="s11Eq">¥<span class="num">278.00</span> ＝ Σ 五项<span class="ok">✓</span></div>
+          <div id="s11Cap">2026-10-W43 · 商户 T1 可信记录 · 账实一致上链</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S12 资产发行 -->
+  <section class="scene" id="s12">
+    <div class="wrap">
+      <div style="text-align:center">
+        <div class="kicker">12 · 资产发行</div>
+        <div class="ttl" style="margin-top:14px">徽章藏品权益，<span class="hl">一键上链</span></div>
+      </div>
+      <div id="hexRow">
+        <div class="hexBadge"><div class="hex"><div class="gl"></div><div class="in"><div class="glyph">🎖️</div><div class="no">#B-0001</div></div></div><div class="nm">数字徽章</div><div class="ch">蚂蚁链</div></div>
+        <div class="hexBadge"><div class="hex"><div class="gl" style="filter:hue-rotate(60deg)"></div><div class="in"><div class="glyph">🏞️</div><div class="no">#NFT-026</div></div></div><div class="nm">旅行藏品</div><div class="ch">鲸探兼容</div></div>
+        <div class="hexBadge"><div class="hex"><div class="gl" style="filter:hue-rotate(-40deg)"></div><div class="in"><div class="glyph">🎟️</div><div class="no">#R-0139</div></div></div><div class="nm">权益凭证</div><div class="ch">EVM 公链</div></div>
+      </div>
+      <div id="s12Cap">同一资产层 · 发行能力由链适配器声明<br>发到哪条链，是<b style="color:#e8f1ff">配置</b>，不是重写</div>
+    </div>
+  </section>
+
+  <!-- S13 游乐场（宣传网站 hero） -->
+  <section class="scene" id="s13">
+    <div class="wrap">
+      <div>
+        <div class="kicker">13 · 世界就是我的游乐场</div>
+        <div class="ttl" style="margin-top:14px">旅程结束，你带走的<span class="am">比照片更多</span></div>
+      </div>
+      <div class="siteCard" id="s13Card">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="url">向往的自由 · 主题旅行 × Web3 权益（真实页面）</span></div>
+        <img src="assets/site-hero.jpg">
+      </div>
+      <div id="s13Lines">
+        <div class="goLine"><span class="pin">›</span>去朱家角，破一桩江南谜案</div>
+        <div class="goLine"><span class="pin">›</span>去乌镇，赴一场姐姐夜宴</div>
+        <div class="goLine"><span class="pin">›</span>去崇明篝火边，认识新朋友</div>
+      </div>
+      <div id="s13Tag">八大主题产品线 · <b>Travel ID 一号通行</b> · 行程凭证上链可核验 · 正规主体运营</div>
+    </div>
+  </section>
+
+  <!-- S14 收尾 -->
+  <section class="scene" id="s14">
+    <div class="wrap">
+      <div class="kicker" id="s14Kick">WANDERLUST · 向往的自由</div>
+      <div id="s14Title">世界，就是我的<br><span class="am">游乐场</span></div>
+      <div id="s14Sub">我们全力构建一个文旅的新生态</div>
+      <div id="s14Chips">
+        <span class="chip">八大主题产品线</span><span class="chip">Travel ID 一号通行</span><span class="chip">行程凭证上链可核验</span><span class="chip">正规主体运营</span>
+      </div>
+      <div id="s14Foot">本片全部哈希 / 金额 / 截图取自真实运行库 · 2026-10-27<br>剩余一步：配置链凭据，锚定即上线</div>
+    </div>
+  </section>
+
+  <div id="ticker"><div id="tickerIn"></div></div>
+</div>
+
+<script>
+/* ── 真实数据（gen-data.mjs 从运行库抓取，画面零手写数字）── */
+const D = {
+  ordNo: 'WL202610262773902485',
+  payloadHash: '00bee831a6abf816d2395e9417697cac58308eee890c4f5afa260ab6bfbbb2c2',
+  root: 'd58f6762dde5a1ebba5dd0bc0954fbad829756006ea6587a5391cbcfeeaf35fc',
+  beanRoot: 'b50190265f8d8fec962d355964295283964efd3b8e2e2a9b6f018d999dbe82a4',
+  leaves: ['190f95ca…','6f9de8b8…','a15be680…','887ffb4a…','c2317dda…','5e90ab12…','77d40c31…','0af9e655…'],
+  did: 'did:cn:wl:u47groy2qa3juz62pylyy4cj5m',
+};
+const TICK = 'd58f6762dde5a1ebba5dd0bc0954fbad829756006ea6587a5391cbcfeeaf35fc  b50190265f8d8fec962d355964295283964efd3b8e2e2a9b6f018d999dbe82a4  TW-8849  did:cn:wl:u47groy2qa3juz62pylyy4cj5m  ';
+
+const $ = (s) => document.querySelector(s);
+const clamp = (x,a,b) => Math.min(b, Math.max(a, x));
+const seg = (x,a,b) => clamp((x-a)/(b-a), 0, 1);
+const ease = (x) => 1 - Math.pow(1 - x, 3);
+function type(el, str, p){ el.textContent = str.slice(0, Math.round(str.length * clamp(p,0,1))); }
+
+/* 星点 + hash 碎片 */
+const stars = $('#stars');
+for (let i=0;i<42;i++){
+  const s = document.createElement('div'); s.className='star';
+  const sz = 1+Math.random()*2.4;
+  s.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*1080}px;top:${Math.random()*1920}px;opacity:${.15+Math.random()*.5}`;
+  stars.appendChild(s);
+}
+for (let i=0;i<16;i++){
+  const f = document.createElement('div'); f.className='frag';
+  f.textContent = ['0x'+(i*2654435761%0xffffff).toString(16).toUpperCase().padStart(6,'0'),'MERKLE','SHA-256','DID','ED25519','ROOT','PROOF','ANCHOR'][i%8];
+  f.dataset.base = 120 + (i*137)%1660;
+  f.dataset.spd = (.55 + (i%5)*.18).toFixed(2);
+  $('#s0').appendChild(f);
+}
+const tickerIn = $('#tickerIn');
+for (let i=0;i<4;i++) tickerIn.textContent += TICK;
+
+/* S5 默克尔树 DOM（确定性） */
+const tree = $('#tree');
+const ROWS = [8,4,2,1];
+const rowEls = [];
+ROWS.forEach((cnt, ri) => {
+  const row = document.createElement('div'); row.className='trow';
+  row.style.top = (56 + ri*238) + 'px';
+  for (let i=0;i<cnt;i++){
+    const n = document.createElement('div'); n.className='node';
+    if (ri===3) n.classList.add('root');
+    n.style.width = ri===3 ? '560px' : (ri===2 ? '340px' : (ri===1 ? '205px' : '106px'));
+    if (ri===3) n.textContent = D.root.slice(0,28)+'…';
+    else if (ri===0) n.textContent = D.leaves[i];
+    else n.textContent = ['a1c4f092…','e77b30d1…','9d2f7c48…','41b0e6cc…'][(ri===1?i:i*2) % 4 + (ri===2?i:0)];
+    row.appendChild(n);
+  }
+  tree.appendChild(row); rowEls.push(row);
+});
+$('#rcPrev').append(document.createTextNode(D.root.slice(0,20)+'…'));
+$('#rcDay').append(document.createTextNode(D.beanRoot.slice(0,20)+'…'));
+$('#hashBox').textContent = D.root;
+
+/* S11 分账条（真实 cents） */
+const splitBar = $('#splitBar'), splitRows = $('#splitRows');
+const SPLITS = [['履约成本','161.24','#22d3ee'],['平台服务','33.36','#8b5cf6'],['推广分佣','12.90','#f472b6'],['旅豆预算','13.90','#fbbf24'],['留存毛利','56.60','#34d399']];
+SPLITS.forEach(([nm, amt, col]) => {
+  const cents = Math.round(parseFloat(amt)*100);
+  const d = document.createElement('div');
+  d.style.cssText = `background:${col}; width:${(cents/27800*100).toFixed(2)}%`;
+  splitBar.appendChild(d);
+  const r = document.createElement('div'); r.className='sRow';
+  r.innerHTML = `<span class="sw" style="background:${col}"></span><span class="nm">${nm}</span><span class="amt">¥${amt}</span>`;
+  splitRows.appendChild(r);
+});
+const bars = [...splitBar.children];
+
+$('#s0Title').innerHTML = '向往的自由'.split('').map(c=>`<span>${c}</span>`).join('');
+const s0Chars = [...$('#s0Title').children];
+
+/* ══════════ 场景时间轴 V4 · 15 幕 · 53 秒（与 make_voice.py LINES 对齐）══════════ */
+const TOTAL = 53;
+const SCENES = [
+  { id:'#s0',  a:0.0,  b:3.4,  fn:s0 },
+  { id:'#s1',  a:3.4,  b:6.8,  fn:s1 },
+  { id:'#s2',  a:6.8,  b:10.0, fn:s2 },
+  { id:'#s3',  a:10.0, b:13.2, fn:s3 },
+  { id:'#s4',  a:13.2, b:16.4, fn:s4 },
+  { id:'#s5',  a:16.4, b:19.6, fn:s5 },
+  { id:'#s6',  a:19.6, b:22.8, fn:s6 },
+  { id:'#s7',  a:22.8, b:27.0, fn:s7 },
+  { id:'#s8',  a:27.0, b:30.1, fn:s8 },
+  { id:'#s9',  a:30.1, b:33.3, fn:s9 },
+  { id:'#s10', a:33.3, b:36.6, fn:s10 },
+  { id:'#s11', a:36.6, b:40.2, fn:s11 },
+  { id:'#s12', a:40.2, b:43.4, fn:s12 },
+  { id:'#s13', a:43.4, b:47.0, fn:s13 },
+  { id:'#s14', a:47.0, b:53.0, fn:s14 },
+];
+SCENES.forEach(s => s.el = $(s.id));
+const sceneEls = SCENES.map(s => s.el);
+let lastIdx = -1;
+
+function s0(t){
+  s0Chars.forEach((c,i)=>{ const p = ease(seg(t,.25+i*.11,.95+i*.11)); c.style.opacity=p; c.style.transform=`translateY(${(1-p)*46}px)`; });
+  $('#s0Kicker').style.opacity = seg(t,.08,.5);
+  $('#s0Sub').style.opacity = seg(t,1.0,1.6);
+  const st = ease(seg(t,1.9,2.5)); $('#s0Stamp').style.opacity=st; $('#s0Stamp').style.transform=`scale(${.7+.3*st})`;
+  const rot = t*46;
+  $('#ring1').style.transform = `rotate(${rot}deg)`;
+  $('#ring2').style.transform = `rotate(${-rot*.7}deg)`;
+  $('#orbitTxt').style.transform = `rotate(${rot*1.1}deg)`;
+  document.querySelectorAll('#s0 .frag').forEach((f,i)=>{
+    const y = ((parseFloat(f.dataset.base) - t*110*parseFloat(f.dataset.spd)) % 1920 + 1920) % 1920;
+    f.style.top = y + 'px';
+    f.style.left = (60 + (i*67)%980) + 'px';
+  });
+}
+function s1(t){
+  $('#fakeCard').style.opacity = seg(t,3.7,4.1);
+  $('#hashCard').style.opacity = seg(t,4.2,4.6);
+  const strike = ease(seg(t,4.7,5.6));
+  $('#fakeStrike').style.transform = `scaleX(${strike}) rotate(-6deg)`;
+  $('#hashCard').style.boxShadow = `0 0 ${30+16*Math.abs(Math.sin(t*5))}px rgba(34,211,238,.2)`;
+}
+function s2(t){
+  const c = ease(seg(t,7.1,7.7));
+  const card = $('#s2Card'); card.style.opacity=c; card.style.transform=`rotate(-1.5deg) translateY(${(1-c)*40}px)`;
+  [...$('#s2Tags').children].forEach((el,i)=>{
+    const p = seg(t, 7.9+i*.07, 8.3+i*.07);
+    el.style.opacity=p; el.style.transform=`translateY(${(1-p)*20}px)`;
+  });
+}
+function s3(t){
+  const c = ease(seg(t,10.3,10.9));
+  const card = $('#tidCard'); card.style.opacity=c; card.style.transform=`translateY(${(1-c)*40}px)`;
+  type($('#tidNoVal'), 'TW-8849 ••••••', seg(t,10.5,11.2));
+  [...$('#tidTiles').children].forEach((el,i)=>{
+    const p = ease(seg(t, 11.0+i*.16, 11.5+i*.16));
+    el.style.opacity=p; el.style.transform=`translateY(${(1-p)*26}px)`;
+  });
+  [...$('#tidClaims').children].forEach((el,i)=>{
+    el.style.opacity = seg(t, 11.8+i*.3, 12.3+i*.3);
+  });
+}
+function s4(t){
+  type($('#ordNo'), D.ordNo, seg(t,13.7,14.6));
+  type($('#ordHash'), D.payloadHash, seg(t,14.5,16.1));
+  $('#s4Phone').style.transform = `rotate(${3 - 1.2*Math.sin((t-13.2)*1.6)}deg)`;
+}
+function s5(t){
+  rowEls.forEach((row,ri)=>{
+    [...row.children].forEach((n,i)=>{
+      const p = ease(seg(t, 16.8+ri*.55+i*.05, 17.3+ri*.55+i*.05));
+      n.style.opacity=p; n.style.transform=`scale(${.6+.4*p})`;
+    });
+  });
+  if (t>18.7) rowEls[3].children[0].style.boxShadow = `0 0 ${34+22*Math.abs(Math.sin((t-18.7)*6))}px rgba(139,92,246,.5)`;
+}
+function s6(t){
+  $('#s6Doc').style.opacity = seg(t,19.9,20.4);
+  const ok = seg(t,20.5,20.9); $('#s6Ok').style.opacity=ok; $('#s6Ok').style.transform=`scale(${.4+.6*ease(ok)})`;
+  $('#rcPrev').style.opacity = seg(t,20.9,21.3);
+  $('#linkLine').style.transform = `scaleX(${ease(seg(t,21.1,22.1))})`;
+  $('#rcDay').style.opacity = seg(t,21.7,22.1);
+  $('#s6Cap').style.opacity = seg(t,22.2,22.7);
+}
+function s7(t){
+  const h = ease(seg(t,23.0,23.5));
+  $('#hub').style.opacity=h; $('#hub').style.transform=`scale(${.6+.4*h})`;
+  $('#hr2').style.transform=`scale(${1+.12*Math.abs(Math.sin((t-23.5)*4))})`;
+  [...$('#chainList').children].forEach((c,i)=>{
+    const p = ease(seg(t, 23.4+i*.5, 24.0+i*.5));
+    c.style.opacity=p; c.style.transform=`translateY(${(1-p)*40}px)`;
+  });
+  $('#s7Foot').style.opacity = seg(t,26.0,26.6);
+}
+function s8(t){
+  $('#s8Doc').style.opacity = seg(t,27.3,27.8);
+  [...$('#ladder').children].forEach((r,i)=>{
+    const p = ease(seg(t, 27.6+i*.4, 28.1+i*.4));
+    r.style.opacity=p; r.style.transform=`translateX(${(1-p)*46}px)`;
+  });
+  const ok = ease(seg(t,29.4,29.9));
+  const okEl = $('#proofOk'); okEl.style.opacity=ok; okEl.style.transform=`scale(${.6+.4*ok})`;
+}
+function s9(t){
+  $('#s9Doc').style.opacity = seg(t,30.4,30.9);
+  type($('#didVal'), D.did, seg(t,30.5,31.6));
+  [...$('#s9Chips').children].forEach((c,i)=>{
+    const p = seg(t,31.7+i*.18,32.1+i*.18);
+    c.style.opacity=p; c.style.transform=`translateY(${(1-p)*24}px)`;
+  });
+  $('#s9Cap').style.opacity = seg(t,32.5,33.1);
+}
+function s10(t){
+  const w = ease(seg(t,33.6,34.1));
+  const fw = $('#flowWrap'); fw.style.opacity=w; fw.style.transform=`translateY(${(1-w)*36}px)`;
+  [...document.querySelectorAll('.fnode')].forEach((n,i)=>{
+    const p = ease(seg(t, 33.9+i*.22, 34.4+i*.22));
+    n.style.opacity=p; n.style.transform=`scale(${.7+.3*p})`;
+  });
+  [...$('#roles').children].forEach((r,i)=>{
+    const p = ease(seg(t, 35.0+i*.3, 35.5+i*.3));
+    r.style.opacity=p; r.style.transform=`translateX(${(1-p)*36}px)`;
+  });
+  $('#s10Quote').style.opacity = seg(t,36.0,36.5);
+}
+function s11(t){
+  $('#s11Doc').style.opacity = seg(t,36.9,37.4);
+  $('#s11Phone').style.opacity = seg(t,37.1,37.6);
+  bars.forEach((b,i)=>{ b.style.transform = `scaleX(${ease(seg(t,37.9+i*.2,38.8+i*.2))})`; });
+  [...$('#splitRows').children].forEach((r,i)=>{ r.style.opacity = seg(t,38.3+i*.2,38.8+i*.2); });
+  $('#s11Eq').style.opacity = seg(t,39.5,40.0);
+  $('#s11Cap').style.opacity = seg(t,39.8,40.2);
+}
+function s12(t){
+  [...$('#hexRow').children].forEach((h,i)=>{
+    const p = ease(seg(t, 40.7+i*.45, 41.4+i*.45));
+    h.style.opacity=p; h.style.transform=`translateY(${(1-p)*60}px)`;
+  });
+  $('#s12Cap').style.opacity = seg(t,42.5,43.2);
+}
+function s13(t){
+  const c = ease(seg(t,43.7,44.3));
+  const card = $('#s13Card'); card.style.opacity=c; card.style.transform=`rotate(1.5deg) translateY(${(1-c)*40}px)`;
+  [...$('#s13Lines').children].forEach((l,i)=>{
+    const p = ease(seg(t, 44.6+i*.35, 45.1+i*.35));
+    l.style.opacity=p; l.style.transform=`translateX(${(1-p)*36}px)`;
+  });
+  $('#s13Tag').style.opacity = seg(t,46.0,46.7);
+}
+function s14(t){
+  $('#s14Kick').style.opacity = seg(t,47.2,47.7);
+  const p1 = ease(seg(t,47.4,48.4));
+  const ti = $('#s14Title'); ti.style.opacity=p1; ti.style.transform=`translateY(${(1-p1)*40}px)`;
+  const p2 = ease(seg(t,48.7,49.6));
+  const sb = $('#s14Sub'); sb.style.opacity=p2; sb.style.transform=`translateY(${(1-p2)*30}px)`;
+  $('#s14Chips').style.opacity = seg(t,50.2,50.9);
+  $('#s14Foot').style.opacity = seg(t,51.2,51.9);
+}
+
+/* ══════════ 总入口：seek(t)（同步、纯函数）══════════ */
+window.seek = function(t){
+  t = clamp(t, 0, TOTAL);
+  let idx = -1;
+  for (let i=0;i<SCENES.length;i++){ if (t >= SCENES[i].a && t < SCENES[i].b){ idx = i; break; } }
+  if (idx < 0) idx = t >= SCENES[SCENES.length-1].b ? SCENES.length-1 : 0;
+  if (idx !== lastIdx){
+    sceneEls.forEach((el,i)=>el.classList.toggle('on', i===idx));
+    lastIdx = idx;
+  }
+  const s = SCENES[idx];
+  s.fn(t);
+  $('#grid').style.backgroundPosition = `0 ${(-t*26)%72}px, 0 0`;
+  $('#progress').style.width = (t/TOTAL*1080) + 'px';
+  const half = tickerIn.scrollWidth/2 || 1;
+  tickerIn.style.transform = `translateX(${-(t*90)%half}px)`;
+  const fade = Math.min(seg(t, s.a, s.a+.28), idx===SCENES.length-1 ? 1 : 1 - seg(t, s.b-.22, s.b));
+  s.el.style.opacity = clamp(fade,0,1);
+};
+window.__ready = Promise.resolve(1);
+</script>
+</body>
+</html>

@@ -33,10 +33,50 @@ npm run e2e     # node test/api-e2e.mjs → 38 PASS
 代码不隔离（SaaS 化前提）；权限=行级 scope；数据库默认共享、大客户 Docker 独立部署（收费档位）。
 
 ## Web3 打通（双层口径的产品化落点）
-- 用户侧：GET /c/identity 数字身份（凭证+徽章+每单存证流水）→ 小程序 A「我的数字身份」页
-- 后台：治理区「存证中心」（批次/Merkle 根/单号验证）
-- 对外：GET /open/verify/order/{单号} 公开存证证明（无登录只读）——给景区/政府/投资人的「一网可信」窗口
-- 链：Noop 阶段哈希流水实时记录；P1 换链数根适配器即真实上链，接口不变
+- 用户侧：GET /c/identity 数字身份（凭证+徽章+每单可信记录）→ 小程序 A「我的数字身份」页；文案一律取 GET /c/lexicon（T1 词表），**页面不硬写任何链上字眼**
+- 后台：治理区「存证中心」——批次表（seq / Merkle 根 / **前根 prev_root** / 叶数 / 尝试次数 / 账本日终标记）、单号验证（返回 **inclusion proof** 并本地重算）、**旅豆账本日终封存**表、四个任务按钮（打包 / 补锚 / 封存昨日账本 / 六条不变式对账）
+- 对外：GET /open/verify/order/{单号} 公开存证证明（含 leafPath，可离线重算）；GET /open/verify/bean-day/{日期} 账本封存证明 —— 给景区/政府/投资人的「一网可信」窗口
+- 链：`src/infra/chain.mjs` 适配器。未配置 `CHAIN_ENDPOINT/CHAIN_ACCOUNT/CHAIN_KEY` 时为 NOOP，批次停在「已打包·待锚定」，**绝不产生假交易号**；配置后补锚即真实上链，业务代码零改动
+- 事件覆盖 7 类：order / pass_issue / pass_verify / bean_grant / bean_deduct / refund / settlement（均与业务同事务写入，`biz_ref` 取业务唯一键）
+- 定时任务：小时级打包 + 补锚；03:10 旅豆日终封存（借贷恒等才封）；04:00 六条不变式对账
+- 迁移：`node scripts/migrate.mjs`（V18 起）；完整性断言：`node test/web3-integrity.mjs`（9 组，NOOP 期 21 PASS）
+
+### 存证报告与公开复核（对外交付物）
+- `GET /open/report/order/{单号}` → **一页 A4 存证证明 PDF**（证明编号 / 指纹 / 逐层证明路径 / 核验步骤 / 二维码）
+- `GET /open/report/bean-day/{日期}` → 旅豆账本封存证明 PDF（Σ贷 Σ借 / 借贷恒等 / 日终根）
+- `GET /verify?no={单号}` 或 `?date={日期}` → **公开复核页**：在访问者浏览器本地重算 sha256，逐层显示中间值，末值等于 Merkle 根才判通过。无登录、不上传数据
+- 版面自检：`node scripts/preview-report.mjs order|bean` → 出 PNG/PDF 到 `/tmp`
+
+### 数字身份（VC-JWT）与商户可信记录
+- `GET /c/vc?scope=travel|basic` → 签发数字身份凭证（VC-JWT，Ed25519 签名；**只含旅行事实，不含 PII**）
+- `POST /open/vc/verify` → 验签（签名/过期/吊销/封号全查）；`GET /open/vc/issuer` → JWKS 公钥（**第三方可离线验签**）
+- `/vc` → 数字身份验签台（景区/合作城市用；后台 WEB3 组「数字身份」页可代签发与吊销）
+- `GET /m/report/settlement/{id}` → 商户《结算可信记录》PDF（**T1 词表：不出现存证/链/Merkle**，限店长及以上）
+- `GET /open/verify/settlement/{id}` → 结算公开复核（**只回校验码，绝不回金额/商户名/订单明细**）
+- `/verify?mode=t1` → 同一个复核页自动切 T1 词表（页脚/提示/章节名全切）
+- 自测：`node scripts/test-vc.mjs`（23 断言）· `node scripts/test-t1-settlement.mjs`（7 断言）
+
+### 多链（一套契约 · N 个适配器 · 一个开关）
+- 适配器：`chaingen`（链数根）· `tbaas`（腾讯云）· `antchain`（蚂蚁链/鲸探）· `evm`（Polygon/Base）· `noop` · `mock`（仅非生产）
+- 切换：`CHAIN_PROVIDER=chaingen|tbaas|antchain|evm|noop`（留空按已有凭据自动推断）；非法值直接抛错，不静默降级
+- 能力矩阵：联盟链只做存证，公链才发资产；**"按根反查"不支持就如实标 —**
+- 资产发行（数字徽章/权益 NFT/藏品）：渠道闸门（微信双层硬禁）+ 能力闸门（provider 不支持即报错）
+- 后台「链与资产」页：能力矩阵 / 发行 / 待发行 / 一键重试；对外 `GET /open/chain/capabilities`
+- 自测：`node scripts/test-multi-chain.mjs`（21 断言）
+
+### 对外可交付物
+- `GET /open/onepager` → **可信能力一页纸**（A4 PDF；`?fmt=png` 出图）：四张能力卡 + 实时规模 + 多链矩阵 + 主动边界声明 + 三个可扫码验证入口
+- 版面自检直出中文名文件：`node scripts/preview-report.mjs order|bean|settle` → `diag-shots/*.png|pdf`
+
+### 上链对接（只剩这一步）
+```bash
+node scripts/chain-ready.mjs            # 检查三段 env + 队列 + 网关可达性
+node scripts/chain-ready.mjs --probe    # 试锚一枚测试根（产生 1 笔真实交易）
+node scripts/chain-ready.mjs --anchor   # 批量补锚「已打包·待锚定」批次
+node scripts/test-chain-flow.mjs        # 无需凭据：本地假链跑通全链路（12 断言）
+node scripts/check-admin-attest.mjs     # 后台 6 个 WEB3 页面真渲染检查（23 断言）
+```
+env：`CHAIN_ENDPOINT` / `CHAIN_ACCOUNT` / `CHAIN_KEY`（+ `PUBLIC_BASE` 用于报告二维码）。三项齐备即 `real`；缺任一项为 NOOP，批次停在「已打包·待锚定」，**绝不产生假交易号**。
 
 ## 管理平台工作区（一个平台 · 五个工作区，非新端）
 

@@ -31,7 +31,7 @@ const NAV = [
   ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
   ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['conflicts', '离线冲突', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
   ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
-  ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分资产发行', 'budgets'], ['badges', '勋章资产发行', 'flag'], ['wallets', '用户数字钱包', 'orders'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
+  ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['chainassets', '链与资产', 'sys'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
 ]
 
 async function api(method, path, body) {
@@ -120,7 +120,7 @@ function boot() {
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
-    return `<details class="nav-section" ${['经营','交易','生态'].includes(g) ? 'open' : ''}><summary class="nav-group">${g === 'WEB3' ? '数字资产与扩展' : g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+    return `<details class="nav-section" ${['经营','交易','生态'].includes(g) ? 'open' : ''}><summary class="nav-group">${g === 'WEB3' ? '可信与权益' : g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   go(allowed ? allowed[0] : 'dash')
@@ -131,9 +131,9 @@ function go(page) {
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
     budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分资产发行', badges: '勋章资产发行', wallets: '用户数字钱包', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突' }[page]
+    web3dash: '链上总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突' }[page]
   $('#crumb').textContent = name
-  const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)
+  const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)
   Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })
 }
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
@@ -622,7 +622,7 @@ async function system() {
         <button class="btn ghost sm" onclick="runJob('close-timeout')">关单</button>
         <button class="btn ghost sm" onclick="runJob('commission-due')">佣金到期</button>
         <button class="btn ghost sm" onclick="runJob('complete-due')">完成到期单</button>
-        <button class="btn ghost sm" onclick="runJob('attest-pack')">存证打包</button>
+        <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">存证打包</button>
         <button class="btn ghost sm" onclick="runJob('bean-expire')">豆过期</button>
       </div></div>
     <div class="row" style="margin-top:4px"><span class="muted">迁移脚本：${(o.migrations || []).map((m) => '<code>' + esc(m) + '</code>').join(' ')}</span></div>
@@ -640,8 +640,14 @@ async function system() {
     <div id="logout2" class="muted">一次输入同时检索订单状态机事件、后台审计与核销流水</div>
   </div>`
 }
-async function runJob(name) {
-  try { const r = await api('POST', '/admin/system/jobs/' + name + '/run', {}); toast('已执行，影响 ' + r.affected + ' 条'); system() } catch (e) { toast(e.message, true) }
+async function runJob(name, thenPage) {
+  try {
+    const r = await api('POST', '/admin/system/jobs/' + name + '/run', {})
+    toast('已执行，影响 ' + r.affected + ' 条')
+    // 跑完停在原地更符合直觉：存证中心点的按钮，回到存证中心而不是跳到运维控制台
+    const back = thenPage || 'system'
+    if (typeof window[back] === 'function') window[back](); else system()
+  } catch (e) { toast(e.message, true) }
 }
 async function searchLogs() {
   const kw = document.getElementById('logkw').value.trim()
@@ -750,32 +756,59 @@ async function verdict(kind, id, pass) {
 async function attest() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/attest/center')
-  const STMAP = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包</span>', '<span class="pill ok">已上链</span>', '<span class="pill s70">重试</span>']
+  // 语义分档（NOOP 期绝不显示"已上链"）：1 已打包·待锚定 / 2 已锚定 / 3 重试 / 4 人工
+  const STMAP = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>',
+    '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定失败重试</span>', '<span class="pill s70">人工处理</span>']
+  const real = (d.chain && d.chain.mode) === 'real'
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       ${(d.queue || []).map((qq) => `<div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
-        <div><div class="l">${esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待锚</div>
-        <div class="s">累计 ${Number(qq.total)} · 已锚 ${Number(qq.anchored)}</div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
+        <div><div class="l">${esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
+        <div class="s">已打包 ${Number(qq.packed || 0)} · 已锚定 ${Number(qq.anchored)} · 累计 ${Number(qq.total)}</div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">① 打包（出 Merkle 根）</button>
+      <button class="btn ghost sm" onclick="runJob('attest-anchor','attest')">② 补锚（按 seq 升序）</button>
+      <button class="btn ghost sm" onclick="runJob('bean-day-close','attest')">③ 封存昨日旅豆账本</button>
+      <button class="btn ghost sm" onclick="runJob('attest-reconcile','attest')">④ 六条不变式对账</button>
+      <span class="muted">${real ? '已接入链数根：补锚将真实上链' : 'NOOP：①后停留在「已打包·待锚定」，②不会产生假交易号'}</span>
     </div>
     <div class="row" style="margin-top:6px"><input id="vref" placeholder="输入订单号验证（如 WL20261024…）" style="width:320px">
       <button class="btn primary sm" onclick="verifyAttest()">验证</button>
-      <span class="muted">公开验证口（无登录只读）：/open/verify/order/{单号} —— 给景区 / 政府 / 投资人的「一网可信」窗口</span></div>
+      <span class="muted">公开验证口（无登录只读）：/open/verify/order/{单号} · /open/verify/bean-day/{日期} —— 给景区 / 政府 / 投资人的「一网可信」窗口</span></div>
     <div id="vout"></div>
   </div>
   <div class="card">
-    <div class="card-head"><h3>锚定批次（Merkle 根）</h3></div>
-    ${(d.batches || []).length ? `<table><thead><tr><th>批次</th><th>业务日</th><th>Merkle 根</th><th>链上编号</th><th>状态</th></tr></thead><tbody>
-      ${d.batches.map((b) => `<tr><td>#${b.id}</td><td>${esc(String(b.biz_date).slice(0, 10))}</td>
-        <td><code>${esc(String(b.merkle_root).slice(0, 24))}…</code></td><td class="td-sub">${esc(b.chain_tx_ref || '—')}</td>
-        <td>${STMAP[b.status]}</td></tr>`).join('')}</tbody></table>` : emptyBox('尚无锚定批次（Noop 阶段队列实时记哈希，接链数根后按小时出批次）')}
+    <div class="card-head"><h3>存证批次（Merkle 根 · 链式前根）</h3><span class="muted">prev_root 指向上批根：改任一批必须改其后所有批次，而最新根在链上</span></div>
+    ${(d.batches || []).length ? `<table><thead><tr><th>seq</th><th>业务日</th><th>Merkle 根</th><th>前根</th><th>叶数</th><th>尝试</th><th>链上编号</th><th>状态</th></tr></thead><tbody>
+      ${d.batches.map((b) => `<tr><td class="num">#${b.seq}${Number(b.is_day_close) ? ' <span class="pill off">账本日终</span>' : ''}</td>
+        <td>${esc(String(b.biz_date).slice(0, 10))}</td>
+        <td><code>${esc(String(b.merkle_root).slice(0, 20))}…</code></td>
+        <td class="td-sub">${b.prev_root ? '<code>' + esc(String(b.prev_root).slice(0, 12)) + '…</code>' : '链起点'}</td>
+        <td class="num">${Number(b.leaf_count)}</td>
+        <td class="td-sub">${Number(b.attempt) || 0}${b.last_err ? '<br><span class="pill s70">' + esc(String(b.last_err).slice(0, 24)) + '</span>' : ''}</td>
+        <td class="td-sub">${b.chain_tx_ref ? esc(b.chain_tx_ref) : '—'}</td>
+        <td>${STMAP[b.status] || ''}</td></tr>`).join('')}</tbody></table>` : emptyBox('尚无批次：点上方「① 打包」即可出根')}
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>旅豆账本日终封存</h3><span class="muted">借贷恒等（Σ借=Σ贷）才允许封存 —— 「严禁超发」的唯一外部证明</span></div>
+    ${(d.dayRoots || []).length ? `<table><thead><tr><th>业务日</th><th>叶数</th><th>Σ贷（发放）</th><th>Σ借（消耗）</th><th>恒等</th><th>Merkle 根</th><th>对外</th></tr></thead><tbody>
+      ${d.dayRoots.map((r) => `<tr><td class="num">${esc(String(r.biz_date).slice(0, 10))}</td><td class="num">${Number(r.leaf_count)}</td>
+        <td class="num">${Number(r.credit_sum)}</td><td class="num">${Number(r.debit_sum)}</td>
+        <td>${Number(r.debit_sum) === Number(r.credit_sum) ? '<span class="pill ok">恒等</span>' : '<span class="pill s70">不平</span>'}</td>
+        <td><code>${esc(String(r.merkle_root).slice(0, 20))}…</code></td>
+        <td><a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/bean-day/${String(r.biz_date).slice(0, 10)}">证明 PDF</a>
+            <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${String(r.biz_date).slice(0, 10)}">公开复核</a></td></tr>`).join('')}</tbody></table>` : emptyBox('尚无封存记录：点上方「③ 封存昨日旅豆账本」')}
   </div>
   <div class="card">
     <div class="card-head"><h3>最近事件</h3></div>
-    <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>Merkle 根</th><th>时间</th></tr></thead><tbody>
+    <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>Merkle 根</th><th>时间</th></tr></thead><tbody>
     ${(d.recent || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
-      <td>${STMAP[e.status]}</td><td class="td-sub">${e.merkle_root ? '<code>' + esc(String(e.merkle_root).slice(0, 16)) + '…</code>' : '—'}</td>
+      <td class="num">v${Number(e.version_no || 1)}</td>
+      <td>${STMAP[e.status]}</td><td class="td-sub">${e.seq ? '#' + e.seq : '—'}</td>
+      <td class="td-sub">${e.merkle_root ? '<code>' + esc(String(e.merkle_root).slice(0, 16)) + '…</code>' : '—'}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('')}
     </tbody></table>
   </div>`
@@ -937,9 +970,9 @@ const TERM_MAP = [
   ['旅豆', '向往自由链积分（Bean Token）', '小程序端一律叫「旅豆」；后台台账/存证语境可用链上口径'],
   ['入园凭证', '链上权益凭证（Pass NFT 语义）', '凭证编号即链上资产编号；小程序端禁提 NFT'],
   ['存证中心', '上链存证（Merkle Anchor）', '对外讲「一网可信」；后台展示 Merkle 根与锚定批次'],
-  ['积分资产发行', 'Token Issuance（按预算批次）', '发行即 mint 语义，但受 global_cap 哨兵约束，严禁超发'],
+  ['积分发行台账', '按预算批次发行', '发行即 mint 语义，但受 global_cap 哨兵约束，严禁超发'],
   ['勋章', '链上数字勋章（Badge SBT 语义）', '不可转让（SBT）；小程序端叫「勋章」'],
-  ['用户数字钱包', '用户权益账户（Wallet 视图）', '仅后台可见链词；小程序端无钱包概念'],
+  ['权益账户', '用户旅豆账户 + 权益视图', '仅后台可见链词；小程序端无「钱包/资产」概念'],
   ['共创分润', '链上分润凭证（Revenue Share）', '分润台账每期上链锚定；小程序端不出现'],
   ['推广服务商', '分销合约节点（Affiliate Node）', 'D2 定稿禁止层级计酬；链词仅内部运营语境'],
 ]
@@ -1012,6 +1045,188 @@ async function conflictResolve(id, action) {
 
 
 /* ============ WEB3 工作区 ============ */
+/* ============ 数字身份（VC-JWT）============ */
+async function vcPage() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  const d = await api('GET', '/admin/web3/vc')
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>数字身份 · 可携出旅行凭证</h2><span class="muted">${esc(d.policy)}</span></div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🪪</div><div><div class="l">已签发</div><div class="v" style="font-size:18px">${d.total}</div><div class="s">持有人 ${d.holders}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">有效</div><div class="v" style="font-size:18px">${d.active}</div><div class="s">未过期未吊销</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdecea">⛔</div><div><div class="l">已吊销</div><div class="v" style="font-size:18px">${d.revoked}</div><div class="s">吊销即时生效</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdf3e0">🔑</div><div><div class="l">公钥指纹</div><div class="v mono" style="font-size:12px">${esc(String(d.keyFingerprint).slice(0, 16))}…</div><div class="s">Ed25519</div></div></div>
+    </div>
+    <div class="row" style="margin-top:10px"><span class="muted">issuer</span><code>${esc(d.issuer)}</code>
+      <span class="muted" style="margin-left:12px">kid</span><code>${esc(d.kid)}</code>
+      <a class="btn ghost sm" style="margin-left:auto" target="_blank" rel="noopener" href="/vc">打开验签台</a>
+      <a class="btn ghost sm" target="_blank" rel="noopener" href="/open/vc/issuer">公钥 JWKS</a></div>
+    <div class="muted" style="margin-top:8px">凭证只含旅行事实（等级/成长区间/入会年月/行程数/城市数/徽章名），姓名手机号身份证订单号金额<strong>从不下发</strong>；第三方可凭公钥离线验签。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>代用户签发（演示 / 客服）</h3><span class="muted">签完可直接复制凭证去验签台验证</span></div>
+    <div class="row">
+      <input id="vcUid" type="number" placeholder="用户 id" style="width:120px">
+      <select id="vcScope"><option value="travel">travel（含行程/城市/徽章）</option><option value="basic">basic（仅等级/入会）</option></select>
+      <button class="btn primary sm" onclick="issueVc()">签发</button>
+      <button class="btn ghost sm" onclick="openVerifyVc()">用当前凭证打开验签台</button>
+    </div>
+    <div id="vcOut"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>最近签发</h3><span class="muted">吊销后验签立即失败</span></div>
+    ${(d.recent || []).length ? `<table><thead><tr><th>#</th><th>用户</th><th>DID</th><th>范围</th><th>签发</th><th>到期</th><th>状态</th><th>操作</th></tr></thead><tbody>
+      ${d.recent.map((v) => `<tr><td class="num">${v.id}</td>
+        <td class="td-main">${esc(v.nickname || '用户' + v.user_id)}</td>
+        <td class="td-sub mono">${esc(String(v.did).slice(0, 18))}…</td>
+        <td><span class="pill off">${esc(v.scope)}</span></td>
+        <td class="td-sub">${esc(String(v.issued_at).slice(5, 19))}</td>
+        <td class="td-sub">${esc(String(v.expires_at).slice(5, 19))}</td>
+        <td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td>
+        <td>${v.revoked_at ? '—' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
+    </tbody></table>` : emptyBox('尚未签发过凭证：上方选一个用户签发即可')}
+  </div>`
+  window.__vcLast = ''
+}
+
+async function issueVc() {
+  const userId = Number(document.getElementById('vcUid').value)
+  const scope = document.getElementById('vcScope').value
+  if (!userId) return toast('请填用户 id', true)
+  try {
+    const r = await api('POST', '/admin/web3/vc/issue', { userId, scope })
+    window.__vcLast = r.jwt
+    document.getElementById('vcOut').innerHTML = `
+      <div class="card" style="margin-top:12px;background:#f0faf7">
+        <div class="row" style="margin:0"><span class="pill ok">已签发</span>
+          <span class="muted">${esc(r.did)} · 有效期至 ${esc(String(r.expiresAt).slice(0, 19))}</span></div>
+        <textarea readonly style="width:100%;height:88px;margin-top:10px;font-family:monospace;font-size:11px">${esc(r.jwt)}</textarea>
+        <div class="row" style="margin-top:8px"><button class="btn ghost sm" onclick="copyVc()">复制凭证</button>
+          <button class="btn primary sm" onclick="openVerifyVc()">去验签</button></div>
+      </div>
+`
+    toast('已签发')
+  } catch (e) { toast(e.message, true) }
+}
+
+function copyVc() {
+  const t = window.__vcLast || ''
+  if (!t) return toast('还没有凭证', true)
+  navigator.clipboard?.writeText(t).then(() => toast('已复制')).catch(() => toast('复制失败，请手动选择', true))
+}
+
+function openVerifyVc() {
+  const t = window.__vcLast || ''
+  window.open(t ? '/vc?jwt=' + encodeURIComponent(t) : '/vc', '_blank')
+}
+
+async function revokeVc(id) {
+  const reason = prompt('吊销原因（会写进审计）', '违规或用户申请')
+  if (!reason) return
+  try { await api('POST', '/admin/web3/vc/' + id + '/revoke', { reason }); toast('已吊销'); vcPage() }
+  catch (e) { toast(e.message, true) }
+}
+
+/* ============ 链与资产（多链能力矩阵 + 资产发行台账）============ */
+async function chainAssetsPage() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  const d = await api('GET', '/admin/web3/assets')
+  const c = await api('GET', '/admin/web3/chain').catch(() => ({}))
+  const cur = d.chain || {}
+  const cap = cur.capabilities || {}
+  const mark = (b) => (b ? '<span class="pill ok">支持</span>' : '<span class="pill off">—</span>')
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>链与资产</h2><span class="muted">当前链：<b>${esc(cur.label || cur.provider)}</b> · ${cur.mode === 'real' ? '<span class="pill ok">已接入</span>' : '<span class="pill warn">未接入（NOOP）</span>'}</span></div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">已发行</div><div class="v" style="font-size:18px">${d.issued}</div><div class="s">累计 ${d.total}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdf3e0">⏳</div><div><div class="l">待发行</div><div class="v" style="font-size:18px">${d.pending}</div><div class="s">凭据到位后补发</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdecea">⚠️</div><div><div class="l">失败</div><div class="v" style="font-size:18px">${d.failed}</div><div class="s">可重试</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e8effd">🧩</div><div><div class="l">支持资产</div><div class="v" style="font-size:15px">${cap.assets ? '是' : '否'}</div><div class="s">${cap.assets ? '可发行徽章/NFT' : '当前链只做存证'}</div></div></div>
+    </div>
+    <div class="muted" style="margin-top:10px">切换链：改环境变量 <code>CHAIN_PROVIDER=chaingen|tbaas|antchain|evm|noop</code> 后重启，业务与页面零改动。当前缺：${(cur.missing || []).length ? '<b>' + esc(cur.missing.join('、')) + '</b>' : '无'}。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>多链能力矩阵</h3><span class="muted">不同链能做不同的事：联盟链只存证，公链才发资产</span></div>
+    <table><thead><tr><th>链</th><th>存证锚定</th><th>按根反查</th><th>资产发行</th><th>DID</th><th>状态</th><th>说明</th></tr></thead><tbody>
+    ${(d.providers || []).map((p) => `<tr>
+      <td class="td-main">${esc(p.label)}${p.current ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td>${mark(p.capabilities.anchor)}</td><td>${mark(p.capabilities.queryByRoot)}</td>
+      <td>${mark(p.capabilities.assets)}</td><td>${mark(p.capabilities.did)}</td>
+      <td>${p.mode === 'real' ? '<span class="pill ok">已配置</span>' : '<span class="pill off">缺凭据</span>'}</td>
+      <td class="td-sub">${esc(p.docs || '')}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+
+  ${(c.preflight || []).length ? `
+  <div class="card">
+    <div class="card-head"><h3>预埋体检</h3><span class="muted">离线自检 · 不需要凭据 · ${(c.summary || {}).ready}/${(c.summary || {}).total} 家通过</span></div>
+    <table><thead><tr><th>链</th><th>离线自检</th><th>凭据</th><th>必问对方</th></tr></thead><tbody>
+    ${(c.preflight || []).filter((p) => p.id !== 'noop' && p.id !== 'mock').map((p) => `<tr>
+      <td class="td-main">${esc(p.label)}${p.active ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td>${p.selfOk ? '<span class="pill ok">通过</span>' : '<span class="pill warn">失败</span>'}</td>
+      <td class="td-sub">${p.missing.length ? '缺 <b>' + esc(p.missing.join('、')) + '</b>' : '<span class="pill ok">齐备</span>'}</td>
+      <td class="td-sub"><details><summary>${p.ask.length} 条</summary><ul style="margin:6px 0 0 16px;padding:0">${p.ask.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details></td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="muted" style="margin-top:10px">填空模板：<code>api/config/chains/</code>（链数根 / 腾讯TBaaS / 蚂蚁链鲸探 / EVM公链），每份含「找谁要、接口约定、必问 4 问」。命令行同源：<code>node scripts/chain-preflight.mjs</code></div>
+  </div>` : ''}
+
+  <div class="card">
+    <div class="card-head"><h3>发行一件资产</h3><span class="muted">微信渠道被硬禁（D10）；不支持资产的链会明确报错</span></div>
+    <div class="row">
+      <select id="akKind">${(d.kinds || []).map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select>
+      <select id="akChannel">${(d.channels || []).map((c) => `<option value="${c.id}" ${c.allowed ? '' : 'disabled'}>${esc(c.label)}${c.allowed ? '' : '（禁止）'}</option>`).join('')}</select>
+      <input id="akUid" type="number" placeholder="用户 id" style="width:110px">
+      <input id="akToken" placeholder="tokenId（可空）" style="width:140px">
+      <input id="akName" placeholder="名称，如「瑜伽修行者」" style="width:200px">
+      <button class="btn primary sm" onclick="issueAsset()">发行</button>
+    </div>
+    <div id="akOut"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>发行台账</h3><span class="muted">未发行也留痕：台账先记，链上后补</span></div>
+    ${(d.rows || []).length ? `<table><thead><tr><th>#</th><th>类型</th><th>渠道</th><th>链</th><th>用户</th><th>tokenId</th><th>交易号</th><th>状态</th><th>操作</th></tr></thead><tbody>
+      ${d.rows.map((r) => `<tr><td class="num">${r.id}</td>
+        <td>${esc(r.kind)}</td><td class="td-sub">${esc(r.channel)}</td><td class="td-sub">${esc(r.provider)}</td>
+        <td class="td-sub">${esc(r.nickname || '用户' + r.user_id)}</td>
+        <td class="td-sub mono">${esc(r.token_id || '—')}</td>
+        <td class="td-sub mono">${r.tx_ref ? esc(String(r.tx_ref).slice(0, 14)) + '…' : '—'}</td>
+        <td>${r.status == 1 ? '<span class="pill ok">已发行</span>' : (r.status == 0 ? '<span class="pill warn">待发行</span>' : '<span class="pill s70">失败</span>')}
+          ${r.err ? '<div class="td-sub">' + esc(String(r.err).slice(0, 30)) + '</div>' : ''}</td>
+        <td>${r.status == 1 ? '—' : `<button class="btn ghost sm" onclick="retryAsset(${r.id})">重试</button>`}</td></tr>`).join('')}
+    </tbody></table>` : emptyBox('还没有发行记录：上方选类型与用户发行一件试试')}
+  </div>`
+}
+
+async function issueAsset() {
+  const kind = document.getElementById('akKind').value
+  const channel = document.getElementById('akChannel').value
+  const userId = Number(document.getElementById('akUid').value)
+  const tokenId = document.getElementById('akToken').value.trim() || null
+  const name = document.getElementById('akName').value.trim() || '数字徽章'
+  if (!userId) return toast('请填用户 id', true)
+  try {
+    const r = await api('POST', '/admin/web3/assets/issue', { kind, channel, userId, tokenId, meta: { name } })
+    document.getElementById('akOut').innerHTML = r.status === 1
+      ? `<div class="card" style="margin-top:12px;background:#f0faf7"><span class="pill ok">已发行</span>
+         <span class="muted">txRef ${esc(String(r.txRef).slice(0, 18))}… · tokenId ${esc(r.tokenId || '—')}</span></div>`
+      : `<div class="card" style="margin-top:12px;background:#fff8ec"><span class="pill warn">${r.status === 0 ? '已入待发行队列' : '发行失败'}</span>
+         <span class="muted">${esc(r.note || r.err || '')}</span></div>`
+    toast(r.status === 1 ? '已发行' : r.status === 0 ? '已入队' : '未发行')
+  } catch (e) { toast(e.message, true) }
+}
+
+async function retryAsset(id) {
+  try { const r = await api('POST', '/admin/web3/assets/' + id + '/retry'); toast(r.status === 1 ? '已补发' : (r.reason || r.err || '未完成')); chainAssetsPage() }
+  catch (e) { toast(e.message, true) }
+}
+
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/web3/overview')
@@ -1022,7 +1237,7 @@ async function web3dash() {
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">锚定批次</div><div class="v" style="font-size:18px">${d.anchoredBatches}/${d.batches}</div><div class="s">Merkle 小时级打包</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">🔗</div><div><div class="l">链上事件</div><div class="v" style="font-size:18px">${d.anchoredEvents}/${d.events}</div><div class="s">待打包 ${d.pendingEvents}</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdf3e0">🏅</div><div><div class="l">勋章发放</div><div class="v" style="font-size:18px">${d.badgeGrants}</div><div class="s">发放即入存证队列</div></div></div>
-      <div class="kpi"><div class="ico" style="background:#e3f6ec">🫘</div><div><div class="l">积分资产</div><div class="v" style="font-size:18px">${d.beanGranted}</div><div class="s">已消耗 ${d.beanConsumed}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e3f6ec">🫘</div><div><div class="l">累计发放</div><div class="v" style="font-size:18px">${d.beanGranted}</div><div class="s">已消耗 ${d.beanConsumed}</div></div></div>
     </div>
     <div class="row" style="margin-top:10px">${(d.trustPath || []).map((t, i) => `<span class="pill ${i ? 'off' : 'ok'}">${esc(t)}</span>`).join('<span class="muted">→</span>')}<span class="muted" style="margin-left:auto">上链的只有哈希指纹+时间戳，业务数据全在 MySQL（数据库是事实来源，链是审计锚点）</span></div>
   </div>
@@ -1030,7 +1245,7 @@ async function web3dash() {
     <div class="card-head"><h3>链上事件动态</h3><button class="btn ghost sm" onclick="go('attest')">进入存证中心 ›</button></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>时间</th></tr></thead><tbody>
     ${(d.recentEvents || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
-      <td>${e.status === 2 ? '<span class="pill ok">已上链</span>' : '<span class="pill warn">待打包</span>'}</td>
+      <td>${e.status === 2 ? '<span class="pill ok">已锚定</span>' : (e.status === 1 ? '<span class="pill s20">已打包·待锚定</span>' : '<span class="pill warn">待打包</span>')}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
   </div>`
@@ -1042,7 +1257,7 @@ async function pointassets() {
   const capPct = d.globalCap ? Math.min(100, Math.round(Number(d.globalCap.granted || 0) / Math.max(Number(d.globalCap.cap_total || d.globalCap.total || 1), 1) * 100)) : 0
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>积分资产发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
+    <div class="card-head"><h2>积分发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="kpi"><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">持有人数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
@@ -1069,7 +1284,7 @@ async function badges() {
   const d = await api('GET', '/admin/web3/badges')
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>勋章资产发行</h2><span class="muted">勋章发放即写入链上存证队列（badge 事件）</span></div>
+    <div class="card-head"><h2>勋章发行</h2><span class="muted">勋章发放即写入链上存证队列（badge 事件）</span></div>
     <div class="row">
       <input id="bgName" placeholder="勋章名称（如 朱家角探索者）" style="width:200px">
       <input id="bgIcon" placeholder="图标键（如 badge_zjj）" style="width:160px">
@@ -1112,14 +1327,14 @@ async function wallets() {
   const d = await api('GET', '/admin/web3/wallets' + (kw ? '?kw=' + encodeURIComponent(kw) : ''))
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>用户数字钱包 / 数字资产</h2>
+    <div class="card-head"><h2>权益账户</h2>
       <div class="row" style="margin:0"><input id="wkw" placeholder="昵称 / 用户ID" style="width:180px" value="${esc(kw)}">
       <button class="btn ghost sm" onclick="wallets()">查询</button></div></div>
     <table><thead><tr><th>用户</th><th>积分余额</th><th>等级</th><th>成长值</th><th>勋章</th><th>存证事件</th><th></th></tr></thead><tbody>
     ${d.map((w) => `<tr><td>${esc(w.nickname || '用户' + w.user_id)}</td><td class="num"><b>${Number(w.balance)}</b></td>
       <td><span class="pill off">Lv${w.member_level}</span></td><td class="num">${Number(w.growth_value)}</td>
       <td class="num">${Number(w.badges)}</td><td class="num">${Number(w.attest_n)}</td>
-      <td><button class="btn ghost sm" onclick="walletDetail(${w.user_id})">资产明细 ›</button></td></tr>`).join('') || '<tr><td colspan="7" class="td-sub">暂无钱包</td></tr>'}
+      <td><button class="btn ghost sm" onclick="walletDetail(${w.user_id})">账户明细 ›</button></td></tr>`).join('') || '<tr><td colspan="7" class="td-sub">暂无账户</td></tr>'}
     </tbody></table>
   </div>
   <div id="wdetail"></div>`
@@ -1128,7 +1343,7 @@ async function walletDetail(uid) {
   const d = await api('GET', '/admin/web3/wallets/' + uid)
   $('#wdetail').innerHTML = `
   <div class="card">
-    <div class="card-head"><h3>${esc(d.profile.nickname || '用户' + uid)} · 数字资产明细</h3><span class="muted">余额 ${Number(d.balance)} · Lv${d.profile.member_level} · 成长值 ${Number(d.profile.growth_value)}</span></div>
+    <div class="card-head"><h3>${esc(d.profile.nickname || '用户' + uid)} · 权益账户明细</h3><span class="muted">余额 ${Number(d.balance)} · Lv${d.profile.member_level} · 成长值 ${Number(d.profile.growth_value)}</span></div>
     <div class="row" style="gap:8px">${(d.badges || []).map((b) => `<span class="pill ok">🏅 ${esc(b.name)}</span>`).join('') || '<span class="muted">暂无勋章</span>'}</div>
     <table style="margin-top:10px"><thead><tr><th>流水</th><th>方向</th><th>科目</th><th>数量</th><th>关联单号</th><th>时间</th></tr></thead><tbody>
     ${(d.ledger || []).slice(0, 12).map((l) => `<tr><td class="td-sub">${esc(String(l.tx_no).slice(0, 20))}…</td>
@@ -1242,13 +1457,21 @@ async function verifyAttest() {
   const ref = document.getElementById('vref').value.trim()
   if (!ref) return
   const r = await api('GET', '/admin/attest/verify?bizType=order&bizRef=' + encodeURIComponent(ref))
+  const anchored = !!r.chainRef
   document.getElementById('vout').innerHTML = r.found
     ? `<div class="card" style="margin-top:14px;background:#f0faf7"><div class="row" style="margin:0">
-        <span class="pill ok">✓ 已找到存证记录</span><span>${r.note}</span></div>
-       <table style="margin-top:8px"><tr><td class="td-sub">业务单号</td><td class="num">${esc(r.bizRef)}</td></tr>
+        <span class="pill ${anchored ? 'ok' : 's20'}">${anchored ? '✓ 已锚定上链' : '已打包·待锚定'}</span><span>${esc(r.note)}</span></div>
+       <table style="margin-top:8px"><tr><td class="td-sub">业务单号</td><td class="num">${esc(r.bizRef)} · v${Number(r.versionNo || 1)}</td></tr>
        <tr><td class="td-sub">载荷哈希</td><td><code>${esc(r.payloadHash)}</code></td></tr>
        ${r.merkleRoot ? `<tr><td class="td-sub">Merkle 根</td><td><code>${esc(r.merkleRoot)}</code></td></tr>` : ''}
-       ${r.chainRef ? `<tr><td class="td-sub">链上编号</td><td><code>${esc(r.chainRef)}</code></td></tr>` : ''}</table></div>`
+       <tr><td class="td-sub">证明路径</td><td>${r.leafPath ? `<span class="pill ok">${r.leafPath.length} 层 · 本地重算${r.proofValid ? '通过' : '不通过'}</span>` : '—'}${r.leafIndex != null ? ` <span class="td-sub">leaf#${r.leafIndex}</span>` : ''}</td></tr>
+       ${anchored ? `<tr><td class="td-sub">链上编号</td><td><code>${esc(r.chainRef)}</code>${r.chainBlock ? ' · 区块 ' + esc(r.chainBlock) : ''}</td></tr>` : ''}
+       </table>
+       <div class="row" style="margin-top:10px">
+         <a class="btn primary sm" target="_blank" rel="noopener" href="/open/report/order/${encodeURIComponent(r.bizRef)}">下载存证证明 PDF</a>
+         <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(r.bizRef)}">公开复核页</a>
+       </div>
+       <div class="muted" style="margin-top:6px">${esc(r.verifyTip || '')}</div></div>`
     : `<div class="card" style="margin-top:14px"><span class="pill s70">未找到该单存证记录</span></div>`
 }
 

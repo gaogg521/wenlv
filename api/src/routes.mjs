@@ -9,6 +9,12 @@ import * as promo from './domain/promo.mjs'
 import * as refund from './domain/refund.mjs'
 import * as group from './domain/group.mjs'
 import * as wxpay from './domain/wxpay.mjs'
+import * as attestDomain from './domain/attest.mjs'
+import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
+import * as vc from './domain/vc.mjs'
+import * as asset from './domain/asset.mjs'
+import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from './domain/onepager.mjs'
+import * as chain from './infra/chain.mjs'
 import * as wxapi from './domain/wxapi.mjs'
 import * as wxsec from './infra/wxsec.mjs'
 import fs from 'node:fs'
@@ -326,7 +332,7 @@ const m = {
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
     const { payload } = req.body
     const r = await pass.verifyScan({ merchantId: u.merchantId, staffId: u.uid, payload, cityCode: '310118' })
-    if (r.ok) await pass.attest('pass_verify', 'pass-' + r.passId, JSON.stringify({ by: u.merchantId }))
+    // 存证由 pass.verifyScan 在核销事务内完成，路由层不再重复写（避免同一事件两片叶子）
     return r
   },
 
@@ -364,6 +370,7 @@ const m = {
     if (note.length < 4 || note.length > 200) throw new BizError(1001, '请填写 4–200 字异议说明')
     const n = await q('UPDATE settlement SET status = 4, dispute_note = ? WHERE id = ? AND merchant_id = ? AND status = 0', [note, req.params.id, u.merchantId])
     if (n.affectedRows !== 1) throw new BizError(2002, '仅待确认结算单可发起异议')
+    await promo.attestSettlement(req.params.id, null, 4)
     return { status: 4 }
   },
   // 商户手机号登录（P2）：微信手机号快速验证组件 code → 手机号找用户 → 回报绑定状态
@@ -398,7 +405,6 @@ const m = {
         results.push({ payload, ok: false, reason: r.reason, conflict: true })
       } else {
         results.push({ payload, ok: true, passId: r.passId })
-        await pass.attest('pass_verify', 'pass-' + r.passId, JSON.stringify({ by: u.merchantId, offline: true }))
       }
     }
     return { uploaded: results.filter((r) => r.ok).length, conflicts: results.filter((r) => r.conflict).length, results }
@@ -498,11 +504,40 @@ const m = {
   },
 
   // 商户确认结算（0 待确认 → 1 商户已确认；财务侧复核后走 2/3）
+  // 结算可信记录 PDF（T1 口径：只给「可信记录 / 校验码」，不出现存证/链字样）
+  'GET /m/report/settlement/:id': async (req, res) => {
+    const u = requireUser(req)
+    if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
+    if (Number(u.role) < 2) throw new BizError(1003, '需要店长及以上权限')
+    const s = await one('SELECT * FROM settlement WHERE id = ? AND merchant_id = ?', [Number(req.params.id), u.merchantId])
+    if (!s) throw new BizError(1004, '结算单不存在')
+    const e = await one(`SELECT e.payload_hash, e.status, e.version_no, e.leaf_path, b.merkle_root, b.seq, b.chain_tx_ref
+      FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+      WHERE e.biz_type = 'settlement' AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, ['settle-' + s.id])
+    const doc = settlementReportDoc({
+      settlementId: s.id, period: s.period, orderCount: s.order_count, totalAmount: s.total_amount,
+      amtFulfill: s.amt_fulfill, amtService: s.amt_service, amtPromoter: s.amt_promoter,
+      amtBeanbudget: s.amt_beanbudget, amtRetained: s.amt_retained, status: Number(s.status),
+      payloadHash: e ? e.payload_hash : null,
+      merkleRoot: e ? e.merkle_root : null,
+    }, publicBase(req))
+    const pdf = svgToPdf(buildSvg(doc))
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="settlement-${s.id}.pdf"`,
+      'Cache-Control': 'no-store',
+    })
+    res.end(pdf)
+    return { __raw: true }
+  },
+
   'POST /m/settlements/:id/confirm': async (req) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
     const r = await q('UPDATE settlement SET status = 1 WHERE id = ? AND merchant_id = ? AND status = 0', [req.params.id, u.merchantId])
     if (!r.affectedRows) throw new BizError(1001, '结算单不在待确认状态')
+    // 商户确认即锚定（version=1）：商户事后无法否认"我没确认过这张单"
+    await promo.attestSettlement(req.params.id, null, 1)
     await tx(async (c) => audit(c, 'merchant:' + u.merchantId, 'settlement', 'merchant-confirm', 'settlement-' + req.params.id, null, { note: req.body.note || '' }))
     return { confirmed: true }
   },
@@ -929,6 +964,7 @@ const admin = {
       const n = await cc.upd('UPDATE settlement SET status = 2 WHERE id = ? AND status = 1', [req.params.id])
       if (n !== 1) throw new BizError(2002, '仅商户已确认的结算单可复核，请刷新状态')
       await audit(cc, 'admin:' + a.name, 'settlement', 'review', 'settlement-' + req.params.id, { status: 1 }, { status: 2 })
+      await promo.attestSettlement(req.params.id, cc, 2)
       return { status: 2, message: '复核通过，待实际支付并登记回单' }
     })
   },
@@ -944,6 +980,7 @@ const admin = {
       if (duplicate) throw new BizError(1001, '该流水号已用于其他结算单')
       await cc.upd('UPDATE settlement SET status = 3, payment_ref = ?, payment_note = ?, paid_by = ?, paid_at = NOW(3) WHERE id = ? AND status = 2', [ref, note, 'admin:' + a.name, s.id])
       await audit(cc, 'admin:' + a.name, 'settlement', 'manual-payment-evidence', 'settlement-' + s.id, { status: 2 }, { status: 3, ref, note })
+      await promo.attestSettlement(s.id, cc, 3)
       return { status: 3, paymentRef: ref, mode: 'MANUAL_RECEIPT' }
     })
   },
@@ -954,6 +991,8 @@ const admin = {
     if (!row) throw new BizError(1004, '结算单不存在或不在异议中')
     if (!String(note || '').trim()) throw new BizError(1001, '请填写异议处理说明')
     await q('UPDATE settlement SET dispute_note = ?, status = 0, dispute_resolved_at = NOW(3) WHERE id = ? AND status = 4', [String(note||'').slice(0,200), req.params.id])
+    // 异议解除回 0，但版本号用 40：否则会与"生成"的 version 0 撞车被幂等吞掉
+    await promo.attestSettlement(req.params.id, null, 40)
     return { resolved: true }  },
 
 
@@ -1081,7 +1120,11 @@ const admin = {
         [o.user_id, amt, orderNo, Number(ua.growth_value)])
     }
     await promo.createCommission(orderNo)
-    await pass.attest('order', orderNo, JSON.stringify({ amount: Number(o.amount_pay), status: 50 }))
+    // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号
+    await pass.attest('order', orderNo, {
+      orderNo, amountPay: Number(o.amount_pay), status: 50,
+      merchantId: Number(o.merchant_id), qty: Number(o.qty), cityCode: o.city_code,
+    }, null, 50)
     return { completed: true }
   },
 }
@@ -1148,7 +1191,10 @@ const adminSys = {
     let n = -1
     if (name === 'close-timeout') n = await closeTimeout()
     else if (name === 'commission-due') n = await settleDue()
-    else if (name === 'attest-pack') { const { packBatch } = await import('./domain/attest.mjs'); const b = await packBatch(); n = b.leaves }
+    else if (name === 'attest-pack') { const b = await attestDomain.packBatch(); n = b.leaves }
+    else if (name === 'attest-anchor') { const r = await attestDomain.reanchorPending(50); n = r.filter((x) => x.anchored).length }
+    else if (name === 'bean-day-close') { const r = await attestDomain.closeBeanDay(req.body && req.body.date); n = r.leaves || 0 }
+    else if (name === 'attest-reconcile') { const r = await attestDomain.reconcile(); n = r.checks.filter((x) => x.ok).length }
     else if (name === 'complete-due') { const { completeOrder } = await import('./jobs.mjs'); const rows = await q("SELECT order_no FROM orders WHERE status = 40 AND refund_deadline <= NOW(3) LIMIT 50"); for (const x of rows) await completeOrder(x.order_no); n = rows.length }
     else if (name === 'bean-expire') { const jobsMod = await import('./jobs.mjs'); await jobsMod.tickExpire(); n = -1 }
     else throw new BizError(1001, '未知任务: ' + name)
@@ -1469,24 +1515,64 @@ const web3 = {
   // 后台：存证批次与队列总览
   'GET /admin/attest/center': async (req) => {
     await requireAdmin(req)
-    const batches = await q('SELECT * FROM attest_batch ORDER BY id DESC LIMIT 20')
+    const batches = await q('SELECT * FROM attest_batch ORDER BY seq DESC LIMIT 20')
     const queue = await q(`SELECT biz_type,
       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) pending,
+      SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) packed,
       SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) anchored,
       COUNT(*) total FROM attest_event GROUP BY biz_type`)
-    const recent = await q(`SELECT e.biz_type, e.biz_ref, e.status, e.created_at, b.merkle_root, b.chain_tx_ref
+    const recent = await q(`SELECT e.biz_type, e.biz_ref, e.version_no, e.status, e.created_at,
+      b.seq, b.merkle_root, b.chain_tx_ref, b.status AS batch_status
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id ORDER BY e.id DESC LIMIT 30`)
-    return { batches, queue, recent, chainMode: 'NOOP（链数根适配 P1 接入，哈希流水已实时记录）' }
+    const dayRoots = await q('SELECT * FROM bean_day_root ORDER BY biz_date DESC LIMIT 10')
+    return {
+      batches, queue, recent, dayRoots,
+      chain: chain.chainStatus(),
+      // 语义分档：NOOP 期一律"已打包·待锚定"，绝不出现"已上链"
+      chainMode: chain.chainMode() === 'real' ? '已接入链数根：新批次真实锚定' : 'NOOP：哈希与 Merkle 根实时落库，批次停在「已打包·待锚定」',
+    }
   },
 
-  // 单号验证（后台+开放页共用逻辑）
+  // 单号验证（后台+开放页共用逻辑）：返回可离线重算的 inclusion proof
   async _verify(bizType, bizRef) {
-    const e = await one('SELECT e.*, b.merkle_root, b.chain_tx_ref, b.anchored_at FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id WHERE e.biz_type = ? AND e.biz_ref = ?', [bizType, bizRef])
+    const e = await one(`SELECT e.*, b.merkle_root, b.prev_root, b.chain_tx_ref, b.chain_block, b.anchored_at,
+        b.seq, b.leaf_count, b.is_day_close
+      FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
     if (!e) return { found: false }
-    return { found: true, bizType, bizRef, payloadHash: e.payload_hash, status: e.status,
-      merkleRoot: e.merkle_root, chainRef: e.chain_tx_ref, anchoredAt: e.anchored_at,
-      note: e.status === 2 ? '已锚定上链，哈希与本地记录一致' : '已入队待打包（小时级批次）' }
+    const path = e.leaf_path || null
+    const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root) : null
+    const anchored = Number(e.status) === 2 && e.chain_tx_ref && !String(e.chain_tx_ref).startsWith('NOOP')
+    return {
+      found: true, bizType, bizRef, versionNo: Number(e.version_no),
+      payloadHash: e.payload_hash, status: Number(e.status),
+      merkleRoot: e.merkle_root, leafIndex: e.leaf_index, leafPath: path,
+      prevRoot: e.prev_root, leafCount: e.leaf_count,
+      proofValid, batchSeq: e.seq, isDayClose: !!Number(e.is_day_close),
+      chainRef: anchored ? e.chain_tx_ref : null, chainBlock: anchored ? e.chain_block : null,
+      anchoredAt: anchored ? e.anchored_at : null,
+      note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根'
+        : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）'),
+      verifyTip: '重算方法：从 payloadHash 起，按 leafPath 逐层 sha256(左+右)（p=R 表示兄弟在右），结果应等于 merkleRoot',
+    }
   },
+
+  // 旅豆账本日终根（给审计/政府：证明"严禁超发"）
+  async _verifyBeanDay(date) {
+    const d = await one('SELECT * FROM bean_day_root WHERE biz_date = ?', [date])
+    if (!d) return { found: false }
+    const b = d.batch_id ? await one('SELECT * FROM attest_batch WHERE id = ?', [d.batch_id]) : null
+    const anchored = b && Number(b.status) === 2 && b.chain_tx_ref && !String(b.chain_tx_ref).startsWith('NOOP')
+    return {
+      found: true, bizDate: d.biz_date, leafCount: Number(d.leaf_count),
+      debitSum: Number(d.debit_sum), creditSum: Number(d.credit_sum),
+      balanced: Number(d.debit_sum) === Number(d.credit_sum),
+      merkleRoot: d.merkle_root, prevRoot: d.prev_root,
+      chainRef: anchored ? b.chain_tx_ref : null, anchoredAt: anchored ? b.anchored_at : null,
+      note: '借贷恒等(Σ借=Σ贷) 成立后才允许封存；prevRoot 指向上一封存日，形成不可回改的账本链',
+    }
+  },
+
   'GET /admin/attest/verify': async (req) => {
     await requireAdmin(req)
     return await web3._verify(String(req.query.bizType || 'order'), String(req.query.bizRef || ''))
@@ -1509,7 +1595,11 @@ const web3 = {
       events: Number(e.total) || 0, anchoredEvents: Number(e.anchored) || 0, pendingEvents: Number(e.pending) || 0,
       badgeGrants: Number(badges.c) || 0,
       beanGranted: Number(bean.granted) || 0, beanConsumed: Number(bean.consumed) || 0,
-      chainMode: 'NOOP（链数根适配 P1）', trustPath: ['订单支付', '权益核销', '勋章发放', '存证报告'],
+      chain: chain.chainStatus(),
+      chainMode: chain.chainMode() === 'real'
+        ? '已接入链数根：批次真实锚定'
+        : 'NOOP（哈希与根实时落库；批次停在「已打包·待锚定」，凭据到位后补锚）',
+      trustPath: ['订单支付', '权益核销', '勋章发放', '存证报告'],
       recentEvents: events,
     }
   },
@@ -1551,8 +1641,10 @@ const web3 = {
     const u = await one('SELECT id FROM user_account WHERE id = ?', [userId])
     if (!u) throw new BizError(1004, '用户不存在')
     const ins = await tx(async (c) => c.q('INSERT IGNORE INTO user_badge (user_id, badge_id) VALUES (?,?)', [Number(userId), b.id]))
-    // 勋章发放同步入存证队列（链上事件：勋章发放节点）
-    await pass.attest('badge', 'badge-' + userId + '-' + b.id, JSON.stringify({ badge: b.name, by: a.name, reason: reason || null }))
+    // 勋章发放入存证队列（同一用户同一勋章只锚一次；重复发放由 uk_biz_ver 幂等）
+    await pass.attest('badge', 'badge-' + userId + '-' + b.id, {
+      userId: Number(userId), badgeId: Number(b.id), badge: b.name, by: a.name, reason: reason || null,
+    }, null, 1)
     return { granted: true, badge: b.name, attestQueued: true }
   },
 
@@ -1636,6 +1728,53 @@ const web3 = {
     return { deleted: true }
   },
 
+  // 链与资产：多链能力矩阵 / 资产发行台账
+  'GET /admin/web3/chain': async (req) => {
+    await requireAdmin(req)
+    const { runPreflight, preflightSummary } = await import('./infra/chain/preflight.mjs')
+    const rows = runPreflight()
+    return { current: chain.chainStatus(), providers: chain.listProviders(), preflight: rows, summary: preflightSummary(rows) }
+  },
+  'GET /admin/web3/assets': async (req) => {
+    await requireAdmin(req)
+    return { ...(await asset.stats()), rows: await asset.list(50) }
+  },
+  'POST /admin/web3/assets/issue': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const { kind, userId, channel, meta, to, tokenId } = req.body || {}
+    const r = await asset.issue({ kind, userId: Number(userId), channel: channel || 'ecosystem', meta: meta || {}, to: to || null, tokenId: tokenId || null })
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'asset', 'issue', 'asset-' + r.id, null, { kind, channel, status: r.status }))
+    return r
+  },
+  'POST /admin/web3/assets/:id/retry': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const r = await asset.retry(Number(req.params.id))
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'asset', 'retry', 'asset-' + req.params.id, null, r))
+    return r
+  },
+
+  // 数字身份（VC）：签发统计 / 吊销
+  'GET /admin/web3/vc': async (req) => {
+    await requireAdmin(req)
+    return await vc.stats()
+  },
+  // 后台代签发（演示/客服场景：给指定用户出一张凭证，便于当场扫码/粘贴验签）
+  'POST /admin/web3/vc/issue': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const userId = Number(req.body?.userId)
+    if (!Number.isInteger(userId) || userId <= 0) throw new BizError(1001, '请填写用户 id')
+    const scope = req.body?.scope === 'basic' ? 'basic' : 'travel'
+    const v = await vc.issue(userId, scope)
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'vc', 'issue', 'vc-' + v.jti, null, { userId, scope }))
+    return v
+  },
+  'POST /admin/web3/vc/:id/revoke': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const r = await vc.revoke(Number(req.params.id), req.body?.reason, 'admin:' + a.name)
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'vc', 'revoke', 'vc-' + req.params.id, null, { reason: req.body?.reason || '' }))
+    return r
+  },
+
   // 合约调用账户（链数根适配器接入位）：凭据经集成中心配置，此处只读展示
   'GET /admin/web3/contract-account': async (req) => {
     await requireAdmin(req)
@@ -1649,11 +1788,154 @@ const web3 = {
 
 // 公开验证（无登录·只读·给景区/政府/投资人：输单号出存证证明）
 const open = {
+  // 给景区/政府/投资人的公开验证：无登录、只读、不暴露用户与金额，返回可离线重算的证明
   'GET /open/verify/order/:orderNo': async (req) => {
     const r = await web3._verify('order', req.params.orderNo)
     if (!r.found) throw new BizError(1004, '未找到该单的存证记录')
-    return { ...r, platform: '向往的自由 · 向往自由链存证', tip: '本验证不暴露任何用户与金额信息，仅返回哈希锚定证明' }
+    return {
+      ...r,
+      platform: '向往的自由 · 向往自由链存证',
+      tip: '本验证不暴露任何用户与金额信息，仅返回哈希锚定证明；可离线重算复核',
+    }
   },
+  // 旅豆账本日终根：证明"账本借贷恒等、未超发"（审计/政府口径）
+  'GET /open/verify/bean-day/:date': async (req) => {
+    const r = await web3._verifyBeanDay(req.params.date)
+    if (!r.found) throw new BizError(1004, '该日尚无账本封存记录')
+    return { ...r, platform: '向往的自由 · 向往自由链账本封存' }
+  },
+
+  // 结算记录的公开复核：只回校验码与封存状态，**绝不回金额、商户名与订单明细**
+  'GET /open/verify/settlement/:id': async (req) => {
+    const id = Number(req.params.id)
+    const s = await one('SELECT id, status FROM settlement WHERE id = ?', [id])
+    if (!s) throw new BizError(1004, '未找到该结算记录')
+    const r = await web3._verify('settlement', 'settle-' + id)
+    return {
+      found: r.found, bizType: 'settlement', bizRef: 'settle-' + id, settlementId: id,
+      payloadHash: r.payloadHash || null, merkleRoot: r.merkleRoot || null, prevRoot: r.prevRoot || null,
+      leafPath: r.leafPath || null, leafIndex: r.leafIndex ?? null, proofValid: r.proofValid ?? null,
+      batchSeq: r.batchSeq ?? null, status: Number(s.status),
+      chainRef: r.chainRef || null, anchoredAt: r.anchoredAt || null,
+      note: r.found ? r.note : '该结算单已生成，但尚未打包封存',
+      privacy: '本接口不返回金额、商户名与订单明细',
+    }
+  },
+
+  // 可信能力一页纸（A4，给政府/景区/投资人）：数据实时，内容与代码同源
+  'GET /open/onepager': async (req, res) => {
+    const base = publicBase(req)
+    const doc = capabilityDoc(await capabilityContext(base))
+    if (String(req.query.fmt || '') === 'png') {
+      const png = renderOnepagerPng(doc)
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' })
+      res.end(png)
+      return { __raw: true }
+    }
+    const pdf = renderOnepagerPdf(doc)
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="capability-onepager.pdf"', 'Cache-Control': 'no-store' })
+    res.end(pdf)
+    return { __raw: true }
+  },
+
+  // 链能力声明（对外）：支持哪些链、各自能做什么，凭据状态不回显
+  'GET /open/chain/capabilities': async () => {
+    const cur = chain.chainStatus()
+    return {
+      current: { provider: cur.provider, label: cur.label, mode: cur.mode, capabilities: cur.capabilities },
+      providers: chain.listProviders().map((p) => ({
+        id: p.id, label: p.label, docs: p.docs, capabilities: p.capabilities, mode: p.mode,
+      })),
+      switchRule: '设置环境变量 CHAIN_PROVIDER=chaingen|tbaas|antchain|evm|noop 即可切换；业务与页面代码零改动',
+      assets: { channels: Object.entries(asset.CHANNELS).map(([k, v]) => ({ id: k, allowed: v.allowed, label: v.label })) },
+    }
+  },
+
+  // 数字身份：签发者公钥（JWKS）—— 第三方凭此可离线验签，不必回调我方接口
+  'GET /open/vc/issuer': async () => vc.issuerJwks(),
+
+  // 数字身份验签：合作方（景区/城市/境外生态）提交凭证，返回"签名是否有效 + 披露了什么 + 没披露什么"
+  'POST /open/vc/verify': async (req) => {
+    const jwt = String(req.body?.jwt || req.body?.vc || '').trim()
+    if (!jwt) throw new BizError(1001, '请提交凭证（字段 jwt）')
+    return await vc.verify(jwt)
+  },
+
+  // 存证报告 PDF（一页 A4 证书，含二维码；给景区/政府/投资人存档用）
+  'GET /open/report/order/:orderNo': async (req, res) => {
+    const v = await web3._verify('order', req.params.orderNo)
+    if (!v.found) throw new BizError(1004, '未找到该单的存证记录')
+    const pdf = svgToPdf(buildSvg(orderReportDoc(v, publicBase(req))))
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="attest-${String(req.params.orderNo).replace(/[^A-Za-z0-9-]/g, '')}.pdf"`,
+      'Cache-Control': 'no-store',
+    })
+    res.end(pdf)
+    return { __raw: true }
+  },
+  'GET /open/report/bean-day/:date': async (req, res) => {
+    const v = await web3._verifyBeanDay(req.params.date)
+    if (!v.found) throw new BizError(1004, '该日尚无账本封存记录')
+    const pdf = svgToPdf(buildSvg(beanDayReportDoc(v, publicBase(req))))
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="ledger-${String(req.params.date).replace(/[^0-9-]/g, '')}.pdf"`,
+      'Cache-Control': 'no-store',
+    })
+    res.end(pdf)
+    return { __raw: true }
+  },
+}
+
+/** 一页纸所需的实时上下文（数字全部来自库，不手写） */
+async function capabilityContext(baseUrl) {
+  const c = async (sql) => Number((await one(sql))?.n || 0)
+  return {
+    baseUrl,
+    chain: chain.chainStatus(),
+    providers: chain.listProviders().filter((p) => p.id !== 'mock'),
+    counts: {
+      events: await c('SELECT COUNT(*) n FROM attest_event'),
+      batches: await c('SELECT COUNT(*) n FROM attest_batch'),
+      dayRoots: await c('SELECT COUNT(*) n FROM bean_day_root'),
+      vc: await c('SELECT COUNT(*) n FROM vc_issue'),
+      assets: await c('SELECT COUNT(*) n FROM asset_issue WHERE status = 1'),
+    },
+  }
+}
+
+/** 对外可访问的基址：优先 PUBLIC_BASE，其次按请求头推断（Nginx/CDN 后需带 x-forwarded-*） */
+function publicBase(req) {
+  if (process.env.PUBLIC_BASE) return String(process.env.PUBLIC_BASE).replace(/\/+$/, '')
+  const h = (req && req.headers) || {}
+  const host = h['x-forwarded-host'] || h.host || ('127.0.0.1:' + (process.env.PORT || 8080))
+  const proto = h['x-forwarded-proto'] || 'http'
+  return proto + '://' + host
+}
+
+// 术语字典：一处定义、三处分发（T1 用户端 / T2 后台 / T3 对外）
+// 小程序不得硬写"存证/链/Web3/NFT/Token/钱包"等词，一律从这里取
+const LEXICON = {
+  T1: {
+    attestation: '可信记录', attest_list: '可信记录流水', attest_empty: '暂无记录',
+    did: '文旅数字身份', pass: '权益凭证', badge: '数字徽章', bean: '旅豆',
+    note: '记录仅用于权益与贡献核算',
+    ledger_sealed: '今日账本已封存',
+  },
+  T2: {
+    attestation: '存证', attest_batch: '存证批次', merkle_root: 'Merkle 根',
+    anchor: '锚定', pending_anchor: '已打包·待锚定', anchored: '已锚定',
+  },
+  T3: {
+    chain: '向往自由链', pass: '链上权益凭证', attest: '联盟链存证',
+  },
+  updatedAt: '2026-10-26',
+}
+
+const lexicon = {
+  'GET /c/lexicon': async () => LEXICON.T1,           // 小程序端只拿得到 T1
+  'GET /admin/lexicon': async (req) => { await requireAdmin(req); return LEXICON },
 }
 
 // 推广中心补全：自助取码 + 客户脱敏列表
@@ -1787,7 +2069,10 @@ const mPhrase = {
     const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
     for (const pid of ids) {
       await pass.adminConfirmPass(pid, u.uid)
-      await pass.attest('pass_verify', 'pass-' + pid, JSON.stringify({ by: u.merchantId, way: 'phrase' }))
+      // 暗号核销不是窗口码，用 -phrase 后缀区分事件来源，避免与扫码事件互相覆盖
+      await pass.attest('pass_verify', 'pass-' + pid + '-phrase', {
+        passId: Number(pid), merchantId: Number(u.merchantId), way: 'phrase', cityCode: o.city_code || '310118',
+      }, null, 1)
     }
     if (ids.length) await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,?,1,?)',
       [ids[0], u.merchantId, u.uid, 4, o.city_code || '310118'])
@@ -1881,6 +2166,18 @@ const cIdentity = {
       passes, badges, attestations,
       statement: '消费与权益记录的可信存证流水，作为贡献分与数字身份的依据' }
   },
+  // 数字身份凭证（VC-JWT）：用户可取走、可出示、他方可验。微信内不展示字样（D6），由 B/G 端与生态 H5 使用
+  'GET /c/vc': async (req) => {
+    const u = requireUser(req)
+    const scope = req.query.scope === 'basic' ? 'basic' : 'travel'
+    const v = await vc.issue(u.uid, scope)
+    return {
+      did: v.did, jwt: v.jwt, scope, expiresAt: v.expiresAt,
+      claims: v.claims, issuer: v.issuer,
+      disclose: ['会员等级', '成长区间', '入会年月', '行程数', '城市数', '徽章名'],
+      withheld: ['姓名', '手机号', '身份证号', '订单号', '金额'],
+    }
+  },
 }
 
 // ---------- 微信支付回调 ----------
@@ -1929,17 +2226,18 @@ const callback = {
   },
 }
 
-export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
-  if (key.includes('/admin/dev/')) routes[key] = req => {
+  if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
-    return handler(req)
+    return handler(req, res)
   }
 }
 // 商户权限在每次请求重新校验，停用员工及变更角色立即生效，禁止跨端 JWT 复用。
 for (const [key, handler] of Object.entries(routes)) {
   if (!key.split(' ')[1]?.startsWith('/m/') || key === 'POST /m/auth/login') continue
-  routes[key] = async (req) => {
+  // 注意：必须把 res 透传给原 handler —— 否则 /m/ 下的 PDF/文件类响应拿不到 res（曾踩坑：500 writeHead）
+  routes[key] = async (req, res) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
     if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications'].includes(key)) {
@@ -1951,7 +2249,7 @@ for (const [key, handler] of Object.entries(routes)) {
       if (manager && staff.role < 2) throw new BizError(1003, '需要店长及以上权限')
       if (key === 'POST /m/supply/:sid' && req.body.action === 'price' && staff.role < 3) throw new BizError(1003, '仅老板可调整价格')
     }
-    return handler(req)
+    return handler(req, res)
   }
 }
 export { handlePayNotify }

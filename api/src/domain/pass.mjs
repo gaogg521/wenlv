@@ -1,8 +1,10 @@
-// 凭证与核销域：出票 / 动态码 HMAC / 防重放消费 / 存证哈希
+// 凭证与核销域：出票 / 动态码 HMAC / 防重放消费 / 存证
+// 存证实现统一在 domain/attest.mjs（同一件事只在同一处实现），本文件只负责在正确的事务里调用
 import crypto from 'node:crypto'
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import * as order from './order.mjs'
+import { attest as attestCore } from './attest.mjs'
 
 const SECRET = process.env.PASS_SECRET || 'wanderlust-pass-code-secret'
 
@@ -26,8 +28,14 @@ export async function issueForOrder(orderNo) {
   return await tx(async (c) => {
     const ids = []
     for (let i = 0; i < o.qty; i++) {
-      ids.push(await c.ins('INSERT INTO travel_pass (user_id, order_id, kind, name, product_id, status) VALUES (?,?,1,?,?,1)',
-        [o.user_id, o.id, '主题游通行凭证·' + orderNo, o.product_id]))
+      const passId = await c.ins('INSERT INTO travel_pass (user_id, order_id, kind, name, product_id, status) VALUES (?,?,1,?,?,1)',
+        [o.user_id, o.id, '主题游通行凭证·' + orderNo, o.product_id])
+      ids.push(passId)
+      // 凭证签发即锚定（与签发同事务）：外部可验证"这张凭证确实是平台签发的"
+      await attestCore('pass_issue', 'pass-' + passId, {
+        passId, orderNo, kind: 1, qty: Number(o.qty), productId: Number(o.product_id),
+        merchantId: Number(o.merchant_id), cityCode: o.city_code,
+      }, c, 1)
     }
     return ids
   })
@@ -87,6 +95,10 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
     await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ?', [passId])
     await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,1,?)',
       [passId, merchantId, staffId, cityCode])
+    // 核销即锚定（与核销同事务）。biz_ref 带窗口号：同一凭证的不同窗口是不同事件，不能互相覆盖
+    await attestCore('pass_verify', 'pass-' + passId + '-' + hit, {
+      passId, merchantId, cityCode, windowNo: Number(hit), method: 1, result: 1,
+    }, c, 1)
     return true
   })
   if (!consumed) return { ok: false, reason: '已核销（重复·并发拦截）', passId }
@@ -105,9 +117,17 @@ export async function revokeForOrder(orderNo) {
 }
 
 export const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex')
-export async function attest(bizType, bizRef, canonical) {
-  await q('INSERT IGNORE INTO attest_event (biz_type, biz_ref, payload_hash) VALUES (?,?,?)',
-    [bizType, bizRef, sha256(bizType + '|' + bizRef + '|' + canonical)])
+
+/**
+ * 兼容包装：老调用方传的是 JSON 字符串，统一转成对象后交给 domain/attest.mjs
+ * @deprecated 新代码请直接 import { attest } from './attest.mjs'，并传入事务连接 c
+ */
+export async function attest(bizType, bizRef, canonical, conn, versionNo = 1) {
+  let payload = canonical
+  if (typeof canonical === 'string') {
+    try { payload = JSON.parse(canonical) } catch { payload = { raw: canonical } }
+  }
+  return attestCore(bizType, bizRef, payload || {}, conn, versionNo)
 }
 
 /** 离线名单（§10）：本店有效凭证 + 未来 30 个窗口的展示码映射（断网期间人工比对用） */

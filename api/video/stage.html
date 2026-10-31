@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>向往的自由 · 全链路 90 秒</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --ink:#eaf6ff; --sub:#8fa8bd; --faint:#5a7288;
+    --cyan:#38bdf8; --cyan-d:#0ea5e9; --blue:#3b82f6;
+    --green:#10b981; --amber:#f59e0b; --violet:#a78bfa; --rose:#fb7185;
+    --card:rgba(13,26,40,.82); --line:rgba(56,189,248,.20);
+    --mono:Consolas,"Cascadia Mono","DejaVu Sans Mono",monospace;
+    --sans:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+  html,body{width:1920px;height:1080px;overflow:hidden;background:#050a12;color:var(--ink);font-family:var(--sans)}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;
+    background:radial-gradient(1200px 700px at 50% 8%, #0d2135 0%, #07121d 42%, #050a12 78%)}
+  #grid{position:absolute;inset:0}
+  .vig{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(1100px 620px at 50% 42%, transparent 40%, rgba(0,0,0,.55) 100%)}
+  .scanline{position:absolute;left:0;width:1920px;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(125,211,252,.42),transparent);opacity:.5}
+
+  /* ── HUD ── */
+  .hud{position:absolute;inset:0;pointer-events:none;font-size:13px;letter-spacing:1px}
+  .hud .tl{position:absolute;left:56px;top:40px}
+  .hud .tl b{font-size:16px;letter-spacing:2px;font-weight:700}
+  .hud .tl .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 12px var(--cyan);margin-right:10px;vertical-align:1px}
+  .hud .tl .st{display:block;margin-top:6px;margin-left:18px;font-size:10.5px;color:var(--faint);letter-spacing:3px}
+  .hud .tr{position:absolute;right:56px;top:42px;text-align:right;font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.7}
+  .hud .chap{position:absolute;left:56px;top:104px;font-family:var(--mono);font-size:11.5px;
+    color:var(--cyan);letter-spacing:2.5px;opacity:0}
+  .hud .chap i{font-style:normal;color:var(--faint)}
+
+  /* ── 字幕 / 进度 ── */
+  #sub{position:absolute;left:0;right:0;bottom:58px;text-align:center;font-size:33px;line-height:1.5;
+    font-weight:500;color:#eaf6ff;text-shadow:0 2px 18px rgba(0,0,0,.85),0 0 40px rgba(56,189,248,.18);
+    padding:0 140px;opacity:0}
+  #sub em{font-style:normal;color:#7dd3fc}
+  .subgrad{position:absolute;left:0;right:0;bottom:0;height:240px;pointer-events:none;
+    background:linear-gradient(to top,rgba(3,8,14,.92),rgba(3,8,14,.55) 45%,transparent)}
+  #bar{position:absolute;left:0;bottom:0;height:3px;width:1920px;background:rgba(255,255,255,.06)}
+  #bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan-d),var(--cyan),#a5f3fc)}
+
+  .sc{position:absolute;inset:0;display:none;opacity:0}
+  .eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:3px;color:var(--cyan);opacity:.9}
+  .h1{font-size:46px;font-weight:800;letter-spacing:.5px;line-height:1.25}
+  .h2{font-size:34px;font-weight:700;letter-spacing:.3px}
+  .note{font-size:15px;color:var(--sub);line-height:1.7}
+  .mono{font-family:var(--mono)}
+
+  /* ── S1 片头 ── */
+  #p1dot{position:absolute;left:954px;top:452px;width:12px;height:12px;border-radius:50%;
+    background:#e0f7ff;box-shadow:0 0 26px 6px rgba(56,189,248,.85);opacity:0}
+  .ring{position:absolute;left:840px;top:338px;width:240px;height:240px;border-radius:50%;
+    border:1.6px solid rgba(56,189,248,.55);opacity:0}
+  #p1title{position:absolute;left:0;right:0;top:396px;text-align:center;font-size:78px;font-weight:800;letter-spacing:.12em}
+  #p1title span{display:inline-block;opacity:0;color:#f2fbff;text-shadow:0 0 40px rgba(56,189,248,.35)}
+  #p1sub{position:absolute;left:0;right:0;top:504px;text-align:center;font-family:var(--mono);
+    font-size:16px;letter-spacing:7px;color:#7dd3fc;opacity:0}
+  #p1line{position:absolute;left:960px;top:548px;height:1px;width:0;transform:translateX(-50%);
+    background:linear-gradient(90deg,transparent,rgba(56,189,248,.9),transparent)}
+  #p1tag{position:absolute;left:0;right:0;top:576px;text-align:center;font-size:20px;color:#a9c6dd;letter-spacing:2px;opacity:0}
+  #p1sweep{position:absolute;top:360px;width:280px;height:210px;opacity:0;filter:blur(16px);
+    background:linear-gradient(104deg,transparent 20%,rgba(190,240,255,.55) 50%,transparent 80%);
+    mix-blend-mode:screen}
+
+  /* ── S2 全链路 ── */
+  .node{position:absolute;top:412px;width:340px;height:170px;border-radius:16px;background:var(--card);
+    border:1px solid var(--line);opacity:0;padding:22px 24px;backdrop-filter:blur(6px)}
+  .node .cap{position:absolute;left:0;right:0;top:0;height:3px;border-radius:16px 16px 0 0}
+  .node .nm{font-size:22px;font-weight:700;margin-top:9px}
+  .node .ds{font-size:15px;color:var(--sub);margin-top:9px;line-height:1.55}
+  .node .tg{position:absolute;right:16px;top:14px;font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:1.5px}
+  .link{position:absolute;top:497px;height:2px;width:0;
+    background:linear-gradient(90deg,rgba(56,189,248,.15),rgba(56,189,248,.75))}
+  .link:after{content:"";position:absolute;right:-1px;top:-3px;width:8px;height:8px;border-radius:50%;
+    background:var(--cyan);box-shadow:0 0 12px var(--cyan);opacity:0}
+  .flowdot{position:absolute;top:494px;width:8px;height:8px;border-radius:50%;background:#a5f3fc;
+    box-shadow:0 0 16px 3px rgba(56,189,248,.9);opacity:0}
+
+  /* ── 手机框 ── */
+  .phone{position:absolute;border-radius:34px;background:#05080c;border:7px solid #16232f;
+    box-shadow:0 30px 70px rgba(0,0,0,.65),0 0 0 1px rgba(56,189,248,.12),0 0 60px rgba(56,189,248,.12);
+    overflow:hidden;opacity:0}
+  .phone .notch{position:absolute;left:50%;top:0;transform:translateX(-50%);width:96px;height:20px;
+    background:#16232f;border-radius:0 0 14px 14px;z-index:3}
+  .phone img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;border-radius:26px;opacity:0}
+  .plabel{position:absolute;text-align:center;font-family:var(--mono);font-size:12.5px;letter-spacing:2px;
+    color:var(--sub);opacity:0}
+
+  /* ── 步骤 / 机制卡 ── */
+  .step{position:absolute;left:0;display:flex;gap:20px;align-items:flex-start;opacity:0}
+  .step .n{flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:rgba(56,189,248,.14);
+    border:1px solid rgba(56,189,248,.5);color:#bae6fd;font-family:var(--mono);font-size:15px;
+    display:flex;align-items:center;justify-content:center;margin-top:3px}
+  .step .tx{font-size:24px;font-weight:600}
+  .step .dx{font-size:16px;color:var(--sub);margin-top:7px;line-height:1.6}
+  .mcard{position:absolute;top:348px;width:384px;height:168px;border-radius:14px;background:var(--card);
+    border:1px solid var(--line);padding:22px 24px;opacity:0}
+  .mcard .k{font-size:20px;font-weight:700;color:#bfe9ff}
+  .mcard .v{font-size:15px;color:var(--sub);margin-top:10px;line-height:1.6}
+  .mcard .ic{position:absolute;right:18px;top:16px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+
+  .bigcode{position:absolute;left:0;right:0;text-align:center;font-family:var(--mono);
+    font-weight:700;letter-spacing:.16em;opacity:0}
+
+  /* ── S5 存证 ── */
+  .ev{position:absolute;left:120px;width:470px;height:50px;border-radius:10px;background:rgba(13,26,40,.72);
+    border:1px solid rgba(56,189,248,.16);display:flex;align-items:center;padding:0 16px;opacity:0}
+  .ev .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-right:12px;box-shadow:0 0 10px var(--cyan)}
+  .ev .t{font-family:var(--mono);font-size:15px;color:#cfe9fb}
+  .ev .c{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--faint)}
+  .packer{position:absolute;left:664px;top:286px;width:480px;height:330px;border-radius:20px;
+    border:1px solid rgba(56,189,248,.3);background:linear-gradient(160deg,rgba(14,32,50,.9),rgba(8,18,28,.9));
+    opacity:0;overflow:hidden}
+  .packer .ttl{position:absolute;left:0;right:0;top:26px;text-align:center;font-family:var(--mono);
+    font-size:12px;letter-spacing:3px;color:var(--cyan)}
+  .packer .root{position:absolute;left:34px;right:34px;top:126px;font-family:var(--mono);font-size:16px;
+    line-height:1.9;color:#d7f2ff;word-break:break-all;opacity:0}
+  .packer .rt{position:absolute;left:0;right:0;bottom:34px;text-align:center;font-size:12px;color:var(--faint)}
+  .brk{position:absolute;left:664px;top:286px;width:480px;height:330px;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 46%,rgba(56,189,248,.30),transparent 62%)}
+
+  .kvline{position:absolute;display:flex;align-items:baseline;gap:16px;opacity:0}
+  .kvline .k{font-size:14px;color:var(--sub);min-width:96px}
+  .kvline .v{font-family:var(--mono);font-size:16px;color:#dff2ff}
+
+  /* ── S6 分账 ── */
+  .split{position:absolute;left:520px;width:660px;opacity:0}
+  .split .lb{font-size:17px;color:var(--sub);width:104px;display:inline-block}
+  .split .amt{font-family:var(--mono);font-size:21px;color:#e8f6ff;width:126px;text-align:right;display:inline-block}
+  .split .track{display:inline-block;vertical-align:middle;height:14px;border-radius:7px;
+    background:rgba(255,255,255,.055);width:430px;margin-left:14px;overflow:hidden}
+  .split .track i{display:block;height:100%;width:0;border-radius:7px}
+  .pdfframe{position:absolute;border-radius:8px;overflow:hidden;opacity:0;
+    box-shadow:0 40px 80px rgba(0,0,0,.7),0 0 0 1px rgba(56,189,248,.18)}
+  .pdfframe img{width:100%;height:100%;object-fit:cover;display:block}
+
+  /* ── S7 浏览器 ── */
+  .bwin{position:absolute;border-radius:12px;overflow:hidden;opacity:0;background:#0b1420;
+    box-shadow:0 40px 90px rgba(0,0,0,.72),0 0 0 1px rgba(56,189,248,.16)}
+  .bwin .bar2{height:40px;background:#16222e;display:flex;align-items:center;padding:0 16px;gap:8px}
+  .bwin .bar2 .d{width:10px;height:10px;border-radius:50%;background:#3d4c5c}
+  .bwin .url{margin-left:14px;flex:1;height:24px;border-radius:6px;background:#0d1a26;
+    font-family:var(--mono);font-size:12px;color:#7f9ab0;display:flex;align-items:center;padding:0 10px}
+  .bwin .body{overflow:hidden}
+  .bwin .body img{width:100%;display:block}
+  .prow{position:absolute;left:926px;width:840px;display:flex;align-items:center;gap:14px;opacity:0;
+    font-family:var(--mono);font-size:14.5px}
+  .prow .i{width:26px;height:26px;border-radius:50%;background:rgba(56,189,248,.13);
+    border:1px solid rgba(56,189,248,.4);color:#bae6fd;font-size:12px;display:flex;align-items:center;
+    justify-content:center;flex:0 0 26px}
+  .prow .h{color:#9fbdd4;flex:0 0 250px;font-size:13px}
+  .prow .o{color:#e6f7ff}
+
+  /* ── S8 多链 ── */
+  .prov{position:absolute;width:280px;height:104px;border-radius:14px;background:var(--card);
+    border:1px solid var(--line);padding:16px 18px;opacity:0}
+  .prov .nm{font-size:15.5px;font-weight:700;line-height:1.35}
+  .prov .ds{font-size:11.5px;color:var(--faint);margin-top:7px;font-family:var(--mono)}
+  .prov .tp{position:absolute;right:14px;top:14px;font-size:10px;color:var(--cyan);
+    border:1px solid rgba(56,189,248,.35);border-radius:20px;padding:1px 8px}
+  .hub{position:absolute;z-index:3;left:850px;top:452px;width:220px;height:96px;border-radius:14px;
+    background:linear-gradient(150deg,rgba(14,40,64,.95),rgba(8,20,32,.95));
+    border:1px solid rgba(56,189,248,.5);box-shadow:0 0 50px rgba(56,189,248,.22);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
+  .hub b{font-size:19px;letter-spacing:1px}
+  .hub span{font-family:var(--mono);font-size:10.5px;color:var(--cyan);margin-top:6px;letter-spacing:2px}
+  .wire{position:absolute;height:1.5px;background:linear-gradient(90deg,rgba(56,189,248,.05),rgba(56,189,248,.55),rgba(56,189,248,.05));
+    transform-origin:left center;opacity:0}
+
+  /* ── S9 收口 ── */
+  .bcard{position:absolute;top:300px;width:392px;height:132px;border-radius:14px;
+    background:rgba(60,42,10,.42);border:1px solid rgba(245,158,11,.34);padding:20px 22px;opacity:0}
+  .bcard .k{font-size:17px;font-weight:700;color:#fcd34d}
+  .bcard .v{font-size:14.5px;color:#e8c98a;margin-top:9px;line-height:1.55}
+  #finalBig{position:absolute;left:0;right:0;top:542px;text-align:center;font-size:60px;font-weight:800;
+    letter-spacing:.02em;opacity:0;
+    background:linear-gradient(100deg,#eaf6ff,#7dd3fc 55%,#eaf6ff);-webkit-background-clip:text;
+    -webkit-text-fill-color:transparent}
+  #finalSm{position:absolute;left:0;right:0;top:648px;text-align:center;font-size:19px;color:#9fbdd4;opacity:0}
+  #finalSign{position:absolute;left:0;right:0;top:728px;text-align:center;font-family:var(--mono);
+    font-size:13px;letter-spacing:4px;color:#7da2bd;opacity:0}
+  #blackout{position:absolute;inset:0;background:#050a12;opacity:1;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="grid" width="1920" height="1080"></canvas>
+  <div class="vig"></div>
+  <div class="scanline" id="scanline"></div>
+
+  <!-- ══ S1 片头 ══ -->
+  <div class="sc" id="sc1">
+    <div id="p1dot"></div>
+    <div class="ring" id="r1"></div>
+    <div class="ring" id="r2"></div>
+    <div class="ring" id="r3"></div>
+    <div id="p1title"><span>向</span><span>往</span><span>的</span><span>自</span><span>由</span></div>
+    <div id="p1sub">WANDERLUST · TRUSTABLE TRAVEL LAYER</div>
+    <div id="p1line"></div>
+    <div id="p1tag">90 秒 · 一条订单的完整旅程</div>
+    <div id="p1sweep"></div>
+  </div>
+
+  <!-- ══ S2 全链路 ══ -->
+  <div class="sc" id="sc2">
+    <div style="position:absolute;left:120px;top:172px" class="eyebrow" id="s2eye">01 / 全链路</div>
+    <div style="position:absolute;left:120px;top:204px" class="h1" id="s2h1">一条订单，四个角色，一路留痕</div>
+    <div class="node" id="n1" style="left:120px">
+      <div class="cap" style="background:linear-gradient(90deg,#38bdf8,#0ea5e9)"></div>
+      <div class="tg">MINI-A</div>
+      <div class="nm">游客端</div>
+      <div class="ds">选线路 · 下单 · 支付<br>签发 60 秒动态核销码</div>
+    </div>
+    <div class="node" id="n2" style="left:560px">
+      <div class="cap" style="background:linear-gradient(90deg,#a78bfa,#7c3aed)"></div>
+      <div class="tg">MINI-B</div>
+      <div class="nm">商户端</div>
+      <div class="ds">扫码 / 输码核销 · 离线可收<br>每周结算 · 一键对账</div>
+    </div>
+    <div class="node" id="n3" style="left:1000px">
+      <div class="cap" style="background:linear-gradient(90deg,#10b981,#059669)"></div>
+      <div class="tg">API</div>
+      <div class="nm">存证引擎</div>
+      <div class="ds">七类事件 · 小时级 Merkle 打包<br>日终账本封存</div>
+    </div>
+    <div class="node" id="n4" style="left:1440px">
+      <div class="cap" style="background:linear-gradient(90deg,#f59e0b,#d97706)"></div>
+      <div class="tg">PUBLIC</div>
+      <div class="nm">任何人</div>
+      <div class="ds">浏览器本地重算<br>不登录、不上传、自己验</div>
+    </div>
+    <div class="link" id="lk1" style="left:460px;width:100px"></div>
+    <div class="link" id="lk2" style="left:900px;width:100px"></div>
+    <div class="link" id="lk3" style="left:1340px;width:100px"></div>
+    <div class="flowdot" id="fd1"></div>
+    <div class="flowdot" id="fd2"></div>
+    <div class="flowdot" id="fd3"></div>
+    <div style="position:absolute;left:120px;top:648px;font-size:17px;color:var(--sub);opacity:0" id="s2foot">
+      每一跳都在后端留下一条<em style="font-style:normal;color:#7dd3fc">不可回改</em>的记录 —— 不是日志，是可被外部重算的证明
+    </div>
+    <div style="position:absolute;left:120px;top:706px;font-family:var(--mono);font-size:14px;color:#7da2bd;opacity:0" id="s2stat"></div>
+  </div>
+
+  <!-- ══ S3 游客端 ══ -->
+  <div class="sc" id="sc3">
+    <div class="phone" id="ph1" style="left:176px;top:140px;width:272px;height:582px">
+      <div class="notch"></div>
+      <img id="ph1a" src="assets/phone-tour-detail.png">
+      <img id="ph1b" src="assets/phone-tour-code.png">
+    </div>
+    <div class="plabel" id="ph1lb" style="left:176px;top:738px;width:272px">小程序 A · 游客端</div>
+
+    <div style="position:absolute;left:540px;top:150px" class="eyebrow" id="s3eye">02 / 游客 · MINI-A</div>
+    <div style="position:absolute;left:540px;top:182px" class="h2" id="s3h2">选中线路，付完款就有码</div>
+
+    <div class="step" id="st1" style="left:540px;top:280px">
+      <div class="n">1</div>
+      <div><div class="tx">选线路 · 立即报名</div>
+        <div class="dx">主题游详情页直接下单，手机号一次填完</div></div>
+    </div>
+    <div class="step" id="st2" style="left:540px;top:392px">
+      <div class="n">2</div>
+      <div><div class="tx">支付成功 · 订单落地</div>
+        <div class="dx">回调触发状态机跃迁，凭证同时签发</div></div>
+    </div>
+    <div class="step" id="st3" style="left:540px;top:504px">
+      <div class="n">3</div>
+      <div><div class="tx">核销码生成</div>
+        <div class="dx">60 秒刷新 · HMAC 动态签名 · 一码一次 · 防截屏重放</div></div>
+    </div>
+
+    <div class="bigcode" id="s3code" style="top:660px;font-size:76px;color:#a5f3fc;text-shadow:0 0 50px rgba(56,189,248,.55)">011228</div>
+    <div style="position:absolute;left:0;right:0;top:772px;text-align:center;font-size:16px;color:var(--sub);opacity:0;font-family:var(--mono)" id="s3codelb">
+      6 位动态码 · 截图 60 秒后失效
+    </div>
+    <div style="position:absolute;left:540px;top:824px;font-size:16px;color:var(--sub);opacity:0" id="s3foot">
+      它不是一张图片 —— 每一帧都由服务端密钥签名，复制给别人也过不了闸门
+    </div>
+  </div>
+
+  <!-- ══ S4 商户端 ══ -->
+  <div class="sc" id="sc4">
+    <div class="phone" id="ph2" style="left:1474px;top:150px;width:250px;height:540px">
+      <div class="notch"></div>
+      <img id="ph2a" src="assets/phone-merchant-verify.png">
+    </div>
+    <div class="plabel" id="ph2lb" style="left:1474px;top:704px;width:250px">小程序 B · 商户端</div>
+
+    <div style="position:absolute;left:150px;top:150px" class="eyebrow" id="s4eye">03 / 商户 · MINI-B</div>
+    <div style="position:absolute;left:150px;top:182px" class="h2" id="s4h2">扫码核销，断网也能收</div>
+
+    <div class="mcard" id="mc1" style="left:150px">
+      <div class="ic">01</div>
+      <div class="k">一码一次</div>
+      <div class="v">唯一约束拦重放，同一张码第二次直接拒绝</div>
+    </div>
+    <div class="mcard" id="mc2" style="left:552px">
+      <div class="ic">02</div>
+      <div class="k">离线可核销</div>
+      <div class="v">断网先记「待复核」，恢复后自动二次校验</div>
+    </div>
+    <div class="mcard" id="mc3" style="left:954px">
+      <div class="ic">03</div>
+      <div class="k">异常自动拦截</div>
+      <div class="v">名单外的码、重复码、跨城码，冲突转人工队列</div>
+    </div>
+
+    <div style="position:absolute;left:150px;top:566px;width:1168px;height:66px;border-radius:12px;
+      background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.38);opacity:0;
+      display:flex;align-items:center;padding:0 24px;gap:14px" id="s4ok">
+      <span style="color:#34d399;font-size:22px">✓</span>
+      <span style="font-size:20px;font-weight:700;color:#a7f3d0">核销成功</span>
+      <span style="font-size:15px;color:#7fd8b8">已写入当日核销流水 · 同一条凭证不会二次生效</span>
+    </div>
+
+    <div style="position:absolute;left:150px;top:678px;font-size:17px;color:var(--sub);opacity:0" id="s4foot">
+      核销这一刻，后端同时写两条账 —— 一条给业务，一条给存证
+    </div>
+    <div style="position:absolute;left:150px;top:722px;font-family:var(--mono);font-size:13px;color:var(--faint);opacity:0" id="s4foot2">
+      pass_verify · biz_ref 带核销窗口号 → 同一凭证多次核销各有各的记录
+    </div>
+  </div>
+
+  <!-- ══ S5 存证引擎 ══ -->
+  <div class="sc" id="sc5">
+    <div style="position:absolute;left:120px;top:118px" class="eyebrow" id="s5eye">04 / 后端 · 存证引擎</div>
+    <div style="position:absolute;left:120px;top:150px" class="h2" id="s5h2">事件进队列，按小时打成一个根</div>
+    <div id="evlist"></div>
+
+    <div class="brk" id="s5glow"></div>
+    <div class="packer" id="s5pack">
+      <div class="ttl">MERKLE · BATCH PACKER</div>
+      <div style="position:absolute;left:0;right:0;top:78px;text-align:center;font-size:12.5px;color:#6f8aa1" id="s5src"></div>
+      <div class="root" id="s5root"></div>
+      <div class="rt" id="s5rt">sha256 左 + 右 · 奇数层补偶</div>
+    </div>
+
+    <div style="position:absolute;left:1232px;top:286px;width:588px;height:300px;border-radius:20px;
+      background:var(--card);border:1px solid var(--line);opacity:0;padding:28px 30px" id="s5batch">
+      <div style="font-family:var(--mono);font-size:11.5px;letter-spacing:2.5px;color:var(--cyan)">BATCH</div>
+      <div style="font-size:38px;font-weight:800;margin-top:10px" id="s5bno">#1</div>
+      <div class="kvline" style="position:relative;left:0;top:14px" id="s5k1"><span class="k">叶子</span><span class="v" id="s5v1">10 片</span></div>
+      <div class="kvline" style="position:relative;left:0;top:52px" id="s5k2"><span class="k">前一批根</span><span class="v" id="s5v2">链起点</span></div>
+      <div style="position:absolute;left:30px;bottom:26px;display:flex;align-items:center;gap:10px" id="s5k3">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber)"></span>
+        <span style="font-size:15px;color:#fcd34d">已打包 · 待锚定</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:120px;top:700px;width:1700px;height:126px;border-radius:16px;
+      background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.3);opacity:0;
+      display:flex;align-items:center;padding:0 32px;gap:40px" id="s5day">
+      <div>
+        <div style="font-size:13px;color:var(--sub)">旅豆账本 · 日终封存</div>
+        <div style="font-size:26px;font-weight:700;margin-top:6px" id="s5dayd">2026-10-26</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:20px;color:#a7f3d0" id="s5daysum"></div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--faint)">日终根</div>
+        <div style="font-family:var(--mono);font-size:14px;color:#9defc9;margin-top:6px" id="s5dayroot"></div>
+      </div>
+    </div>
+    <div style="position:absolute;left:120px;top:852px;font-size:15px;color:var(--faint);opacity:0" id="s5honest">
+      没有链凭据时它不会冒充「已上链」—— 状态停在待锚定，交易号留空
+    </div>
+  </div>
+
+  <!-- ══ S6 商户结算 ══ -->
+  <div class="sc" id="sc6">
+    <div class="phone" id="ph3" style="left:150px;top:140px;width:250px;height:540px">
+      <div class="notch"></div>
+      <img id="ph3a" src="assets/phone-merchant-settle.png">
+    </div>
+    <div class="plabel" id="ph3lb" style="left:150px;top:694px;width:250px">小程序 B · 结算页</div>
+
+    <div style="position:absolute;left:470px;top:126px" class="eyebrow" id="s6eye">05 / 结算 · 五项恒等</div>
+    <div style="position:absolute;left:470px;top:158px" class="h2" id="s6h2">账目当面对清，不用信谁</div>
+
+    <div class="split" id="sp0" style="top:290px"><span class="lb">履约结算</span><span class="amt" id="spa0">161.24</span><span class="track"><i id="spi0" style="background:#7b5aa6"></i></span></div>
+    <div class="split" id="sp1" style="top:352px"><span class="lb">平台服务费</span><span class="amt" id="spa1">33.36</span><span class="track"><i id="spi1" style="background:#a97fd1"></i></span></div>
+    <div class="split" id="sp2" style="top:414px"><span class="lb">推广服务费</span><span class="amt" id="spa2">12.90</span><span class="track"><i id="spi2" style="background:#f0b429"></i></span></div>
+    <div class="split" id="sp3" style="top:476px"><span class="lb">权益预算</span><span class="amt" id="spa3">13.90</span><span class="track"><i id="spi3" style="background:#38bdf8"></i></span></div>
+    <div class="split" id="sp4" style="top:538px"><span class="lb">留存毛利</span><span class="amt" id="spa4">56.60</span><span class="track"><i id="spi4" style="background:#0f9d58"></i></span></div>
+
+    <div style="position:absolute;left:470px;top:620px;width:700px;height:2px;background:rgba(56,189,248,.25);opacity:0" id="s6line"></div>
+    <div style="position:absolute;left:470px;top:646px;display:flex;align-items:baseline;gap:16px;opacity:0" id="s6sum">
+      <span style="font-size:15px;color:var(--sub)">合计</span>
+      <span style="font-family:var(--mono);font-size:34px;font-weight:700;color:#eaf6ff" id="s6total">¥278.00</span>
+      <span style="font-size:15px;color:#34d399">✓ 五项相加 = 结算总额（差额 0）</span>
+    </div>
+    <div style="position:absolute;left:470px;top:724px;font-size:15px;color:var(--sub);opacity:0" id="s6foot">
+      商户手机上看得到分账，也能拿到一份可扫码复核的《结算可信记录》
+    </div>
+
+    <div class="pdfframe" id="s6pdf" style="left:1264px;top:96px;width:492px;height:696px">
+      <img src="assets/pdf-settle.png">
+    </div>
+    <div style="position:absolute;left:1264px;top:806px;width:492px;text-align:center;font-family:var(--mono);
+      font-size:12px;color:var(--faint);opacity:0" id="s6pdflb">《结算可信记录》· 五项 + 整单校验码</div>
+  </div>
+
+  <!-- ══ S7 公开复核 ══ -->
+  <div class="sc" id="sc7">
+    <div class="bwin" id="bw1" style="left:104px;top:130px;width:760px;height:700px">
+      <div class="bar2"><div class="d"></div><div class="d"></div><div class="d"></div>
+        <div class="url" id="bwurl">127.0.0.1:8080/verify?no=WL202610262773902485</div></div>
+      <div class="body" style="height:660px"><img id="bwimg" src="assets/verify-order.png"></div>
+    </div>
+
+    <div style="position:absolute;left:926px;top:126px" class="eyebrow" id="s7eye">06 / 外部复核</div>
+    <div style="position:absolute;left:926px;top:158px" class="h2" id="s7h2">他自己算，不用信我们</div>
+    <div style="position:absolute;left:926px;top:214px;font-size:15px;color:var(--sub);opacity:0" id="s7note">
+      Web Crypto · 全部在浏览器本地执行 · 数据零上传
+    </div>
+
+    <div id="prows"></div>
+
+    <div style="position:absolute;left:926px;top:566px;width:840px;height:80px;border-radius:12px;
+      background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.4);opacity:0;
+      display:flex;align-items:center;padding:0 26px;gap:16px" id="s7ok">
+      <span style="color:#34d399;font-size:24px">✓</span>
+      <div>
+        <div style="font-size:20px;font-weight:700;color:#a7f3d0">本地重算通过 · 记录未被改动</div>
+        <div style="font-family:var(--mono);font-size:12px;color:#7fd8b8;margin-top:4px" id="s7oksub"></div>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:104px;top:840px;font-size:18px;color:var(--sub);opacity:0" id="s7foot">
+      改一个字，这个值就全变了 —— <span style="color:#7dd3fc">这不是承诺，是数学</span>
+    </div>
+  </div>
+
+  <!-- ══ S8 多链 ══ -->
+  <div class="sc" id="sc8">
+    <div style="position:absolute;left:0;right:0;top:112px;text-align:center" class="eyebrow" id="s8eye">07 / 多链</div>
+    <div style="position:absolute;left:0;right:0;top:146px;text-align:center;font-size:36px;font-weight:800;opacity:0" id="s8h2">
+      一套契约，五个适配器，改一个变量就换链
+    </div>
+    <div id="provs"></div>
+    <div id="wires"></div>
+    <div class="hub" id="s8hub"><b>业务层</b><span>submit / verify / issue</span></div>
+    <div style="position:absolute;left:0;right:0;top:838px;text-align:center;font-family:var(--mono);
+      font-size:15px;color:#7dd3fc;letter-spacing:1px;opacity:0" id="s8cmd">
+      CHAIN_PROVIDER = chaingen | tbaas | antchain | evm | noop
+    </div>
+    <div style="position:absolute;left:0;right:0;top:880px;text-align:center;font-size:15px;color:var(--faint);opacity:0" id="s8foot">
+      联盟链只做存证，公链才发资产 —— 能力矩阵如实标注，不做「都能做」的承诺
+    </div>
+  </div>
+
+  <!-- ══ S9 收口 ══ -->
+  <div class="sc" id="sc9">
+    <div style="position:absolute;left:0;right:0;top:196px;text-align:center" class="eyebrow" id="s9eye">08 / 边界</div>
+    <div style="position:absolute;left:0;right:0;top:232px;text-align:center;font-size:32px;font-weight:700;opacity:0" id="s9h2">
+      四条红线，我们主动先说
+    </div>
+    <div class="bcard" id="bc1" style="left:120px">
+      <div class="k">微信内不做藏品</div>
+      <div class="v">不做发行 / 交易 / 转赠，代码与数据库双层拦截</div>
+    </div>
+    <div class="bcard" id="bc2" style="left:544px">
+      <div class="k">不做钱包与转账</div>
+      <div class="v">没有地址、没有助记词、没有转账界面</div>
+    </div>
+    <div class="bcard" id="bc3" style="left:968px">
+      <div class="k">境内外完全隔离</div>
+      <div class="v">境外业务独立主体、独立合规，不互通</div>
+    </div>
+    <div class="bcard" id="bc4" style="left:1392px">
+      <div class="k">不承诺升值</div>
+      <div class="v">权益不承诺兑付、可交易或升值，不碰股权</div>
+    </div>
+    <div id="finalBig">你不用换链，我们适配你的链</div>
+    <div id="finalSm">真实上链只差三个环境变量 · 没有真实交易号，我们不写「已上链」</div>
+    <div id="finalSign">向往的自由 · WANDERLUST TRUST LAYER</div>
+  </div>
+
+  <div class="subgrad"></div>
+  <div id="sub"></div>
+  <div id="bar"><i></i></div>
+
+  <div class="hud">
+    <div class="tl"><span class="dot"></span><b>向往的自由</b>
+      <span class="st">TRUSTABLE TRAVEL LAYER</span></div>
+    <div class="tr">DEMO · 90s<br><span id="hudtime">00:00</span></div>
+      </div>
+  <div id="blackout"></div>
+</div>
+
+<script src="data.js"></script>
+<script>
+const $ = (id) => document.getElementById(id)
+const D = window.DATA
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
+const seg = (t, a, b) => clamp01((t - a) / (b - a || 1e-6))
+const easeOut = (p) => 1 - Math.pow(1 - p, 3)
+const easeIO = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
+const lerp = (a, b, p) => a + (b - a) * p
+const hex = (s, n) => (s || '') .slice(0, n || 10)
+const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + '…' : s }
+
+/* ═══════════ 背景 ═══════════ */
+const cv = $('grid'), cx = cv.getContext('2d')
+function drawBg(t) {
+  cx.clearRect(0, 0, 1920, 1080)
+  const horizon = 690
+  cx.lineWidth = 1
+  // 透视横线
+  for (let i = 0; i < 15; i++) {
+    const p = i / 14
+    const y = horizon + Math.pow(p, 2.1) * 400
+    cx.strokeStyle = `rgba(56,189,248,${0.055 * (1 - p * 0.55)})`
+    cx.beginPath(); cx.moveTo(0, y); cx.lineTo(1920, y); cx.stroke()
+  }
+  // 透视竖线
+  for (let i = -14; i <= 14; i++) {
+    const x2 = 960 + i * 190
+    cx.strokeStyle = 'rgba(56,189,248,0.045)'
+    cx.beginPath(); cx.moveTo(960 + i * 26, horizon); cx.lineTo(x2, 1080); cx.stroke()
+  }
+  // 数据流竖线
+  const lanes = [260, 720, 1200, 1660]
+  lanes.forEach((x, i) => {
+    const ph = (t * 0.30 + i * 0.27) % 1
+    const y = 120 + ph * 900
+    const g = cx.createLinearGradient(x, y - 220, x, y + 40)
+    g.addColorStop(0, 'rgba(56,189,248,0)')
+    g.addColorStop(0.85, `rgba(56,189,248,${0.20})`)
+    g.addColorStop(1, 'rgba(165,243,252,0)')
+    cx.strokeStyle = g; cx.lineWidth = 1.4
+    cx.beginPath(); cx.moveTo(x, y - 220); cx.lineTo(x, y + 40); cx.stroke()
+    cx.fillStyle = 'rgba(165,243,252,.55)'
+    cx.beginPath(); cx.arc(x, y, 1.9, 0, 6.283); cx.fill()
+  })
+}
+
+/* ═══════════ 场景显隐 ═══════════ */
+const SCENES = [
+  { id: 'sc1', a: 0.0, b: 8.2, chap: '00 / 开场' },
+  { id: 'sc2', a: 8.2, b: 18.2, chap: '01 / 全链路' },
+  { id: 'sc3', a: 18.2, b: 31.2, chap: '02 / 游客 · MINI-A' },
+  { id: 'sc4', a: 31.2, b: 42.2, chap: '03 / 商户 · MINI-B' },
+  { id: 'sc5', a: 42.2, b: 55.2, chap: '04 / 后端 · 存证引擎' },
+  { id: 'sc6', a: 55.2, b: 67.2, chap: '05 / 结算 · 五项恒等' },
+  { id: 'sc7', a: 67.2, b: 78.2, chap: '06 / 外部复核' },
+  { id: 'sc8', a: 78.2, b: 84.2, chap: '07 / 多链' },
+  { id: 'sc9', a: 84.2, b: 91.0, chap: '08 / 边界' },
+]
+function showScenes(t) {
+  SCENES.forEach((s) => {
+    const el = $(s.id)
+    const on = t >= s.a - 0.01 && t < s.b + 0.35
+    if (!on) { el.style.display = 'none'; el.style.opacity = 0; return }
+    el.style.display = 'block'
+    const pin = easeOut(seg(t, s.a, s.a + 0.55))
+    const pout = easeIO(seg(t, s.b - 0.42, s.b))
+    el.style.opacity = Math.min(pin, 1 - pout)
+    el.style.transform = `translateY(${(1 - pin) * 22 - pout * 18}px)`
+  })
+}
+
+/* ═══════════ S1 ═══════════ */
+function s1(t) {
+  const dot = $('p1dot')
+  const pin = easeOut(seg(t, 0.25, 1.15))
+  const shrink = easeIO(seg(t, 1.35, 2.1))
+  dot.style.opacity = pin * (1 - seg(t, 2.0, 2.4))
+  dot.style.transform = `scale(${pin * (1 - shrink * 0.45)})`
+  dot.style.width = (12 + shrink * 180) + 'px'
+  dot.style.height = (12 - shrink * 8) + 'px'
+  dot.style.borderRadius = (6 - shrink * 4) + 'px'
+  dot.style.left = (960 - (6 + shrink * 90)) + 'px'
+
+  ;['r1', 'r2', 'r3'].forEach((id, i) => {
+    const el = $(id)
+    const s0 = 1.5 + i * 0.52
+    const p = seg(t, s0, s0 + 1.9)
+    const sc = lerp(0.12, 1.85, easeOut(p))
+    el.style.opacity = p > 0 && p < 1 ? (1 - p) * 1.0 : 0
+    el.style.transform = `scale(${sc})`
+  })
+
+  const chars = $('p1title').children
+  for (let i = 0; i < chars.length; i++) {
+    const p = easeOut(seg(t, 2.15 + i * 0.115, 2.15 + i * 0.115 + 0.85))
+    chars[i].style.opacity = p
+    chars[i].style.transform = `translateY(${(1 - p) * 22}px)`
+  }
+  const psub = easeOut(seg(t, 3.9, 4.9))
+  $('p1sub').style.opacity = psub
+  $('p1sub').style.letterSpacing = lerp(12, 7, psub) + 'px'
+
+  const pl = easeIO(seg(t, 4.35, 5.5))
+  $('p1line').style.width = (pl * 620) + 'px'
+  $('p1line').style.opacity = pl
+
+  const pt = easeOut(seg(t, 4.95, 5.9))
+  $('p1tag').style.opacity = pt * 0.95
+  $('p1tag').style.transform = `translateY(${(1 - pt) * 14}px)`
+
+  const ps = seg(t, 5.15, 6.75)
+  const sweep = $('p1sweep')
+  sweep.style.opacity = ps > 0 && ps < 1 ? Math.sin(ps * Math.PI) * 0.95 : 0
+  sweep.style.left = lerp(-320, 1920, easeIO(ps)) + 'px'
+}
+
+/* ═══════════ S2 ═══════════ */
+function s2(t) {
+  const lt = t - 8.2
+  $('s2eye').style.opacity = easeOut(seg(lt, 0.1, 0.7))
+  $('s2h1').style.opacity = easeOut(seg(lt, 0.25, 1.05))
+  $('s2h1').style.transform = `translateY(${(1 - easeOut(seg(lt, 0.25, 1.05))) * 16}px)`
+
+  const nodes = ['n1', 'n2', 'n3', 'n4']
+  nodes.forEach((id, i) => {
+    const p = easeOut(seg(lt, 1.05 + i * 0.52, 1.05 + i * 0.52 + 0.85))
+    const el = $(id)
+    el.style.opacity = p
+    el.style.transform = `translateY(${(1 - p) * 26}px)`
+    el.style.borderColor = `rgba(56,189,248,${0.16 + p * 0.16})`
+  })
+  ;['lk1', 'lk2', 'lk3'].forEach((id, i) => {
+    const p = easeIO(seg(lt, 1.5 + i * 0.5, 1.5 + i * 0.5 + 0.7))
+    $(id).style.width = (100 * p) + 'px'
+    $(id).style.opacity = p
+  })
+  // 沿链路移动的光点
+  ;['fd1', 'fd2', 'fd3'].forEach((id, i) => {
+    const el = $(id)
+    const base = 3.4 + i * 0.42
+    const p = seg(lt, base, base + 6.2)
+    if (p <= 0 || p >= 1) { el.style.opacity = 0; return }
+    el.style.opacity = 0.9
+    el.style.left = lerp(460 + i * 440, 560 + i * 440, (p * 3) % 1) + 'px'
+  })
+
+  $('s2foot').style.opacity = easeOut(seg(lt, 3.0, 3.9)) * 0.95
+  const ps = easeOut(seg(lt, 3.5, 4.4))
+  const stat = $('s2stat')
+  stat.style.opacity = ps * 0.9
+  if (D) stat.textContent = `已沉淀 ${D.totals.types} 类事件 · ${D.totals.events} 条记录 · ${D.order.leafCount} 片叶子已打包`
+}
+
+/* ═══════════ S3 游客 ═══════════ */
+function s3(t) {
+  const lt = t - 18.2
+  const ph = $('ph1')
+  const pin = easeOut(seg(lt, 0.15, 1.1))
+  ph.style.opacity = pin
+  ph.style.transform = `translateY(${(1 - pin) * 34}px) scale(${lerp(0.96, 1, pin)})`
+  $('ph1lb').style.opacity = easeOut(seg(lt, 0.6, 1.3)) * 0.9
+
+  const a = $('ph1a'), b = $('ph1b')
+  a.style.opacity = 1 - seg(lt, 2.3, 3.1)
+  b.style.opacity = seg(lt, 2.4, 3.2)
+
+  $('s3eye').style.opacity = easeOut(seg(lt, 0.25, 0.85))
+  $('s3h2').style.opacity = easeOut(seg(lt, 0.4, 1.15))
+
+  ;['st1', 'st2', 'st3'].forEach((id, i) => {
+    const s0 = 1.0 + i * 1.75
+    const p = easeOut(seg(lt, s0, s0 + 0.7))
+    const el = $(id)
+    el.style.opacity = p
+    el.style.transform = `translateX(${(1 - p) * 26}px)`
+  })
+
+  const pc = easeOut(seg(lt, 6.1, 7.1))
+  const code = $('s3code')
+  code.style.opacity = pc
+  code.style.transform = `scale(${lerp(0.92, 1, pc)})`
+  $('s3codelb').style.opacity = easeOut(seg(lt, 7.0, 7.8)) * 0.9
+  $('s3foot').style.opacity = easeOut(seg(lt, 8.6, 9.6)) * 0.95
+}
+
+/* ═══════════ S4 商户 ═══════════ */
+function s4(t) {
+  const lt = t - 31.2
+  const ph = $('ph2')
+  const pin = easeOut(seg(lt, 0.15, 1.1))
+  ph.style.opacity = pin
+  ph.style.transform = `translateY(${(1 - pin) * 34}px) scale(${lerp(0.96, 1, pin)})`
+  ph.querySelector('img').style.opacity = 1
+  $('ph2lb').style.opacity = easeOut(seg(lt, 0.6, 1.3)) * 0.9
+
+  $('s4eye').style.opacity = easeOut(seg(lt, 0.25, 0.85))
+  $('s4h2').style.opacity = easeOut(seg(lt, 0.4, 1.15))
+
+  ;['mc1', 'mc2', 'mc3'].forEach((id, i) => {
+    const s0 = 1.2 + i * 1.35
+    const p = easeOut(seg(lt, s0, s0 + 0.7))
+    const el = $(id)
+    el.style.opacity = p
+    el.style.transform = `translateY(${(1 - p) * 22}px)`
+  })
+
+  const ok = easeOut(seg(lt, 5.5, 6.3))
+  $('s4ok').style.opacity = ok
+  $('s4ok').style.transform = `scaleX(${lerp(0.94, 1, ok)})`
+  $('s4foot').style.opacity = easeOut(seg(lt, 6.6, 7.4)) * 0.95
+  $('s4foot2').style.opacity = easeOut(seg(lt, 7.4, 8.2)) * 0.8
+}
+
+/* ═══════════ S5 存证 ═══════════ */
+const EVROWS = (D && D.events) || []
+function buildS5() {
+  const box = $('evlist')
+  EVROWS.forEach((e, i) => {
+    const d = document.createElement('div')
+    d.className = 'ev'
+    d.id = 'ev' + i
+    d.style.top = (246 + i * 66) + 'px'
+    d.innerHTML = `<span class="dot"></span><span class="t">${e.type}</span><span class="c">${e.count} 条</span>`
+    box.appendChild(d)
+  })
+}
+function s5(t) {
+  const lt = t - 42.2
+  $('s5eye').style.opacity = easeOut(seg(lt, 0.1, 0.7))
+  $('s5h2').style.opacity = easeOut(seg(lt, 0.2, 1.0))
+
+  EVROWS.forEach((e, i) => {
+    const s0 = 0.55 + i * 0.26
+    const p = easeOut(seg(lt, s0, s0 + 0.55))
+    const el = $('ev' + i)
+    if (!el) return
+    el.style.opacity = p
+    el.style.transform = `translateX(${(1 - p) * -40}px)`
+  })
+
+  // 打包器
+  const pk = easeOut(seg(lt, 2.5, 3.4))
+  $('s5pack').style.opacity = pk
+  $('s5pack').style.transform = `translateY(${(1 - pk) * 18}px)`
+  const gl = seg(lt, 2.9, 4.6)
+  $('s5glow').style.opacity = gl > 0 && gl < 1 ? Math.sin(gl * Math.PI) * 0.9 : (lt > 4.6 ? 0.35 : 0)
+
+  // 根：逐段显现
+  const root = (D && D.order.merkleRoot) || '0'.repeat(64)
+  const pr = seg(lt, 3.3, 5.2)
+  const shown = Math.round(clip(root, 64).length * pr)
+  const rEl = $('s5root')
+  rEl.style.opacity = pr > 0 ? 1 : 0
+  rEl.innerHTML = `<span style="color:#5a7288">root </span><br>${root.slice(0, shown)}<span style="color:#5a7288">${root.slice(shown)}</span>`
+
+  $('s5src').textContent = D ? `${D.totals.types} 类事件 · ${D.order.leafCount} 片叶子 → 1 个根` : ''
+  const pb = easeOut(seg(lt, 5.3, 6.2))
+  $('s5batch').style.opacity = pb
+  $('s5batch').style.transform = `translateY(${(1 - pb) * 20}px)`
+  if (D) {
+    $('s5bno').textContent = '#' + D.order.batchSeq
+    $('s5v1').textContent = D.order.leafCount + ' 片（本单第 ' + D.order.leafIndex + ' 片）'
+    $('s5v2').textContent = D.order.prevRoot ? hex(D.order.prevRoot, 10) + '…' : '链起点'
+  }
+  $('s5k1').style.opacity = pb
+  $('s5k2').style.opacity = pb
+  $('s5k3').style.opacity = easeOut(seg(lt, 6.2, 7.0))
+
+  const pd = easeOut(seg(lt, 7.0, 7.9))
+  $('s5day').style.opacity = pd
+  $('s5day').style.transform = `translateY(${(1 - pd) * 18}px)`
+  if (D) {
+    $('s5dayd').textContent = D.beanDay.date
+    $('s5daysum').innerHTML = `Σ贷 ${D.beanDay.credit} &nbsp;=&nbsp; Σ借 ${D.beanDay.debit} &nbsp;<span style="color:#34d399">差额 0 · 允许封存</span>`
+    $('s5dayroot').textContent = hex(D.beanDay.merkleRoot, 28) + '…'
+  }
+  $('s5honest').style.opacity = easeOut(seg(lt, 9.0, 9.9)) * 0.72
+}
+
+/* ═══════════ S6 结算 ═══════════ */
+function s6(t) {
+  const lt = t - 55.2
+  const ph = $('ph3')
+  const pin = easeOut(seg(lt, 0.15, 1.1))
+  ph.style.opacity = pin
+  ph.style.transform = `translateY(${(1 - pin) * 34}px)`
+  ph.querySelector('img').style.opacity = 1
+  $('ph3lb').style.opacity = easeOut(seg(lt, 0.6, 1.3)) * 0.9
+
+  $('s6eye').style.opacity = easeOut(seg(lt, 0.2, 0.8))
+  $('s6h2').style.opacity = easeOut(seg(lt, 0.35, 1.1))
+
+  const vals = D ? [D.settlement.fulfill, D.settlement.service, D.settlement.promoter, D.settlement.beanbudget, D.settlement.retained] : ['161.24', '33.36', '12.90', '13.90', '56.60']
+  const cents = D ? [D.settlement.cents.fulfill, D.settlement.cents.service, D.settlement.cents.promoter, D.settlement.cents.beanbudget, D.settlement.cents.retained] : [16124, 3336, 1290, 1390, 5660]
+  const total = D ? D.settlement.cents.total : 27800
+  const maxC = Math.max(...cents)
+
+  for (let i = 0; i < 5; i++) {
+    const s0 = 1.0 + i * 0.42
+    const p = easeOut(seg(lt, s0, s0 + 0.6))
+    const row = $('sp' + i)
+    row.style.opacity = p
+    row.style.transform = `translateX(${(1 - p) * 22}px)`
+    const bar = $('spi' + i)
+    const pw = easeIO(seg(lt, s0 + 0.15, s0 + 1.15))
+    bar.style.width = ((cents[i] / maxC) * 100 * pw) + '%'
+    $('spa' + i).textContent = vals[i]
+  }
+
+  $('s6line').style.opacity = easeOut(seg(lt, 3.9, 4.6)) * 0.8
+  const ps = easeOut(seg(lt, 4.3, 5.2))
+  $('s6sum').style.opacity = ps
+  if (D) $('s6total').textContent = '¥' + D.settlement.total
+  $('s6foot').style.opacity = easeOut(seg(lt, 6.2, 7.2)) * 0.95
+
+  const pp = easeOut(seg(lt, 5.4, 6.5))
+  const pdf = $('s6pdf')
+  pdf.style.opacity = pp
+  pdf.style.transform = `translateY(${(1 - pp) * 40}px) rotate(${lerp(1.6, 0, pp)}deg)`
+  $('s6pdflb').style.opacity = easeOut(seg(lt, 6.4, 7.3)) * 0.85
+}
+
+/* ═══════════ S7 复核 ═══════════ */
+const PATH = (D && D.order.leafPath) || []
+function buildS7() {
+  const box = $('prows')
+  PATH.forEach((p, i) => {
+    const d = document.createElement('div')
+    d.className = 'prow'
+    d.id = 'pr' + i
+    d.style.top = (272 + i * 62) + 'px'
+    d.innerHTML = `<span class="i">${i + 1}</span>
+      <span class="h">兄弟在${p.p === 'R' ? '右' : '左'} · ${p.h.slice(0, 10)}…</span>
+      <span class="o" id="pro${i}">—</span>`
+    box.appendChild(d)
+  })
+}
+function s7(t) {
+  const lt = t - 67.2
+  const w = $('bw1')
+  const pin = easeOut(seg(lt, 0.15, 1.15))
+  w.style.opacity = pin
+  w.style.transform = `translateY(${(1 - pin) * 36}px) scale(${lerp(0.975, 1, pin)})`
+
+  $('s7eye').style.opacity = easeOut(seg(lt, 0.3, 0.9))
+  $('s7h2').style.opacity = easeOut(seg(lt, 0.45, 1.2))
+  $('s7note').style.opacity = easeOut(seg(lt, 1.0, 1.7)) * 0.9
+
+  // 逐层重算：每层显示结果（真实链式哈希，用前一层输出模拟滚动）
+  let cur = (D && D.order.payloadHash) || ''
+  PATH.forEach((p, i) => {
+    const s0 = 1.5 + i * 0.95
+    const pr = easeOut(seg(lt, s0, s0 + 0.6))
+    const el = $('pr' + i)
+    el.style.opacity = pr
+    el.style.transform = `translateX(${(1 - pr) * 20}px)`
+    const outEl = $('pro' + i)
+    // 展示真实的兄弟哈希与本层结果的截断值（结果由后续层/根串接体现）
+    const nxt = i < PATH.length - 1 ? PATH[i + 1].h : ((D && D.order.merkleRoot) || '')
+    outEl.textContent = pr > 0.5 ? hex(nxt, 10) + '…' : '…'
+  })
+
+  const ok = easeOut(seg(lt, 5.6, 6.6))
+  $('s7ok').style.opacity = ok
+  $('s7ok').style.transform = `translateY(${(1 - ok) * 16}px)`
+  if (D) {
+    $('s7oksub').textContent = `末值 = ${hex(D.order.merkleRoot, 18)}… · ${PATH.length} 层全部在本地计算`
+    $('bwurl').textContent = '127.0.0.1:8080/verify?no=' + D.order.no
+  }
+  $('s7foot').style.opacity = easeOut(seg(lt, 7.6, 8.6)) * 0.95
+}
+
+/* ═══════════ S8 多链 ═══════════ */
+const PROVS = (D && D.chain && D.chain.providers) || []
+const POS = [
+  { x: 820, y: 214 },   // 上中
+  { x: 386, y: 384 },   // 左中
+  { x: 1530, y: 384 },  // 右中
+  { x: 604, y: 690 },   // 左下
+  { x: 1324, y: 690 },  // 右下
+]
+// 长名称会把卡片撑破：显示用一个短名，全称放到副行
+const SHORT = {
+  chaingen: { nm: '链数根', ds: '上海数据集团 · 联盟链' },
+  tbaas: { nm: '腾讯云 TBaaS', ds: '至信链 · 需落根合约' },
+  antchain: { nm: '蚂蚁链 / 鲸探', ds: '藏品需资质与审核' },
+  evm: { nm: '通用 EVM 链', ds: 'Polygon / Base / BNB' },
+  noop: { nm: '未接入', ds: '本地存证 · 不发伪交易号' },
+}
+function buildS8() {
+  const box = $('provs')
+  PROVS.forEach((p, i) => {
+    const pos = POS[i] || { x: 1500, y: 300 }
+    const d = document.createElement('div')
+    d.className = 'prov'
+    d.id = 'pv' + i
+    d.style.left = pos.x + 'px'
+    d.style.top = pos.y + 'px'
+    const cap = []
+    if (p.capabilities.anchor) cap.push('存证')
+    if (p.capabilities.assets) cap.push('资产')
+    const sh = SHORT[p.id] || { nm: p.label, ds: '' }
+    d.innerHTML = `<div class="nm">${sh.nm}</div>
+      <div class="ds">${sh.ds}</div>
+      <div class="ds" style="margin-top:4px;color:#7da2bd">${cap.join(' · ') || '仅记录'} · ${p.mode === 'real' ? '已配置' : '缺凭据'}</div>
+      <div class="tp" style="${p.id === ((D && D.chain && D.chain.current && D.chain.current.provider) || '') ? 'border-color:rgba(56,189,248,.75);color:#a5f3fc' : ''}">${p.id}${p.id === ((D && D.chain && D.chain.current && D.chain.current.provider) || '') ? ' · 当前' : ''}</div>`
+    box.appendChild(d)
+  })
+  const wb = $('wires')
+  PROVS.forEach((p, i) => {
+    const pos = POS[i] || { x: 1500, y: 300 }
+    const cx0 = 960, cy0 = 500
+    const px = pos.x + 135, py = pos.y + 48
+    const dx = px - cx0, dy = py - cy0
+    const len = Math.hypot(dx, dy)
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI
+    const w = document.createElement('div')
+    w.className = 'wire'
+    w.id = 'wr' + i
+    w.style.left = cx0 + 'px'
+    w.style.top = cy0 + 'px'
+    w.style.width = len + 'px'
+    w.style.transform = `rotate(${ang}deg)`
+    wb.appendChild(w)
+  })
+}
+function s8(t) {
+  const lt = t - 78.2
+  $('s8eye').style.opacity = easeOut(seg(lt, 0.1, 0.6))
+  $('s8h2').style.opacity = easeOut(seg(lt, 0.2, 1.0))
+  $('s8h2').style.transform = `translateY(${(1 - easeOut(seg(lt, 0.2, 1.0))) * 14}px)`
+
+  const hub = easeOut(seg(lt, 0.7, 1.5))
+  $('s8hub').style.opacity = hub
+  $('s8hub').style.transform = `scale(${lerp(0.9, 1, hub)})`
+
+  PROVS.forEach((p, i) => {
+    const s0 = 1.2 + i * 0.3
+    const pr = easeOut(seg(lt, s0, s0 + 0.6))
+    const el = $('pv' + i)
+    el.style.opacity = pr
+    el.style.transform = `translateY(${(1 - pr) * 18}px)`
+    const wr = $('wr' + i)
+    if (wr) { wr.style.opacity = easeOut(seg(lt, s0 + 0.15, s0 + 0.7)) * 0.9 }
+  })
+
+  // 当前生效的链常亮，其余静默 —— 不做无意义的高亮游走
+  const curId = (D && D.chain && D.chain.current && D.chain.current.provider) || 'noop'
+  PROVS.forEach((p, i) => {
+    const el = $('pv' + i)
+    if (!el) return
+    const isCur = p.id === curId
+    const glow = isCur ? easeOut(seg(lt, 2.2, 3.2)) : 0
+    el.style.borderColor = `rgba(56,189,248,${0.16 + glow * 0.62})`
+    el.style.boxShadow = glow > 0.02 ? `0 0 ${30 * glow}px rgba(56,189,248,${0.3 * glow})` : 'none'
+  })
+
+  $('s8cmd').style.opacity = easeOut(seg(lt, 3.0, 3.9))
+  $('s8foot').style.opacity = easeOut(seg(lt, 5.4, 6.3)) * 0.8
+}
+
+/* ═══════════ S9 收口 ═══════════ */
+function s9(t) {
+  const lt = t - 84.2
+  $('s9eye').style.opacity = easeOut(seg(lt, 0.05, 0.5))
+  $('s9h2').style.opacity = easeOut(seg(lt, 0.15, 0.8))
+  ;['bc1', 'bc2', 'bc3', 'bc4'].forEach((id, i) => {
+    const s0 = 0.22 + i * 0.36
+    const p = easeOut(seg(lt, s0, s0 + 0.5))
+    $(id).style.opacity = p
+    $(id).style.transform = `translateY(${(1 - p) * 18}px)`
+  })
+  const pb = easeOut(seg(lt, 1.95, 2.75))
+  $('finalBig').style.opacity = pb
+  $('finalBig').style.transform = `translateY(${(1 - pb) * 20}px)`
+  $('finalSm').style.opacity = easeOut(seg(lt, 2.65, 3.3)) * 0.92
+  $('finalSign').style.opacity = easeOut(seg(lt, 3.05, 3.7)) * 0.8
+}
+
+/* ═══════════ 字幕 ═══════════ */
+const CUES = [
+  [0.6, 4.4, '一条订单，从游客掏手机，到政府能自己验'],
+  [4.6, 8.0, '90 秒，看完它怎么走完'],
+  [8.6, 13.2, '四个角色：游客、商户、平台、以及<em>任何一个外部人</em>'],
+  [13.4, 17.8, '每一跳都在后端留下一条不可回改的记录'],
+  [18.8, 24.4, '游客在小程序里选线路、下单、支付'],
+  [24.6, 30.8, '付完款就拿到核销码 —— <em>60 秒刷新，一码一次</em>'],
+  [31.8, 37.6, '商户用自己的小程序扫码核销，<em>断网也能收</em>'],
+  [37.8, 41.8, '核销那一刻，业务账和存证账同时落笔'],
+  [42.8, 48.6, '七类事件按小时打包成一个 <em>Merkle 根</em>，根里带着上一批的根'],
+  [48.8, 54.8, '旅豆账本日终封存：Σ贷 = Σ借，差额为零才允许封'],
+  [55.8, 61.8, '商户最痛的是「平台说多少就多少」'],
+  [62.0, 66.8, '五项分账恒等，外加一个<em>整单校验码</em>'],
+  [67.8, 73.2, '任何人打开这个页面，浏览器<em>本地</em>逐层算 sha256'],
+  [73.4, 77.8, '算出来等于公布的根才通过 —— 改一个字就全变'],
+  [78.6, 84.0, '客户用什么链，我们就接什么链 —— 业务代码零改动'],
+  [84.3, 86.6, '四条红线，我们主动先说'],
+]
+function showSub(t) {
+  const el = $('sub')
+  let hit = null
+  for (const [a, b, txt] of CUES) if (t >= a && t <= b) { hit = [a, b, txt]; break }
+  if (!hit) { el.style.opacity = 0; return }
+  const [a, b, txt] = hit
+  if (el.dataset.txt !== txt) { el.innerHTML = txt; el.dataset.txt = txt }
+  const pin = easeOut(seg(t, a, a + 0.32))
+  const pout = 1 - easeIO(seg(t, b - 0.3, b))
+  el.style.opacity = Math.min(pin, pout)
+  el.style.transform = `translateY(${(1 - pin) * 10}px)`
+}
+
+/* ═══════════ 主循环 ═══════════ */
+const TOTAL = 90
+let lastT = -1
+window.seek = function (t) {
+  lastT = t
+  drawBg(t)
+  showScenes(t)
+  s1(t); s2(t); s3(t); s4(t); s5(t); s6(t); s7(t); s8(t); s9(t)
+  showSub(t)
+  $('bar').firstElementChild.style.width = (clamp01(t / TOTAL) * 1920) + 'px'
+  const mm = String(Math.floor(t / 60)).padStart(2, '0')
+  const ss = String(Math.floor(t % 60)).padStart(2, '0')
+  $('hudtime').textContent = mm + ':' + ss
+  // 片头黑场：前 0.5 秒淡出，结尾 89.2 淡入
+  const bo = Math.max(1 - seg(t, 0.0, 0.9), seg(t, 89.0, 90))
+  $('blackout').style.opacity = clamp01(bo)
+  // 扫描线
+  $('scanline').style.top = ((t * 42) % 1200 - 60) + 'px'
+  $('scanline').style.opacity = 0.28 + 0.12 * Math.sin(t * 1.7)
+}
+window.DURATION = TOTAL
+
+/* 初始化 */
+buildS5(); buildS7(); buildS8()
+window.__ready = Promise.all(
+  Array.from(document.images).map((im) => im.complete ? 1 : new Promise((r) => { im.onload = im.onerror = r }))
+)
+seek(0)
+window.__ready.then(() => { window.__scrollOK = document.body.scrollHeight })
+</script>
+</body>
+</html>

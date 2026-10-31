@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>向往的自由 · 存证复核</title>
+<style>
+  :root{
+    --brand:#0f766e; --brand-soft:#e6f4f1; --ink:#10151c; --sub:#5b6572; --faint:#98a1b0;
+    --line:#e3e7ee; --ok:#0f9d58; --warn:#b45309; --bg:#f4f6f8; --card:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.6}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px 56px}
+  header{background:linear-gradient(135deg,#123a3a,#0f766e);color:#fff;padding:26px 0 30px;margin-bottom:-18px}
+  header .wrap{padding-bottom:0}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.5px}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:#7ee0cf;box-shadow:0 0 0 4px rgba(126,224,207,.22)}
+  .sub{font-size:12px;opacity:.72;letter-spacing:2px;margin-top:2px}
+  h1{font-size:22px;margin:16px 0 4px;font-weight:700}
+  .lead{font-size:13px;opacity:.8;margin:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 20px;
+    margin-top:16px;box-shadow:0 1px 2px rgba(16,21,28,.04)}
+  .card h2{font-size:14px;margin:0 0 12px;color:var(--sub);font-weight:600;letter-spacing:.5px;
+    display:flex;align-items:center;gap:8px}
+  .card h2::before{content:"";width:3px;height:14px;border-radius:2px;background:var(--brand)}
+  .row{display:flex;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .row:last-child{border-bottom:0}
+  .row .k{width:96px;color:var(--sub);flex:none}
+  .row .v{flex:1;word-break:break-all;font-variant-numeric:tabular-nums}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    font-size:12.5px;font-weight:600}
+  .badge.ok{background:#e7f6ee;color:var(--ok)}
+  .badge.warn{background:#fdf3e0;color:var(--warn)}
+  .badge.idle{background:#eef1f5;color:var(--sub)}
+  .big{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;background:var(--brand-soft);
+    border:1px solid #cfe8e2}
+  .big .icon{width:38px;height:38px;border-radius:10px;background:var(--brand);color:#fff;display:flex;
+    align-items:center;justify-content:center;font-size:19px;flex:none}
+  .big b{display:block;font-size:15px}
+  .big span{font-size:12.5px;color:var(--sub)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--sub);font-weight:600;font-size:12px}
+  td.mono{font-size:12px}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .step:last-child{border-bottom:0}
+  .step .n{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border-radius:10px;font-size:14px;
+    font-weight:600;text-decoration:none;border:1px solid transparent;cursor:pointer}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.ghost{background:#fff;border-color:var(--line);color:var(--ink)}
+  .search{display:flex;gap:8px;margin-top:6px}
+  .search input{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;outline:none}
+  .search input:focus{border-color:var(--brand)}
+  .note{font-size:12px;color:var(--faint);margin-top:14px;line-height:1.75}
+  .err{background:#fdecea;border-color:#f6cfc9;color:#8a1f11}
+  .hide{display:none}
+  body{min-height:100vh;display:flex;flex-direction:column}
+  .wrap.main{flex:1}
+  code{background:#f2f4f7;padding:1px 5px;border-radius:4px;font-size:12.5px}
+  @media(max-width:520px){ .row .k{width:80px} h1{font-size:19px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>向往的自由 <span style="opacity:.6;font-weight:400;font-size:13px">WANDERLUST</span></div>
+    <div class="sub">向往自由链 · 存证复核</div>
+    <h1>任何人都能自己算一遍</h1>
+    <p class="lead">本页在<strong>你的浏览器本地</strong>完成 SHA-256 计算，不向服务器上传任何数据。<br>算出来的根与平台给出的根一致，才叫「不可篡改」。</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card" id="searchCard">
+    <h2>查询</h2>
+    <div class="search">
+      <input id="q" placeholder="订单号（如 WL2026…）或账本日期（如 2026-10-26）" autocomplete="off">
+      <button class="btn primary" onclick="go()">复核</button>
+    </div>
+    <div class="note">扫描存证证明上的二维码会自动带上参数；也可手工输入。无需登录。</div>
+  </div>
+
+  <div id="intro">
+    <div class="card">
+      <h2>三步复核</h2>
+      <div class="step"><div class="n">1</div><div>扫描存证证明上的二维码，或在上方输入订单号 / 账本日期</div></div>
+      <div class="step"><div class="n">2</div><div>本页取回该记录的「载荷哈希」与「证明路径」，在<strong>你本机浏览器</strong>逐层计算 sha256</div></div>
+      <div class="step"><div class="n">3</div><div>算出的末值应等于平台公布的 Merkle 根；若已上链，还会显示链上交易编号供进一步查询</div></div>
+    </div>
+    <div class="card">
+      <h2>为什么这算「不可篡改」</h2>
+      <div class="note" style="margin-top:0">
+        单条记录改动一个字，它的哈希就完全不同，重算得到的根也就对不上 —— 这是密码学保证，不依赖任何一方的承诺。<br>
+        更进一步：每一批的根都写着<strong>上一批的根</strong>（前根链）。想改历史某一批，必须把它之后所有批次一起改，而最新一批已经锚定在联盟链上。<br>
+        链上<strong>只放指纹</strong>（Merkle 根），不放姓名、手机号、身份证号与金额 —— 可验证，但不泄露。
+      </div>
+    </div>
+  </div>
+
+  <div id="out"></div>
+
+  <div class="note" id="foot">
+    本页只展示哈希指纹与时点，不展示姓名、手机号、身份证号与金额明细。<br>
+    数据来源：平台存证队列 → Merkle 打包 → 链上锚定；链上只放指纹，业务数据留在平台数据库。
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s)
+const params = new URLSearchParams(location.search)
+// 双域词表：默认 T3（对外 BD / 政府 / 投资人）；mode=t1 切到微信生态口径（商户可见，不出现"链/存证"）
+const T1 = params.get('mode') === 't1'
+const W = T1
+  ? { page: '可信记录复核', sub: '向往自由 · 记录复核', h1: '核对一条记录，只看它该让你看的',
+      root: '整单校验码', hash: '记录校验码', prev: '上一条记录', batch: '记录批次',
+      chainRef: null, anchored: '已封存', pending: '校验中', leaf: '记录指纹' }
+  : { page: '存证复核', sub: '向往自由链 · 存证复核', h1: '任何人都能自己算一遍',
+      root: 'Merkle 根', hash: '载荷哈希', prev: '前一批根', batch: '批次',
+      chainRef: '链上编号', anchored: '已锚定上链', pending: '已打包 · 待锚定', leaf: '载荷哈希' }
+if (T1) {
+  document.title = '向往的自由 · 可信记录复核'
+  $('h1').textContent = W.h1
+  const sub = $('header .sub'); if (sub) sub.textContent = W.sub
+  const lead = $('.lead'); if (lead) lead.innerHTML = '本页在<strong>你的浏览器本地</strong>完成校验码重算，不向服务器上传任何数据。<br>算出来的值与平台记录的一致，说明这条记录未被改动。'
+  const foot = document.getElementById('foot')
+  if (foot) foot.innerHTML = '本页只展示校验码与记录状态，不展示姓名、手机号、身份证号与金额明细。<br>记录由平台在业务发生时写入并封存，任何改动都会导致校验码不同。'
+  const hint = document.querySelector('#searchCard .note')
+  if (hint) hint.textContent = '扫描记录上的二维码会自动带上参数；也可手工输入。无需登录。'
+}
+
+const enc = new TextEncoder()
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+const sha256 = async (s) => hex(await crypto.subtle.digest('SHA-256', enc.encode(s)))
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const cut = (h, n = 24) => (h && h.length > n * 2 ? h.slice(0, n) + '…' + h.slice(-8) : String(h ?? '—'))
+
+/** 浏览器内重算：与后端 verifyProof 完全同一套规则 */
+async function recomputeLeaf(payloadHash, path) {
+  const steps = []
+  let cur = payloadHash
+  for (let i = 0; i < path.length; i++) {
+    const st = path[i]
+    const left = st.p === 'R' ? cur : st.h
+    const right = st.p === 'R' ? st.h : cur
+    const next = await sha256(left + right)
+    steps.push({ i: i + 1, dir: st.p, sib: st.h, dup: st.dup, out: next })
+    cur = next
+  }
+  return { root: cur, steps }
+}
+
+function shell(inner) {
+  $('#out').innerHTML = inner
+  const intro = document.getElementById('intro')
+  if (intro && inner) intro.classList.add('hide')
+}
+
+async function go() {
+  const raw = ($('#q').value || '').trim()
+  if (!raw) return
+  const isDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+  const url = isDate ? '/open/verify/bean-day/' + raw : '/open/verify/order/' + encodeURIComponent(raw)
+  shell('<div class="card"><h2>复核中</h2><div class="note">正在读取记录…</div></div>')
+  try {
+    const r = await fetch(url).then((x) => x.json())
+    if (!r.data) throw new Error(r.msg || '未找到记录')
+    isDate ? renderBean(r.data) : renderOrder(r.data)
+  } catch (e) {
+    shell(`<div class="card err"><h2>未能复核</h2><div class="note" style="color:#8a1f11">${esc(e.message)}<br>请确认单号是否正确；未打包的记录也会查不到。</div></div>`)
+  }
+}
+
+function badge(anchored) {
+  return `<span class="badge ${anchored ? 'ok' : 'warn'}">${anchored ? W.anchored : W.pending}</span>`
+}
+
+async function renderOrder(d) {
+  const anchored = !!d.chainRef
+  const path = d.leafPath || []
+  const { root, steps } = path.length ? await recomputeLeaf(d.payloadHash, path) : { root: null, steps: [] }
+  const pass = root && root === d.merkleRoot
+  const chainRow = (W.chainRef && anchored)
+    ? `<div class="row"><div class="k">${W.chainRef}</div><div class="v mono">${esc(d.chainRef)}</div></div>
+       <div class="row"><div class="k">锚定时间</div><div class="v">${esc(String(d.anchoredAt || '').slice(0, 19))}</div></div>`
+    : (W.chainRef ? `<div class="row"><div class="k">${W.chainRef}</div><div class="v" style="color:var(--warn)">待锚定</div></div>` : '')
+
+  shell(`
+  <div class="card">
+    <div class="big">
+      <div class="icon">${pass ? '✓' : (path.length ? '!' : '·')}</div>
+      <div style="flex:1">
+        <b>${pass ? '本地重算通过：校验值与记录一致' : (path.length ? '重算未通过，请联系平台' : '尚未打包，暂无可核验的路径')}</b>
+        <span>${pass
+          ? '你的浏览器从' + W.leaf + '逐层算出同一个校验值，说明这条记录未被改动。'
+          : (path.length ? '计算出的值与平台记录不同，请勿采信本次结果。' : '记录已入队，等待批次打包后即可复核。')}</span>
+      </div>
+    </div>
+    <div style="margin-top:14px">${badge(anchored)}${pass ? '<span class="badge ok" style="margin-left:8px">校验自洽</span>' : ''}</div>
+  </div>
+
+  <div class="card">
+    <h2>记录</h2>
+    <div class="row"><div class="k">业务单号</div><div class="v mono">${esc(d.bizRef)}</div></div>
+    <div class="row"><div class="k">记录版本</div><div class="v">v${esc(d.versionNo)}</div></div>
+    <div class="row"><div class="k">${W.hash}</div><div class="v mono">${esc(d.payloadHash)}</div></div>
+    <div class="row"><div class="k">${W.batch}</div><div class="v">#${esc(d.batchSeq ?? '—')} · 第 ${esc(d.leafIndex ?? '—')} 片${d.leafCount ? ' / 共 ' + esc(d.leafCount) + ' 片' : ''}</div></div>
+    <div class="row"><div class="k">${W.prev}</div><div class="v mono" style="color:var(--faint)">${d.prevRoot ? esc(cut(d.prevRoot)) : '链起点（本批为第一环）'}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>${W.root}（平台给出）</h2>
+    <div class="v mono" style="word-break:break-all">${esc(d.merkleRoot || '—')}</div>
+    ${root ? `<div class="row" style="margin-top:10px"><div class="k">本地算出</div>
+      <div class="v mono" style="color:${pass ? 'var(--ok)' : '#b42318'}">${esc(root)}</div></div>` : ''}
+    ${chainRow}
+  </div>
+
+  ${steps.length ? `<div class="card">
+    <h2>重算过程（浏览器本地执行）</h2>
+    <div class="note" style="margin:0 0 8px">从「${W.hash}」起，按序计算 <code>sha256(左 + 右)</code>。</div>
+    ${steps.map((s) => `<div class="step">
+      <div class="n">${s.i}</div>
+      <div style="flex:1">
+        <div>兄弟在${s.dir === 'R' ? '右' : '左'}${s.dup ? '（末节点自身复制）' : ''} <span class="mono" style="color:var(--faint)">${esc(cut(s.sib, 16))}</span></div>
+        <div class="mono" style="color:var(--sub)">→ ${esc(cut(s.out, 20))}</div>
+      </div>
+    </div>`).join('')}
+    <div class="step" style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
+      <div class="n" style="background:${pass ? 'var(--ok)' : '#b42318'}">✓</div>
+      <div style="flex:1"><b>末值 = ${W.root}</b>
+        <div class="mono" style="color:var(--sub)">${esc(root)}</div></div>
+    </div>
+  </div>` : ''}
+
+  <div class="bar">
+    <a class="btn primary" href="/open/report/order/${encodeURIComponent(d.bizRef)}" target="_blank" rel="noopener">⬇ 下载${T1 ? '可信记录' : '存证证明'}（PDF）</a>
+    <button class="btn ghost" onclick="window.print()">打印本页</button>
+  </div>`)
+}
+
+async function renderBean(d) {
+  const anchored = !!d.chainRef
+  const ok = d.balanced
+  shell(`
+  <div class="card">
+    <div class="big">
+      <div class="icon" style="background:${ok ? 'var(--brand)' : '#b42318'}">${ok ? '✓' : '!'}</div>
+      <div style="flex:1">
+        <b>${ok ? '账本自洽：Σ贷 = Σ借' : '账本不平，请勿采信'}</b>
+        <span>${ok
+          ? '该日发放与消耗的数额相等，没有凭空的旅豆被创造出来 —— 这是"严禁超发"的账本证据。'
+          : '借贷差额不为零，账本存在异常。'}</span>
+      </div>
+    </div>
+    <div style="margin-top:14px">${badge(anchored)}</div>
+  </div>
+
+  <div class="card">
+    <h2>封存记录</h2>
+    <div class="row"><div class="k">业务日期</div><div class="v mono">${esc(d.bizDate)}</div></div>
+    <div class="row"><div class="k">账本笔数</div><div class="v">${esc(d.leafCount)} 笔</div></div>
+    <div class="row"><div class="k">Σ贷（发放）</div><div class="v mono">${esc(d.creditSum)} 豆</div></div>
+    <div class="row"><div class="k">Σ借（消耗）</div><div class="v mono">${esc(d.debitSum)} 豆</div></div>
+    <div class="row"><div class="k">借贷恒等</div><div class="v">${ok ? '成立（差额 0）' : '不成立'}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>日终根</h2>
+    <div class="v mono" style="word-break:break-all">${esc(d.merkleRoot)}</div>
+    <div class="row" style="margin-top:10px"><div class="k">前一日根</div><div class="v mono" style="color:var(--faint)">${d.prevRoot ? esc(cut(d.prevRoot)) : '链起点（首日封存）'}</div></div>
+    ${W.chainRef ? `<div class="row"><div class="k">${W.chainRef}</div><div class="v mono">${anchored ? esc(d.chainRef) : '<span style="color:var(--warn)">待锚定</span>'}</div></div>` : ''}
+  </div>
+
+  <div class="bar">
+    <a class="btn primary" href="/open/report/bean-day/${encodeURIComponent(d.bizDate)}" target="_blank" rel="noopener">⬇ 下载账本封存证明（PDF）</a>
+    <button class="btn ghost" onclick="window.print()">打印本页</button>
+  </div>`)
+}
+
+/** 结算记录：只出校验码与封存状态，不出金额（隐私边界） */
+async function renderSettle(d) {
+  shell(`
+  <div class="card">
+    <div class="big">
+      <div class="icon">${d.found ? '✓' : '·'}</div>
+      <div style="flex:1">
+        <b>${d.found ? '已找到该结算记录' : '该结算单尚未写入记录'}</b>
+        <span>${d.found ? (d.chainRef ? '校验码已封存，可与你手里那份 PDF 逐位比对。' : '校验码已生成，等待平台统一封存。') : '结算单已生成后，会在下一次批次写入记录。'}</span>
+      </div>
+    </div>
+    <div style="margin-top:14px">${badge(!!d.chainRef)}</div>
+  </div>
+
+  <div class="card">
+    <h2>记录</h2>
+    <div class="row"><div class="k">结算单号</div><div class="v mono">#${esc(d.settlementId)}</div></div>
+    <div class="row"><div class="k">记录版本</div><div class="v">v${esc(d.status)}</div></div>
+    <div class="row"><div class="k">${W.hash}</div><div class="v mono">${esc(d.payloadHash || '—')}</div></div>
+    <div class="row"><div class="k">${W.root}</div><div class="v mono">${esc(d.merkleRoot || '—')}</div></div>
+    <div class="row"><div class="k">所属批次</div><div class="v">#${esc(d.batchSeq ?? '—')}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>金额不在此页展示</h2>
+    <div class="note" style="margin:0">结算金额与商户信息只出现在你手里那份《结算可信记录》PDF 中。<br>
+    本页只证明<b>那条记录没有被改动过</b>：把 PDF 上的校验码与本页比对即可。</div>
+  </div>`)
+}
+
+async function goSettle(id) {
+  shell('<div class="card"><h2>复核中</h2><div class="note">正在读取记录…</div></div>')
+  try {
+    const r = await fetch('/open/verify/settlement/' + encodeURIComponent(id)).then((x) => x.json())
+    if (!r.data) throw new Error(r.msg || '未找到记录')
+    renderSettle(r.data)
+  } catch (e) {
+    shell(`<div class="card err"><h2>未能复核</h2><div class="note" style="color:#8a1f11">${esc(e.message)}</div></div>`)
+  }
+}
+
+const settle = params.get('settle')
+const preset = params.get('no') || params.get('date') || params.get('ref') || ''
+if (settle) {
+  const sc = document.getElementById('searchCard'); if (sc) sc.classList.add('hide')
+  $('#q').value = ''
+  goSettle(settle)
+} else if (preset) {
+  $('#q').value = preset
+  go()
+}
+</script>
+</body>
+</html>
