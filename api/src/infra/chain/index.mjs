@@ -42,8 +42,8 @@ const K = (key, label, o = {}) => ({ key, label, ...o })
 export const CATALOG = {
   chaingen: { group: 'alliance', vendor: '上海数据集团', protocol: { transport: 'HTTPS REST', sign: 'HMAC-SHA256（METHOD\nPATH\nts\nbody）', mode: '同步出块', contract: '无需部署合约' },
     keys: [K('CHAIN_ENDPOINT', '接入地址', { required: true, ph: 'https://…' }), K('CHAIN_ACCOUNT', '接入账号', { required: true }), K('CHAIN_KEY', '签名密钥', { required: true, secret: true })] },
-  tbaas: { group: 'alliance', vendor: '腾讯云', protocol: { transport: '腾讯云 API 3.0', sign: 'TC3-HMAC-SHA256', mode: '同步', contract: '需部署落根合约 writeRoot' },
-    keys: [K('TBAAS_SECRET_ID', 'SecretId', { required: true }), K('TBAAS_SECRET_KEY', 'SecretKey', { required: true, secret: true }), K('TBAAS_CLUSTER_ID', '网络 ID', { required: true }),
+  tbaas: { group: 'alliance', vendor: '腾讯云', protocol: { transport: '腾讯云 API 3.0', sign: 'TC3-HMAC-SHA256', mode: '体验网络：提交 → 交易回执确认；其他形态：同步', contract: '生产需自有落根合约；体验合约仅供联调' },
+    keys: [K('TBAAS_SECRET_ID', 'SecretId', { required: true, secret: true }), K('TBAAS_SECRET_KEY', 'SecretKey', { required: true, secret: true }), K('TBAAS_CLUSTER_ID', '网络 ID', { required: true }),
       K('TBAAS_CHANNEL', '通道/群组（Fabric 形态）'), K('TBAAS_CHAIN_ID', '业务链 ID（长安链形态）', { ph: 'chain_demo' }),
       K('TBAAS_CONTRACT', '落根合约名（长安链形态）', { ph: 'ChainMakerDemo' }),
       K('TBAAS_PARAM_TEMPLATE', '入参模板（长安链形态，JSON 对象）', { multiline: true, ph: '{"key":"{root}","field":"merkle_root","value":"{prevRoot}|{bizDate}"}' }),
@@ -151,7 +151,7 @@ export const needsConfirmation = () => !!active().capabilities.confirm
 /** 核验一笔已提交的锚定交易：按批次提交时所用的链核验（切换当前链后，旧批次仍去旧链确认） */
 export async function confirm(args) {
   const p = (args.provider && PROVIDERS[args.provider]) || active()
-  if (!p.capabilities.confirm || typeof p.confirm !== 'function') return { final: true }
+  if (!p.capabilities.confirm || typeof p.confirm !== 'function') return { final: false, reason: '当前链配置不支持回执确认，请恢复提交时的配置后重试' }
   return await p.confirm(args)
 }
 

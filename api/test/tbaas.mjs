@@ -13,7 +13,7 @@ const srv = http.createServer((req, res) => {
   let b = ''
   req.on('data', (d) => (b += d))
   req.on('end', () => {
-    seen.push({ h: req.headers, body: JSON.parse(b) })
+    seen.push({ h: req.headers, body: JSON.parse(b), at: Date.now() })
     res.setHeader('content-type', 'application/json')
     res.end(JSON.stringify(reply))
   })
@@ -76,6 +76,103 @@ try {
     assert.deepEqual(renderParamTemplate('{"n":{bizDate},"k":"{root}"}', { root: 'r', prevRoot: 'p', bizDate: 20261102 }), { n: '20261102', k: 'r' })
   })
   await t('离线自检仍通过', () => { assert.equal(tbaas.selfTest().ok, true) })
+  const demo = () => {
+    reset(); base(); Object.assign(process.env, { TBAAS_CHAIN_ID: 'chain_demo', TBAAS_CONTRACT: 'ChainMakerDemo',
+      TBAAS_ACTION: 'InvokeChainMakerDemoContract', TBAAS_VERSION: '2018-04-16', TBAAS_REGION: 'ap-beijing' })
+  }
+  await t('体验网络按 TxID 回查并等待终局；Fabric 不声明确认能力', async () => {
+    demo(); seen.length = 0
+    assert.equal(tbaas.capabilities.confirm, true)
+    reply = { Response: { RequestId: 'receipt-r', Result: { Code: 0, TxId: TX, BlockHeight: 277493 } } }
+    assert.deepEqual(await tbaas.confirm({ txRef: TX }), { final: true, block: '277493', confirmations: 1 })
+    assert.equal(seen[0].h['x-tc-action'], 'QueryChainMakerDemoTransaction')
+    assert.deepEqual(seen[0].body, { ClusterId: 'chainmaker-demo', ChainId: 'chain_demo', TxID: TX })
+    reply.Response.Result.BlockHeight = 0
+    assert.equal((await tbaas.confirm({ txRef: TX })).final, false)
+    reset(); base(); process.env.TBAAS_CHANNEL = 'ch1'
+    assert.equal(tbaas.capabilities.confirm, false)
+    await assert.rejects(() => tbaas.confirm({ txRef: TX }), /仅支持长安链体验网络/)
+  })
+  await t('错误回执不得记终局：失败、交易号错、缺 Code、无效块高', async () => {
+    demo()
+    for (const [result, error] of [
+      [{ Code: 4, TxId: TX, BlockHeight: 1 }, /合约执行失败/],
+      [{ Code: 0, TxId: 'b'.repeat(64), BlockHeight: 1 }, /交易号不一致/],
+      [{ TxId: TX, BlockHeight: 1 }, /缺少结果码/],
+      [{ Code: 0, TxId: TX, BlockHeight: -1 }, /区块高度无效/],
+      [{ Code: 0, TxId: TX }, /区块高度无效/],
+    ]) {
+      reply = { Response: { Result: result } }
+      await assert.rejects(() => tbaas.confirm({ txRef: TX }), error)
+    }
+    await assert.rejects(() => tbaas.queryTransaction('bad-id'), /64 位/)
+  })
+  await t('只读探测确实调用查询接口、base64 解码且不提交交易', async () => {
+    demo(); seen.length = 0
+    reply = { Response: { RequestId: 'query-r', Result: { Code: 0, Result: Buffer.from('test-issued').toString('base64') } } }
+    assert.equal((await tbaas.readDemoValue('wenlv-test-001', 'ticket_status')).value, 'test-issued')
+    assert.equal((await tbaas.probe()).ok, true)
+    assert.ok(seen.every(s => s.h['x-tc-action'] === 'QueryChainMakerDemoContract'))
+    assert.deepEqual(JSON.parse(seen[0].body.FuncParam), { key: 'wenlv-test-001', field: 'ticket_status' })
+  })
+  await t('并发请求间隔至少 1 秒，失败后队列仍可继续且不重发写交易', async () => {
+    demo(); seen.length = 0
+    reply = { Response: { Error: { Code: 'RequestLimitExceeded', Message: 'rate limited' } } }
+    await assert.rejects(() => tbaas.anchor({ root: ROOT }), /RequestLimitExceeded/)
+    reply = { Response: { Result: { Code: 0, TxId: TX, BlockHeight: 8 } } }
+    await Promise.all([tbaas.confirm({ txRef: TX }), tbaas.confirm({ txRef: TX })])
+    assert.equal(seen.length, 3)
+    assert.equal(seen.filter(s => s.h['x-tc-action'] === 'InvokeChainMakerDemoContract').length, 1)
+    for (let i = 1; i < seen.length; i++) assert.ok(seen[i].at - seen[i - 1].at >= 1000)
+  })
+  if (process.env.DB_NAME) {
+    const { assertIsolatedDb } = await import('./_guard.mjs')
+    assertIsolatedDb('test/tbaas.mjs')
+    const { q, one } = await import('../src/db.mjs')
+    const attest = await import('../src/domain/attest.mjs')
+    const created = []
+    const savedProvider = process.env.CHAIN_PROVIDER
+    try {
+      demo(); process.env.CHAIN_PROVIDER = 'tbaas'
+      const last = await one('SELECT seq FROM attest_batch ORDER BY seq DESC LIMIT 1')
+      for (let i = 1; i <= 2; i++) {
+        const r = await q(`INSERT INTO attest_batch (seq,biz_date,merkle_root,leaf_count,merkle_kind,merkle_version,status)
+          VALUES (?,CURDATE(),?,0,'tbaas-unit',2,1)`, [Number(last?.seq || 0) + i, String(i).repeat(64)])
+        created.push(r.insertId)
+      }
+      await t('隔离库：提交仅进入 5；指定批次确认进入 2，另一批次保持 5', async () => {
+        reply = { Response: { Result: { Code: 0, TxId: TX } } }
+        for (const id of created) assert.equal((await attest.anchorToChain(id)).submitted, true)
+        assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[0]])).status), 5)
+        reply = { Response: { Result: { Code: 0, TxId: TX, BlockHeight: 277493 } } }
+        assert.equal((await attest.confirmBatch(created[0])).anchored, true)
+        assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[0]])).status), 2)
+        assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[1]])).status), 5)
+      })
+      await t('隔离库：重复确认已终局批次不再发请求；待确认空块高保持 5', async () => {
+        const n = seen.length
+        assert.equal((await attest.confirmBatch(created[0])).anchored, true)
+        assert.equal(seen.length, n)
+        reply = { Response: { Result: { Code: 0, TxId: TX, BlockHeight: 0 } } }
+        assert.equal((await attest.confirmBatch(created[1])).pending, true)
+        assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[1]])).status), 5)
+      })
+      await t('隔离库：待确认期间改成不支持确认的配置，不得直接当成功', async () => {
+        process.env.TBAAS_ACTION = 'Invoke'
+        const r = await attest.confirmBatch(created[1])
+        assert.equal(r.pending, true)
+        assert.match(r.reason, /不支持回执确认/)
+        assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[1]])).status), 5)
+      })
+    } finally {
+      for (const id of created) await q('DELETE FROM attest_batch WHERE id=?', [id])
+      if (savedProvider === undefined) delete process.env.CHAIN_PROVIDER
+      else process.env.CHAIN_PROVIDER = savedProvider
+      // mysql2 连接池在此进程内仍有连接；用正常关闭助手释放，避免 Windows 强制退出断言。
+      const { closeDb } = await import('../src/db.mjs')
+      await closeDb()
+    }
+  }
 } finally {
   reset(); srv.closeAllConnections(); srv.close()
 }

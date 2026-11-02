@@ -14,6 +14,9 @@ const pool = mysql.createPool({
   namedPlaceholders: false,
 })
 
+/** 一次性脚本/测试结束时正常释放连接池。服务进程不调用。 */
+export async function closeDb() { await pool.end() }
+
 export async function q(sql, params = []) {
   const [rows] = await pool.query(sql, params)
   return rows

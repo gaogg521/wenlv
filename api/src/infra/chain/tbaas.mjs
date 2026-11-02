@@ -15,6 +15,20 @@
 //       Result.Code 不为 0 即合约执行失败，不能当成功。
 import { E } from './conf.mjs'
 import crypto from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
+
+// 同一进程内所有 TBaaS 请求共用队列；失败也占用间隔，不自动重发写交易。
+let requestQueue = Promise.resolve(), nextRequestAt = 0
+function scheduled(fn) {
+  const pending = requestQueue.then(async () => {
+    await delay(Math.max(0, nextRequestAt - Date.now()))
+    nextRequestAt = Date.now() + 1100
+    return await fn()
+  })
+  requestQueue = pending.catch(() => {})
+  return pending
+}
+const isDemo = () => env().action === 'InvokeChainMakerDemoContract' && !!env().chainId
 
 const env = () => ({
   secretId: E.TBAAS_SECRET_ID || '',
@@ -76,7 +90,10 @@ function tc3Sign({ secretId, secretKey, host, body, ts }) {
 }
 
 /** 腾讯云 API 3.0 签名调用 */
-async function call(payload) {
+async function call(payload, action) {
+  return scheduled(() => request(payload, action))
+}
+async function request(payload, action) {
   const e = env()
   const host = new URL(e.endpoint).host
   const body = JSON.stringify(payload)
@@ -89,7 +106,7 @@ async function call(payload) {
       Authorization: authorization,
       'Content-Type': 'application/json; charset=utf-8',
       Host: host,
-      'X-TC-Action': e.action,
+      'X-TC-Action': action || e.action,
       'X-TC-Version': e.version,
       'X-TC-Timestamp': String(ts),
       'X-TC-Region': e.region,
@@ -101,6 +118,7 @@ async function call(payload) {
   let json = null
   try { json = JSON.parse(text) } catch { /* 非 JSON */ }
   const r = json?.Response || {}
+  if (!json?.Response) throw new Error('tbaas 响应缺少 Response')
   if (!res.ok || r.Error) {
     throw new Error(`tbaas ${res.status}: ${(r.Error && (r.Error.Code + ' ' + r.Error.Message)) || text.slice(0, 160)}`)
   }
@@ -109,9 +127,7 @@ async function call(payload) {
   if (result && result.Code != null && Number(result.Code) !== 0) {
     throw new Error(`tbaas 合约执行失败: Code ${result.Code} ${result.CodeMessage || result.Message || ''}`.trim())
   }
-  const txRef = r.Txid || r.TxId || r.txid || r.transactionId || result?.TxId || result?.Txid || ''
-  if (!txRef) throw new Error('tbaas 响应缺少 Txid')
-  return { txRef, block: String(r.BlockNumber ?? r.blockNumber ?? ''), raw: r }
+  return r
 }
 
 const invoke = (funcName, params, contract) => {
@@ -130,7 +146,7 @@ export default {
   id: 'tbaas',
   label: '腾讯云 TBaaS / 至信链',
   docs: '需已部署落根合约（默认 writeRoot）；资产发行需另配 TBAAS_MINT_FUNC / TBAAS_NFT_CONTRACT',
-  capabilities: { anchor: true, queryByRoot: false, assets: true, did: false },
+  get capabilities() { return { anchor: true, queryByRoot: false, assets: true, did: false, confirm: isDemo() } },
   mode: () => (missing().length ? 'noop' : 'real'),
   status: () => ({
     provider: 'tbaas', mode: missing().length ? 'noop' : 'real', missing: missing(),
@@ -145,7 +161,40 @@ export default {
     // 配了入参模板 → 长安链形态（字符串键值对象）；否则保持原来的数组形态
     const params = e.paramTpl ? renderParamTemplate(e.paramTpl, { root, prevRoot: prev, bizDate: biz }) : [root, prev, biz]
     const r = await invoke(e.rootFunc, params, e.contract || undefined)
-    return { txRef: r.txRef, block: r.block, mode: 'real' }
+    const txRef = r.Txid || r.TxId || r.txid || r.transactionId || r.Result?.TxId || r.Result?.Txid
+    if (!txRef) throw new Error('tbaas 响应缺少 Txid')
+    return { txRef, block: String(r.BlockNumber ?? r.blockNumber ?? ''), mode: 'real' }
+  },
+  /** 体验网络按交易 ID 查询回执。正式长安链与 Fabric 不套用体验网络协议。 */
+  async queryTransaction(txRef) {
+    if (!isDemo()) throw new Error('交易回查目前仅支持长安链体验网络')
+    if (!/^[0-9a-f]{64}$/i.test(txRef || '')) throw new Error('交易 ID 必须是 64 位十六进制')
+    const e = env()
+    const r = await call({ ClusterId: e.clusterId, ChainId: e.chainId, TxID: txRef }, 'QueryChainMakerDemoTransaction')
+    const receipt = r.Result
+    if (!receipt || typeof receipt !== 'object' || receipt.Code == null) throw new Error('tbaas 交易回执缺少结果码')
+    if (receipt.TxId !== txRef) throw new Error('tbaas 回执交易号不一致')
+    return { txRef, block: receipt.BlockHeight, code: Number(receipt.Code), requestId: r.RequestId }
+  },
+  async confirm({ txRef }) {
+    const r = await this.queryTransaction(txRef)
+    if (!Number.isSafeInteger(r.block) || r.block < 0) throw new Error('tbaas 回执区块高度无效')
+    if (r.block === 0) return { final: false, reason: '等待出块', confirmations: 0 }
+    return { final: true, block: String(r.block), confirmations: 1 }
+  },
+  /** 仅体验合约的 get；读回值不能作为该交易携带根的密码学证明。 */
+  async readDemoValue(key, field) {
+    if (!isDemo()) throw new Error('合约读回目前仅支持长安链体验网络')
+    const e = env()
+    const r = await call({ ClusterId: e.clusterId, ChainId: e.chainId, ContractName: e.contract,
+      FuncName: 'get', FuncParam: JSON.stringify({ key: String(key), field: String(field) }) }, 'QueryChainMakerDemoContract')
+    if (r.Result?.Code !== 0 || typeof r.Result.Result !== 'string') throw new Error('tbaas 查询结果格式无效')
+    return { value: Buffer.from(r.Result.Result, 'base64').toString('utf8'), requestId: r.RequestId }
+  },
+  async probe() {
+    if (!isDemo()) throw new Error('只读探测目前仅支持长安链体验网络')
+    const r = await this.readDemoValue('wenlv-test-001', 'ticket_status')
+    return { ok: true, detail: '体验网络只读查询成功，RequestId=' + r.requestId }
   },
   // TBaaS 没有"按根反查"的标准接口；幂等以本地 台账 + 上游 txRef 为准
   async queryByRoot() { return null },
@@ -153,7 +202,9 @@ export default {
     const e = env()
     if (!e.mintFunc) throw new Error('TBaaS 未配置发行方法（TBAAS_MINT_FUNC）')
     const r = await invoke(e.mintFunc, [to, tokenId, amount, uri || ''], e.nftContract || undefined)
-    return { txRef: r.txRef, contract: e.nftContract || null, tokenId, to }
+    const txRef = r.Txid || r.TxId || r.txid || r.transactionId || r.Result?.TxId || r.Result?.Txid
+    if (!txRef) throw new Error('tbaas 响应缺少 Txid')
+    return { txRef, contract: e.nftContract || null, tokenId, to }
   },
   /** 离线自检：TC3 签名可算出且确定性（同输入同结果），不需要真实密钥 */
   selfTest() {

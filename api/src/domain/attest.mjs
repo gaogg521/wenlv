@@ -212,12 +212,24 @@ export async function confirmByCallback({ provider, txRef, root, block }) {
   return { matched: true, ...(await markAnchored(b.id, txRef, block || null, null)) }
 }
 
+/** 指定批次确认：联调只传自己创建的 ID，不扫描或处理其他批次。 */
+export async function confirmBatch(batchId) {
+  const b = await one('SELECT * FROM attest_batch WHERE id = ?', [batchId])
+  if (!b) throw new Error('批次不存在')
+  if (Number(b.status) !== 5) return { batchId: b.id, anchored: Number(b.status) === 2, reason: '批次不在待确认状态' }
+  return (await confirmRows([b]))[0]
+}
+
 export async function confirmPending(limit = 50) {
   const rows = await q(`SELECT * FROM attest_batch WHERE status = 5 ORDER BY seq ASC LIMIT ${Number(limit)}`)
+  return await confirmRows(rows)
+}
+
+async function confirmRows(rows) {
   const out = []
   for (const b of rows) {
     try {
-      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, provider: b.chain_provider })
+      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date, provider: b.chain_provider })
       if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
       else {
         await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',
