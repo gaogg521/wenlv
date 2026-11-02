@@ -1,4 +1,6 @@
 // 隔离验收库专用：不重置现有库；测试二维码可解码、真实签名/加密回调、门店边界与结算状态。
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/remediation-core.mjs') // 会写库：只能对隔离库运行
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import https from 'node:https'

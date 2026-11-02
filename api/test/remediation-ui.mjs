@@ -1,3 +1,5 @@
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/remediation-ui.mjs') // 会写库：只能对隔离库运行
 import automator from 'miniprogram-automator'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'

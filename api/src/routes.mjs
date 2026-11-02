@@ -13,11 +13,12 @@ import * as attestDomain from './domain/attest.mjs'
 import * as merkleLib from './domain/merkle.mjs'
 import * as refundPolicy from './domain/refund-policy.mjs'
 import { sanitizeRich } from './infra/sanitize.mjs'
-import { bizDay } from './infra/bizdate.mjs'
+import { bizDay, settlementPeriod } from './infra/bizdate.mjs'
 import * as entities from './domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
 import * as asset from './domain/asset.mjs'
+import * as badgeDomain from './domain/badge.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from './domain/onepager.mjs'
 import * as chain from './infra/chain.mjs'
 import * as wxapi from './domain/wxapi.mjs'
@@ -179,7 +180,8 @@ const c = {
     if (!sec.pass) throw new BizError(1001, '评价含违规内容')
     const id = await tx(async (c) => c.ins('INSERT INTO review (order_id, user_id, product_id, rating, content) VALUES (?,?,?,?,?)',
       [o.id, u.uid, o.product_id, rate, text.slice(0, 500)]))
-    return { id, rating: rate, secMock: sec.mock }
+    const badges = await badgeDomain.evaluateSafe(u.uid)
+    return { id, rating: rate, secMock: sec.mock, badges }
   },
 
   'POST /c/orders': async (req) => {
@@ -1045,6 +1047,14 @@ const admin = {
     if (key === 'order.refund_policy') {
       try { refundPolicy.parsePolicy(newValue) } catch (e) { throw new BizError(1001, e.message) }
     }
+    if (/^settlement\.split_/.test(key)) {
+      const nv = Number(newValue)
+      if (!(nv >= 0 && nv <= 1)) throw new BizError(1001, '比例需在 0~1 之间（如 0.58 = 58%）')
+      const keys = ['settlement.split_fulfill', 'settlement.split_service', 'settlement.split_beanbudget']
+      let sum = 0
+      for (const k of keys) sum += k === key ? nv : Number(await cfg(k))
+      if (sum > 1) throw new BizError(1001, `履约 + 服务费 + 权益预算合计 ${(sum * 100).toFixed(1)}% 超过 100%，留存毛利将为负`)
+    }
     if (key === 'settlement.refund_fee_merchant_pct' && !(Number(newValue) >= 0 && Number(newValue) <= 1)) {
       throw new BizError(1001, '商户分成比例需在 0~1 之间（如 0.5 = 50%）')
     }
@@ -1122,7 +1132,8 @@ const admin = {
   },
   'POST /admin/settlements/generate': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
-    const period = req.body.period || new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
+    const period = String(req.body.period || '') || settlementPeriod() // ISO 周，如 2026-W45
+    if (!/^[\w-]{4,12}$/.test(period)) throw new BizError(1001, '结算周期格式不正确（如 2026-W45）')
     const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
       UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
       WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
@@ -1339,6 +1350,7 @@ const admin = {
         [o.user_id, amt, orderNo, Number(ua.growth_value)])
     }
     await promo.createCommission(orderNo)
+    await badgeDomain.evaluateSafe(Number(o.user_id))
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号
     await pass.attest('order', orderNo, {
       orderNo, amountPay: Number(o.amount_pay), status: 50,
@@ -2107,6 +2119,13 @@ const web3 = {
       [name, iconKey, ruleDesc || '', ruleType || 'manual', JSON.stringify(ruleParam || null)]))
     return { id }
   },
+  // 按规则补发：对存量用户评估自动规则（改了阈值或新建规则后使用）
+  'POST /admin/web3/badges/:id/backfill': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const r = await badgeDomain.backfill(Number(req.params.id))
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'badge', 'backfill', 'badge-' + req.params.id, null, r))
+    return r
+  },
   'POST /admin/web3/badges/:id/grant': async (req) => {
     const a = await requireAdmin(req)
     const { userId, reason } = req.body
@@ -2114,11 +2133,10 @@ const web3 = {
     if (!b) throw new BizError(1004, '勋章定义不存在')
     const u = await one('SELECT id FROM user_account WHERE id = ?', [userId])
     if (!u) throw new BizError(1004, '用户不存在')
-    const ins = await tx(async (c) => c.q('INSERT IGNORE INTO user_badge (user_id, badge_id) VALUES (?,?)', [Number(userId), b.id]))
-    // 勋章发放入存证队列（同一用户同一勋章只锚一次；重复发放由 uk_biz_ver 幂等）
-    await pass.attest('badge', 'badge-' + userId + '-' + b.id, {
-      userId: Number(userId), badgeId: Number(b.id), badge: b.name, by: a.name, reason: reason || null,
-    }, null, 1)
+    // 与自动发放同一入口：校验发行上限、幂等、入存证队列
+    const full = await one('SELECT * FROM badge WHERE id = ?', [b.id])
+    const r = await badgeDomain.grant(Number(userId), full, { by: 'admin:' + a.name, reason, strict: true })
+    if (!r.granted && r.reason === 'owned') throw new BizError(1001, '该用户已拥有此勋章')
     return { granted: true, badge: b.name, attestQueued: true }
   },
 

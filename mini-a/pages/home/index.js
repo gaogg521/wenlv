@@ -19,6 +19,9 @@ Page({
   onShow() {
     // 首次进入 onLoad→onShow 只请求一次；从其他页返回时，超过 60 秒才刷新，避免来回切 tab 反复请求
     if (!this.lastFetch || Date.now() - this.lastFetch > 60000) this.fetch()
+    // 从目的地页选了新城市回来：按新城市刷新轮播
+    const hc = wx.getStorageSync('homeCity') || null
+    if (this.bannerCity !== undefined && (hc ? hc.code : '') !== this.bannerCity) this.fetchBanners()
     // 首页可转发（分享/朋友圈入口）
     wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] })
   },
@@ -39,7 +42,11 @@ Page({
   goDestinations() { wx.navigateTo({ url: '/pages/destination/index' }) },
   async fetchBanners() {
     try {
-      const bs = await api.request('/c/banners')
+      // 按当前城市取轮播：后台「轮播管理 · 投放城市」限定了城市的，只在对应城市展示；未限定的全部展示
+      const hc = wx.getStorageSync('homeCity') || null
+      this.bannerCity = hc ? hc.code : ''
+      this.setData({ homeCity: hc })
+      const bs = await api.request('/c/banners' + (hc && hc.code ? '?city=' + hc.code : ''))
       this.setData({ banners: bs.map(b => ({ ...b, image: api.img(b.image) })), curBanner: 0 })
     } catch (e) {} // 无轮播静默
   },

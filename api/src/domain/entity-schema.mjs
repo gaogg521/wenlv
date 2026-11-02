@@ -349,12 +349,15 @@ const S = {
       { title: '获得规则', fields: [
         { k: 'rule_type', label: '规则类型', type: 'select', store: 'col', options: [['manual', '人工授予'], ['order_count', '完成订单数'], ['city_count', '打卡城市数'], ['review', '发表评价']], dflt: 'manual' },
         { k: 'rule_desc', label: '规则说明（游客可见）', type: 'text', store: 'col', max: 120, span: 2 },
-        { k: 'threshold', label: '达成阈值', type: 'int', min: 1, max: 10000, help: '自动规则使用' },
+        { k: 'threshold', label: '达成阈值', type: 'int', min: 1, max: 10000, help: '自动规则必填：订单完成或写评价时自动检查并发放；改阈值后可在列表点「按规则补发」' },
         { k: 'max_issue', label: '发行上限', type: 'int', min: 0, max: 10000000, help: '0=不限' },
         { k: 'valid_days', label: '有效期', type: 'int', min: 0, max: 3650, unit: '天', help: '0=永久' },
         { k: 'display_order', label: '展示顺序', type: 'int', min: 0, max: 9999 },
       ] },
     ],
+    async validate(v) {
+      if (v.rule_type && v.rule_type !== 'manual' && !(Number(v.threshold) > 0)) return { threshold: '自动规则需要设置达成阈值' }
+    },
     async create(c, v) { return c.ins('INSERT INTO badge (name, icon_key, rule_desc, rule_type) VALUES (?,?,?,?)', [v.name, v.icon_key, v.rule_desc || '', v.rule_type || 'manual']) },
   },
 

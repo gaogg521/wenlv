@@ -13,7 +13,7 @@ export const DEFAULTS = {
   'contribution.weights': '{"q":0.5,"s":0.3,"r":0.2}',
   'order.pay_timeout': '15', 'order.observe_days': '7',
   'order.refund_policy': '{"d7":0.0,"d3":0.10,"d1":0.30}', 'order.group_cancel_hours': '48',
-  'pass.code_window': '60', 'commission.settle_delay_days': '7', 'settlement.weekday': '1', 'settlement.refund_fee_merchant_pct': '0',
+  'pass.code_window': '60', 'commission.settle_delay_days': '7', 'settlement.weekday': '1', 'settlement.refund_fee_merchant_pct': '0', 'settlement.split_fulfill': '0.58', 'settlement.split_service': '0.12', 'settlement.split_beanbudget': '0.05',
   'budget.approval.l1': '300000', 'budget.approval.l2': '800000', 'budget.fuse_pct': '0.25',
   'budget.forecast.warn': '[0.25,0.50]',
   'city.initial': '["310118","320508"]', 'channel.initial': '["main"]',
