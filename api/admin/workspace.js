@@ -3,6 +3,7 @@
 (() => {
   const app = document.getElementById('app')
   const descriptions = {
+    partners: '城市经营、推广转化与共创回报；各类身份分别统计，数据遵循城市权限。',
     dash: '看清经营变化，照顾好每一段旅程。', orders: '查询订单、追踪履约，核对每一笔交易。',
     products: '从线路草稿到出发团期，让每次出行有据可依。', settlements: '商户确认、财务复核、支付回单，逐步完成结算。',
     merchants: '连接在地伙伴，管理商户资料与入驻申请。', content: '审核旅行故事，让值得分享的体验被看见。',
@@ -25,7 +26,7 @@
     terms: '后台术语与小程序合规用语的对照表。',
     users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
   }
-  const renderers = { dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
