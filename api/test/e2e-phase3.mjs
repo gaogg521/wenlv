@@ -23,7 +23,8 @@ async function main() {
   ok(/^1\d{2}\*\*\*\*\d{4}$/.test(ph.phone), '手机号换号成功并脱敏返回（' + ph.phone + '）')
   const dbx = await import('../src/db.mjs')
   const row = await dbx.one('SELECT mobile_enc FROM user_account WHERE id = ?', [u.user.id])
-  ok(row && /^1\d{10}$/.test(Buffer.from(row.mobile_enc).toString()), '手机号已加密落库 user_account.mobile_enc')
+  const { openMobile, isLegacyPlain } = await import('../src/infra/mobile.mjs')
+  ok(row && !isLegacyPlain(row.mobile_enc) && /^1\d{10}$/.test(openMobile(row.mobile_enc) || ''), '手机号已加密落库 user_account.mobile_enc（可解出 11 位号码，且不是明文）')
 
   console.log('== B. 推广小程序码（官方 getUnlimitedQRCode）==')
   const admin = (await api('POST', '/admin/login', { username: 'admin', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' })).token

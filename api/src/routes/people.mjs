@@ -3,13 +3,9 @@
 // 隐私：手机号、证件号、实名只下发脱敏值；城市合伙人只能看本城商户。
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
+import { maskMobile, whereMobile } from '../infra/mobile.mjs'
 
 const N = (v) => Number(v || 0)
-/** 手机号脱敏：138****1234（mobile_enc 目前存的是明文，见设计文档"安全债"） */
-const maskMobile = (buf) => {
-  const s = buf == null ? '' : Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf)
-  return /^\d{11}$/.test(s) ? s.slice(0, 3) + '****' + s.slice(7) : (s ? '已绑定' : '')
-}
 const maskName = (s) => (s ? String(s).slice(0, 1) + '*'.repeat(Math.max(1, String(s).length - 1)) : '')
 const PAID = '(20,30,40,50)' // 已支付且未退款的订单状态（GMV 口径）
 const VALID = '(20,30,40,50,60,70)' // 产生过支付的订单（含退款中/已退款）
@@ -55,7 +51,7 @@ export const people = {
     const args = []
     if (req.query.seg && SEGMENTS[req.query.seg]) where.push(SEGMENTS[req.query.seg])
     if (kw) {
-      if (/^\d{11}$/.test(kw)) { where.push('u.mobile_enc = ?'); args.push(Buffer.from(kw, 'utf8')) } // 客服按手机号精确查
+      if (/^\d{11}$/.test(kw)) { const w = whereMobile(kw); where.push(w.sql); args.push(...w.args) } // 客服按手机号精确查（走盲索引，不回显完整号码）
       else if (/^\d+$/.test(kw)) { where.push('u.id = ?'); args.push(Number(kw)) }
       else { where.push('u.nickname LIKE ?'); args.push('%' + kw + '%') }
     }
