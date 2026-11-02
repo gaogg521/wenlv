@@ -29,7 +29,7 @@ const ICONS = {
 const NAV = [
   ['工作台', [['dash', '驾驶舱', 'dash']]],
   ['内容数据', [['contentdash', '内容看板', 'content']]],
-  ['合伙人', [['partners', '合伙人中心', 'promoters']]],
+  ['合伙人', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements']]],
   ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
@@ -127,10 +127,12 @@ function boot() {
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
   const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
+  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
   for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentdash')
   const allowed = access[ME?.role]
   $('#nav').innerHTML = NAV.map(([g, items]) => {
+    items = items.filter(([k]) => k !== 'partnerperf' || ['super', 'ops', 'finance', 'city_partner'].includes(ME?.role))
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
     return `<details class="nav-section" ${['工作台','交易履约','小程序'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'

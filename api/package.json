@@ -8,7 +8,7 @@
     "start:win": "node --env-file=.env src/index.mjs",
     "migrate": "node scripts/migrate.mjs",
     "test": "node scripts/check-syntax.mjs && node test/import-paths.mjs && node test/web3-core.mjs && node test/refund-policy.mjs && node test/secrets-key.mjs && node test/wording-guard.mjs && node test/miniapp-map.mjs && node test/mobile.mjs && node test/tbaas.mjs",
-    "test:db": "node test/tbaas.mjs && node test/web3-core.mjs && node test/web3-integrity.mjs && node test/refund-e2e.mjs && node test/entity-engine.mjs && node test/chain-hub.mjs && node test/business-rules.mjs && node test/content-review.mjs && node test/people.mjs && node test/mobile-freeze.mjs && node test/partners.mjs && node test/scenics.mjs && node test/content-dashboard.mjs",
+    "test:db": "node test/tbaas.mjs && node test/web3-core.mjs && node test/web3-integrity.mjs && node test/refund-e2e.mjs && node test/entity-engine.mjs && node test/chain-hub.mjs && node test/business-rules.mjs && node test/content-review.mjs && node test/people.mjs && node test/mobile-freeze.mjs && node test/partners.mjs && node test/scenics.mjs && node test/content-dashboard.mjs && node test/partner-performance.mjs",
     "e2e": "node test/api-e2e.mjs",
     "seed:scenario": "node test/scenario-populate.mjs"
   },
