@@ -12,6 +12,8 @@ import * as wxpay from './domain/wxpay.mjs'
 import * as attestDomain from './domain/attest.mjs'
 import * as merkleLib from './domain/merkle.mjs'
 import * as refundPolicy from './domain/refund-policy.mjs'
+import { sanitizeRich } from './infra/sanitize.mjs'
+import * as entities from './domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
 import * as asset from './domain/asset.mjs'
@@ -588,14 +590,6 @@ const SUP_CATS = ['ticket', 'hotel', 'transport', 'ground', 'catering', 'other']
 const CREATOR_TAGS = ['none', 'signed', 'star', 'limited']
 
 // 富文本白名单清洗（后台编辑内容入库前统一过一道：去脚本/事件/外域脚本）
-function sanitizeRich(html) {
-  let s = String(html || '')
-  s = s.replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-       .replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[^>]*\/?>/gi, '')
-       .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-       .replace(/(href|src)\s*=\s*(?:"|')?\s*javascript:[^"'\s>]*/gi, '$1="#"')
-  return s.slice(0, 200000)
-}
 
 async function audit(c, actor, module_, action, bizRef, before, after) {
   await c.q('INSERT INTO audit_log (actor, module, action, biz_ref, before_val, after_val) VALUES (?,?,?,?,?,?)',
@@ -911,6 +905,13 @@ const admin = {
     await q('UPDATE tour_product SET status = ? WHERE id = ?', [Number(req.body.status), req.params.id])
     return { ok: true }
   },
+  'GET /admin/products/:id/sessions': async (req) => {
+    await requireAdmin(req)
+    const p = await one('SELECT id, title, price_from FROM tour_product WHERE id = ?', [req.params.id])
+    if (!p) throw new BizError(1004, '商品不存在')
+    const sessions = await q('SELECT id, depart_date, quota, booked, min_go, price_adult, early_price, status FROM tour_session WHERE product_id = ? ORDER BY depart_date DESC', [p.id])
+    return { title: p.title, priceFrom: Number(p.price_from), sessions }
+  },
   'POST /admin/sessions': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
     const { productId, departDate, quota, minGo, priceAdult, earlyPrice, earlyDays } = req.body
@@ -926,6 +927,40 @@ const admin = {
   },
 
   'GET /admin/merchants': async (req) => { const a = await requireAdmin(req); const sc=scopeFilter(a); return await q('SELECT * FROM merchant WHERE 1=1 '+sc.sql+' ORDER BY id',sc.params) },
+  // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====
+  'GET /admin/entity-schemas/:kind': async (req) => {
+    const a = await requireAdmin(req)
+    const sch = entities.publicSchema(req.params.kind)
+    const fill = async (fs) => { for (const f of fs) { if (f.type === 'ref') f.options = await entities.refOptions(f.ref, a); if (f.of) await fill(f.of) } }
+    for (const s of sch.sections) await fill(s.fields)
+    return sch
+  },
+  'GET /admin/entities/:kind/:id': async (req) => {
+    await requireAdmin(req)
+    const sc = entities.get(req.params.kind)
+    const row = await one(`SELECT * FROM ${sc.table} WHERE ${sc.idCol} = ?`, [req.params.id])
+    if (!row) throw new BizError(1004, sc.label + '不存在')
+    const values = entities.readValues(req.params.kind, row)
+    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values) }
+  },
+  // 列表页用：一次取回某类实体全部的扩展资料完整度（不返回资料本身）
+  'GET /admin/entities/:kind': async (req) => {
+    await requireAdmin(req)
+    const sc = entities.get(req.params.kind)
+    const rows = await q(`SELECT * FROM ${sc.table}`)
+    return rows.map((r) => { const v = entities.readValues(req.params.kind, r); return { id: r[sc.idCol], completeness: entities.completeness(req.params.kind, v), cover: v.logo || v.cover || v.icon_img || (v.images || [])[0] || v.image || null } })
+  },
+  'POST /admin/entities/:kind': async (req) => {
+    const a = await requireAdmin(req)
+    return entities.save(req.params.kind, req.body.values || {}, { admin: a, parentId: Number(req.body.parentId) || null,
+      audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
+  },
+  'PUT /admin/entities/:kind/:id': async (req) => {
+    const a = await requireAdmin(req)
+    return entities.save(req.params.kind, req.body.values || {}, { admin: a, id: req.params.id,
+      audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
+  },
+
   'POST /admin/merchants': async (req) => {
     const a = await requireAdmin(req, ['super'])
     const { name, cityCode, wxpaySubMchid, bizLicense, kind } = req.body
@@ -2340,7 +2375,7 @@ const cNotes = {
   // 常见问题（小程序「我的-常见问题」）
   'GET /c/faqs': async (req) => {
     requireUser(req)
-    return await q('SELECT id, question, answer FROM faq WHERE status = 1 ORDER BY sort, id')
+    return await q('SELECT id, question, answer, category, is_hot FROM faq WHERE status = 1 ORDER BY is_hot DESC, sort, id')
   },
   // 首页轮播
   'GET /c/banners': async (req) => {

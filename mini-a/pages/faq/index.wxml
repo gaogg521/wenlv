@@ -6,6 +6,6 @@
   <view class="kv" bindtap="toggle" data-i="{{index + 1}}">
     <text style="flex:1">{{item.question}}</text><text class="v">{{open === index + 1 ? '收起' : '展开'}}</text>
   </view>
-  <view class="note" wx:if="{{open === index + 1}}">{{item.answer}}</view>
+  <view class="note faq-a" wx:if="{{open === index + 1}}"><rich-text nodes="{{item.answer}}"></rich-text></view>
 </view>
 <view wx:if="{{!list.length}}" class="empty">暂无常见问题</view>

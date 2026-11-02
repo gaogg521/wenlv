@@ -41,7 +41,7 @@ async function bootstrap() {
 
 function json(res, code, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify({ code, msg: code === 0 ? 'ok' : (data && data.message) || 'error', data: code === 0 ? data : null, traceId: 't' + Date.now().toString(36) }))
+  res.end(JSON.stringify({ code, msg: code === 0 ? 'ok' : (data && data.message) || 'error', data: code === 0 ? data : (data && data.fieldErrors ? { fieldErrors: data.fieldErrors } : null), traceId: 't' + Date.now().toString(36) }))
 }
 
 const server = http.createServer(async (req, res) => {
@@ -119,7 +119,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ code: 'FAIL', message: '支付通知校验失败' }))
     }
-    if (e && e.code) return json(res, e.code, { message: e.message })
+    if (e && e.code) return json(res, e.code, { message: e.message, fieldErrors: e.data && e.data.fieldErrors })
     console.error('[err]', req.method, pathname, e)
     json(res, 9000, { message: '系统错误：' + e.message }, 500)
   }

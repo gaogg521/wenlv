@@ -17,6 +17,12 @@
       <text class="tag">{{p.days_desc || '1天'}}</text>
       <text class="tag blue" wx:if="{{cityName}}">{{cityName}}</text>
       <text class="tag" wx:if="{{rv.count > 0}}">★ {{rv.avg}} · {{rv.count}} 条评价</text>
+      <text class="tag" wx:for="{{extra.tags}}" wx:key="*this">{{item}}</text>
+    </view>
+    <view class="dt-fit" wx:if="{{extra.suitable || extra.groupSize || extra.ageRange}}">
+      <text wx:if="{{extra.suitable}}">适合：{{extra.suitable}}</text>
+      <text wx:if="{{extra.groupSize}}">{{extra.groupSize}}</text>
+      <text wx:if="{{extra.ageRange}}">{{extra.ageRange}}</text>
     </view>
     <view class="dt-price-row">
       <view><text class="tour-price" style="font-size:44rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text><text class="muted2"> 起/人</text></view>
@@ -40,6 +46,21 @@
     <rich-text class="rich-p" wx:if="{{rich.intro}}" nodes="{{rich.intro}}"></rich-text>
   </view>
 
+  <!-- 行程时间线：后台「行程节点」逐条维护 -->
+  <view class="sec-title" wx:if="{{extra.itinerary.length}}">行程安排</view>
+  <view class="card" wx:if="{{extra.itinerary.length}}">
+    <view class="iti" wx:for="{{extra.itinerary}}" wx:key="index">
+      <view class="iti-dot"></view>
+      <view class="iti-body">
+        <view class="iti-time" wx:if="{{item.time}}">{{item.time}}</view>
+        <view class="iti-title">{{item.title}}</view>
+        <view class="iti-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
+        <image wx:if="{{item.image}}" class="iti-img" src="{{item.image}}" mode="aspectFill" lazy-load />
+      </view>
+    </view>
+    <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">🚌 {{extra.transport}}</view>
+  </view>
+
   <view class="sec-title" wx:if="{{rich.includes.length || rich.excludes.length}}">费用说明</view>
   <view class="card" wx:if="{{rich.includes.length || rich.excludes.length}}">
     <view class="fee-h" wx:if="{{rich.includes.length}}">费用包含</view>
@@ -59,6 +80,7 @@
     <view class="hl-item"><text class="hl-dot">·</text>凭证核销前可在订单中申请退款，按以下退改规则原路退回，抵扣的旅豆全额返还：</view>
     <view class="hl-item refund-tier" wx:for="{{rules.refundRules}}" wx:key="*this"><text class="hl-dot ok">›</text>{{item}}</view>
     <view class="hl-item" wx:if="{{minGo > 1}}"><text class="hl-dot">·</text>本线路 {{minGo}} 人成团；未成团时可免费改签同类团期或全额退款。</view>
+    <rich-text wx:if="{{extra.notice}}" class="rich-p" nodes="{{extra.notice}}"></rich-text>
     <view class="hl-item"><text class="hl-dot">·</text>旅豆最多抵扣订单金额的 {{rules.deductPct}}%，{{rules.beanPerYuan}} 旅豆抵 1 元。</view>
   </view>
 

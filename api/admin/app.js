@@ -333,25 +333,15 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const [rows, merchantRows, supRows, scenRows] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
-    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
+  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
+    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
-    <p class="muted" style="margin-bottom:16px">先保存草稿 → 完善行程与集合信息 → 添加团期 → 检查后上架。价格单位为元。</p><div class="row" style="margin-top:0">
-      <input id="p_title" placeholder="标题，如：朱家角剧本游 · 江南谜案">
-      <select id="p_cat"><option value="script">剧本闯关</option><option value="yoga">瑜伽之旅</option><option value="sister">姐姐系列</option>
-        <option value="single">单身社交</option><option value="sport">体育竞技</option><option value="family">亲子主题</option>
-        <option value="red">红色文旅</option><option value="shop">商城 SKU</option></select>
-      <input id="p_price" placeholder="价格（元），如 298" type="number" min="0.01" step="0.01" style="width:150px">
-      <select id="p_merchant">${merchantRows.filter(m => m.status === 1).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('') || '<option value="">请先审核商户</option>'}</select>
-      <select id="p_supplier"><option value="">供应商（选填）</option>${supOpts}</select>
-      <select id="p_scenic"><option value="">关联景区（选填）</option>${scenOpts}</select>
-      <button class="btn primary sm" onclick="addProduct()">保存草稿</button>
-    </div>
+    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button></div>
+    <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
     <div class="row" style="margin:10px 0 0">
       <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
         <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
@@ -359,56 +349,24 @@ async function products() {
         <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
       <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
     </div>
-    ${frs.length ? `<table><thead><tr><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${frs.length ? `<table><thead><tr><th></th><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((p) => `<tr>
-      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div></td>
-      <td><span class="pill off">${esc(p.cat)}</span></td><td class="num">${esc(p.city_code)}</td>
+      <td>${eeThumb(info[p.id])}</td>
+      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
+      <td><span class="pill off">${esc(CAT_CN[p.cat] || p.cat)}</span></td><td>${esc(CITY_CN[p.city_code] || p.city_code)}</td>
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionModal(${p.id}, ${p.price_from})">＋团期</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑·素材</button></td>
-    </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——用上方表单录入第一条线路')}
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button></td>
+    </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>`
 }
 
 /* 商品编辑 + 素材（P0 宣传力：实拍图集/行程/费用包含/集合点/安全告知） */
 let EDIT_P = null
-async function editProduct(id) {
-  const [p, supRows, scenRows] = await Promise.all([api('GET', '/admin/products').then((rs) => rs.find((x) => x.id === id)),
-    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
-  if (!p) return toast('商品不存在', true)
-  EDIT_P = p
-  const rich = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
-  const imgs = typeof p.images === 'string' ? JSON.parse(p.images || '[]') : (p.images || [])
-  modal(`编辑 · ${esc(p.title)}`, `
-    <label class="muted" style="display:block;margin-bottom:4px">实拍图集（首图 = 小程序封面；≤9 张，单张 ≤2MB）</label>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-      ${imgs.map((u, i) => `<div style="position:relative"><img src="${u}" style="width:72px;height:54px;object-fit:cover;border-radius:8px;display:block">
-        <button onclick="delProductImage(${id},${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:18px">×</button></div>`).join('')}
-      <label style="width:72px;height:54px;border:1.5px dashed var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--sub)">
-        ＋<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadProductImage(${id},this)"></label>
-    </div>
-    <div class="row" style="margin-top:0">
-      <select id="e_supplier"><option value="">供应商（选填）</option>${supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.supplier_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <select id="e_scenic"><option value="">关联景区（选填）</option>${scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.scenic_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-    </div>
-    <label class="muted" style="display:block">玩法亮点（每行一条）</label>
-    <textarea id="e_highlights" class="ta-full" rows="3">${esc((rich.highlights || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">行程介绍（富文本 · 小程序详情页图文混排展示）</label>
-    ${richEdit('e_intro', rich.intro || '')}
-    <label class="muted" style="display:block">费用包含（每行一条）</label>
-    <textarea id="e_includes" class="ta-full" rows="3">${esc((rich.includes || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">费用不含（每行一条 · 游客最常追问的信息，建议必填）</label>
-    <textarea id="e_excludes" class="ta-full" rows="2" placeholder="如：往返大交通&#10;个人消费">${esc((rich.excludes || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">集合地点 / 交通</label>
-    <input id="e_meeting" style="width:100%" value="${esc(p.meeting_point || '')}" placeholder="如：地铁17号线朱家角站 2 号口，09:00 集合">
-    <label class="muted" style="display:block">安全告知</label>
-    <input id="e_safety" style="width:100%" value="${esc(p.safety_note || '')}" placeholder="如：含户外环节，已购公众责任险，请穿着运动鞋">
-    <p class="muted">保存后小程序详情页即时可见（图片经 /uploads 静态服务）</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveProduct(${id})">保存</button>`)
-}
+async function editProduct(id) { return entityEditor('product', id, { onSaved: () => products() }) }
 function lines(v) { return v.split('\n').map((s) => s.trim()).filter(Boolean) }
 async function uploadProductImage(id, input) {
   const f = input.files[0]
@@ -438,34 +396,20 @@ async function saveProduct(id) {
     toast('已保存'); closeModal(); products()
   } catch (e) { toast(e.message, true) }
 }
-function productModal() { products().then(() => document.getElementById('p_title')?.focus()) }
-async function addProduct() {
-  try {
-    if (!$('#p_title').value.trim()) return toast('请填写标题', true)
-    await api('POST', '/admin/products', { title: $('#p_title').value.trim(), cat: $('#p_cat').value,
-      priceFrom: Math.round(Number($('#p_price').value) * 100), merchantId: Number($('#p_merchant').value), status: 0,
-      supplierId: Number($('#p_supplier').value) || null, scenicId: Number($('#p_scenic').value) || null })
-    toast('草稿已保存，请完善素材并添加团期后上架'); products()
-  } catch (e) { toast(e.message, true) }
-}
+function productModal() { return entityEditor('product', null, { onSaved: () => products() }) }
+async function addProduct() { return entityEditor('product', null, { onSaved: () => products() }) }
 async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
-function sessionModal(pid, price) {
-  const yuan = (Number(price) / 100).toFixed(2)
-  const d7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-  const d10 = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
-  modal('新增团期', `
-    <div class="field"><label>出发日期 * / 最低成团人数</label><div class="row" style="margin:0">
-      <input id="s_date" type="date" value="${d7}" style="width:170px">
-      <input id="s_mingo" type="number" value="10" style="width:100px" title="不足则不成团"></div></div>
-    <div class="field"><label>名额 * / 成人价（元）*</label><div class="row" style="margin:0">
-      <input id="s_quota" type="number" value="24" style="width:100px">
-      <input id="s_price" type="number" step="0.01" value="${yuan}" style="width:130px"></div></div>
-    <div class="field"><label>早鸟价（元，选填）/ 早鸟天数</label><div class="row" style="margin:0">
-      <input id="s_early" type="number" step="0.01" placeholder="如 ${Math.max(1, Math.round(Number(yuan) * 0.85))}" style="width:130px">
-      <input id="s_earlydays" type="number" value="7" style="width:100px" title="出发前 N 天前预订享受早鸟价">
-      <span class="muted">留空 = 不开早鸟</span></div></div>
-    <p class="muted">出发日建议选周五/周六；名额售完自动拦截（数据库 CHECK 防超卖）；早鸟价须低于成人价</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSession(${pid})">保存团期</button>`)
+function sessionModal(pid, priceFen) { return entityEditor('session', null, { parentId: pid, defaults: priceFen ? { price_adult: priceFen / 100 } : {}, onSaved: () => sessionsDrawer(pid) }) }
+/** 团期管理：列出某线路全部团期，逐个用完整编辑器维护 */
+async function sessionsDrawer(pid) {
+  const d = await api('GET', '/admin/products/' + pid + '/sessions')
+  const STS = { 1: '报名中', 2: '已成团', 3: '已截止', 4: '已取消', 5: '未成团' }
+  drawer('团期管理 · ' + esc(d.title), `
+    <div class="row" style="margin:0 0 12px"><button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button><span class="muted">${d.sessions.length} 个团期</span></div>
+    ${d.sessions.length ? `<table><thead><tr><th>出发日</th><th>价格</th><th>报名/名额</th><th>状态</th><th></th></tr></thead><tbody>
+    ${d.sessions.map((x) => `<tr><td class="num">${esc(String(x.depart_date).slice(0, 10))}</td><td class="money num">${fen(x.price_adult)}${x.early_price ? `<div class="td-sub">早鸟 ${fen(x.early_price)}</div>` : ''}</td>
+      <td class="num">${x.booked}/${x.quota}<div class="td-sub">${x.min_go} 人成团</div></td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
+      <td><button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期：点「新增团期」')}`)
 }
 async function addSession(pid) {
   try {
@@ -481,23 +425,17 @@ async function addSession(pid) {
 /* ============ 商户 ============ */
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const rows = await api('GET', '/admin/merchants')
+  const [rows, info] = await Promise.all([api('GET', '/admin/merchants'), eeCompleteness('merchant')])
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0"><input id="m_name" placeholder="商户名称"><select id="m_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
-      <input id="m_city" placeholder="城市码（310118 青浦 / 320508 姑苏）" style="width:250px">
-      <input id="m_wx" placeholder="收付通子商户号（选填）" style="width:200px"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button></div>
-    ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
-    ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td class="num">${esc(m.city_code)}</td>
+    <div class="row" style="margin-top:0"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button><span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
+    ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
+    ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
       <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
-async function addMerchant() {
-  try { await api('POST', '/admin/merchants', { name: $('#m_name').value.trim(), cityCode: $('#m_city').value.trim(), wxpaySubMchid: $('#m_wx').value.trim(), kind: $('#m_kind').value }); toast('商户已创建'); merchants() }
-  catch (e) { toast(e.message, true) }
-}
-
+async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
 /* ============ 结算 ============ */
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -602,7 +540,7 @@ async function promoters() {
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
       <td class="money num">${fen(p.valid_gmv_90d)}</td><td>⭐ ${p.service_score}</td>
-      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
+      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('promoter', ${p.user_id}, { onSaved: () => promoters() })">资料</button> <button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
   </div>`
 }
 function promoterModal() {
@@ -618,8 +556,12 @@ function promoterModal() {
 async function addPromoter() {
   try {
     if (!Number($('#pr_uid').value)) return toast('请填写用户 ID', true)
-    const r = await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })
-    toast('已开通，费率 ' + r.rateBp / 100 + '%'); closeModal(); promoters()
+    const uidVal = Number($('#pr_uid').value)
+    const r = { ...(await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })), userId: uidVal }
+    toast('已开通，费率 ' + r.rateBp / 100 + '%，请补全服务商资料'); closeModal()
+    const uid = Number($('#pr_uid')?.value) || null
+    await promoters()
+    if (r.userId || uid) entityEditor('promoter', r.userId || uid, { onSaved: () => promoters() })
   } catch (e) { toast(e.message, true) }
 }
 
@@ -1462,6 +1404,8 @@ async function retryAsset(id) {
 
 // ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
 const RESOURCE_ST = { 1: '<span class="pill ok">合作中</span>', 0: '<span class="pill warn">暂缓</span>', 2: '<span class="pill s70">清退</span>' }
+const CAT_CN = { script: '剧本闯关', yoga: '瑜伽之旅', sister: '姐姐系列', single: '单身社交', sport: '体育竞技', family: '亲子主题', red: '红色文旅', shop: '商城 SKU' }
+const CITY_CN = { 310118: '上海·青浦', 310000: '上海', 320508: '苏州·姑苏', 330500: '湖州', 330523: '湖州·安吉' }
 const SUP_KIND = { ticket: '门票', hotel: '住宿', transport: '交通', ground: '地接', catering: '餐饮', other: '其他' }
 const MERCHANT_KIND = { catering: '餐饮', hotel: '住宿', ticket: '门票', transport: '交通', experience: '体验', other: '其他' }
 const SETTLE_MODE = { monthly: '月结', per_order: '单结', prepaid: '预付' }
@@ -1490,20 +1434,7 @@ async function scenics() {
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
   </div>`
 }
-function scenicModal() {
-  modal('新增景区（G端合作台账）', `
-    <div class="field"><label>景区名称 *</label><input id="sc_name" maxlength="40" placeholder="如 朱家角古镇"></div>
-    <div class="field"><label>城市码 / 等级</label><div class="row" style="margin:0">
-      <input id="sc_city" value="310118" style="width:130px" title="310118 青浦 / 320508 姑苏">
-      <select id="sc_level"><option value="">等级</option><option>5A</option><option>4A</option><option>3A</option><option>非A</option></select></div></div>
-    <div class="field"><label>合作模式 / 票务对接方式</label><div class="row" style="margin:0">
-      <select id="sc_coop"><option value="">合作模式</option><option>票务分成</option><option>联合运营</option><option>引流合作</option></select>
-      <input id="sc_ticket" placeholder="如：二维码核销直连" style="width:200px"></div></div>
-    <div class="field"><label>联系人 / 联系电话</label><div class="row" style="margin:0">
-      <input id="sc_contact" style="width:130px"><input id="sc_phone" style="width:170px"></div></div>
-    <div class="field"><label>分成/合作条款摘要</label><input id="sc_terms" placeholder="如：门票 8 折结算，月结"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addScenic()">入库</button>`)
-}
+function scenicModal() { return entityEditor('scenic', null, { onSaved: () => scenics() }) }
 async function addScenic() {
   try {
     if (!$('#sc_name').value.trim()) return toast('请填写景区名称', true)
@@ -1514,21 +1445,7 @@ async function addScenic() {
     toast('景区已入库'); closeModal(); scenics()
   } catch (e) { toast(e.message, true) }
 }
-async function editScenic(id) {
-  const s = await api('GET', '/admin/scenics').then((rs) => rs.find((x) => x.id === id))
-  if (!s) return toast('景区不存在', true)
-  modal('编辑景区 · ' + esc(s.name), `
-    <div class="field"><label>景区名称</label><input id="es_name" value="${esc(s.name)}"></div>
-    <div class="field"><label>等级 / 合作模式</label><div class="row" style="margin:0">
-      <select id="es_level"><option value="">等级</option>${['5A', '4A', '3A', '非A'].map((l) => `<option ${s.scenic_level === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select id="es_coop"><option value="">合作模式</option>${['票务分成', '联合运营', '引流合作'].map((l) => `<option ${s.coop_mode === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
-    <div class="field"><label>票务对接方式</label><input id="es_ticket" value="${esc(s.ticket_interface || '')}" placeholder="如：二维码核销直连"></div>
-    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
-      <input id="es_contact" value="${esc(s.contact_name || '')}"><input id="es_phone" value="${esc(s.contact_phone || '')}"></div></div>
-    <div class="field"><label>分成/合作条款摘要</label><input id="es_terms" value="${esc(s.profit_terms || '')}" placeholder="如：门票 8 折结算，月结"></div>
-    <div class="field"><label>合作状态</label><select id="es_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveScenicEdit(${id})">保存</button>`)
-}
+async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
 async function saveScenicEdit(id) {
   try {
     await api('PUT', '/admin/scenics/' + id, { name: $('#es_name').value.trim(), level: $('#es_level').value,
@@ -1564,19 +1481,7 @@ async function suppliers() {
       <td><button class="btn ghost sm" onclick="editSupplier(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无供应商：门票/大巴/酒店等资源方在这里入库，商品可关联')}
   </div>`
 }
-function supplierModal() {
-  modal('新增供应商（资源供给方）', `
-    <div class="field"><label>供应商名称 *</label><input id="sp_name" maxlength="40" placeholder="如 青浦旅游车队"></div>
-    <div class="field"><label>城市码 / 类目</label><div class="row" style="margin:0">
-      <input id="sp_city" value="310118" style="width:130px">
-      <select id="sp_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div></div>
-    <div class="field"><label>资质证照号</label><input id="sp_license" placeholder="如 沪B2K198（道路运输许可）"></div>
-    <div class="field"><label>结算方式 / 联系人 / 电话</label><div class="row" style="margin:0">
-      <select id="sp_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
-      <input id="sp_contact" style="width:110px"><input id="sp_phone" style="width:150px"></div></div>
-    <div class="field"><label>备注（车队规模 / 房量 / 供应能力）</label><input id="sp_note" placeholder="如：33 座大巴 4 台，周末需提前锁车"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSupplier()">入库</button>`)
-}
+function supplierModal() { return entityEditor('supplier', null, { onSaved: () => suppliers() }) }
 async function addSupplier() {
   try {
     if (!$('#sp_name').value.trim()) return toast('请填写供应商名称', true)
@@ -1587,21 +1492,7 @@ async function addSupplier() {
     toast('供应商已入库'); closeModal(); suppliers()
   } catch (e) { toast(e.message, true) }
 }
-async function editSupplier(id) {
-  const s = await api('GET', '/admin/suppliers').then((rs) => rs.find((x) => x.id === id))
-  if (!s) return toast('供应商不存在', true)
-  modal('编辑供应商 · ' + esc(s.name), `
-    <div class="field"><label>供应商名称</label><input id="ep_name" value="${esc(s.name)}"></div>
-    <div class="field"><label>类目 / 结算方式</label><div class="row" style="margin:0">
-      <select id="ep_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}" ${s.category === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <select id="ep_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}" ${s.settle_mode === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
-    <div class="field"><label>资质证照号</label><input id="ep_license" value="${esc(s.license_no || '')}"></div>
-    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
-      <input id="ep_contact" value="${esc(s.contact_name || '')}"><input id="ep_phone" value="${esc(s.contact_phone || '')}"></div></div>
-    <div class="field"><label>备注</label><input id="ep_note" value="${esc(s.note || '')}"></div>
-    <div class="field"><label>合作状态</label><select id="ep_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveSupplierEdit(${id})">保存</button>`)
-}
+async function editSupplier(id) { return entityEditor('supplier', id, { onSaved: () => suppliers() }) }
 async function saveSupplierEdit(id) {
   try {
     await api('PUT', '/admin/suppliers/' + id, { name: $('#ep_name').value.trim(), category: $('#ep_cat').value,
@@ -1992,16 +1883,11 @@ async function badges() {
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>勋章发行</h2><span class="muted">勋章发放即写入链上存证队列（badge 事件）</span></div>
-    <div class="row">
-      <input id="bgName" placeholder="勋章名称（如 朱家角探索者）" style="width:200px">
-      <input id="bgIcon" placeholder="图标键（如 badge_zjj）" style="width:160px">
-      <input id="bgRule" placeholder="授予规则说明" style="width:220px">
-      <button class="btn primary sm" onclick="createBadge()">新建定义</button>
-    </div>
+    <div class="row"><button class="btn primary sm" onclick="createBadge()">＋ 新建勋章</button><span class="muted">外观（勋章图/稀有度/故事）与获得规则（类型/阈值/发行上限/有效期）</span></div>
     <table style="margin-top:10px"><thead><tr><th>ID</th><th>名称</th><th>图标键</th><th>授予规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
     ${(d.defs || []).map((b) => `<tr><td>#${b.id}</td><td>${esc(b.name)}</td><td class="td-sub">${esc(b.icon_key)}</td>
       <td class="td-sub">${esc(b.rule_desc || '—')}</td><td class="num">${Number(b.granted)}</td>
-      <td><button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
+      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
     </tbody></table>
   </div>
   <div class="card">
@@ -2011,14 +1897,7 @@ async function badges() {
     </tbody></table>
   </div>`
 }
-async function createBadge() {
-  const name = document.getElementById('bgName').value.trim()
-  const iconKey = document.getElementById('bgIcon').value.trim()
-  if (!name || !iconKey) return toast('名称与图标键必填', true)
-  const ruleDesc = document.getElementById('bgRule').value.trim()
-  const r = await api('POST', '/admin/web3/badges', { name, iconKey, ruleDesc })
-  toast('勋章定义已创建 #' + r.id); badges()
-}
+async function createBadge() { return entityEditor('badge', null, { onSaved: () => badges() }) }
 async function grantBadge(id) {
   const userId = prompt('发放给用户 ID：')
   if (!userId) return
@@ -2101,22 +1980,7 @@ async function faqs() {
     </tbody></table>
   </div>`
 }
-async function faqModal(id) {
-  let f = { category: '通用', sort: (await api('GET', '/admin/faqs')).length + 1 }
-  if (id) {
-    f = (await api('GET', '/admin/faqs')).find((x) => x.id === id)
-    if (!f) return toast('问题不存在', true)
-  }
-  modal(id ? '编辑问题 · ' + esc(f.question) : '新增常见问题', `
-    <div class="field"><label>问题 *</label><input id="fq_q" value="${esc(f.question || '')}" maxlength="60" placeholder="如：旅豆怎么获得？"></div>
-    <div class="field"><label>分类 / 排序</label><div class="row" style="margin:0">
-      <select id="fq_cat">${FAQ_CAT.map((c) => `<option ${f.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-      <input id="fq_sort" type="number" value="${Number(f.sort) || 0}" style="width:90px" title="数字越小越靠前"></div></div>
-    <div class="field"><label>答案 *（支持多段，小程序按行展示）</label><textarea id="fq_a" rows="5" placeholder="第一行：直接结论&#10;第二行起：具体规则/步骤">${esc(f.answer || '')}</textarea></div>
-    <div class="field"><label><input type="checkbox" id="fq_hot" ${Number(f.is_hot) ? 'checked' : ''} style="width:auto"> 标记为热门问题（列表置顶标识）</label></div>
-    <div class="field"><label>状态</label><select id="fq_st"><option value="1" ${Number(f.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(f.status) === 0 ? 'selected' : ''}>下架</option></select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveFaq(${id || 0})">保存</button>`)
-}
+async function faqModal(id) { return entityEditor('faq', id || null, { onSaved: () => faqs() }) }
 async function saveFaq(id) {
   const question = $('#fq_q').value.trim(), answer = $('#fq_a').value.trim()
   if (!question || !answer) return toast('问题与答案必填', true)
@@ -2150,27 +2014,7 @@ async function banners() {
     </tbody></table>
   </div>`
 }
-async function bannerModal(id) {
-  let b = { sort: (await api('GET', '/admin/banners')).length + 1 }
-  if (id) {
-    b = (await api('GET', '/admin/banners')).find((x) => x.id === id)
-    if (!b) return toast('轮播不存在', true)
-  }
-  modal(id ? '编辑轮播 · ' + esc(b.title) : '新增轮播', `
-    <div class="field"><label>主标题 * / 副标题（角标）</label><div class="row" style="margin:0">
-      <input id="bn_t" value="${esc(b.title || '')}" maxlength="30" placeholder="如：秋日水乡特惠季" style="width:180px">
-      <input id="bn_st" value="${esc(b.sub_title || '')}" maxlength="24" placeholder="如：立减 ¥50" style="width:120px"></div></div>
-    <div class="field"><label>轮播图 *（建议 750×360，2MB 内）</label>${imgPicker('bn_img', b.image || '', '上传轮播图')}</div>
-    <div class="field"><label>跳转路径（选填：/c/tours/商品ID 或活动页路径）</label><input id="bn_link" value="${esc(b.link || '')}" placeholder="留空 = 纯展示"></div>
-    <div class="field"><label>投放窗口（选填，留空 = 长期）</label><div class="row" style="margin:0">
-      <input id="bn_start" type="date" value="${b.start_at ? String(b.start_at).slice(0, 10) : ''}" style="width:160px">
-      <span class="muted">至</span>
-      <input id="bn_end" type="date" value="${b.end_at ? String(b.end_at).slice(0, 10) : ''}" style="width:160px"></div></div>
-    <div class="field"><label>排序 / 状态</label><div class="row" style="margin:0">
-      <input id="bn_sort" type="number" value="${Number(b.sort) || 0}" style="width:90px" title="数字越小越靠前">
-      <select id="bn_status"><option value="1" ${Number(b.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(b.status) === 0 ? 'selected' : ''}>下架</option></select></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveBanner(${id || 0})">保存</button>`)
-}
+async function bannerModal(id) { return entityEditor('banner', id || null, { onSaved: () => banners() }) }
 async function saveBanner(id) {
   const title = $('#bn_t').value.trim(), image = $('#bn_img').value
   if (!title || !image) return toast('标题与轮播图必填', true)
@@ -2311,15 +2155,7 @@ document.addEventListener('DOMContentLoaded', () => boot(), { once: true })
 async function handleRisk(id) {
   try { await api('POST', '/admin/risk/' + id + '/handle', {}); toast('风控事件已标记处理'); risk() } catch (e) { toast(e.message, true) }
 }
-async function editMerchant(id, name, cityCode, wxpaySubMchid, kind) {
-  modal('编辑商户', `
-    <div class="field"><label>商户名称</label><input id="em_name" value="${esc(name)}"></div>
-    <div class="field"><label>类目</label><select id="em_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}" ${(kind || 'other') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-    <div class="field"><label>城市码</label><input id="em_city" value="${esc(cityCode)}"></div>
-    <div class="field"><label>收付通子商户号（选填）</label><input id="em_wx" value="${esc(wxpaySubMchid)}"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn primary" onclick="saveMerchantEdit(${id})">保存</button>`)
-}
+async function editMerchant(id) { return entityEditor('merchant', id, { onSaved: () => merchants() }) }
 async function approveMerchant(id) {
   try { await api('POST', '/admin/merchants/' + id + '/approve', {}); toast('商户进件已通过'); merchants() } catch (e) { toast(e.message, true) }
 }

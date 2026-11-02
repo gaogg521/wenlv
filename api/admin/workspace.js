@@ -28,12 +28,6 @@
   let current = '', generation = 0, rendering = Promise.resolve(), previousFocus = null
   let orderRows = [], orderQuery = '', orderPage = 1, orderStatus = 0
   const pageSize = 15
-  window.productModal = () => {
-    const field = document.getElementById('p_title')
-    if (!field) return
-    field.closest('.row').scrollIntoView({ behavior: 'smooth', block: 'center' })
-    field.focus({ preventScroll: true })
-  }
   const allowedItems = () => [...document.querySelectorAll('#nav [data-p]')]
   const titleFor = key => key === 'dash' ? '经营概览' : allowedItems().find(el => el.dataset.p === key)?.textContent.trim() || '工作台'
   downloadExport = async function (what) {
@@ -61,7 +55,11 @@
         localStorage.removeItem('admin_token'); localStorage.removeItem('admin_me'); location.reload()
         throw new Error('登录已过期，请重新登录')
       }
-      if (!response.ok || result.code !== 0) throw new Error(result.msg || result.data?.message || '操作失败，请重试')
+      if (!response.ok || result.code !== 0) {
+        const error = new Error(result.msg || result.data?.message || '操作失败，请重试')
+        error.fieldErrors = result.data?.fieldErrors || null // 表单引擎据此定位到具体字段
+        throw error
+      }
       return result.data
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('请求超时，请检查网络后重试')

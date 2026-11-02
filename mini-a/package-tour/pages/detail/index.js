@@ -4,7 +4,7 @@ const api = require('../../../utils/api')
 const CITY = { '310118': '上海·青浦', '330523': '湖州·安吉', '320508': '苏州·姑苏', '310000': '上海' }
 
 Page({
-  data: { rules: rulesOf({}), p: null, sessions: [], sessPreview: [], minGo: 0, cityName: '', loading: true, error: '',
+  data: { extra: { tags: [], suitable: '', itinerary: [] }, rules: rulesOf({}), p: null, sessions: [], sessPreview: [], minGo: 0, cityName: '', loading: true, error: '',
     gallery: [], gIdx: 0, illustrated: false, rich: { intro: '', highlights: [], includes: [], excludes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
@@ -32,12 +32,22 @@ Page({
           state: s.isEarly ? '早鸟价 · 提前 ' + s.daysToDepart + ' 天' : (g.minGo > 1 ? (g.reached ? '已成团' : '已报 ' + g.booked + '/' + g.minGo + ' 人成团') : '可预订'),
         }
       })
+      let pf = {}
+      try { pf = typeof d.profile === 'string' ? JSON.parse(d.profile || '{}') : (d.profile || {}) } catch (e) { pf = {} }
+      const SUIT = { family: '亲子', couple: '情侣', friends: '朋友结伴', solo: '独自出行', senior: '银发长辈', team: '公司团建' }
       wx.setNavigationBarTitle({ title: d.title || '线路详情' })
       this.setData({
         p: d, sessions, sessPreview, loading: false,
         minGo: sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
         cityName: CITY[d.city_code] || '',
         rules: rulesOf(d),
+        // 后台表单引擎维护的扩展资料（profile）：标签、适合人群、行程节点、补充须知等
+        extra: {
+          tags: pf.tags || [], suitable: (pf.suitable || []).map((k) => SUIT[k]).filter(Boolean).join('、'),
+          ageRange: pf.age_range || '', groupSize: pf.group_size || '', transport: pf.transport || '',
+          itinerary: (pf.itinerary || []).map((n) => ({ ...n, image: n.image ? api.img(n.image) : '' })),
+          notice: pf.notice || '', shareTitle: pf.share_title || '', shareImage: pf.share_image ? api.img(pf.share_image) : '',
+        },
         gallery: images.length ? images : [api.coverFor(d)], illustrated: !images.length, gIdx: 0,
         rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [], excludes: rich.excludes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv,
@@ -58,7 +68,8 @@ Page({
   onShareAppMessage() {
     const p = this.data.p || {}
     const scene = this.myScene ? '&scene=' + this.myScene : ''
-    return { title: p.title || '向往的自由 · 主题游', path: '/package-tour/pages/detail/index?id=' + this.pid + scene }
+    const ex = this.data.extra || {}
+    return { title: ex.shareTitle || p.title || '向往的自由 · 主题游', path: '/package-tour/pages/detail/index?id=' + this.pid + scene, imageUrl: ex.shareImage || undefined }
   },
   onShareTimeline() {
     const p = this.data.p || {}

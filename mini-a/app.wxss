@@ -184,3 +184,14 @@ page {
 .qty-btn { width: 52rpx; height: 52rpx; line-height: 50rpx; text-align: center; border: 1.5rpx solid var(--line); border-radius: 50%; font-size: 30rpx; color: var(--ink); }
 .qty-btn.off { color: #c9ced6; }
 .refund-tier { padding-left: 24rpx; font-size: 24rpx; }
+.faq-a { text-align: left; }
+/* ---- 详情页：适合人群 / 行程时间线 ---- */
+.dt-fit { display: flex; flex-wrap: wrap; gap: 8rpx 20rpx; font-size: 23rpx; color: var(--ink2); }
+.iti { display: flex; gap: 18rpx; position: relative; padding-bottom: 26rpx; }
+.iti:not(:last-child)::before { content: ''; position: absolute; left: 9rpx; top: 26rpx; bottom: 0; width: 2rpx; background: #f1dcc8; }
+.iti-dot { width: 20rpx; height: 20rpx; border-radius: 50%; background: var(--brand); margin-top: 8rpx; flex: none; box-shadow: 0 0 0 6rpx var(--brand-soft); }
+.iti-body { flex: 1; min-width: 0; }
+.iti-time { font-size: 22rpx; color: var(--brand); font-weight: 700; }
+.iti-title { font-size: 28rpx; font-weight: 700; margin-top: 4rpx; }
+.iti-desc { font-size: 25rpx; color: var(--ink2); line-height: 1.7; margin-top: 6rpx; }
+.iti-img { width: 100%; height: 300rpx; border-radius: 16rpx; margin-top: 12rpx; }
