@@ -27,6 +27,30 @@ const ORDER_AGG = `LEFT JOIN (SELECT user_id, COUNT(*) cnt, SUM(CASE WHEN status
   FROM orders WHERE status IN ${VALID} GROUP BY user_id) o ON o.user_id = u.id`
 
 export const people = {
+  'GET /admin/scenics/:id/overview': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner', 'readonly'])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const sc = scopeFilter(a, 's.city_code')
+    const scenic = await one(`SELECT s.id, s.name, s.city_code, s.scenic_level, s.status FROM scenic_spot s WHERE s.id = ?${sc.sql}`, [req.params.id, ...sc.params])
+    if (!scenic) throw new BizError(1004, '景区不存在或不在权限范围')
+    const ps = scopeFilter(a, 'p.city_code'), os = scopeFilter(a, 'o.city_code'), vs = scopeFilter(a, 'v.city_code')
+    // 每个指标分别聚合，避免订单、凭证、评价相互 JOIN 后产生乘积。
+    const products = await q(`SELECT p.id, p.title, p.city_code, p.status,
+      (SELECT COALESCE(SUM(o.qty),0) FROM orders o WHERE o.product_id=p.id AND o.status IN ${PAID}${os.sql}) sold,
+      (SELECT COALESCE(SUM(o.amount_pay),0) FROM orders o WHERE o.product_id=p.id AND o.status IN ${PAID}${os.sql}) gmv,
+      (SELECT COUNT(DISTINCT tp.id) FROM travel_pass tp JOIN orders o ON o.id=tp.order_id
+        WHERE o.product_id=p.id AND tp.kind=1 AND EXISTS (SELECT 1 FROM verification_log v WHERE v.pass_id=tp.id AND v.result=1${vs.sql})${os.sql}) verified,
+      (SELECT COUNT(*) FROM review r JOIN orders o ON o.id=r.order_id WHERE r.product_id=p.id AND r.status=1${os.sql}) reviews,
+      (SELECT AVG(r.rating) FROM review r JOIN orders o ON o.id=r.order_id WHERE r.product_id=p.id AND r.status=1${os.sql}) rating,
+      (SELECT COALESCE(SUM(r.rating),0) FROM review r JOIN orders o ON o.id=r.order_id WHERE r.product_id=p.id AND r.status=1${os.sql}) rating_total
+      FROM tour_product p WHERE p.scenic_id=?${ps.sql} ORDER BY p.id DESC`, [...os.params, ...os.params, ...vs.params, ...os.params, ...os.params, ...os.params, ...os.params, scenic.id, ...ps.params])
+    const kpi = products.reduce((s, p) => ({ sold: s.sold + N(p.sold), gmv: s.gmv + N(p.gmv), verified: s.verified + N(p.verified), reviews: s.reviews + N(p.reviews), score: s.score + N(p.rating_total) }), { sold: 0, gmv: 0, verified: 0, reviews: 0, score: 0 })
+    kpi.rating = kpi.reviews ? kpi.score / kpi.reviews : null
+    delete kpi.score
+    const daily = await q(`SELECT DATE_FORMAT(o.created_at,'%Y-%m-%d') d, SUM(o.qty) n, SUM(o.amount_pay) gmv FROM orders o JOIN tour_product p ON p.id=o.product_id
+      WHERE p.scenic_id=?${ps.sql}${os.sql} AND o.status IN ${PAID} AND o.created_at >= CURDATE() - INTERVAL 13 DAY GROUP BY d ORDER BY d`, [scenic.id, ...ps.params, ...os.params])
+    return { scenic, products, kpi, daily }
+  },
   // 统一主体键为 kind + id；共创人按产品合同登记，不按姓名合并。
   'GET /admin/partners': async (req) => {
     const a = await partnerAccess(req)

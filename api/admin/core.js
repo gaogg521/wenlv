@@ -126,6 +126,7 @@ function boot() {
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
   const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
+  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
   const allowed = access[ME?.role]
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items

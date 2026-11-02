@@ -13,7 +13,7 @@ async function scenics() {
       <input id="sc_kw" placeholder="搜名称 / 联系人 / 城市码" style="width:200px" value="${esc(window.__kw.scenics || '')}" onchange="window.__kw.scenics=this.value;scenics()">
       <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 家' : '共 ' + all.length + ' 家'}</span>
       <span class="muted">G端合作台账 · 可在「商品与团期」把线路关联到景区</span>
-      <button class="btn primary sm" onclick="scenicModal()">＋ 新增景区</button></div>
+      ${ME.role === 'super' ? '<button class="btn primary sm" onclick="scenicModal()">＋ 新增景区</button>' : ''}</div>
     ${rows.length ? `<table style="margin-top:10px"><thead><tr><th>景区</th><th>城市</th><th>等级</th><th>合作模式</th><th>票务对接</th><th>联系人</th><th>条款摘要</th><th>关联商品</th><th>状态</th><th></th></tr></thead><tbody>
     ${rows.map((s) => `<tr><td class="td-main">${esc(s.name)}</td><td class="num">${esc(s.city_code)}</td><td class="num">${esc(s.scenic_level || '—')}</td>
       <td>${esc(s.coop_mode || '—')}</td><td class="td-sub">${esc(s.ticket_interface || '—')}</td>
@@ -21,11 +21,21 @@ async function scenics() {
       <td class="td-sub">${esc(s.profit_terms || '—')}</td>
       <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${esc(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
-      <td><button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>`
+      <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
   </div>`
 }
 function scenicModal() { return entityEditor('scenic', null, { onSaved: () => scenics() }) }
+async function scenicProfile(id) {
+  let data
+  try { data = await api('GET', `/admin/scenics/${id}/overview`) } catch (e) { return toast(e.message, true) }
+  const k = data.kpi
+  reviewDrawer(`景点数据 · ${esc(data.scenic.name)}`, `
+    <div class="rv-box">${kv('城市', esc(CITY_CN[data.scenic.city_code] || data.scenic.city_code))}${kv('统计口径', '按当前关联线路汇总；销量为已支付未退款人数，核销按成功凭证去重，评分按已发布评价加权。')}</div>
+    <div class="pstats">${stat('销量', k.sold + ' 人次', `${data.products.length} 条关联线路`)}${stat('有效 GMV', fen(k.gmv))}${stat('核销人次', k.verified, '成功核销凭证去重（含历史到访）')}${stat('评分', k.rating == null ? '—' : k.rating.toFixed(1) + ' ★', `${k.reviews} 条已发布评价`)}</div>
+    <div class="rv-box"><div class="rv-h">近 14 日销量（按下单日）</div>${dayBars(data.daily, { label: '销量', fmt: v => v + ' 人次' })}</div>
+    <div class="rv-box"><div class="rv-h">关联线路业绩</div>${data.products.length ? `<table><thead><tr><th>线路</th><th>状态</th><th>销量</th><th>GMV</th><th>核销人次</th><th>评分 / 评价</th></tr></thead><tbody>${data.products.map(p => `<tr><td>${esc(p.title)}</td><td>${Number(p.status) === 1 ? '在架' : '下架'}</td><td>${PN(p.sold)}</td><td>${fen(p.gmv)}</td><td>${PN(p.verified)}</td><td>${p.rating == null ? '—' : Number(p.rating).toFixed(1)} / ${PN(p.reviews)} 条</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无关联线路')}</div>`, '')
+}
 async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
 async function suppliers() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`

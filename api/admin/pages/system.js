@@ -6,15 +6,16 @@ let cfgGroup = 'bean'
 async function config() {
   $('#app').innerHTML = `<div class="card">${skel(6)}</div>`
   const rows = await api('GET', '/admin/config')
+  window.__cfgNames = Object.fromEntries(rows.map(r => [r.k, r.name]))
   const groups = {}
   rows.forEach((r) => (groups[r.group_name] = groups[r.group_name] || []).push(r))
-  const GNAMES = { bean: '旅豆', member: '会员', promoter: '推广', contribution: '贡献分', order: '订单', pass: '核销', settlement: '结算', cost: '成本控制', channel: '城市与频道' }
+  const GNAMES = { bean: '旅豆', member: '会员', promoter: '推广', contribution: '贡献分', order: '订单', pass: '核销', settlement: '结算', cost: '成本控制', channel: '城市与频道', feature: '功能开关', security: '安全' }
   const items = groups[cfgGroup] || []
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>参数中心</h2><span class="muted">代码零硬编码 · 敏感参数双人复核 · 版本可回滚</span></div>
     <div class="cfg-tabs">${Object.keys(groups).map((g) => `<div class="cfg-tab ${cfgGroup === g ? 'on' : ''}" onclick="cfgGroup='${g}';config()">${GNAMES[g] || g}</div>`).join('')}</div>
-    ${items.length ? `<table><thead><tr><th>参数</th><th>当前值</th><th>说明</th><th>复核</th><th>最近变更</th><th></th></tr></thead><tbody>
-    ${items.map((r) => `<tr><td><code>${esc(r.k)}</code></td><td><b>${esc(r.v)}</b></td>
+    ${items.length ? `<table><thead><tr><th>参数名称</th><th>参数键</th><th>当前值</th><th>说明</th><th>复核</th><th>最近变更</th><th></th></tr></thead><tbody>
+    ${items.map((r) => `<tr><td class="td-main">${esc(r.name || r.memo || '自定义参数（待补名称）')}</td><td><code>${esc(r.k)}</code></td><td><b>${esc(r.v)}</b></td>
       <td class="td-sub">${esc(r.memo || '')}</td>
       <td>${Number(r.sensitive) ? '<span class="pill warn">双人复核</span>' : '<span class="pill off">直接生效</span>'}</td>
       <td class="td-sub">${esc(String(r.updated_at).slice(5, 16))}${r.updated_by ? ' · ' + esc(r.updated_by) : ''}</td>
@@ -22,7 +23,7 @@ async function config() {
   </div>`
 }
 function cfgEdit(k, v) {
-  modal('修改参数 <code>' + k + '</code>', `
+  modal('修改参数 · ' + esc(window.__cfgNames?.[k] || k) + ' <code>' + esc(k) + '</code>', `
     <div style="margin-bottom:12px">当前值：<code>${esc(v)}</code> → 新值：
     <input id="cfg_new" value="${esc(v)}" style="width:100%;margin-top:8px;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px"></div>
     <input id="cfg_reason" placeholder="修改原因（必填，将写入审计）" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px">
