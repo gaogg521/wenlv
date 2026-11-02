@@ -69,8 +69,9 @@ await t('UTC 23:30 = 北京次日 07:30，业务日取北京日期', () => {
 })
 
 console.log('== C EVM 锚定终局 ==')
-if (!process.env.DB_NAME) {
-  console.log('  - 跳过（需要 DB_NAME 指向隔离库）')
+import { PROTECTED } from './_guard.mjs'
+if ((!process.env.DB_NAME || PROTECTED.includes(process.env.DB_NAME)) && process.env.ALLOW_DESTRUCTIVE !== '1') {
+  console.log('  - 跳过（需要 DB_NAME 指向隔离库，或一次性容器设 ALLOW_DESTRUCTIVE=1）')
 } else {
   const ANCHOR_TO = '0x' + 'ab'.repeat(20)
   const chainState = { head: 100, txs: new Map(), failNext: false, tamperNext: false }

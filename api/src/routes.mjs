@@ -24,7 +24,8 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 
 const fen2yuan = (f) => (Number(f) / 100).toFixed(2)
-const apiImg = (u) => (u && /^https?:/.test(u)) ? u : (u ? 'http://127.0.0.1:8080' + u : u)
+// 相对路径图片补全为对外基址（PUBLIC_BASE 或按请求头推断），真机/外网不能拿到 127.0.0.1
+const apiImg = (u, req) => (u && /^https?:/.test(u)) ? u : (u ? publicBase(req) + u : u)
 // CSV 序列化：RFC4180 转义 + UTF-8 BOM（Excel 直开不乱码）
 function toCsv(rows) {
   if (!rows.length) return '\uFEFF(空)\n'
@@ -2314,7 +2315,7 @@ const cNotes = {
     const rows = await q(`SELECT id, title, sub_title, image, link FROM banner WHERE status = 1
       AND (start_at IS NULL OR start_at <= NOW(3)) AND (end_at IS NULL OR end_at >= NOW(3))
       ORDER BY sort, id LIMIT 6`)
-    return rows.map((b) => ({ ...b, image: apiImg(b.image) }))
+    return rows.map((b) => ({ ...b, image: apiImg(b.image, req) }))
   },
   // 目的地城市聚合（P2）
   'GET /c/destinations': async (req) => {

@@ -1,6 +1,8 @@
 // HTTP 全链路 E2E：起服务 → 游客登录 → 浏览 → 下单 → 模拟支付回调 → 出票 →
 // 商户登录 → 扫码核销 → 完成 → 返豆/佣金 → 结算五口径 → 退款冲正 → 参数中心双人复核 → 试算
 // 运行：node test/api-e2e.mjs（自动重置业务数据）
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/api-e2e.mjs')
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }
@@ -20,7 +22,7 @@ async function main() {
   // 重置业务数据（保留 rule_config / bean_global_cap，issued_sum 归零）——保证可重复执行
   const dbx = await import('../src/db.mjs')
   await dbx.q('SET FOREIGN_KEY_CHECKS = 0')
-  for (const t of await dbx.q("SELECT table_name tn FROM information_schema.tables WHERE table_schema = 'wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','faq')")) {
+  for (const t of await dbx.q("SELECT table_name tn FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','faq')")) {
     await dbx.q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await dbx.q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')
