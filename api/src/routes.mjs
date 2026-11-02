@@ -10,6 +10,7 @@ import * as refund from './domain/refund.mjs'
 import * as group from './domain/group.mjs'
 import * as wxpay from './domain/wxpay.mjs'
 import * as attestDomain from './domain/attest.mjs'
+import * as merkleLib from './domain/merkle.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
 import * as asset from './domain/asset.mjs'
@@ -513,7 +514,7 @@ const m = {
     if (!s) throw new BizError(1004, '结算单不存在')
     const e = await one(`SELECT e.payload_hash, e.status, e.version_no, e.leaf_path, b.merkle_root, b.seq, b.chain_tx_ref
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = 'settlement' AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, ['settle-' + s.id])
+      WHERE e.biz_type = 'settlement' AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, ['settle-' + s.id])
     const doc = settlementReportDoc({
       settlementId: s.id, period: s.period, orderCount: s.order_count, totalAmount: s.total_amount,
       amtFulfill: s.amt_fulfill, amtService: s.amt_service, amtPromoter: s.amt_promoter,
@@ -1279,7 +1280,7 @@ const adminSys = {
     if (name === 'close-timeout') n = await closeTimeout()
     else if (name === 'commission-due') n = await settleDue()
     else if (name === 'attest-pack') { const b = await attestDomain.packBatch(); n = b.leaves }
-    else if (name === 'attest-anchor') { const r = await attestDomain.reanchorPending(50); n = r.filter((x) => x.anchored).length }
+    else if (name === 'attest-anchor') { const c = await attestDomain.confirmPending(50); const r = await attestDomain.reanchorPending(50); n = [...c, ...r].filter((x) => x.anchored).length }
     else if (name === 'bean-day-close') { const r = await attestDomain.closeBeanDay(req.body && req.body.date); n = r.leaves || 0 }
     else if (name === 'attest-reconcile') { const r = await attestDomain.reconcile(); n = r.checks.filter((x) => x.ok).length }
     else if (name === 'complete-due') { const { completeOrder } = await import('./jobs.mjs'); const rows = await q("SELECT order_no FROM orders WHERE status = 40 AND refund_deadline <= NOW(3) LIMIT 50"); for (const x of rows) await completeOrder(x.order_no); n = rows.length }
@@ -1728,24 +1729,28 @@ const web3 = {
   // 单号验证（后台+开放页共用逻辑）：返回可离线重算的 inclusion proof
   async _verify(bizType, bizRef) {
     const e = await one(`SELECT e.*, b.merkle_root, b.prev_root, b.chain_tx_ref, b.chain_block, b.anchored_at,
-        b.seq, b.leaf_count, b.is_day_close
+        b.seq, b.leaf_count, b.is_day_close, b.merkle_version, b.status AS batch_status
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     if (!e) return { found: false }
     const path = e.leaf_path || null
-    const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root) : null
+    const mv = Number(e.merkle_version || 1)
+    const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root, mv) : null
+    // 叶哈希必须能由公开的 canonical 重算出来：否则"平台给的哈希"只是一句话，不是证据
+    const canonicalValid = e.canonical ? attestDomain.hashOf(attestDomain.canonicalize(typeof e.canonical === 'string' ? JSON.parse(e.canonical) : e.canonical)) === e.payload_hash : null
     const anchored = Number(e.status) === 2 && e.chain_tx_ref && !String(e.chain_tx_ref).startsWith('NOOP')
     return {
       found: true, bizType, bizRef, versionNo: Number(e.version_no),
-      payloadHash: e.payload_hash, status: Number(e.status),
-      merkleRoot: e.merkle_root, leafIndex: e.leaf_index, leafPath: path,
+      payloadHash: e.payload_hash, status: Number(e.status), canonicalValid,
+      merkleRoot: e.merkle_root, merkleVersion: mv, leafIndex: e.leaf_index, leafPath: path,
       prevRoot: e.prev_root, leafCount: e.leaf_count,
       proofValid, batchSeq: e.seq, isDayClose: !!Number(e.is_day_close),
       chainRef: anchored ? e.chain_tx_ref : null, chainBlock: anchored ? e.chain_block : null,
       anchoredAt: anchored ? e.anchored_at : null,
-      note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根'
-        : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）'),
-      verifyTip: '重算方法：从 payloadHash 起，按 leafPath 逐层 sha256(左+右)（p=R 表示兄弟在右），结果应等于 merkleRoot',
+      note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根，再到链上核对该根'
+        : (Number(e.batch_status) === 5 ? '已提交上链·等待确认：确认数达标前不视为已锚定'
+        : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）')),
+      verifyTip: merkleLib.describe(mv),
     }
   },
 
@@ -1788,7 +1793,7 @@ const web3 = {
     if (!o) throw new BizError(1201, '订单不存在')
     const COLS = 'e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq, b.merkle_root, b.status AS batch_status'
     const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
     const passes = await q('SELECT id, name, serial_no FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
     const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
@@ -1798,7 +1803,7 @@ const web3 = {
       { key: 'order', no: '②', label: '支付成功', hint: '订单事实入链', ev: await ev('order', orderNo) },
       { key: 'issue', no: '③', label: '出票', hint: passes.length > 1 ? `权益凭证 ×${passes.length}` : '权益凭证', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
       { key: 'verify', no: '④', label: '核销', hint: '到店扫码', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.id DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
       { key: 'grant', no: '⑤', label: '返豆', hint: '消费奖励', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
       { key: 'settle', no: '⑥', label: '结算', hint: '五口径分账', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
     ]
@@ -2050,7 +2055,7 @@ const open = {
     if (!o) throw new BizError(1004, '未找到该订单的记录')
     const COLS = 'e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq'
     const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
     const passes = await q('SELECT id FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
     const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
@@ -2060,7 +2065,7 @@ const open = {
       { no: '②', key: 'order', label: '支付成功', hint: '待支付', ev: await ev('order', orderNo) },
       { no: '③', key: 'issue', label: '出票', hint: passes.length > 1 ? '待出票 ×' + passes.length : '待出票', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
       { no: '④', key: 'verify', label: '核销', hint: '待到店', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.id DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
       { no: '⑤', key: 'grant', label: '返豆', hint: '待完成', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
       { no: '⑥', key: 'settle', label: '结算', hint: '待结算', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
     ]
@@ -2090,6 +2095,7 @@ const open = {
       found: r.found, bizType: 'settlement', bizRef: 'settle-' + id, settlementId: id,
       payloadHash: r.payloadHash || null, merkleRoot: r.merkleRoot || null, prevRoot: r.prevRoot || null,
       leafPath: r.leafPath || null, leafIndex: r.leafIndex ?? null, proofValid: r.proofValid ?? null,
+      merkleVersion: r.merkleVersion ?? null, canonicalValid: r.canonicalValid ?? null,
       batchSeq: r.batchSeq ?? null, status: Number(s.status),
       chainRef: r.chainRef || null, anchoredAt: r.anchoredAt || null,
       note: r.found ? r.note : '该结算单已生成，但尚未打包封存',

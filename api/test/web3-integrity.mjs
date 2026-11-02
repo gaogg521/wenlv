@@ -42,7 +42,7 @@ const have = types.map((t) => t.biz_type)
 ok(need.every((t) => have.includes(t)), `${need.length} 类事件全部有埋点（实际 ${have.length} 类）`, have)
 
 console.log('== A3 inclusion proof 可离线重算 ==')
-const batches = await rows(`SELECT id, merkle_root FROM attest_batch WHERE status >= 1`)
+const batches = await rows(`SELECT id, merkle_root, merkle_version FROM attest_batch WHERE status >= 1`)
 let checked = 0
 let bad = []
 for (const b of batches) {
@@ -52,7 +52,7 @@ for (const b of batches) {
     const path = typeof e.leaf_path === 'string' ? JSON.parse(e.leaf_path) : e.leaf_path
     if (!path) { bad.push({ batch: b.id, event: e.id, why: 'no proof' }); continue }
     checked++
-    if (!verifyProof(e.payload_hash, path, b.merkle_root)) bad.push({ batch: b.id, event: e.id, why: 'root mismatch' })
+    if (!verifyProof(e.payload_hash, path, b.merkle_root, b.merkle_version)) bad.push({ batch: b.id, event: e.id, why: 'root mismatch' })
   }
 }
 ok(checked > 0 && bad.length === 0, `逐条重算 ${checked} 片叶子，全部等于批次根`, bad.slice(0, 3))

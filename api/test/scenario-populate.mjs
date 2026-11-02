@@ -27,7 +27,7 @@ async function api(method, path, body, token) {
 async function main() {
   // ===== 环境准备（唯一不走 HTTP 的一步：清场 + 保证管理员在） =====
   await q('SET FOREIGN_KEY_CHECKS = 0')
-  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema='wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user')")) {
+  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema='wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','schema_migration')")) {
     await q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')

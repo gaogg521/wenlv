@@ -9,3 +9,16 @@ body{font-size:13px}#frame{background:var(--bg)}.side{width:236px;background:#ff
 @media(min-width:1150px){.content.dashboard{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}.dashboard>.workspace-intro,.dashboard>.kpi-grid,.dashboard>.card:not(.chart-box){grid-column:1/-1}.dashboard .chart-box{min-width:0}.dashboard .chart-box svg{height:170px}}
 
 .orders-card .table-wrap table{min-width:1000px}.orders-card .money,.orders-card .order-link{white-space:nowrap}.orders-card td:first-child{min-width:240px}.orders-card td:nth-child(2){min-width:100px}.orders-card td:nth-child(3){min-width:100px}
+
+/* 驾驶舱：待办置顶 */
+.todo-card .card-head{margin-bottom:14px}.todo-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.todo-row .task-link{min-width:0}.todo-row .task-link:not(.has){opacity:.62}.todo-row .task-link:not(.has) b{color:#9aa49c}
+.todo-row .task-link.has{background:#fff5ea;border-color:#efcfab}
+@media(max-width:1100px){.todo-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.todo-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 业务类型标签（存证/链上表格） */
+.biz-tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:#f2f4f7;color:#55606a;white-space:nowrap}
+.biz-tag small{color:#9aa3ab;margin-left:4px;font-family:Consolas,monospace;font-size:10px}
+.audit-diff{font-family:Consolas,monospace;font-size:11px;line-height:1.6}
+.audit-diff .k{color:#8a928c}.audit-diff del{color:#b4523d;text-decoration:none;background:#fff0eb;padding:0 3px;border-radius:3px}
+.audit-diff ins{color:#377d76;text-decoration:none;background:#e4f4f0;padding:0 3px;border-radius:3px}

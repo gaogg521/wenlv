@@ -81,7 +81,9 @@ export async function tickExpire() {
 
 /** 存证打包（小时级）：本地 Merkle 根 + inclusion proof；随后尝试锚定（NOOP 下停留在"已打包"） */
 export async function tickAttest() {
-  const { packBatch, reanchorPending } = await import('./domain/attest.mjs')
+  const { packBatch, reanchorPending, confirmPending } = await import('./domain/attest.mjs')
+  const confirmed = await confirmPending(50)
+  if (confirmed.length) console.log('[job:attest-confirm]', confirmed.filter((x) => x.anchored).length, '/', confirmed.length, 'confirmed')
   const r = await packBatch()
   if (r.leaves > 0) console.log('[job:attest] batch #' + r.batchId, 'seq', r.seq, 'leaves', r.leaves, 'root', String(r.root).slice(0, 12))
   const anchored = await reanchorPending(20)

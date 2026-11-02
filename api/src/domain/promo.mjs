@@ -1,4 +1,5 @@
 // 推广域（一级 CPS 三档）+ 结算域（五口径恒等）
+import crypto from 'node:crypto'
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgArr, cfgNum } from '../config.mjs'
 import { attest } from './attest.mjs'
@@ -6,7 +7,10 @@ import { attest } from './attest.mjs'
 /** 结算单锚定：version_no 默认 = 结算主状态（0生成/1商户确认/2分账/3完成/4异议），
  *  异议解除回 0 时用 40，避免与"生成"撞同一版本号被幂等吞掉 */
 export async function attestSettlement(settlementId, conn, versionNo) {
-  const s = await one('SELECT * FROM settlement WHERE id = ?', [settlementId])
+  // 必须用同一事务连接读：在 tx() 里刚改的状态还没提交，用全局连接会读到旧状态，
+  // 结果是"复核通过(v2)"那条存证里写的却是 status=1 —— 证据与事实不符
+  const s = conn ? await conn.one('SELECT * FROM settlement WHERE id = ?', [settlementId])
+    : await one('SELECT * FROM settlement WHERE id = ?', [settlementId])
   if (!s) return null
   const v = versionNo != null ? Number(versionNo) : Number(s.status)
   return attest('settlement', 'settle-' + s.id, {
@@ -15,6 +19,8 @@ export async function attestSettlement(settlementId, conn, versionNo) {
     amtFulfill: Number(s.amt_fulfill), amtService: Number(s.amt_service),
     amtPromoter: Number(s.amt_promoter), amtBeanbudget: Number(s.amt_beanbudget),
     amtRetained: Number(s.amt_retained), status: Number(s.status),
+    // 回单号只存哈希：可证明"登记的是哪张回单"，又不把银行流水号公开到复核页
+    paymentRefHash: s.payment_ref ? crypto.createHash('sha256').update(String(s.payment_ref)).digest('hex') : null,
   }, conn, v)
 }
 

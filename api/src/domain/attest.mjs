@@ -3,13 +3,16 @@
 // 关键不变式（改动前先读）：
 //   I1 叶子哈希只由 canonical 决定；canonical 只放白名单字段，绝不含 PII
 //   I2 每批 prev_root = 上一批 merkle_root（存证链，防整批替换）
-//   I3 每片叶子在批次内有唯一 leaf_index，且落 leaf_path 可在链下独立重算
-//   I4 status 单向：0待打包 → 1已打包 → 2已锚定；3/4 只影响锚定，不影响业务
+//   I3 每片叶子在批次内有唯一 leaf_index，且落 leaf_path 可在链下独立重算（算法见 merkle.mjs，按批次 merkle_version）
+//   I4 status 单向：0待打包 → 1已打包 →（5已提交待确认）→ 2已锚定；3/4 只影响锚定，不影响业务
+//      txHash 不等于已上链：需要确认的链（EVM）必须核验回执、确认数和交易内容后才置 2
 //   I5 NOOP 模式下批次永远停在 1，绝不写 status=2（否则对外一查就穿帮）
 //   I6 旅豆日终根必须借贷恒等（Σ借=Σ贷）才允许打包
 import crypto from 'node:crypto'
 import { q, one, tx } from '../db.mjs'
 import * as chain from '../infra/chain.mjs'
+import { bizDay } from '../infra/bizdate.mjs'
+import * as merkle from './merkle.mjs'
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex')
 
@@ -28,45 +31,8 @@ export function canonicalize(obj) {
 
 export const hashOf = (canonical) => sha(JSON.stringify(canonical))
 
-/** Merkle 树：奇数层复制末节点补偶；返回每层，便于取 proof */
-export function buildTree(leafHashes) {
-  if (!leafHashes.length) return { root: sha('empty'), levels: [] }
-  let level = leafHashes.map((h, i) => ({ hash: h, pos: i }))
-  const levels = [level.slice()]
-  while (level.length > 1) {
-    const next = []
-    for (let i = 0; i < level.length; i += 2) {
-      const a = level[i]
-      const b = level[i + 1]
-      next.push({ hash: sha(a.hash + (b ? b.hash : a.hash)), pos: next.length })
-    }
-    level = next
-    levels.push(level.slice())
-  }
-  return { root: level[0].hash, levels }
-}
-
-/** 取某叶子的 inclusion proof：[{h, p, dup}] */
-export function proofFor(levels, leafPos) {
-  const path = []
-  let pos = leafPos
-  for (let i = 0; i < levels.length - 1; i++) {
-    const lv = levels[i]
-    const sib = lv[pos % 2 === 0 ? pos + 1 : pos - 1]
-    path.push({ h: sib ? sib.hash : lv[pos].hash, p: pos % 2 === 0 ? 'R' : 'L', dup: !sib })
-    pos = Math.floor(pos / 2)
-  }
-  return path
-}
-
-/** 链下独立重算：任何一方拿到 payload_hash + leaf_path 都能算出根（对外验证的核心） */
-export function verifyProof(payloadHash, path, root) {
-  let cur = payloadHash
-  for (const step of path || []) {
-    cur = step.p === 'R' ? sha(cur + step.h) : sha(step.h + cur)
-  }
-  return cur === root
-}
+/** 链下独立重算（version 取批次的 merkle_version；历史批次为 1） */
+export const verifyProof = (payloadHash, path, root, version = 1) => merkle.verifyProof(payloadHash, path, root, version)
 
 /**
  * 事件入队（幂等）
@@ -100,19 +66,22 @@ export async function packBatch(opts = {}) {
     if (!rows.length) return { batchId: 0, leaves: 0, root: null, seq: 0, prevRoot: null }
 
     const { seq, prevRoot } = await nextSeq(c)
-    const { root, levels } = buildTree(rows.map((r) => r.payload_hash))
-    const bizDate = opts.bizDate || new Date().toISOString().slice(0, 10)
+    const tree = merkle.buildTree(rows.map((r) => r.payload_hash))
+    const root = tree.root
+    const bizDate = opts.bizDate || bizDay()
 
     const batchId = await c.ins(
-      `INSERT INTO attest_batch (seq, biz_date, merkle_root, prev_root, leaf_count, merkle_kind, status)
-       VALUES (?,?,?,?,?,?,1)`,
-      [seq, bizDate, root, prevRoot, rows.length, opts.merkleKind || 'mixed'])
+      `INSERT INTO attest_batch (seq, biz_date, merkle_root, prev_root, leaf_count, merkle_kind, merkle_version, status)
+       VALUES (?,?,?,?,?,?,?,1)`,
+      [seq, bizDate, root, prevRoot, rows.length, opts.merkleKind || 'mixed', tree.version])
 
-    // 批内顺序即叶子顺序：leaf_index 必须与 levels 中的 pos 严格对应
+    // 批内顺序即叶子顺序：leaf_index 必须与树中位置严格对应；写入前自检每条 proof
     for (let i = 0; i < rows.length; i++) {
+      const path = merkle.proofFor(tree, i)
+      if (!merkle.verifyProof(rows[i].payload_hash, path, root, tree.version)) throw new Error(`proof 自检失败 event=${rows[i].id}`)
       await c.upd(
         'UPDATE attest_event SET batch_id = ?, leaf_index = ?, leaf_path = ?, status = 1 WHERE id = ?',
-        [batchId, i, JSON.stringify(proofFor(levels, i)), rows[i].id])
+        [batchId, i, JSON.stringify(path), rows[i].id])
     }
     return { batchId, leaves: rows.length, root, seq, prevRoot }
   })
@@ -124,15 +93,15 @@ export async function packBatch(opts = {}) {
  * @param opts.force 仅对"当日"有效：当日账本还在增长，允许重封（历史日一旦封存即不可变）
  */
 export async function closeBeanDay(bizDate, opts = {}) {
-  const day = bizDate || new Date(Date.now() - 86400_000).toISOString().slice(0, 10)
-  const today = new Date().toISOString().slice(0, 10)
+  const day = bizDate || bizDay(-1)
+  const today = bizDay()
   const exist = await one('SELECT * FROM bean_day_root WHERE biz_date = ?', [day])
   if (exist) {
     // 历史日封存后不可变；当日允许重封（对账快照），且旧批次必须还没上链
     if (day < today) return { skipped: true, bizDate: day, reason: '历史日已封存，不可变' }
     if (!opts.force) return { skipped: true, bizDate: day, reason: '当日已封存（如需重封请带 force）' }
     const old = exist.batch_id ? await one('SELECT status FROM attest_batch WHERE id = ?', [exist.batch_id]) : null
-    if (old && Number(old.status) === 2) throw new Error('该日根已上链，不允许重封')
+    if (old && [2, 5].includes(Number(old.status))) throw new Error('该日根已提交上链，不允许重封')
     // 只删日终根索引，不删旧批次：删批次会在 seq 链上留洞，旧批次留作历史（无事件、不上链）
     await q('DELETE FROM bean_day_root WHERE biz_date = ?', [day])
   }
@@ -155,10 +124,11 @@ export async function closeBeanDay(bizDate, opts = {}) {
 
   const out = await tx(async (c) => {
     const { seq, prevRoot } = await nextSeq(c)
-    const { root } = buildTree(leaves)
+    const tree = merkle.buildTree(leaves)
+    const root = tree.root
     const batchId = await c.ins(
-      `INSERT INTO attest_batch (seq, biz_date, merkle_root, prev_root, leaf_count, merkle_kind, is_day_close, status)
-       VALUES (?,?,?,?,?,?,1,1)`, [seq, day, root, prevRoot, leaves.length, 'bean_day'])
+      `INSERT INTO attest_batch (seq, biz_date, merkle_root, prev_root, leaf_count, merkle_kind, merkle_version, is_day_close, status)
+       VALUES (?,?,?,?,?,?,?,1,1)`, [seq, day, root, prevRoot, leaves.length, 'bean_day', tree.version])
     await c.q(
       `INSERT INTO bean_day_root (biz_date, leaf_count, debit_sum, credit_sum, merkle_root, prev_root, batch_id)
        VALUES (?,?,?,?,?,?,?)`, [day, leaves.length, debitSum, creditSum, root, prevRoot, batchId])
@@ -170,40 +140,86 @@ export async function closeBeanDay(bizDate, opts = {}) {
 /**
  * 锚定一批到链上
  * - NOOP：直接返回，不改状态（**不消耗重试次数**）
- * - 真实：先按根查重（幂等）→ 提交 → 成功置 2；失败置 3 并计数，超 5 次置 4 进人工队列
+ * - 真实：先按根查重（幂等）→ 提交
+ *   - 链返回即终局（联盟链同步出块）→ 置 2
+ *   - 链需要等确认（EVM 等公链：txHash ≠ 已上链）→ 置 5「已提交·待确认」，由 confirmPending() 核验后才置 2
+ *   失败置 3 并计数，超 5 次置 4 进人工队列
  */
 export async function anchorToChain(batchId) {
   const b = await one('SELECT * FROM attest_batch WHERE id = ?', [batchId])
   if (!b) throw new Error('批次不存在')
   if (Number(b.status) === 2) return { batchId, skipped: true, reason: '已锚定' }
+  if (Number(b.status) === 5) return { batchId, skipped: true, reason: '已提交，等待链上确认' }
   if (chain.chainMode() === 'noop') {
     return { batchId, anchored: false, mode: 'noop', reason: '未配置链：存证停留在已打包' }
   }
 
+  let r, existed
   try {
-    const existed = await chain.queryByRoot(b.merkle_root)
-    const r = existed || await chain.submit({
+    existed = await chain.queryByRoot(b.merkle_root)
+    r = existed || await chain.submit({
       root: b.merkle_root, prevRoot: b.prev_root, leafCount: b.leaf_count,
       bizDate: b.biz_date, merkleKind: b.merkle_kind,
     })
-    return await tx(async (c) => {
-      await c.upd(
-        `UPDATE attest_batch SET status = 2, chain_tx_ref = ?, chain_block = ?, anchored_at = NOW(3), last_err = NULL
-         WHERE id = ?`, [r.txRef, r.block || null, batchId])
-      await c.q('UPDATE attest_event SET status = 2 WHERE batch_id = ? AND status = 1', [batchId])
-      return { batchId, anchored: true, txRef: r.txRef, block: r.block, reused: !!existed }
-    })
+    if (!r || !r.txRef) throw new Error('链适配器未返回交易号')
   } catch (e) {
-    const attempt = Number(b.attempt || 0) + 1
-    const status = attempt >= 5 ? 4 : 3
-    await q('UPDATE attest_batch SET attempt = ?, last_err = ?, status = ? WHERE id = ?',
-      [attempt, String(e.message).slice(0, 255), status, batchId])
-    if (status === 4) {
-      await q(`INSERT INTO risk_event (kind, severity, detail, handled) VALUES ('attest_anchor_failed', 2, ?, 0)`,
-        [JSON.stringify({ batchId, attempt, err: String(e.message).slice(0, 200) })])
-    }
-    return { batchId, anchored: false, attempt, status, err: String(e.message) }
+    return await markFailed(b, e)
   }
+  // 提交已成功：此后的数据库异常不能记成"提交失败"，否则重试会重复上链
+  const needConfirm = chain.needsConfirmation() && !existed
+  if (needConfirm) {
+    await q(`UPDATE attest_batch SET status = 5, chain_tx_ref = ?, submitted_at = NOW(3), last_err = NULL WHERE id = ?`,
+      [r.txRef, batchId])
+    return { batchId, anchored: false, submitted: true, txRef: r.txRef, reason: '已提交，等待链上确认' }
+  }
+  return await markAnchored(batchId, r.txRef, r.block, null, !!existed)
+}
+
+async function markAnchored(batchId, txRef, block, confirmations, reused = false) {
+  return await tx(async (c) => {
+    await c.upd(
+      `UPDATE attest_batch SET status = 2, chain_tx_ref = ?, chain_block = ?, confirmations = ?, anchored_at = NOW(3), last_err = NULL
+       WHERE id = ?`, [txRef, block || null, confirmations, batchId])
+    await c.q('UPDATE attest_event SET status = 2 WHERE batch_id = ? AND status = 1', [batchId])
+    return { batchId, anchored: true, txRef, block, confirmations, reused }
+  })
+}
+
+async function markFailed(b, e) {
+  const attempt = Number(b.attempt || 0) + 1
+  const status = attempt >= 5 ? 4 : 3
+  await q('UPDATE attest_batch SET attempt = ?, last_err = ?, status = ?, chain_tx_ref = NULL, submitted_at = NULL WHERE id = ?',
+    [attempt, String(e.message).slice(0, 255), status, b.id])
+  if (status === 4) {
+    await q(`INSERT INTO risk_event (kind, severity, detail, handled) VALUES ('attest_anchor_failed', 2, ?, 0)`,
+      [JSON.stringify({ batchId: b.id, attempt, err: String(e.message).slice(0, 200) })])
+  }
+  return { batchId: b.id, anchored: false, attempt, status, err: String(e.message) }
+}
+
+/**
+ * 确认"已提交·待确认"的批次：交易成功 + 确认数达标 + 交易内容确实是这枚根，才算已锚定。
+ * - 交易被回滚/内容不符 → 置 3（可重试，重新提交）
+ * - 还没够确认数 → 保持 5
+ */
+export async function confirmPending(limit = 50) {
+  const rows = await q(`SELECT * FROM attest_batch WHERE status = 5 ORDER BY seq ASC LIMIT ${Number(limit)}`)
+  const out = []
+  for (const b of rows) {
+    try {
+      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root })
+      if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
+      else {
+        await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',
+          [c.confirmations ?? null, c.reason ? String(c.reason).slice(0, 255) : null, b.id])
+        out.push({ batchId: b.id, anchored: false, pending: true, confirmations: c.confirmations ?? null, reason: c.reason || null })
+      }
+    } catch (e) {
+      // 交易失败、被替换、或链上内容与根不符：这次提交作废，回到可重试
+      out.push(await markFailed(b, e))
+    }
+  }
+  return out
 }
 
 /** 补锚：按 seq 升序回放 1/3 批次（链恢复后调用），保证 prev_root 链连续 */
@@ -246,6 +262,9 @@ export async function reconcile() {
   const fake = await one(`
     SELECT COUNT(*) n FROM attest_batch WHERE status = 2 AND (chain_tx_ref IS NULL OR chain_tx_ref LIKE 'NOOP%')`)
   checks.push({ id: 'I5', name: '无假上链记录', ok: Number(fake.n) === 0, detail: { fake: Number(fake.n) } })
+
+  const unconfirmed = await one(`SELECT COUNT(*) n FROM attest_batch WHERE status = 5 AND submitted_at < NOW() - INTERVAL 6 HOUR`)
+  checks.push({ id: 'I7', name: '已提交批次 6 小时内得到链上确认', ok: Number(unconfirmed.n) === 0, detail: { stale: Number(unconfirmed.n) } })
 
   // 按"旅豆事务号"计，不按流水行数计：一笔发放/抵扣都是双分录两行，用行数会误判成漏埋点
   const missed = await one(`

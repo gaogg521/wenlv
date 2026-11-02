@@ -20,6 +20,7 @@ const env = () => ({
   to: process.env.EVM_ANCHOR_TO || '',              // 落根交易的目标地址（可以是自己的地址）
   explorer: (process.env.EVM_EXPLORER || '').replace(/\/+$/, ''), // 例：https://polygonscan.com/tx/
   mintSig: process.env.EVM_MINT_SIGNATURE || 'mint(address,uint256,uint256,bytes)',
+  confirmations: Math.max(1, Number(process.env.EVM_CONFIRMATIONS || 12)),
 })
 
 function missing() {
@@ -27,7 +28,24 @@ function missing() {
   const m = []
   if (!e.relayer) m.push('EVM_RELAYER_URL')
   if (!e.token) m.push('EVM_RELAYER_TOKEN')
+  // 没有 RPC 就无法核验回执与确认数：只能"发出去"，不能"证明上了链"，因此不算真实接入
+  if (!e.rpc) m.push('EVM_RPC_URL')
+  if (!e.to) m.push('EVM_ANCHOR_TO')
   return m
+}
+
+let rpcId = 0
+async function rpc(method, params) {
+  const e = env()
+  const res = await fetch(e.rpc, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
+    signal: AbortSignal.timeout(10_000),
+  })
+  const j = await res.json().catch(() => null)
+  if (!res.ok || !j) throw new Error(`evm rpc ${method} HTTP ${res.status}`)
+  if (j.error) throw new Error(`evm rpc ${method}: ${j.error.message || JSON.stringify(j.error)}`)
+  return j.result
 }
 
 async function relay({ to, data, asset }) {
@@ -51,11 +69,11 @@ export default {
   id: 'evm',
   label: '通用 EVM 链（Polygon / Base / BNB / 自建）',
   docs: '需托管签名服务（relayer）。存证把 Merkle 根写进交易 input data；资产用 ERC-1155',
-  capabilities: { anchor: true, queryByRoot: false, assets: true, did: true },
+  capabilities: { anchor: true, queryByRoot: false, assets: true, did: true, confirm: true },
   mode: () => (missing().length ? 'noop' : 'real'),
   status: () => ({
     provider: 'evm', mode: missing().length ? 'noop' : 'real', missing: missing(),
-    note: '私钥不进入本服务：由 relayer/KMS 托管签名',
+    note: `私钥不进入本服务：由 relayer/KMS 托管签名；回执成功且 ≥${env().confirmations} 个确认、交易内容等于 Merkle 根才记为已锚定`,
     chainId: env().chainId || '未配置',
     assets: env().contract ? '可发行（ERC-1155）' : '未配 NFT 合约',
   }),
@@ -65,6 +83,27 @@ export default {
     if (!e.to) throw new Error('EVM 未配置 EVM_ANCHOR_TO（落根交易的目标地址）')
     if (!/^[0-9a-f]{64}$/.test(root)) throw new Error('EVM 存证要求 root 为 32 字节 hex')
     return await relay({ to: e.to, data: '0x' + root })
+  },
+  /**
+   * 核验：①交易存在且 input 正是 0x+root、目标地址一致 ②回执 status=0x1 ③确认数达标
+   * 不满足①②抛错（本次提交作废、可重试）；只差③返回 final=false 继续等
+   */
+  async confirm({ txRef, root }) {
+    const e = env()
+    if (!e.rpc) return { final: false, reason: '未配置 EVM_RPC_URL，无法核验回执' }
+    const txn = await rpc('eth_getTransactionByHash', [txRef])
+    if (!txn) return { final: false, confirmations: 0, reason: '交易尚未被节点看到（可能仍在内存池）' }
+    if (String(txn.input || '').toLowerCase() !== '0x' + root) throw new Error('链上交易内容与 Merkle 根不一致')
+    if (e.to && String(txn.to || '').toLowerCase() !== e.to.toLowerCase()) throw new Error('链上交易目标地址与 EVM_ANCHOR_TO 不一致')
+    if (e.chainId && txn.chainId && BigInt(txn.chainId) !== BigInt(e.chainId)) throw new Error('链上交易 chainId 与 EVM_CHAIN_ID 不一致')
+    const rc = await rpc('eth_getTransactionReceipt', [txRef])
+    if (!rc || !rc.blockNumber) return { final: false, confirmations: 0, reason: '等待打包进块' }
+    if (rc.status !== '0x1') throw new Error('链上交易执行失败（receipt.status=' + rc.status + '）')
+    const head = BigInt(await rpc('eth_blockNumber', []))
+    const block = BigInt(rc.blockNumber)
+    const confirmations = Number(head - block + 1n)
+    if (confirmations < e.confirmations) return { final: false, block: String(block), confirmations, reason: `确认数 ${confirmations}/${e.confirmations}` }
+    return { final: true, block: String(block), confirmations }
   },
   async queryByRoot() { return null }, // 反查需索引器；以本地台账 + 浏览器为准
   async issueAsset({ to, tokenId, amount = 1, uri }) {

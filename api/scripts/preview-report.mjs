@@ -19,7 +19,7 @@ async function loadOrder(bizRef) {
   const ref = bizRef || (await one(`SELECT biz_ref FROM attest_event WHERE biz_type='order' ORDER BY id DESC LIMIT 1`))?.biz_ref
   const e = await one(`SELECT e.*, b.merkle_root, b.seq, b.chain_tx_ref, b.chain_block, b.anchored_at
     FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-    WHERE e.biz_type='order' AND e.biz_ref=? ORDER BY e.version_no DESC LIMIT 1`, [ref])
+    WHERE e.biz_type='order' AND e.biz_ref=? ORDER BY e.id DESC LIMIT 1`, [ref])
   if (!e) throw new Error('找不到订单存证：' + ref)
   return {
     found: true, bizType: 'order', bizRef: e.biz_ref, versionNo: Number(e.version_no),
@@ -50,7 +50,7 @@ async function loadSettle(id) {
   const sid = Number(id) || row.id
   const s2 = await one('SELECT * FROM settlement WHERE id = ?', [sid])
   const e = await one(`SELECT e.payload_hash, b.merkle_root FROM attest_event e LEFT JOIN attest_batch b ON b.id=e.batch_id
-    WHERE e.biz_type='settlement' AND e.biz_ref=? ORDER BY e.version_no DESC LIMIT 1`, ['settle-' + sid])
+    WHERE e.biz_type='settlement' AND e.biz_ref=? ORDER BY e.id DESC LIMIT 1`, ['settle-' + sid])
   return {
     settlementId: s2.id, period: s2.period, orderCount: s2.order_count, totalAmount: s2.total_amount,
     amtFulfill: s2.amt_fulfill, amtService: s2.amt_service, amtPromoter: s2.amt_promoter,

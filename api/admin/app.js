@@ -25,14 +25,16 @@ const ICONS = {
   risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 3 20h18zM12 10v4M12 17.5v.5"/></svg>',
   audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
 }
+// 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
 const NAV = [
-  ['经营', [['dash', '驾驶舱', 'dash']]],
-  ['交易', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['settlements', '结算', 'settlements']]],
-  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
-  ['资源池', [['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants'], ['creators', '创作者池', 'content']]],
-  ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['conflicts', '离线冲突', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
-  ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
-  ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['chainassets', '链与资产', 'sys'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
+  ['工作台', [['dash', '驾驶舱', 'dash']]],
+  ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
+  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
+  ['用户与内容', [['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
+  ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
+  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
 ]
 
 async function api(method, path, body) {
@@ -45,6 +47,20 @@ async function api(method, path, body) {
   if (j.code !== 0) throw new Error(j.msg || j.data?.message || '请求失败')
   return j.data
 }
+const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
+  refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行' }
+/** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]） */
+function auditDiff(before, after) {
+  const obj = (v) => { if (v == null) return {}; if (typeof v === 'string') { try { return JSON.parse(v) } catch { return { value: v } } } return v }
+  const b = obj(before), a = obj(after)
+  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])]
+  if (!keys.length) return '—'
+  const show = (v) => v === undefined ? '∅' : esc((typeof v === 'object' ? JSON.stringify(v) : String(v)).slice(0, 40))
+  return '<div class="audit-diff">' + keys.slice(0, 6).map((k) => b[k] === a[k]
+    ? `<div><span class="k">${esc(k)}</span> ${show(a[k])}</div>`
+    : `<div><span class="k">${esc(k)}</span> <del>${show(b[k])}</del> → <ins>${show(a[k])}</ins></div>`).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
+}
+const bizTag = (t) => `<span class="biz-tag">${BIZ_CN[t] || t}<small>${t}</small></span>`
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
@@ -121,7 +137,7 @@ function boot() {
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
-    return `<details class="nav-section" ${['经营','交易','生态'].includes(g) ? 'open' : ''}><summary class="nav-group">${g === 'WEB3' ? '可信与权益' : g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+    return `<details class="nav-section" ${['工作台','交易履约','资金结算'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   go(allowed ? allowed[0] : 'dash')
@@ -130,9 +146,9 @@ function boot() {
 function go(page) {
   document.querySelectorAll('.nav-item').forEach((a) => a.classList.toggle('on', a.dataset.p === page))
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
-    budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
+    budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控事件', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
+    web3dash: '链路总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
   $('#crumb').textContent = name
   const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }[page] || dash)
   Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })
@@ -151,7 +167,7 @@ async function dash() {
   const recent = orders.slice(0, 8)
   const cityTag = k.scopeCity ? `本城 ${k.scopeCity} 口径` : '全域口径'
   const kpis = [
-    ['💰', 'var(--brand-soft)', '今日 GMV', k.gmvToday, cityTag],
+    ['💰', 'var(--brand-soft)', '今日 GMV', '¥' + k.gmvToday, cityTag],
     ['🧾', '#e8effd', '今日订单', k.ordersToday, '含已支付以上状态'],
     ['✅', '#e3f6ec', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
     ['🫘', '#fdf3e0', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
@@ -166,25 +182,18 @@ async function dash() {
   const area = path ? path + ` L${pts[pts.length - 1][0]},${H - P} L${pts[0][0]},${H - P} Z` : ''
   const w3 = await api('GET', '/admin/web3/overview').catch(() => null)
   const ins = await api('GET', '/admin/dash/insights').catch(() => null)
-  $('#app').innerHTML = `<div class="workspace-intro"><div><div class="workspace-eyebrow">OPERATIONS / 经营</div><h1>把每一段旅程，照顾周全。</h1><p>先处理待办，再看经营变化。当前数据范围：${esc(cityTag)}</p></div><div class="workspace-date">${new Date().toLocaleDateString('zh-CN')}<small>经营工作台</small></div></div>
-  ${ins ? `<div class="card"><div class="card-head"><h3>待审核事项（聚合）</h3></div>
-    <div class="row" style="gap:18px;margin:0">
-      <button class="task-link" onclick="go('content')"><span>内容待审</span><b>${ins.pending.notes}</b>去审核 →</button>
-      <button class="task-link" onclick="go('merchants')"><span>商户进件</span><b>${ins.pending.merchants}</b>去处理 →</button>
-      <button class="task-link" onclick="go('withdrawals')"><span>提现待审</span><b>${ins.pending.withdrawals}</b>去复核 →</button>
-      <button class="task-link" onclick="go('conflicts')"><span>核销异常</span><b>${ins.pending.conflicts}</b>去处理 →</button>
-      <button class="task-link" onclick="go('tasks')"><span>约稿待审</span><b>${ins.pending.tasks}</b>去处理 →</button>
-      <span class="muted" style="margin-left:auto">合计 ${ins.pending.notes + ins.pending.merchants + ins.pending.withdrawals + ins.pending.conflicts + ins.pending.tasks} 项</span>
-    </div>
-    <div class="card-head" style="margin-top:12px"><h3>热门主题游 TOP5（已支付口径）</h3></div>
-    <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
-    ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
-    </tbody></table>
-    <div class="card-head" style="margin-top:12px"><h3>经营指标</h3></div>
-    <div class="row" style="gap:24px;margin:0">
-      <span>报名→支付 <b>${ins.funnel.payRate}</b></span>
-      <span>复购线索 <b>${ins.funnel.rebuyRate}</b></span>
-      <span>累计抵扣 / 累计发放 <b>${ins.funnel.beanUseRate}</b></span>
+  const P_ = ins ? ins.pending : null
+  const todoTotal = P_ ? P_.notes + P_.merchants + P_.withdrawals + P_.conflicts + P_.tasks : 0
+  const todo = (k, label, n, verb) => `<button class="task-link${n ? ' has' : ''}" onclick="go('${k}')"><span>${label}</span><b>${n}</b>${n ? verb + ' →' : '已清空'}</button>`
+  $('#app').innerHTML = `
+  ${P_ ? `<div class="card todo-card"><div class="card-head"><h3>今日待办 <span class="muted">· ${cityTag}</span></h3>
+      <span class="${todoTotal ? 'pill s10' : 'pill s50'}">${todoTotal ? '共 ' + todoTotal + ' 项待处理' : '全部处理完毕'}</span></div>
+    <div class="todo-row">
+      ${todo('merchants', '商户进件', P_.merchants, '去审批')}
+      ${todo('withdrawals', '提现待审', P_.withdrawals, '去复核')}
+      ${todo('conflicts', '核销异常', P_.conflicts, '去处理')}
+      ${todo('content', '内容待审', P_.notes, '去审核')}
+      ${todo('tasks', '约稿待审', P_.tasks, '去处理')}
     </div></div>` : ''}
   <div class="kpi-grid">${kpis.map(([ic, bg, l, v, s]) => `
     <div class="kpi"><div class="ico" style="background:${bg}">${ic}</div>
@@ -202,7 +211,17 @@ async function dash() {
     </svg>
     ${trend.length ? '' : emptyBox('暂无成交数据——去「商品与团期」上架第一条线路吧')}
   </div>
-  ${wxd.list && wxd.list.length ? miniVisitCard(wxd) : ''}
+  ${wxd.list && wxd.list.length && !wxd.mock ? miniVisitCard(wxd) : `<div class="card chart-box"><div class="card-head"><h3>小程序访问趋势</h3></div>
+    ${emptyBox('尚未接入微信数据分析：在「集成中心」配置小程序 AppSecret 后显示真实 PV/UV（不展示模拟曲线）')}</div>`}
+  ${ins ? `<div class="card"><div class="card-head"><h3>热门主题游 TOP5 <span class="muted">· 已支付口径</span></h3>
+      <div class="row" style="gap:20px;margin:0">
+        <span class="muted">报名→支付 <b>${ins.funnel.payRate}</b></span>
+        <span class="muted">复购线索 <b>${ins.funnel.rebuyRate}</b></span>
+        <span class="muted" title="累计抵扣旅豆 ÷ 累计发放旅豆">旅豆使用率 <b>${ins.funnel.beanUseRate}</b></span>
+      </div></div>
+    <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
+    ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
+    </tbody></table></div>` : ''}
   <div class="card">
     <div class="card-head"><h3>最近订单</h3><button class="btn ghost sm" onclick="go('orders')">全部订单 →</button></div>
     ${recent.length ? `<table><thead><tr><th>单号</th><th>商品</th><th>用户</th><th>金额</th><th>状态</th><th>支付时间</th></tr></thead><tbody>
@@ -666,7 +685,7 @@ async function audit() {
     ${rows.length ? `<table><thead><tr><th>时间</th><th>操作人</th><th>模块 / 动作</th><th>对象</th><th>变更</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td class="td-sub num">${esc(String(a.created_at).slice(5, 19))}</td><td>${esc(a.actor)}</td>
       <td><b>${esc(a.module)}</b> · ${esc(a.action)}</td><td class="td-sub">${esc(a.biz_ref || '')}</td>
-      <td>${a.before_val || a.after_val ? `<span class="diff-old">${esc(String(a.before_val || '∅').slice(0, 24))}</span> → <span class="diff-new">${esc(String(a.after_val || '∅').slice(0, 24))}</span>` : '—'}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无操作记录')}
+      <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无操作记录')}
   </div>`
 }
 
@@ -837,7 +856,7 @@ async function attest() {
     <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       ${(d.queue || []).map((qq) => `<div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
-        <div><div class="l">${esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
+        <div><div class="l">${BIZ_CN[qq.biz_type] || esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
         <div class="s">已打包 ${Number(qq.packed || 0)} · 已锚定 ${Number(qq.anchored)} · 累计 ${Number(qq.total)}</div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
     </div>
     <div class="row" style="margin-top:10px">
@@ -877,8 +896,8 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h3>最近事件</h3></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>Merkle 根</th><th>时间</th></tr></thead><tbody>
-    ${(d.recent || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
-      <td class="num">v${Number(e.version_no || 1)}</td>
+    ${(d.recent || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
+      <td class="num">v${Number(e.version_no ?? 1)}</td>
       <td>${STMAP[e.status]}</td><td class="td-sub">${e.seq ? '#' + e.seq : '—'}</td>
       <td class="td-sub">${e.merkle_root ? '<code>' + esc(String(e.merkle_root).slice(0, 16)) + '…</code>' : '—'}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('')}
@@ -1622,7 +1641,15 @@ async function saveCreatorTag(id) {
 
 // ---- 链上总览：链路视图（3D 区块链）+ KPI + 事件动态 ----
 const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>',
-  '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>']
+  '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>',
+  '<span class="dpill warn">已提交·待确认</span>']
+/** 3D 区块：tone = blue | green | gold | gray；sm = 小号；pulse = 等待链上确认中 */
+function cube3d(tone, opt = {}) {
+  const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : ''].filter(Boolean).join(' ')
+  return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}><div class="cube3d">`
+    + '<div class="fc"></div>'.repeat(6) + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
+    + (opt.label ? `<div class="ghost-label">${opt.label}</div>` : '') + '</div>'
+}
 // 演示模式：纯前端模拟一条 8 节点的链（含分支/待打包/已锚定），不动真库，仅供形态预览
 function mockChain() {
   const HEX = ['3f9a1c7e5d24b806', '8d02e4b1a97c33f5', '5c77aa190e6db248', 'e21b6d40fa93c715',
@@ -1656,13 +1683,10 @@ function blockNodeHTML(b) {
   const dayClose = Number(b.is_day_close) === 1
   const st = Number(b.status)
   const root8 = String(b.merkle_root).slice(0, 8)
-  const cubeCls = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : ''))
+  const tone = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
   const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
   return `<div class="${cls}" id="bnode-${b.id}" onclick="openBlock(${b.id})">
-    <div class="cube-zone"><div class="cube ${cubeCls}">
-      <div class="face f1"><b>#${b.seq}</b><i>${root8}</i></div><div class="face f2"></div><div class="face f3"></div>
-      <div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-    </div></div>
+    ${cube3d(tone, { pulse: st === 5 })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
     <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
@@ -1697,7 +1721,7 @@ async function web3dash() {
   })
   if (Number(pendingN) > 0) {
     nodes.push(blockLinkHTML(batches.length ? Number(batches[batches.length - 1].is_day_close) === 1 : false, false))
-    nodes.push(`<div class="chain-node ghost"><div class="cube-zone"><div class="ghost-cube">待打包<br><b>${pendingN}</b> 条</div></div>
+    nodes.push(`<div class="chain-node ghost">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
       <div class="blk-title" style="opacity:.75">下一区块</div>
       <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div></div>`)
   }
@@ -1748,7 +1772,7 @@ async function web3dash() {
   <div class="card">
     <div class="card-head"><h3>链上事件动态</h3><button class="btn ghost sm" onclick="go('attest')">进入存证中心 ›</button></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>时间</th></tr></thead><tbody>
-    ${(d.recentEvents || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
+    ${(d.recentEvents || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
       <td>${e.status === 2 ? '<span class="pill ok">已锚定</span>' : (e.status === 1 ? '<span class="pill s20">已打包·待锚定</span>' : '<span class="pill warn">待打包</span>')}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
@@ -1795,8 +1819,8 @@ async function openBlock(id) {
         <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${esc(String(b.biz_date).slice(0, 10))}">公开复核</a>` : ''}
     </div>
     <table style="margin-top:10px"><thead><tr><th>叶序</th><th>类型</th><th>业务单号</th><th>版本</th><th>payload 指纹</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>
-    ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td><span class="pill off">${esc(e.biz_type)}</span></td>
-      <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no || 1)}</td>
+    ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td>${bizTag(esc(e.biz_type))}</td>
+      <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no ?? 1)}</td>
       <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 16))}…</code></td>
       <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
       <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
@@ -1815,15 +1839,12 @@ const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpil
 function flowStepHTML(s, i) {
   const e = s.ev
   if (!e) return `<div class="chain-node ghost" style="width:150px">
-    <div class="cube-zone"><div class="ghost-cube" style="width:54px;height:54px;font-size:10px">待产生</div></div>
+    ${cube3d('gray', { ghost: true, sm: true, label: '待产生' })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div></div>`
   const st = Number(e.status)
-  const cubeCls = st === 2 ? 'green' : (st === 0 ? 'gray' : '')
+  const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
   return `<div class="chain-node" style="width:150px" id="fnode-${i}" onclick="openFlowStep(${i})">
-    <div class="cube-zone"><div class="cube sm ${cubeCls}">
-      <div class="face f1"><b>${s.no}</b><i>${esc(String(e.payload_hash).slice(0, 6))}</i></div>
-      <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-    </div></div>
+    ${cube3d(tone, { sm: true })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
     <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>
     <div class="blk-line">批 #${e.seq != null ? e.seq : '—'} · ${FLOW_ST[st] || ''}</div>
@@ -1844,10 +1865,7 @@ function renderFlow(d) {
   ;(d.refunds || []).forEach((e, j) => {
     parts.push('<div class="chain-link elbow"><i style="top:59px;height:74px;border-top:2px dashed rgba(252,211,77,.5);border-right:2px dashed rgba(252,211,77,.5);border-top-right-radius:12px"></i><b style="top:132px;border-top-color:rgba(252,211,77,.5)"></b><u style="top:122px;color:#fcd34d">▸</u></div>')
     parts.push(`<div class="chain-node branch" id="fnode-r${j}" onclick="openFlowStep('r${j}')">
-      <div class="cube-zone"><div class="cube sm gold">
-        <div class="face f1"><b>↩</b><i>refund</i></div>
-        <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-      </div></div>
+      ${cube3d('gold', { sm: true })}
       <div class="blk-title">退款冲正</div>
       <div class="blk-line">${esc(e.biz_ref)} · ${yuan(e.amount || 0)}</div>
       <div class="blk-line">${FLOW_ST[Number(e.status)] || ''}</div></div>`)
@@ -1898,7 +1916,7 @@ function openFlowStep(i) {
     <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
       <span>类型 <code>${esc(e.biz_type)}</code></span>
       <span>业务单号 <code>${esc(e.biz_ref)}</code></span>
-      <span>版本 v${Number(e.version_no || 1)}</span>
+      <span>版本 v${Number(e.version_no ?? 1)}</span>
       <span>${BST[Number(e.status)] || ''}</span>
       <span>所在批次 ${e.seq != null ? '#' + e.seq : '待打包'}</span>
       <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code></span>

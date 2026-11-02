@@ -13,6 +13,9 @@
 //   anchor({root, prevRoot, leafCount, bizDate, merkleKind}) → {txRef, block}
 //   queryByRoot(root) → {txRef, block} | null（无标准反查能力的返回 null，以本地台账为准）
 //   issueAsset?({to, tokenId, amount, uri, meta}) → {txRef, contract, tokenId}
+//   confirm?({txRef, root}) → {final, block, confirmations, reason}
+//                    仅 capabilities.confirm=true 的链实现：提交返回的 txRef 只代表"已广播"，
+//                    必须核验回执成功、确认数达标、交易内容就是这枚根，才算已锚定
 //
 // 铁律：
 //   1. NOOP 永不返回伪 txRef —— "没有真实交易就没有交易号"是这套系统的底线
@@ -94,6 +97,16 @@ export async function queryByRoot(root) {
   const p = active()
   if (!p.capabilities.queryByRoot) return null
   return await p.queryByRoot(root)
+}
+
+/** 该链的提交结果是否需要后续确认（公链/EVM：txHash ≠ 已上链） */
+export const needsConfirmation = () => !!active().capabilities.confirm
+
+/** 核验一笔已提交的锚定交易 */
+export async function confirm(args) {
+  const p = active()
+  if (!p.capabilities.confirm || typeof p.confirm !== 'function') return { final: true }
+  return await p.confirm(args)
 }
 
 /** 发行链上资产（数字徽章 / 权益凭证 NFT / 藏品） */

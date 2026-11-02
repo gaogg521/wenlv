@@ -13,3 +13,7 @@ Thumbs.db
 .DS_Store
 .idea/
 .vscode/
+
+# 运行时上传与本地证据（不入库）
+api/static/uploads/
+api/.env

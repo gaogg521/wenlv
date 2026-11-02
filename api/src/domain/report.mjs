@@ -206,7 +206,9 @@ export function orderReportDoc(v, baseUrl) {
     path: (v.leafPath || []).map((p, i) => ({ level: i + 1, dir: p.p, h: p.h, dup: p.dup })),
     steps: [
       '打开上方二维码或链接，在浏览器内当场重算哈希（Web Crypto，无需登录）',
-      '从「载荷哈希」起，按第三节顺序逐层计算 sha256(左 + 右)，末值应等于 Merkle 根',
+      Number(v.merkleVersion) === 2
+        ? '从「载荷哈希」起，先算 sha256(0x00‖叶)，再按第三节顺序逐层 sha256(0x01‖左‖右)（字节拼接），末值应等于 Merkle 根'
+        : '从「载荷哈希」起，按第三节顺序逐层计算 sha256(左 + 右)，末值应等于 Merkle 根',
       v.chainRef ? '持「链上编号」到链数根链上浏览器查询，可看到该 Merkle 根与锚定时间' : '待锚定：链接入完成后，链上编号自动出现在此证明中',
     ],
     notes: [
