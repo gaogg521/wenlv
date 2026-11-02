@@ -7,8 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const BANNED = ['区块链', '链上', '上链', '联盟链', '公链', '锚定', '存证', 'Web3', 'WEB3', 'web3', 'NFT', '数字藏品', '藏品', '代币', '通证',
-  '加密货币', '虚拟货币', '数字货币', '钱包', 'DID', 'did:', 'Merkle', '默克尔', '哈希', '智能合约', '元宇宙', '铸造', '空投', '挖矿', '向往自由链', '交易所', '升值', 'Token']
+import { BANNED } from '../src/domain/wording.mjs'
+export { BANNED }
 // 白名单：仅生态 H5 / 合作方使用、小程序不调用的接口（下方会同时检查小程序源码确实没有引用它们）
 const H5_ONLY = ['/c/vc']
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')

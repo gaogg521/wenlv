@@ -1,0 +1,4 @@
+<view class="card doc-card">
+  <rich-text wx:if="{{html}}" class="rich-p" nodes="{{html}}"></rich-text>
+  <view wx:else class="empty">{{title}}内容整理中</view>
+</view>

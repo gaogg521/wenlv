@@ -62,10 +62,12 @@ await t('子表必填：行内缺必填项定位到行号', async () => {
   assert.equal(r.code, 1001); assert.match(r.data.fieldErrors.business_hours, /第 1 行「打烊」/)
 })
 await t('敏感字段在审计中打码，只记变化字段', async () => {
-  ok(await call('PUT', '/admin/entities/merchant/' + merchant.id, { values: { account_no: '6222020200118899', bank_name: '工商银行' } }, A))
+  const acct = '62220202' + String(Date.now()).slice(-8) // 每次不同，保证产生变化与审计
+  const bank = '工商银行' + (Date.now() % 1000)
+  ok(await call('PUT', '/admin/entities/merchant/' + merchant.id, { values: { account_no: acct, bank_name: bank } }, A))
   const a = await one(`SELECT after_val FROM audit_log WHERE module = 'merchant' AND biz_ref = ? ORDER BY id DESC LIMIT 1`, ['merchant-' + merchant.id])
   const av = typeof a.after_val === 'string' ? JSON.parse(a.after_val) : a.after_val
-  assert.equal(av.account_no, '***8899'); assert.equal(av.bank_name, '工商银行'); assert.equal(Object.keys(av).length, 2)
+  assert.equal(av.account_no, '***' + acct.slice(-4)); assert.equal(av.bank_name, bank); assert.equal(Object.keys(av).length, 2)
 })
 await t('权限：财务账号不能编辑商户资料', async () => assert.equal((await call('PUT', '/admin/entities/merchant/' + merchant.id, { values: { short_name: 'x' } }, FIN)).code, 1003))
 await t('商品：只能选已审核商户；行程子表保存', async () => {
@@ -185,6 +187,29 @@ await t('逐品佣金：费率 >12% 拒绝；必须填原因；百分比↔bp', 
   assert.equal(list.find((x) => x.id === product.id).rate_reason, '新品冷启动')
   ok(await call('PUT', '/admin/entities/rateov/' + product.id, { values: { promo_rate_bp: '', rate_reason: '恢复档位', rate_end: '' } }, A))
   assert.equal((await one('SELECT promo_rate_bp FROM tour_product WHERE id = ?', [product.id])).promo_rate_bp, null)
+})
+
+console.log('== 小程序装修与用语 ==')
+await t('小程序装修：公开接口无需登录即可取；旅豆数值来自参数中心', async () => {
+  const site = (await (await fetch(BASE + '/c/site')).json()).data
+  assert.ok(site.hero_title && Array.isArray(site.themes) && site.themes.length)
+  assert.equal(site.beanRules.deductMaxPct, 10)
+  assert.equal(site.merchant_notice, undefined, '商户端公告不给游客端')
+})
+await t('小程序可见字段拦截审核敏感词，并给出替换建议；后台专用字段不受限', async () => {
+  const r = await call('PUT', '/admin/entities/site/1', { values: { hero_caption: '每一单都上链存证' } }, A)
+  assert.equal(r.code, 1001); assert.match(r.data.fieldErrors.hero_caption, /敏感词「上链」|敏感词「存证」/)
+  const r2 = await call('PUT', '/admin/entities/product/' + product.id, { values: { highlights: ['赠送数字藏品'] } }, A)
+  assert.match(r2.data.fieldErrors.highlights, /藏品/)
+  ok(await call('PUT', '/admin/entities/merchant/' + merchant.id, { values: { remark: '内部：后续对接联盟链存证' } }, A))
+})
+await t('目的地名称来自装修配置', async () => {
+  const orig = ok(await call('GET', '/admin/entities/site/1', null, A)).values.destinations
+  ok(await call('PUT', '/admin/entities/site/1', { values: { destinations: [{ city: '310118', name: '朱家角·水乡', intro: '入戏一日' }] } }, A))
+  const ct = (await (await fetch(BASE + '/c/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'mock-dest' }) })).json()).data.token
+  const d = ok(await call('GET', '/c/destinations', null, ct))
+  assert.equal(d.find((x) => x.city_code === '310118').cityName, '朱家角·水乡')
+  ok(await call('PUT', '/admin/entities/site/1', { values: { destinations: orig } }, A))
 })
 
 await q('DELETE FROM scenic_spot WHERE id = ?', [scenicId])

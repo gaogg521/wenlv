@@ -113,3 +113,5 @@ page {
 .scan-frame .mid { font-size: 100rpx; opacity: .35; }
 
 .stock-row{display:block!important}.stock-row>view:last-child{margin-top:20rpx;flex-wrap:wrap;gap:14rpx}.stock-row .pill{padding:12rpx 22rpx}.stock-row b{font-size:28rpx}
+.notice-card { background: #fffaf2; border: 1rpx solid #f3dcc0; font-size: 25rpx; line-height: 1.7; }
+.notice-h { font-weight: 700; margin-bottom: 8rpx; }

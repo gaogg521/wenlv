@@ -1,8 +1,10 @@
 // 目的地城市聚合页（P2）：城市维度聚合在架产品
 const api = require('../../utils/api')
+const siteData = require('../../utils/site')
 Page({
-  data: { list: [], loading: true },
+  data: { caption: siteData.DEFAULT.dest_caption, list: [], loading: true },
   onShow() { this.fetch() },
+  onReady() { siteData.get().then((s) => this.setData({ caption: s.dest_caption || siteData.DEFAULT.dest_caption })) },
   async fetch() {
     try {
       const list = await api.request('/c/destinations')

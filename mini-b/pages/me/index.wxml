@@ -18,7 +18,7 @@
   <input value="{{applyMobile}}" bindinput="onApplyMobile" type="number" placeholder="联系电话"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
   <view class="btn ghost" bindtap="applyMerchant">提交入驻申请</view>
-  <view class="note">可在本页查看审核进度；审核通过后重新登录即可进入门店。</view>
+  <view class="note">{{joinTip || '可在本页查看审核进度；审核通过后重新登录即可进入门店。'}}</view>
 </view>
 <block wx:else>
   <view class="card">

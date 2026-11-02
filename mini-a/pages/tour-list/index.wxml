@@ -23,4 +23,4 @@
   </view>
   <view wx:if="{{!tours.length}}" class="empty"><view class="e-ico">🧭</view>{{kw ? '没找到「' + kw + '」相关线路' : '该分类暂无线路'}}</view>
 </block>
-<view class="note">真实交易 · 下单即锁名额 · 支持按梯度退改</view>
+<view class="note">{{site.list_footer}}</view>

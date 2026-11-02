@@ -1,4 +1,5 @@
 const api = require('../../utils/api')
+const siteData = require('../../utils/site')
 Page({
   data: { bean: null, ledger: [], level: 1, levels: [
     { lv: 1, name: '探索者', need: '注册即享' },
@@ -9,6 +10,7 @@ Page({
   retry() { this.onShow() },
   onShow() {
     this.setData({ error: '' })
+    siteData.get().then((s) => this.setData({ beanIntro: s.bean_intro || '' }))
     api.getBean().then(bean => this.setData({ bean })).catch(e => this.setData({ bean: null, error: e.msg || '加载失败' }))
     api.getMe().then((m) => this.setData({ level: m.memberLevel || 1, levels: this.data.levels.map((l,i) => ({ ...l, need: i === 0 ? '注册即享' : '成长值 ' + Number((m.levelThresholds || [0,2000,10000,50000])[i]).toLocaleString() })) })).catch(() => {})
     api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: ledger.slice(0, 10) })).catch(() => {})

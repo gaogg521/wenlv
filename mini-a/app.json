@@ -32,7 +32,8 @@
         "pages/identity/index",
         "pages/create/index",
         "pages/note/index",
-        "pages/task/index"
+        "pages/task/index",
+        "pages/doc/index"
       ]
     },
     {

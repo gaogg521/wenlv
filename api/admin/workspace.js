@@ -17,6 +17,7 @@
     banners: '小程序首页轮播位与投放窗口。', faqs: '小程序常见问题的分类与排序。', risk: '核销重放、退款滥用、锚定失败等风险告警。',
     features: '按角色、端与城市灰度开放能力。', system: '服务健康、后台任务与手动干预。',
     web3dash: '每个区块是一批 Merkle 根：本地打包 → 提交上链 → 确认后锚定。',
+    miniapp: '小程序的每个页面在后台哪里改：装修文案集中维护，其余内容一键直达对应栏目。',
     chainhub: '联盟链与公链的接入配置、离线自检、连通性探测与热切换；凭据加密保存，不需要重启服务。', chainassets: '当前接入的链、能力边界与资产发行台账。',
     pointassets: '旅豆发行批次、持有人与年度总量哨兵。', badges: '勋章定义与发放记录，发放即进入存证队列。',
     wallets: '用户积分、等级、勋章与存证事件的汇总视图。', vc: '可携出的旅行凭证：签发、验签与吊销。',
@@ -27,6 +28,7 @@
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
   if (typeof window.chainhub === 'function') renderers.chainhub = window.chainhub
+  if (typeof window.miniapp === 'function') renderers.miniapp = window.miniapp
   let current = '', generation = 0, rendering = Promise.resolve(), previousFocus = null
   let orderRows = [], orderQuery = '', orderPage = 1, orderStatus = 0
   const pageSize = 15

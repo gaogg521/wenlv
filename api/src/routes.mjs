@@ -130,6 +130,17 @@ const c = {
         refundRules: refundPolicy.describe(await cfg('order.refund_policy')) } }
   },
 
+  // 小程序装修（公开，首屏可用）：文案与配置来自后台「小程序装修」；旅豆数值来自参数中心，页面不写死
+  'GET /c/site': async (req) => {
+    const row = await one('SELECT * FROM site_config WHERE id = 1')
+    const v = row ? entities.readValues('site', row) : {}
+    const img = (u) => (u ? apiImg(u, req) : u)
+    const { merchant_notice, merchant_join_tip, ...pub } = v // 商户端内容不给游客端
+    for (const k of ['share_image', 'service_qr']) pub[k] = img(pub[k])
+    pub.destinations = (pub.destinations || []).map((d) => ({ ...d, cover: img(d.cover) }))
+    return { ...pub, beanRules: { orderRatePct: Math.round(await cfgNum('bean.order_rate') * 100), deductMaxPct: Math.round(await cfgNum('bean.deduct_max_pct') * 100),
+      expireMonths: await cfgNum('bean.expire_months'), beanPerYuan: 10 } }
+  },
   // 履约商户 / 景区 公开资料页（白名单字段）
   'GET /c/places/:kind/:id': async (req) => {
     const kind = req.params.kind
@@ -264,7 +275,9 @@ const c = {
   'GET /c/bean/account': async (req) => {
     requireUser(req)
     const bal = await bean.balance(requireUser(req).uid)
-    return { balance: bal, rule: '消费返豆 10% · 100 豆≈10 元 · 单笔抵扣上限 10% · 滚动 12 个月有效 · 不可转账不可购买' }
+    const rate = Math.round(await cfgNum('bean.order_rate') * 100), cap = Math.round(await cfgNum('bean.deduct_max_pct') * 100), months = await cfgNum('bean.expire_months')
+    return { balance: bal, orderRatePct: rate, deductMaxPct: cap, expireMonths: months,
+      rule: `消费返豆 ${rate}% · 100 豆可抵 10 元 · 单笔抵扣上限 ${cap}% · 滚动 ${months} 个月有效 · 不可转让不可购买` }
   },
 
   'GET /c/bean/ledger': async (req) => {
@@ -2554,13 +2567,28 @@ const cNotes = {
     requireUser(req)
     const rows = await q(`SELECT p.city_code, COUNT(*) products, MIN(p.price_from) price_from
       FROM tour_product p WHERE p.status = 1 GROUP BY p.city_code ORDER BY products DESC`)
-    const NAMES = { '310118': '上海·青浦朱家角', '320508': '苏州·姑苏' }
-    return rows.map((r) => ({ ...r, cityName: NAMES[r.city_code] || r.city_code,
-      priceFromLabel: (Number(r.price_from) / 100).toFixed(0) }))
+    // 目的地名称、介绍、封面来自后台「小程序装修 · 目的地」；未配置的城市回退为城市名
+    const site = await one('SELECT * FROM site_config WHERE id = 1')
+    const dests = site ? (entities.readValues('site', site).destinations || []) : []
+    const CITY = Object.fromEntries(entities.DICT.city)
+    const order = dests.map((d) => d.city)
+    return rows.map((r) => {
+      const d = dests.find((x) => x.city === r.city_code) || {}
+      return { ...r, cityName: d.name || CITY[r.city_code] || r.city_code, intro: d.intro || '', cover: d.cover ? apiImg(d.cover, req) : null,
+        priceFromLabel: (Number(r.price_from) / 100).toFixed(0) }
+    }).sort((a, b) => (order.indexOf(a.city_code) + 1 || 99) - (order.indexOf(b.city_code) + 1 || 99))
   },
 }
 
 // 商户进件自助化（P2）：无 token 提交申请 → 后台审核
+// ---------- 商户端：装修公告 ----------
+const mSite = {
+  'GET /m/site': async (req) => {
+    const row = await one('SELECT * FROM site_config WHERE id = 1')
+    const v = row ? entities.readValues('site', row) : {}
+    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '' }
+  },
+}
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------
 const mPhrase = {
   // 核销员输入游客说出的暗号 → 与本店已出票订单的产品用户暗号比对；命中即核销该订单全部有效凭证
@@ -2795,7 +2823,7 @@ const callback = {
   },
 }
 
-export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
@@ -2809,7 +2837,7 @@ for (const [key, handler] of Object.entries(routes)) {
   routes[key] = async (req, res) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
-    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications'].includes(key)) {
+    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'].includes(key)) {
       const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
         WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])
       if (!staff) throw new BizError(1003, '尚未加入门店或账号已停用')

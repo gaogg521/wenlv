@@ -3,6 +3,7 @@ const app = getApp()
 Page({
   data: { merchant: null, role: 0, midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
+    if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
     if (app.globalData.token) this.fetchApplications()
     if (this.data.merchant && this.data.role >= 2) this.fetchInvite()

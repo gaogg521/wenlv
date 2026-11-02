@@ -10,6 +10,7 @@ import { one, q, BizError } from '../db.mjs'
 import { cfgArr } from '../config.mjs'
 import { sanitizeRich, richTextLength } from '../infra/sanitize.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
+import { findBanned, SUGGEST } from './wording.mjs'
 
 /* ---------------- 共享字典 ---------------- */
 export const DICT = {
@@ -520,6 +521,67 @@ const S = {
     },
   },
 
+  // ======================= 小程序装修（单例：site_config.id = 1）=======================
+  site: {
+    label: '小程序装修', table: 'site_config', idCol: 'id', roles: ['super', 'ops'], auditModule: 'site', titleKey: 'brand_name', noCreate: true,
+    sections: [
+      { title: '品牌与分享', fields: [
+        { k: 'brand_name', label: '品牌名', type: 'text', required: true, max: 20 },
+        { k: 'slogan', label: '品牌标语', type: 'text', max: 40 },
+        { k: 'share_title', label: '默认分享标题', type: 'text', max: 40 },
+        { k: 'share_image', label: '默认分享图', type: 'image', help: '5:4' },
+      ] },
+      { title: '首页', desc: '游客打开小程序第一屏', fields: [
+        { k: 'hero_eyebrow', label: '眉标', type: 'text', max: 40 },
+        { k: 'hero_title', label: '主标题', type: 'text', required: true, max: 20 },
+        { k: 'hero_title_em', label: '主标题强调词', type: 'text', max: 12, help: '以品牌色显示在主标题后' },
+        { k: 'hero_caption', label: '副标题', type: 'text', max: 60, span: 2 },
+        { k: 'search_ph', label: '搜索框提示', type: 'text', max: 30 },
+        { k: 'destination_line', label: '目的地快捷行', type: 'text', max: 30, ph: '朱家角 · 苏州 · 安吉' },
+        { k: 'themes', label: '主题入口', type: 'repeat', span: 2, max: 8, of: [
+          { k: 'cat', label: '频道', type: 'select', required: true, options: DICT.productCat },
+          { k: 'name', label: '名称', type: 'text', required: true, max: 8 },
+          { k: 'sub', label: '副标题', type: 'text', max: 12 },
+          { k: 'icon', label: '图标字符', type: 'text', max: 2, ph: '⌕' },
+        ] },
+        { k: 'section_title', label: '线路区标题', type: 'text', max: 12, ph: '值得出发' },
+        { k: 'footer_line', label: '页脚标语', type: 'text', max: 40 },
+        { k: 'footer_sub', label: '页脚副标', type: 'text', max: 40 },
+      ] },
+      { title: '目的地', fields: [
+        { k: 'dest_caption', label: '页面副标题', type: 'text', max: 40, span: 2 },
+        { k: 'destinations', label: '目的地', type: 'repeat', span: 2, max: 20, of: [
+          { k: 'city', label: '城市', type: 'select', required: true, options: DICT.city },
+          { k: 'name', label: '展示名', type: 'text', required: true, max: 16 },
+          { k: 'intro', label: '一句话介绍', type: 'text', max: 40 },
+          { k: 'cover', label: '封面', type: 'image' },
+        ] },
+      ] },
+      { title: '列表与商城', fields: [
+        { k: 'list_footer', label: '线路列表页脚说明', type: 'text', max: 60, span: 2 },
+        { k: 'shop_title', label: '商城标题', type: 'text', max: 12 },
+        { k: 'shop_caption', label: '商城副标题', type: 'text', max: 30 },
+        { k: 'shop_note', label: '商城说明', type: 'textarea', max: 200, span: 2 },
+      ] },
+      { title: '旅豆与推广', desc: '返豆比例、抵扣上限、有效期等数值由参数中心统一下发，这里只写说明文案', fields: [
+        { k: 'bean_intro', label: '旅豆说明', type: 'rich', span: 2 },
+        { k: 'promo_rules', label: '推广中心规则说明', type: 'rich', span: 2 },
+      ] },
+      { title: '客服与协议', fields: [
+        { k: 'service_phone', label: '客服电话', type: 'phone' },
+        { k: 'service_hours', label: '服务时间', type: 'text', max: 30, ph: '每天 09:00-21:00' },
+        { k: 'service_qr', label: '客服微信二维码', type: 'image' },
+        { k: 'user_agreement', label: '用户协议', type: 'rich', span: 2 },
+        { k: 'privacy_policy', label: '隐私政策', type: 'rich', span: 2 },
+        { k: 'about', label: '关于我们', type: 'rich', span: 2 },
+      ] },
+      { title: '商户端', fields: [
+        { k: 'merchant_notice', label: '商户工作台公告', type: 'rich', span: 2, help: '显示在商户小程序首页顶部；留空不显示' },
+        { k: 'merchant_join_tip', label: '入驻说明', type: 'textarea', max: 300, span: 2 },
+      ] },
+    ],
+  },
+
   // ======================= 推广服务商 =======================
   promoter: {
     label: '推广服务商', table: 'promoter', idCol: 'user_id', roles: ['super', 'ops'], auditModule: 'promoter', titleKey: 'real_name', noCreate: true,
@@ -749,6 +811,13 @@ export async function save(kind, input, ctx, tx) {
     vals[f.k] = v
   }
   if (sc.beforeSave) sc.beforeSave(vals)
+  // 小程序可见字段：拦截区块链/虚拟资产类用语（小程序审核红线；PC 后台专用字段不受限）
+  const mini = miniFields(kind)
+  for (const k of Object.keys(vals)) {
+    if (!mini.has(k) || errors[k]) continue
+    const w = findBanned(vals[k])
+    if (w) errors[k] = `含小程序审核敏感词「${w}」${SUGGEST[w] ? '，建议改为「' + SUGGEST[w] + '」' : ''}`
+  }
   // showIf 隐藏的字段不校验
   for (const f of allFields(sc)) if (f.showIf && vals[f.showIf[0]] !== undefined && String(vals[f.showIf[0]] ?? '') !== f.showIf[1]) delete errors[f.k]
   if (sc.validate) Object.assign(errors, (await sc.validate({ ...before, ...vals }, { creating, row, id: ctx.id })) || {})
@@ -853,6 +922,18 @@ export function publicProfile(kind, row, img = (u) => u) {
     out[k] = x
   }
   return out
+}
+
+/** 各实体中会出现在小程序界面上的字段 */
+const MINI_EXTRA = {
+  product: ['title', 'subtitle', 'days_desc', 'tags', 'suitable', 'age_range', 'group_size', 'highlights', 'intro', 'itinerary', 'transport',
+    'meeting_point', 'includes', 'excludes', 'notice', 'safety_note', 'insurance_note', 'share_title', 'keywords'],
+  session: ['leader_name'], faq: ['question', 'answer', 'keywords'], banner: ['title', 'sub_title'],
+  phrase: ['phrase_user', 'phrase_hint', 'phrase_role', 'phrase_location'],
+}
+function miniFields(kind) {
+  if (kind === 'site') return new Set(allFields(get('site')).map((f) => f.k))
+  return new Set([...(PUBLIC[kind] || []), ...(MINI_EXTRA[kind] || [])])
 }
 
 /** 已支付订单可见的团期信息：在公开字段之外加上领队联系方式 */

@@ -227,3 +227,6 @@ page {
 .faq-search { margin: 20rpx 24rpx 0; }
 .faq-search input { background: #fff; border-radius: 999rpx; padding: 18rpx 30rpx; font-size: 26rpx; box-shadow: var(--shadow); }
 .faq-hot { font-size: 20rpx; color: #fff; background: var(--brand); border-radius: 6rpx; padding: 2rpx 8rpx; margin-left: 8rpx; }
+.dest-card { overflow: hidden; }
+.dest-cover { width: calc(100% + 48rpx); height: 240rpx; margin: -24rpx -24rpx 18rpx; display: block; }
+.doc-card { line-height: 1.9; }

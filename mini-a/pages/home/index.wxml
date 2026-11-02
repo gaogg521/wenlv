@@ -1,11 +1,11 @@
 <view class="home-intro">
-  <view class="eyebrow">WANDERLUST · 向往的自由</view>
-  <view class="home-title">世界就是<text>我的游乐场</text></view>
-  <view class="home-caption">去水乡入戏，去山野放空。下一段故事，由你出发。</view>
-  <view class="home-search" bindtap="goTours">⌕ 搜索目的地、线路与新体验 <text>探索 →</text></view>
-  <view class="home-destination" bindtap="goDestinations">朱家角 · 苏州 · 安吉<text>发现目的地 ↗</text></view>
+  <view class="eyebrow">{{site.hero_eyebrow}}</view>
+  <view class="home-title">{{site.hero_title}}<text>{{site.hero_title_em}}</text></view>
+  <view class="home-caption">{{site.hero_caption}}</view>
+  <view class="home-search" bindtap="goTours">⌕ {{site.search_ph}} <text>探索 →</text></view>
+  <view class="home-destination" bindtap="goDestinations">{{site.destination_line}}<text>发现目的地 ↗</text></view>
 </view>
-<view class="theme-grid"><view wx:for="{{themes}}" wx:key="k" class="theme-tile" data-cat="{{item.k}}" bindtap="goTours"><text class="theme-symbol">{{item.icon}}</text><view class="theme-name">{{item.n}}</view><view class="theme-sub">{{item.sub}}</view></view></view>
+<view class="theme-grid"><view wx:for="{{site.themes}}" wx:key="cat" class="theme-tile" data-cat="{{item.cat}}" bindtap="goTours"><text class="theme-symbol">{{item.icon}}</text><view class="theme-name">{{item.name}}</view><view class="theme-sub">{{item.sub}}</view></view></view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">
     <swiper-item wx:for="{{banners}}" wx:key="id">
       <image src="{{item.image}}" mode="aspectFill" style="width:100%;height:300rpx;background:{{item.bgColor || '#f3ece2'}}" data-i="{{index}}" bindtap="tapBanner" />
@@ -13,7 +13,7 @@
   </swiper>
 
 
-<view class="sec-title">值得出发 <text class="more" bindtap="goTours">查看全部 →</text></view>
+<view class="sec-title">{{site.section_title}} <text class="more" bindtap="goTours">查看全部 →</text></view>
 
 <view wx:if="{{loading}}">
   <view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
@@ -35,4 +35,4 @@
     </view>
   </view>
 </view>
-<view class="home-footer">把一次出行，变成值得分享的故事。<view>主题体验 · 在地好物 · 旅行记录</view></view>
+<view class="home-footer">{{site.footer_line}}<view>{{site.footer_sub}}</view></view>

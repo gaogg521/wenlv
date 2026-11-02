@@ -1,4 +1,7 @@
 const app = getApp()
+const api = require('../../utils/api')
+const siteData = require('../../utils/site')
+const place = require('../../utils/place')
 Page({
   goPromo() { wx.navigateTo({ url: '/package-promo/pages/center/index' }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/create/index' }) },
@@ -26,10 +29,12 @@ Page({
   },
   goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
-  data: { kycOpen: false, kycStatus: -1, kycMask: '', kycNote: '', kycName: '', kycId: '', user: null, avatarUrl: '' },
+  data: { site: siteData.DEFAULT, kycOpen: false, kycStatus: -1, kycMask: '', kycNote: '', kycName: '', kycId: '', user: null, avatarUrl: '' },
+  goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + e.currentTarget.dataset.type }) },
+  callService() { place.call(this.data.site.service_phone) },
   onShow() {
+    siteData.get().then((site) => this.setData({ site }))
     this.setData({ user: app.globalData.user })
-    const api = require('../../utils/api')
     api.getMe().then((m) => this.setData({ avatarUrl: m.avatarUrl || '', user: { nickname: m.nickname, levelName: ['探索者', '旅行家', '城市探索官', '环球探索家'][m.memberLevel - 1] || '探索者' } })).catch(() => {})
   },
   async login() {

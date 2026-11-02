@@ -4,6 +4,8 @@
   <view class="hero-chip" wx:if="{{wb}}"><view class="dot"></view>营业中 · 数据实时同步</view>
   <view class="hero-chip" wx:elif="{{err === 'login'}}">🔒 绑定门店后开启核销</view>
 </view>
+<!-- 平台公告：后台「小程序装修 · 商户端」维护 -->
+<view class="card notice-card" wx:if="{{notice}}"><view class="notice-h">📢 平台公告</view><rich-text nodes="{{notice}}"></rich-text></view>
 
 <view class="kpi-row fade-up" wx:if="{{wb}}">
   <view class="kpi"><view class="ico">🧾</view><view class="v">{{role >= 2 ? wb.todayOrders : wb.myVerified}}</view><view class="l">{{role >= 2 ? '今日订单' : '今日核销'}}</view></view>

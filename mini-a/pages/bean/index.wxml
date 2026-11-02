@@ -1,24 +1,26 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="hero" style="background:linear-gradient(140deg,#4a6fa5 0%,#243b55 60%,#16263c 100%)">
-  <view class="sub2" style="position:relative">我的旅豆（消费返豆 10%）</view>
+  <view class="sub2" style="position:relative">我的旅豆（消费返豆 {{bean.orderRatePct}}%）</view>
   <view class="bean-num" wx:if="{{bean}}">{{bean.balance}}</view>
-  <view class="sub2" wx:if="{{bean}}" style="position:relative">100 豆 ≈ ¥10</view>
-  <view class="hero-chip" wx:if="{{bean}}"><view class="dot"></view>下单时自动抵扣 · 单笔上限 10%</view>
+  <view class="sub2" wx:if="{{bean}}" style="position:relative">100 豆可抵 ¥10</view>
+  <view class="hero-chip" wx:if="{{bean}}"><view class="dot"></view>下单时自动抵扣 · 单笔上限 {{bean.deductMaxPct}}%</view>
 </view>
 
 <view class="bean-rules fade-up" wx:if="{{bean}}">
-  <view class="bean-rule"><view class="bi">🎯</view><view class="bv">返 10%</view><view class="bl">消费即返豆</view></view>
-  <view class="bean-rule"><view class="bi">⏳</view><view class="bv">12 个月</view><view class="bl">滚动有效期</view></view>
+  <view class="bean-rule"><view class="bi">🎯</view><view class="bv">返 {{bean.orderRatePct}}%</view><view class="bl">消费即返豆</view></view>
+  <view class="bean-rule"><view class="bi">⏳</view><view class="bv">{{bean.expireMonths}} 个月</view><view class="bl">滚动有效期</view></view>
   <view class="bean-rule"><view class="bi">🚫</view><view class="bv">不可转</view><view class="bl">不可购买</view></view>
 </view>
 
 <view class="card fade-up" wx:if="{{bean}}">
   <view class="kv"><text>获取方式</text><text class="v">消费返豆 / 任务奖励 / 内容奖励</text></view>
   <view class="kv"><text>抵扣标准</text><text class="v">100 旅豆可抵 ¥10</text></view>
-  <view class="kv"><text>单笔抵扣上限</text><text class="v">订单金额 10%</text></view>
-  <view class="kv"><text>有效期</text><text class="v">滚动 12 个月</text></view>
+  <view class="kv"><text>单笔抵扣上限</text><text class="v">订单金额 {{bean.deductMaxPct}}%</text></view>
+  <view class="kv"><text>有效期</text><text class="v">滚动 {{bean.expireMonths}} 个月</text></view>
   <view class="kv"><text>转账/购买</text><text class="v">不支持</text></view>
 </view>
+
+<view class="card fade-up" wx:if="{{beanIntro}}"><rich-text class="rich-p" nodes="{{beanIntro}}"></rich-text></view>
 
 <view class="sec-title">会员等级 <text class="more">成长值随真实消费累积</text></view>
 <view class="card fade-up" wx:if="{{bean}}">

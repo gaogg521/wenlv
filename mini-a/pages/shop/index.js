@@ -1,7 +1,9 @@
 const api = require('../../utils/api')
+const siteData = require('../../utils/site')
 Page({
-  data: { items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
+  data: { site: siteData.DEFAULT, items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
   retry() { this.onLoad() },
+  onReady() { siteData.get().then((site) => this.setData({ site })) },
   onLoad() {
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
