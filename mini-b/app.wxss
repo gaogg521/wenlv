@@ -121,3 +121,5 @@ page {
 .btn { background: linear-gradient(135deg, #e5743b 0%, #c64e28 60%, #a93f1e 100%); box-shadow: 0 12rpx 28rpx rgba(198,78,40,.28); }
 .card { border-radius: 30rpx; }
 .fee-box { margin-top: 14rpx; padding: 16rpx 20rpx; border-radius: 16rpx; background: #fbf6ee; font-size: 23rpx; color: #6b5d4b; line-height: 1.8; }
+.fee-box.fee-none { background: #f4f5f7; color: #8a8f98; }
+.split-rate { margin-top: 10rpx; font-size: 22rpx; color: var(--sub); }

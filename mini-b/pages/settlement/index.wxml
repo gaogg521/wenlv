@@ -1,6 +1,6 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
 <view class="card fade-up" wx:for="{{list}}" wx:key="id" wx:for-item="s">
-  <view class="sec-title">{{s.period}} 周结算单
+  <view class="sec-title">{{s.periodTitle}}
     <text class="pill {{s.status === 3 ? 'p50' : 'p30'}}" style="margin-left:8rpx">{{s.statusText}}</text>
   </view>
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
@@ -24,10 +24,12 @@
     <text><em style="background:#38bdf8"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
     <text><em style="background:#0f9d58"></em>留存 ¥{{s.amt_retained/100}}</text>
   </view>
+  <view class="split-rate" wx:if="{{s.splitText}}">{{s.splitNote}}：{{s.splitText}}</view>
   <view class="fee-box" wx:if="{{s.fee_total > 0}}">
     <view>游客退改手续费 ¥{{s.fee_total/100}}（{{s.fee_count}} 笔）</view>
     <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.fee_merchant/100}}</text></view>
   </view>
+  <view class="fee-box fee-none" wx:elif="{{s.hasSnapshot}}">本期无游客退改手续费</view>
   <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
   <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
   <view class="btn" wx:if="{{s.status === 0}}" bindtap="confirm" data-id="{{s.id}}">确认对账无误</view>
@@ -41,12 +43,6 @@
       <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
     </view>
   </view>
-  <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
-  <view class="fee-box" wx:if="{{s.fee_total > 0}}">
-    <view>游客退改手续费 ¥{{s.fee_total/100}}（{{s.fee_count}} 笔）</view>
-    <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.fee_merchant/100}}</text></view>
-  </view>
-  <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
 </view>
 <view wx:if="{{!list.length && loaded}}" class="empty"><view class="e-ico">🧮</view>暂无结算单（每周一出账）</view>
 <view class="note">请逐单核对本店应结金额，有差异可提交异议。财务复核后实际付款，支付回单可追溯。</view>
