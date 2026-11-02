@@ -33,11 +33,15 @@ Page({
   },
 
   async refund() {
-    const ok = await new Promise(r => wx.showModal({ title: '申请退款', content: '按平台退改梯度执行，确认？', success: r }))
+    const unpaid = this.data.o && this.data.o.status === 10
+    // 文案必须与服务端真实规则一致：未核销订单全额原路退回，抵扣的旅豆同步返还
+    const ok = await new Promise(r => wx.showModal(unpaid
+      ? { title: '取消订单', content: '订单尚未支付，取消后名额将释放。确认取消？', success: r }
+      : { title: '申请退款', content: '凭证未核销，支付金额将全额原路退回，抵扣的旅豆同步返还。确认申请？', success: r }))
     if (!ok.confirm) return
     try {
       await api.refund(this.no, '用户申请')
-      wx.showToast({ title: '退款已受理' })
+      wx.showToast({ title: this.data.o && this.data.o.status === 10 ? '订单已取消' : '退款已受理' })
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }
   },

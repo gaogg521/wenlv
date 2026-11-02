@@ -100,7 +100,9 @@ const c = {
         isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
         groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
     }),
-      rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) } }
+      rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
+      // 预订须知用的实时规则：页面不写死参数中心可调的数值
+      bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10 } }
   },
 
   // 评价列表（公开；仅展示态）
@@ -274,6 +276,9 @@ const c = {
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     const { reason } = req.body
     if (o.status === 10) { await order.fire(o.order_no, 'CLOSE_TIMEOUT', 'user'); return { closed: true } }
+    // 自助退款只覆盖"已支付、未核销"：核销即服务已发生，全额自助退款会让用户玩完再全退。
+    // 已核销订单的售后由客服在后台处理（后台退款接口不受此限制，并留审计）
+    if (![20, 30].includes(Number(o.status))) throw new BizError(2002, Number(o.status) === 40 ? '凭证已核销，如需售后请联系客服' : '当前状态不可退款')
     const r = await refund.fullRefund({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid })
     await q("UPDATE orders SET close_reason = 'user_refund' WHERE order_no = ? AND status = 70", [o.order_no])
     return r
@@ -804,10 +809,11 @@ const admin = {
     const p = await one('SELECT rich_desc FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     const old = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
-    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
+    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, excludes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
     const rich = { intro: intro !== undefined ? sanitizeRich(intro) : (old.intro || ''), includes: includes !== undefined ? arr(includes) : (old.includes || []),
-      highlights: highlights !== undefined ? arr(highlights) : (old.highlights || []) }
+      highlights: highlights !== undefined ? arr(highlights) : (old.highlights || []),
+      excludes: excludes !== undefined ? arr(excludes) : (old.excludes || []) }
     if (supplierId && !(await one('SELECT id FROM supplier WHERE id=?', [supplierId]))) throw new BizError(1001, '关联供应商不存在')
     if (scenicId && !(await one('SELECT id FROM scenic_spot WHERE id=?', [scenicId]))) throw new BizError(1001, '关联景区不存在')
     const r = await q(`UPDATE tour_product SET title = COALESCE(?, title), subtitle = COALESCE(?, subtitle),

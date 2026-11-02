@@ -383,6 +383,8 @@ async function editProduct(id) {
     ${richEdit('e_intro', rich.intro || '')}
     <label class="muted" style="display:block">费用包含（每行一条）</label>
     <textarea id="e_includes" class="ta-full" rows="3">${esc((rich.includes || []).join('\n'))}</textarea>
+    <label class="muted" style="display:block">费用不含（每行一条 · 游客最常追问的信息，建议必填）</label>
+    <textarea id="e_excludes" class="ta-full" rows="2" placeholder="如：往返大交通&#10;个人消费">${esc((rich.excludes || []).join('\n'))}</textarea>
     <label class="muted" style="display:block">集合地点 / 交通</label>
     <input id="e_meeting" style="width:100%" value="${esc(p.meeting_point || '')}" placeholder="如：地铁17号线朱家角站 2 号口，09:00 集合">
     <label class="muted" style="display:block">安全告知</label>
@@ -412,7 +414,7 @@ async function delProductImage(id, idx) {
 async function saveProduct(id) {
   try {
     await api('PUT', '/admin/products/' + id, {
-      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value),
+      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value), excludes: lines($('#e_excludes').value),
       meetingPoint: $('#e_meeting').value || null, safetyNote: $('#e_safety').value || null,
       supplierId: Number($('#e_supplier')?.value) || null, scenicId: Number($('#e_scenic')?.value) || null,
     })

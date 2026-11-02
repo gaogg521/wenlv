@@ -31,7 +31,10 @@
   </view>
 
   <view class="btn ghost" style="color:var(--red);border-color:var(--red)"
-        wx:if="{{[10,20,30,40].indexOf(o.status) > -1}}" bindtap="refund">申请退款</view>
+        wx:if="{{o.status === 10}}" bindtap="refund">取消订单</view>
+  <view class="btn ghost" style="color:var(--red);border-color:var(--red)"
+        wx:if="{{o.status === 20 || o.status === 30}}" bindtap="refund">申请退款</view>
+  <view class="note" wx:if="{{o.status === 40}}">凭证已核销。如对服务有异议，请在「我的 - 常见问题」联系客服处理售后。</view>
   <view class="btn ghost" style="color:#1a9c6b;border-color:#1a9c6b"
         wx:if="{{o.canRebook}}" bindtap="rebook">未成团 · 免费改签 ›</view>
 

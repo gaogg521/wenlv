@@ -12,10 +12,11 @@ Page({
         wx.showToast({ title: '专属邀请已生效', icon: 'none' })
       }
     }
-    this.fetch(); this.fetchBanners()
+    this.fetchBanners()
   },
   onShow() {
-    this.fetch()
+    // 首次进入 onLoad→onShow 只请求一次；从其他页返回时，超过 60 秒才刷新，避免来回切 tab 反复请求
+    if (!this.lastFetch || Date.now() - this.lastFetch > 60000) this.fetch()
     // 首页可转发（分享/朋友圈入口）
     wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] })
   },
@@ -23,7 +24,8 @@ Page({
   goTours(e) { wx.setStorageSync('tourFilter', { cat: e.currentTarget.dataset.cat || 'all', city: '' }); wx.switchTab({ url: '/pages/tour-list/index' }) },
   fetch(done) {
     if (typeof done !== 'function') done = undefined
-    this.setData({ loading: true, error: '' })
+    this.lastFetch = Date.now()
+    if (!this.data.tours.length) this.setData({ loading: true, error: '' })
     api.getTours('all').then(list => {
       // 首页「即将成团」只展示主题游线路；有实拍图用真图，无图回退渐变封面
       const tours = (list || []).filter(t => (t.cat || '') !== 'shop')
