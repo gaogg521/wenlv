@@ -21,6 +21,7 @@ Page({
     } catch (e) {}
   },
 
+  openTask(e) { wx.navigateTo({ url: '/package-content/pages/task/index?id=' + e.currentTarget.dataset.id }) },
   async claim(e) {
     try {
       await api.request('/c/tasks/' + e.currentTarget.dataset.id + '/claim', 'POST', {})

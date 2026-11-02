@@ -1,11 +1,15 @@
 <view class="hero" style="background:linear-gradient(135deg,#1f3a5f,#243b55)">
   <view class="hi">常见问题</view>
-  <view class="sub2">消费返豆 · 动态核销 · 退款改签 · 一站答疑</view>
+  <view class="sub2">预订 · 出行 · 旅豆 · 退款 · 一站答疑</view>
 </view>
-<view class="card" wx:for="{{list}}" wx:key="id">
-  <view class="kv" bindtap="toggle" data-i="{{index + 1}}">
-    <text style="flex:1">{{item.question}}</text><text class="v">{{open === index + 1 ? '收起' : '展开'}}</text>
+<view class="faq-search"><input placeholder="搜索问题，如：退款、集合" value="{{kw}}" bindinput="onKw" confirm-type="search" /></view>
+<scroll-view scroll-x class="chips" style="white-space:nowrap">
+  <view class="chip {{cat === item ? 'on' : ''}}" wx:for="{{cats}}" wx:key="*this" bindtap="pickCat" data-c="{{item}}" style="display:inline-block">{{item}}</view>
+</scroll-view>
+<view class="card" wx:for="{{shown}}" wx:key="id">
+  <view class="kv" bindtap="toggle" data-id="{{item.id}}">
+    <text style="flex:1">{{item.question}} <text class="faq-hot" wx:if="{{item.is_hot}}">热门</text></text><text class="v">{{open === item.id ? '收起' : '展开'}}</text>
   </view>
-  <view class="note faq-a" wx:if="{{open === index + 1}}"><rich-text nodes="{{item.answer}}"></rich-text></view>
+  <view class="note faq-a" wx:if="{{open === item.id}}"><rich-text nodes="{{item.answer}}"></rich-text></view>
 </view>
-<view wx:if="{{!list.length}}" class="empty">暂无常见问题</view>
+<view wx:if="{{!shown.length}}" class="empty">{{list.length ? '没有找到相关问题，换个说法试试' : '暂无常见问题'}}</view>

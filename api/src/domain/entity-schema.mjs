@@ -813,3 +813,51 @@ export async function refOptions(ref, admin) {
   if (ref === 'product') return (await q('SELECT id, title FROM tour_product ORDER BY id DESC LIMIT 500')).map((r) => [String(r.id), r.title])
   return []
 }
+
+/* ---------------- 游客端公开字段（白名单） ----------------
+ * 只有这里列出的字段会下发到小程序。银行账号、法人、联系人、结算价、内部备注、审批信息一律不在其中。
+ * 新增"游客可见"字段时，必须同时加进这里——默认不公开。 */
+const PUBLIC = {
+  merchant: ['name', 'short_name', 'kind', 'tags', 'logo', 'storefront', 'intro', 'address', 'geo', 'service_phone', 'business_hours', 'facilities'],
+  scenic: ['name', 'alias', 'scenic_level', 'cover', 'gallery', 'intro', 'address', 'geo', 'open_hours', 'tickets', 'traffic'],
+  // 领队姓名电话只在已支付订单里给（见 sessionForOrder）
+  session: ['sign_deadline', 'gather_time', 'end_time', 'vehicle', 'note'],
+  badge: ['name', 'icon_key', 'icon_img', 'rarity', 'color', 'description', 'rule_desc', 'valid_days', 'display_order'],
+  task: ['title', 'category', 'product_id', 'brief', 'cover_img', 'tags', 'platforms', 'rich_brief', 'must_mention', 'forbidden',
+    'min_words', 'min_images', 'references', 'review_rules', 'reward_beans', 'cash_reward', 'max_participants', 'deadline'],
+}
+const PUBLIC_SUB = { scenic: { tickets: ['name', 'price', 'note'] } } // 票种只给门市价，不给结算价
+
+export function publicProfile(kind, row, img = (u) => u) {
+  const keys = PUBLIC[kind]
+  if (!keys || !row) return null
+  const v = readValues(kind, row)
+  const fs = allFields(get(kind))
+  const out = {}
+  for (const k of keys) {
+    let x = v[k]
+    if (x == null || (Array.isArray(x) && !x.length)) continue
+    const f = fs.find((ff) => ff.k === k)
+    if (f?.type === 'image') x = img(x)
+    if (f?.type === 'gallery') x = x.map(img)
+    if (f?.type === 'select' && f.options) out[k + '_label'] = (f.options.find(([o]) => String(o) === String(x)) || [])[1] || null
+    if (f?.type === 'multi' && f.options) out[k + '_labels'] = x.map((o) => (f.options.find(([oo]) => String(oo) === String(o)) || [])[1]).filter(Boolean)
+    if (f?.type === 'repeat') {
+      const allow = PUBLIC_SUB[kind]?.[k]
+      x = x.map((r) => {
+        const rr = allow ? Object.fromEntries(Object.entries(r).filter(([kk]) => allow.includes(kk))) : { ...r }
+        for (const sf of f.of) if (sf.type === 'image' && rr[sf.k]) rr[sf.k] = img(rr[sf.k])
+        return rr
+      })
+    }
+    out[k] = x
+  }
+  return out
+}
+
+/** 已支付订单可见的团期信息：在公开字段之外加上领队联系方式 */
+export function sessionForOrder(row) {
+  if (!row) return null
+  const v = readValues('session', row)
+  return { ...publicProfile('session', row), leader_name: v.leader_name || null, leader_phone: v.leader_phone || null }
+}

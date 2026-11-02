@@ -8,6 +8,20 @@
       <text class="st-tag">{{stName[o.status] || '—'}}</text></view>
   </view>
 
+  <view class="card" wx:if="{{o.trip && o.status >= 20 && o.status <= 40}}">
+    <view class="sec-title">出行安排</view>
+    <view class="kv"><text>出发日期</text><text class="v">{{o.trip.departDate}}</text></view>
+    <view class="kv" wx:if="{{o.trip.gather_time}}"><text>集合时间</text><text class="v">{{o.trip.gather_time}}{{o.trip.end_time ? '，预计 ' + o.trip.end_time + ' 结束' : ''}}</text></view>
+    <view class="kv" wx:if="{{o.trip.vehicle}}"><text>交通安排</text><text class="v">{{o.trip.vehicle}}</text></view>
+    <view class="kv" wx:if="{{o.trip.leader_name}}" bindtap="callLeader"><text>领队</text><text class="v pl-link">{{o.trip.leader_name}}{{o.trip.leader_phone ? ' · 拨打 ›' : ''}}</text></view>
+    <view class="muted2" wx:if="{{o.trip.note}}">⚠️ {{o.trip.note}}</view>
+  </view>
+  <view class="card place-card" wx:if="{{o.merchantContact && o.merchantContact.name}}">
+    <image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />
+    <view style="flex:1;min-width:0"><view class="place-name">{{o.merchantContact.name}}</view><view class="muted2" wx:if="{{o.merchantContact.address}}">{{o.merchantContact.address}}</view></view>
+    <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">📞</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">🧭</text></view>
+  </view>
+
   <view class="card" wx:if="{{o.refundInfo}}">
     <view class="sec-title">退款明细</view>
     <view class="kv"><text>实付金额</text><text>¥{{o.amountPayLabel}}</text></view>

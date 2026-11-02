@@ -197,3 +197,33 @@ page {
 .iti-img { width: 100%; height: 300rpx; border-radius: 16rpx; margin-top: 12rpx; }
 .phrase-card { background: linear-gradient(135deg, #fff7ee, #fdf0ff); border: 1rpx solid #f1d9c4; }
 .phrase-text { font-size: 38rpx; font-weight: 800; color: #6d28d9; margin: 14rpx 0 10rpx; letter-spacing: 2rpx; }
+/* ---- 资料页 / 商户景区卡片 / 约稿 / 勋章墙 / FAQ ---- */
+.sm-btn { margin: 16rpx 0 0; padding: 12rpx 0; font-size: 24rpx; }
+.place-card { display: flex; align-items: center; gap: 20rpx; }
+.place-img { width: 150rpx; height: 112rpx; border-radius: 16rpx; flex: none; background: #f3ece2; }
+.place-img.logo { width: 96rpx; height: 96rpx; border-radius: 50%; }
+.place-name { font-size: 29rpx; font-weight: 700; margin-bottom: 6rpx; }
+.pl-link { color: var(--brand); }
+.pl-top { display: flex; align-items: center; gap: 16rpx; }
+.pl-logo { width: 88rpx; height: 88rpx; border-radius: 50%; flex: none; }
+.pl-fac { display: flex; flex-wrap: wrap; gap: 10rpx; padding-top: 16rpx; }
+.mc-ops { display: flex; gap: 28rpx; font-size: 40rpx; }
+.sess-info { margin-top: 12rpx; background: #fbfaf6; }
+.tk-card { display: flex; gap: 20rpx; align-items: flex-start; }
+.tk-cover { width: 160rpx; height: 120rpx; border-radius: 14rpx; flex: none; }
+.tk-reward { text-align: right; flex: none; }
+.tk-cash { font-size: 22rpx; color: #b45309; margin-left: 10rpx; }
+.tk-ref { display: flex; gap: 16rpx; align-items: center; padding: 14rpx 0; border-bottom: 1rpx solid var(--line); font-size: 26rpx; }
+.tk-ref:last-child { border-bottom: none; }
+.tk-ref-img { width: 120rpx; height: 90rpx; border-radius: 10rpx; }
+.badge-wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16rpx; margin: 0 24rpx 24rpx; }
+.bdg { --bc: #b8b2a7; background: #fff; border-radius: 20rpx; padding: 22rpx 10rpx; text-align: center; box-shadow: var(--shadow); filter: grayscale(1); opacity: .55; }
+.bdg.on { filter: none; opacity: 1; border: 2rpx solid var(--bc); }
+.bdg-img { width: 96rpx; height: 96rpx; }
+.bdg-ico { font-size: 64rpx; line-height: 96rpx; }
+.bdg-name { font-size: 24rpx; font-weight: 700; margin-top: 8rpx; }
+.bdg-r { font-size: 20rpx; color: var(--sub); }
+.bdg.on.r-rare .bdg-r { color: #2563eb; } .bdg.on.r-epic .bdg-r { color: #7c3aed; } .bdg.on.r-legend .bdg-r { color: #b45309; }
+.faq-search { margin: 20rpx 24rpx 0; }
+.faq-search input { background: #fff; border-radius: 999rpx; padding: 18rpx 30rpx; font-size: 26rpx; box-shadow: var(--shadow); }
+.faq-hot { font-size: 20rpx; color: #fff; background: var(--brand); border-radius: 6rpx; padding: 2rpx 8rpx; margin-left: 8rpx; }

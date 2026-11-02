@@ -70,7 +70,27 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
-  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view></view>
+  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
+    <view wx:if="{{extra.meetingGeo}}" class="btn ghost sm-btn" bindtap="navMeeting">导航到集合点</view></view>
+
+  <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
+  <view class="sec-title" wx:if="{{scenic || merchant}}">在哪里玩 · 谁来接待</view>
+  <view class="card place-card" wx:if="{{scenic}}" bindtap="goPlace" data-kind="scenic" data-id="{{scenic.id}}">
+    <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
+    <view style="flex:1;min-width:0">
+      <view class="place-name">{{scenic.name}} <text class="tag" wx:if="{{scenic.scenic_level}}">{{scenic.scenic_level}}</text></view>
+      <view class="muted2" wx:if="{{scenic.open_hours}}">🕘 {{scenic.open_hours}}</view>
+      <view class="muted2" wx:if="{{scenic.address}}">📍 {{scenic.address}}</view>
+    </view><text class="pl-link">›</text>
+  </view>
+  <view class="card place-card" wx:if="{{merchant}}" bindtap="goPlace" data-kind="merchant" data-id="{{p.merchant_id}}">
+    <image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
+    <view style="flex:1;min-width:0">
+      <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
+      <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
+      <view class="dt-meta" wx:if="{{merchant.tags.length}}"><text class="tag blue" wx:for="{{merchant.tags}}" wx:key="*this">{{item}}</text></view>
+    </view><text class="pl-link">›</text>
+  </view>
 
   <!-- 预订须知：与服务端真实规则一致，不写系统做不到的承诺 -->
   <view class="sec-title">预订须知</view>
@@ -87,6 +107,14 @@
   <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
   <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
 
+  <view class="sec-title" wx:if="{{faqs.length}}">关于这条线路的常见问题</view>
+  <view class="card" wx:if="{{faqs.length}}">
+    <view wx:for="{{faqs}}" wx:key="id">
+      <view class="kv" bindtap="toggleFaq" data-i="{{index}}"><text style="flex:1">{{item.question}}</text><text class="v">{{faqOpen === index ? '−' : '+'}}</text></view>
+      <rich-text wx:if="{{faqOpen === index}}" class="rich-p" nodes="{{item.answer}}"></rich-text>
+    </view>
+  </view>
+
   <view class="sec-title">真实评价 <text class="more" wx:if="{{rv.count}}">{{rv.count}} 条 · 均分 {{rv.avg}}</text></view>
   <view class="card" wx:if="{{rv.list.length}}">
     <view class="rv-item" wx:for="{{rv.list}}" wx:key="index">
@@ -99,7 +127,7 @@
     </view>
   </view>
   <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后可以写第一条</view>
-  <view class="note">履约商户：{{p.merchant_name || '—'}}</view>
+  <view class="note" wx:if="{{!merchant}}">履约商户：{{p.merchant_name || '—'}}</view>
   <view style="height:150rpx"></view>
 
   <!-- 底部常驻预订栏：滚动到任何位置都能下单 -->

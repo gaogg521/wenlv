@@ -85,22 +85,42 @@ const c = {
 
   'GET /c/tours': async (req) => {
     const { cat = 'all', kw = '', city = '' } = req.query
-    const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days
-      FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''} ${kw ? 'AND p.title LIKE ?' : ''} ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
-      [...(cat !== 'all' ? [cat] : []), ...(kw ? ['%' + kw + '%'] : []), ...(city ? [city] : [])])
-    return rows.map(r => ({ ...r, loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    // 搜索同时命中标题、副标题，以及后台维护的「搜索关键词」「标签」
+    const like = '%' + kw + '%'
+    const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
+        JSON_EXTRACT(p.profile, '$.tags') tags_json
+      FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''}
+      ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
+      ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
+      [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
+    return rows.map(({ tags_json, ...r }) => ({ ...r, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
   },
 
   'GET /c/tours/:id': async (req) => {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
     if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
-      price_adult, early_price, early_days, status
+      price_adult, early_price, early_days, status, profile
       FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 ORDER BY depart_date`, [p.id])
+    const img = (u) => apiImg(u, req)
+    const merchantRow = await one('SELECT * FROM merchant WHERE id = ?', [p.merchant_id])
+    const scenicRow = p.scenic_id ? await one('SELECT * FROM scenic_spot WHERE id = ? AND status = 1', [p.scenic_id]) : null
+    const relatedFaqs = await q(`SELECT id, question, answer FROM faq WHERE status = 1 AND JSON_CONTAINS(COALESCE(JSON_EXTRACT(profile, '$.related_products'), JSON_ARRAY()), CAST(? AS JSON)) ORDER BY is_hot DESC, sort, id LIMIT 5`, [String(p.id)])
     const agg = await one(`SELECT COALESCE(AVG(rating),0) avg_rating, COUNT(*) count FROM review WHERE product_id = ? AND status = 1`, [p.id])
-    return { ...p, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from), sessions: sessions.map((s) => {
+    // 只下发白名单字段：此前 p.* 会把商家暗号下半句、未支付可见的上半句、单品佣金、合同编号等内部字段带给游客
+    const PUB_COLS = ['id', 'channel', 'city_code', 'cat', 'title', 'subtitle', 'days_desc', 'price_from', 'bean_gift', 'merchant_id', 'scenic_id',
+      'status', 'rich_desc', 'images', 'meeting_point', 'safety_note', 'insurance_note', 'insurance_fee', 'merchant_name']
+    const PUB_PROFILE = ['tags', 'suitable', 'age_range', 'group_size', 'itinerary', 'transport', 'meeting_geo', 'notice', 'share_title', 'share_image', 'keywords']
+    const pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
+    const pub = Object.fromEntries(PUB_COLS.map((k) => [k, p[k]]))
+    pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
+    return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
+      merchantCard: entities.publicProfile('merchant', merchantRow, img),
+      scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
+      relatedFaqs,
+      sessions: sessions.map(({ profile, ...s }) => {
       const ep = order.priceForSession(s)
-      return { ...s, priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
+      return { ...s, info: entities.publicProfile('session', { ...s, profile }), priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
         isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
         groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
     }),
@@ -108,6 +128,20 @@ const c = {
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
       bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
         refundRules: refundPolicy.describe(await cfg('order.refund_policy')) } }
+  },
+
+  // 履约商户 / 景区 公开资料页（白名单字段）
+  'GET /c/places/:kind/:id': async (req) => {
+    const kind = req.params.kind
+    if (!['merchant', 'scenic'].includes(kind)) throw new BizError(1004, '不支持的类型')
+    const row = kind === 'merchant'
+      ? await one('SELECT * FROM merchant WHERE id = ? AND status = 1', [req.params.id])
+      : await one('SELECT * FROM scenic_spot WHERE id = ? AND status = 1', [req.params.id])
+    if (!row) throw new BizError(1004, '未找到或已停止合作')
+    const col = kind === 'merchant' ? 'merchant_id' : 'scenic_id'
+    const tours = await q(`SELECT id, title, price_from, images, city_code, cat, days_desc FROM tour_product WHERE ${col} = ? AND status = 1 ORDER BY id DESC LIMIT 10`, [row.id])
+    return { kind, id: row.id, ...entities.publicProfile(kind, row, (u) => apiImg(u, req)),
+      tours: tours.map((t) => ({ ...t, priceLabel: fen2yuan(t.price_from) })) }
   },
 
   // 评价列表（公开；仅展示态）
@@ -203,7 +237,14 @@ const c = {
     const lastRefund = await one('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, status, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC LIMIT 1', [o.id])
     const refundInfo = lastRefund ? { refundNo: lastRefund.refund_no, refundLabel: fen2yuan(lastRefund.amount), feeLabel: fen2yuan(lastRefund.fee_amount),
       feeRate: lastRefund.fee_rate != null ? Number(lastRefund.fee_rate) : null, status: Number(lastRefund.status) } : null
-    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo }
+    // 已支付后才给领队联系方式；商户只给公开营业信息
+    const paid = [20, 30, 40, 50].includes(Number(o.status))
+    const sRow = await one('SELECT * FROM tour_session WHERE id = ?', [o.session_id])
+    const trip = sRow ? { departDate: String(sRow.depart_date).slice(0, 10), ...(paid ? entities.sessionForOrder(sRow) : entities.publicProfile('session', sRow)) } : null
+    const mRow = await one('SELECT * FROM merchant WHERE id = ?', [o.merchant_id])
+    const mp = entities.publicProfile('merchant', mRow, (u) => apiImg(u, req)) || {}
+    const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
+    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
@@ -2355,9 +2396,26 @@ const cNotes = {
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {
     const u = requireUser(req)
-    const open = await q("SELECT id, task_no, title, brief, reward_beans FROM content_task WHERE status = 0 ORDER BY id DESC LIMIT 20")
+    const raw = await q("SELECT * FROM content_task WHERE status = 0 AND (deadline IS NULL OR deadline >= NOW()) ORDER BY id DESC LIMIT 20")
+    const CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
+    const open = raw.map((t) => {
+      const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
+      return { id: t.id, task_no: t.task_no, title: t.title, brief: t.brief, reward_beans: t.reward_beans, cover: pp.cover_img || null,
+        categoryLabel: CAT[t.category] || '图文笔记', tags: pp.tags || [], platforms: pp.platforms_labels || [],
+        cashLabel: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null, deadline: t.deadline ? String(t.deadline).slice(0, 16) : null,
+        minWords: Number(t.min_words) || 0, minImages: Number(t.min_images) || 0 }
+    })
     const mine = await q("SELECT id, task_no, title, status, reward_beans, submitted_at FROM content_task WHERE claimed_by = ? ORDER BY id DESC LIMIT 20", [u.uid])
     return { open, mine }
+  },
+  'GET /c/tasks/:id': async (req) => {
+    const u = requireUser(req)
+    const t = await one('SELECT * FROM content_task WHERE id = ?', [req.params.id])
+    if (!t || (Number(t.status) !== 0 && Number(t.claimed_by) !== Number(u.uid))) throw new BizError(1004, '任务不存在或已被领取')
+    const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
+    const prod = t.product_id ? await one('SELECT id, title FROM tour_product WHERE id = ? AND status = 1', [t.product_id]) : null
+    return { id: t.id, status: Number(t.status), mine: Number(t.claimed_by) === Number(u.uid), product: prod,
+      ...pp, cash_reward_label: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null }
   },
   'POST /c/tasks/:id/claim': async (req) => {
     const u = requireUser(req)
@@ -2378,15 +2436,22 @@ const cNotes = {
   // 常见问题（小程序「我的-常见问题」）
   'GET /c/faqs': async (req) => {
     requireUser(req)
-    return await q('SELECT id, question, answer, category, is_hot FROM faq WHERE status = 1 ORDER BY is_hot DESC, sort, id')
+    const rows = await q('SELECT id, question, answer, category, is_hot, profile FROM faq WHERE status = 1 ORDER BY is_hot DESC, sort, id')
+    // 同义问法只用于搜索命中，随条目下发
+    return rows.map(({ profile, ...f }) => ({ ...f, keywords: ((typeof profile === 'string' ? JSON.parse(profile || '{}') : profile) || {}).keywords || [] }))
   },
   // 首页轮播
   'GET /c/banners': async (req) => {
     requireUser(req)
-    const rows = await q(`SELECT id, title, sub_title, image, link FROM banner WHERE status = 1
+    const rows = await q(`SELECT id, title, sub_title, image, link, profile FROM banner WHERE status = 1
       AND (start_at IS NULL OR start_at <= NOW(3)) AND (end_at IS NULL OR end_at >= NOW(3))
-      ORDER BY sort, id LIMIT 6`)
-    return rows.map((b) => ({ ...b, image: apiImg(b.image, req) }))
+      ORDER BY sort, id LIMIT 12`)
+    // 投放城市：传了 city 时只给面向该城市（或未限定城市）的轮播；未传时给全部
+    const city = String(req.query.city || '')
+    return rows.map(({ profile, ...b }) => {
+      const pf = (typeof profile === 'string' ? JSON.parse(profile || '{}') : profile) || {}
+      return { ...b, image: apiImg(b.image, req), bgColor: pf.bg_color || null, cities: pf.cities || [] }
+    }).filter((b) => !city || !b.cities.length || b.cities.includes(city)).slice(0, 6)
   },
   // 目的地城市聚合（P2）
   'GET /c/destinations': async (req) => {
@@ -2529,7 +2594,18 @@ const cIdentity = {
     const u = requireUser(req)
     const acc = await one('SELECT nickname, member_level, growth_value, created_at FROM user_account WHERE id = ?', [u.uid])
     const passes = await q('SELECT id, name, kind, status, valid_to, created_at FROM travel_pass WHERE user_id = ? ORDER BY id DESC LIMIT 20', [u.uid])
-    const badges = await q(`SELECT b.name, b.icon_key, ub.granted_at FROM user_badge ub JOIN badge b ON b.id = ub.badge_id WHERE ub.user_id = ?`, [u.uid])
+    // 勋章墙：全部勋章（已获得点亮、未获得置灰并给出获得条件），有效期从授予日起算
+    const defs = await q('SELECT * FROM badge')
+    const owned = await q('SELECT badge_id, MAX(granted_at) granted_at FROM user_badge WHERE user_id = ? GROUP BY badge_id', [u.uid])
+    const badges = defs.map((b) => {
+      const pp = entities.publicProfile('badge', b, (x) => apiImg(x, req))
+      const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
+      const days = Number(pp.valid_days) || 0
+      const expireAt = got && days ? new Date(new Date(String(got.granted_at).replace(' ', 'T') + '+08:00').getTime() + days * 86400000).toISOString().slice(0, 10) : null
+      return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
+        color: pp.color || null, description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0,
+        owned: !!got, granted_at: got ? got.granted_at : null, expireAt, expired: !!(expireAt && expireAt < bizDay()) }
+    }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
     const myOrders = await q('SELECT order_no FROM orders WHERE user_id = ?', [u.uid])
     const attestations = []
     for (const o of myOrders.slice(0, 10)) {

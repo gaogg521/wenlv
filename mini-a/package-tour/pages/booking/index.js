@@ -54,12 +54,13 @@ Page({
   },
   // 团期展示预计算（wxml 只做取值，防分包表达式炸编译）
   sessView(s) {
-    if (!s) return { label: '', extra: '' }
+    if (!s) return { label: '', extra: '', info: null }
     const parts = [s.depart_date + ' · 余' + s.left_seats]
     const extra = []
     if (s.isEarly) extra.push('🐦 早鸟价 ¥' + (s.priceNow / 100) + '（提前 ' + s.daysToDepart + ' 天报名）')
     if (s.groupProgress) extra.push(s.groupProgress.reached ? '已成团' : '需 ' + s.groupProgress.minGo + ' 人成团 · 已报 ' + s.groupProgress.booked)
-    return { label: parts[0], extra: extra.join(' · ') }
+    const info = s.info && Object.keys(s.info).length ? s.info : null
+    return { label: parts[0], extra: extra.join(' · '), info }
   },
 
   pick(e) {

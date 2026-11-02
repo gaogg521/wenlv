@@ -13,6 +13,12 @@
     <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
   </view>
   <view class="muted2" wx:if="{{selView.extra}}" style="margin:8rpx 32rpx 0;font-size:22rpx;color:#1a9c6b">{{selView.extra}}</view>
+  <view class="card sess-info" wx:if="{{selView.info}}">
+    <view class="kv" wx:if="{{selView.info.gather_time}}"><text>集合时间</text><text class="v">{{selView.info.gather_time}}{{selView.info.end_time ? '，预计 ' + selView.info.end_time + ' 结束' : ''}}</text></view>
+    <view class="kv" wx:if="{{selView.info.vehicle}}"><text>交通安排</text><text class="v">{{selView.info.vehicle}}</text></view>
+    <view class="kv" wx:if="{{selView.info.sign_deadline}}"><text>报名截止</text><text class="v">{{selView.info.sign_deadline}}</text></view>
+    <view class="muted2" wx:if="{{selView.info.note}}">⚠️ {{selView.info.note}}</view>
+  </view>
 
   <view class="sec-title">2 · 出行人数与联系人</view>
   <view class="card">

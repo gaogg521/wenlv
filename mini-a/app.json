@@ -14,7 +14,8 @@
       "pages": [
         "pages/detail/index",
         "pages/pay-result/index",
-        "pages/booking/index"
+        "pages/booking/index",
+        "pages/place/index"
       ]
     },
     {
@@ -30,7 +31,8 @@
       "pages": [
         "pages/identity/index",
         "pages/create/index",
-        "pages/note/index"
+        "pages/note/index",
+        "pages/task/index"
       ]
     },
     {

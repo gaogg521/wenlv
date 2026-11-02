@@ -1,0 +1,46 @@
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="load">重新加载</view></view>
+<view wx:elif="{{!d}}" class="skeleton" style="height:420rpx;margin-top:20rpx"></view>
+<block wx:else>
+  <swiper wx:if="{{d.gallery.length}}" class="gallery" indicator-dots="{{d.gallery.length > 1}}" circular bindchange="onSwiper">
+    <swiper-item wx:for="{{d.gallery}}" wx:key="index"><image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" bindtap="preview" data-i="{{index}}" /></swiper-item>
+  </swiper>
+  <view class="book-bar dt-head">
+    <view class="pl-top">
+      <image wx:if="{{d.kind === 'merchant' && d.logo}}" class="pl-logo" src="{{d.logo}}" mode="aspectFill" />
+      <view style="flex:1;min-width:0">
+        <view class="dt-title">{{d.name}}</view>
+        <view class="dt-sub" wx:if="{{d.aliasText}}">又名 {{d.aliasText}}</view>
+      </view>
+      <text class="tag" wx:if="{{d.scenic_level}}">{{d.scenic_level}} 景区</text>
+      <text class="tag" wx:if="{{d.kind_label}}">{{d.kind_label}}</text>
+    </view>
+    <view class="dt-meta" wx:if="{{d.tags.length}}"><text class="tag blue" wx:for="{{d.tags}}" wx:key="*this">{{item}}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="kv" wx:if="{{d.open_hours}}"><text>开放时间</text><text class="v">{{d.open_hours}}</text></view>
+    <view class="kv" wx:for="{{d.business_hours}}" wx:key="index"><text>{{index === 0 ? '营业时间' : ''}}</text><text class="v">{{item.days || '每天'}} {{item.open}}-{{item.close}}</text></view>
+    <view class="kv" wx:if="{{d.address}}" bindtap="nav"><text>地址</text><text class="v pl-link">{{d.address}} ›</text></view>
+    <view class="kv" wx:if="{{d.service_phone}}" bindtap="call"><text>电话</text><text class="v pl-link">{{d.service_phone}} ›</text></view>
+    <view class="pl-fac" wx:if="{{d.facilityText.length}}"><text class="tag" wx:for="{{d.facilityText}}" wx:key="*this">✓ {{item}}</text></view>
+  </view>
+
+  <view class="sec-title" wx:if="{{d.tickets.length}}">门票</view>
+  <view class="card" wx:if="{{d.tickets.length}}">
+    <view class="kv" wx:for="{{d.tickets}}" wx:key="index"><view><view>{{item.name}}</view><view class="muted2" wx:if="{{item.note}}">{{item.note}}</view></view><text class="tour-price" style="font-size:30rpx" wx:if="{{item.price}}">¥{{item.price}}</text></view>
+  </view>
+
+  <view class="sec-title" wx:if="{{d.intro}}">{{d.kind === 'scenic' ? '景区介绍' : '关于我们'}}</view>
+  <view class="card" wx:if="{{d.intro}}"><rich-text class="rich-p" nodes="{{d.intro}}"></rich-text></view>
+
+  <view class="sec-title" wx:if="{{d.traffic}}">交通指引</view>
+  <view class="card" wx:if="{{d.traffic}}"><view class="rich-p">🚇 {{d.traffic}}</view></view>
+
+  <view class="sec-title" wx:if="{{d.tours.length}}">相关线路</view>
+  <view class="tour-item" wx:for="{{d.tours}}" wx:key="id" bindtap="goTour" data-id="{{item.id}}">
+    <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+    <view style="flex:1;min-width:0"><view class="tour-title">{{item.title}}</view><view class="tour-desc">{{item.days_desc || ''}}</view>
+      <view class="tour-price"><text class="rmb">¥</text>{{item.priceLabel}}</view></view>
+  </view>
+  <view style="height:40rpx"></view>
+</block>

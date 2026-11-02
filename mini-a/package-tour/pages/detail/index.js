@@ -1,4 +1,5 @@
 const api = require('../../../utils/api')
+const place = require('../../../utils/place')
 
 // 城市编码 → 名称（与 tour-list 筛选一致；未知编码不显示，避免把数字编码直接给游客看）
 const CITY = { '310118': '上海·青浦', '330523': '湖州·安吉', '320508': '苏州·姑苏', '310000': '上海' }
@@ -41,12 +42,14 @@ Page({
         minGo: sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
         cityName: CITY[d.city_code] || '',
         rules: rulesOf(d),
+        merchant: d.merchantCard ? { ...d.merchantCard, hoursText: (d.merchantCard.business_hours || []).map((h) => (h.days || '每天') + ' ' + h.open + '-' + h.close).join('；') } : null,
+        scenic: d.scenicCard || null, faqs: d.relatedFaqs || [], faqOpen: -1,
         // 后台表单引擎维护的扩展资料（profile）：标签、适合人群、行程节点、补充须知等
         extra: {
           tags: pf.tags || [], suitable: (pf.suitable || []).map((k) => SUIT[k]).filter(Boolean).join('、'),
           ageRange: pf.age_range || '', groupSize: pf.group_size || '', transport: pf.transport || '',
           itinerary: (pf.itinerary || []).map((n) => ({ ...n, image: n.image ? api.img(n.image) : '' })),
-          notice: pf.notice || '', shareTitle: pf.share_title || '', shareImage: pf.share_image ? api.img(pf.share_image) : '',
+          notice: pf.notice || '', meetingGeo: pf.meeting_geo || '', shareTitle: pf.share_title || '', shareImage: pf.share_image ? api.img(pf.share_image) : '',
         },
         gallery: images.length ? images : [api.coverFor(d)], illustrated: !images.length, gIdx: 0,
         rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [], excludes: rich.excludes || [] },
@@ -56,6 +59,9 @@ Page({
     }).catch(e => this.setData({ error: e.msg || '线路加载失败，请重试', loading: false }))
   },
   retry() { this.load() },
+  navMeeting() { place.openGeo(this.data.extra.meetingGeo, '集合点', this.data.p.meeting_point) },
+  goPlace(e) { wx.navigateTo({ url: `/package-tour/pages/place/index?kind=${e.currentTarget.dataset.kind}&id=${e.currentTarget.dataset.id}` }) },
+  toggleFaq(e) { const i = Number(e.currentTarget.dataset.i); this.setData({ faqOpen: this.data.faqOpen === i ? -1 : i }) },
   onSwiper(e) { this.setData({ gIdx: e.detail.current }) },
   preview(e) {
     if (this.data.illustrated) return

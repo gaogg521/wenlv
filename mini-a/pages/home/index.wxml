@@ -8,7 +8,7 @@
 <view class="theme-grid"><view wx:for="{{themes}}" wx:key="k" class="theme-tile" data-cat="{{item.k}}" bindtap="goTours"><text class="theme-symbol">{{item.icon}}</text><view class="theme-name">{{item.n}}</view><view class="theme-sub">{{item.sub}}</view></view></view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">
     <swiper-item wx:for="{{banners}}" wx:key="id">
-      <image src="{{item.image}}" mode="aspectFill" style="width:100%;height:300rpx" data-i="{{index}}" bindtap="tapBanner" />
+      <image src="{{item.image}}" mode="aspectFill" style="width:100%;height:300rpx;background:{{item.bgColor || '#f3ece2'}}" data-i="{{index}}" bindtap="tapBanner" />
     </swiper-item>
   </swiper>
 

@@ -1,4 +1,5 @@
 const api = require('../../../utils/api')
+const place = require('../../../utils/place')
 Page({
   data: { o: null, passes: [], stName: { 10: '待支付', 20: '已支付', 30: '待出行·待核销', 40: '已核销', 50: '已完成', 70: '已退款', 90: '已关闭' },
     passSt: { 1: '有效 · 待核销', 2: '已核销', 3: '已撤销', 4: '已冲正' },
@@ -32,6 +33,9 @@ Page({
     } catch (e) { wx.showToast({ title: e.msg || '改签失败', icon: 'none' }) }
   },
 
+  callLeader() { place.call(this.data.o.trip && this.data.o.trip.leader_phone) },
+  callMerchant() { place.call(this.data.o.merchantContact.phone) },
+  navMerchant() { const m = this.data.o.merchantContact; place.openGeo(m.geo, m.name, m.address) },
   async refund() {
     const unpaid = this.data.o && this.data.o.status === 10
     let content

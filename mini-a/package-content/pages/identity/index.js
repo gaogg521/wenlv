@@ -27,7 +27,14 @@ Page({
           statusText: PASS_STATUS[p.status] || '已作废',
         }))
       }
-      this.setData({ d, lex: Object.assign({}, LEX_FALLBACK, lex || {}), loadTxt: '' })
+      const ownedCount = (d.badges || []).filter((b) => b.owned).length
+      this.setData({ d, ownedCount, lex: Object.assign({}, LEX_FALLBACK, lex || {}), loadTxt: '' })
     } catch (e) { this.setData({ loadTxt: e.msg || '暂时无法加载，请稍后重试' }) }
+  },
+  showBadge(e) {
+    const b = this.data.d.badges[Number(e.currentTarget.dataset.i)]
+    const plain = String(b.description || '').replace(/<[^>]+>/g, '').trim()
+    const lines = [plain, b.ruleDesc ? '获得方式：' + b.ruleDesc : '', b.owned ? '获得于 ' + String(b.granted_at).slice(0, 10) + (b.expireAt ? '，有效至 ' + b.expireAt : '') : '尚未获得']
+    wx.showModal({ title: b.name + ' · ' + b.rarityLabel, content: lines.filter(Boolean).join('\n'), showCancel: false, confirmText: '知道了' })
   },
 })

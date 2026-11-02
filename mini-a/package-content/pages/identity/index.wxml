@@ -4,6 +4,15 @@
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
     <view class="sub2">{{d.profile.levelName}} · 成长值 {{d.profile.growth}}</view>
   </view>
+  <view class="sec-title" wx:if="{{d.badges.length}}">勋章墙 <text class="more">已点亮 {{ownedCount}}/{{d.badges.length}}</text></view>
+  <view class="badge-wall" wx:if="{{d.badges.length}}">
+    <view class="bdg {{item.owned ? 'on' : ''}} r-{{item.rarity}}" wx:for="{{d.badges}}" wx:key="id" bindtap="showBadge" data-i="{{index}}" style="{{item.owned && item.color ? '--bc:' + item.color : ''}}">
+      <image wx:if="{{item.iconImg}}" class="bdg-img" src="{{item.iconImg}}" mode="aspectFit" />
+      <view wx:else class="bdg-ico">🏅</view>
+      <view class="bdg-name">{{item.name}}</view>
+      <view class="bdg-r">{{item.rarityLabel}}{{item.expired ? ' · 已过期' : ''}}</view>
+    </view>
+  </view>
   <view class="sec-title">我的{{lex.pass}}（{{d.passes.length}}）<text class="more">核销后记录永久有效</text></view>
   <view class="card" wx:for="{{d.passes}}" wx:key="id">
     <view class="kv"><text>{{item.name}}</text><text class="v">{{item.statusText}}</text></view>
