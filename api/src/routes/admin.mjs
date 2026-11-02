@@ -1,5 +1,5 @@
 import { q, one, count, tx, BizError } from '../db.mjs'
-import { cfg, cfgAll, cfgNum, cfgArr, loadConfig } from '../config.mjs'
+import { cfg, cfgAll, cfgNum, cfgArr, loadConfig, configName } from '../config.mjs'
 import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from '../auth.mjs'
 import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
@@ -412,7 +412,7 @@ const admin = {
   'GET /admin/config': async (req) => {
     await requireAdmin(req)
     const rows = await q('SELECT k, v, group_name, `sensitive`, memo, updated_by, updated_at FROM rule_config ORDER BY group_name, k')
-    return rows.map(r => ({ ...r, v: typeof r.v === 'string' ? r.v : JSON.stringify(r.v) }))
+    return rows.map(r => ({ ...r, name: configName(r.k, r.memo), v: typeof r.v === 'string' ? r.v : JSON.stringify(r.v) }))
   },
   'POST /admin/config/proposal': async (req) => {
     const a = await requireAdmin(req)

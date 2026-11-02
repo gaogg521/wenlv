@@ -222,9 +222,10 @@ const adminEdit = {
   // ===== 资源池（景区 / 供应商）：供给侧资源台账，独立于履约商户；城市合伙人行级隔离 =====
   'GET /admin/scenics': async (req) => {
     const a = await requireAdmin(req)
-    const sc = scopeFilter(a)
-    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id) product_count
-      FROM scenic_spot s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const sc = scopeFilter(a, 's.city_code'), ps = scopeFilter(a, 'p.city_code')
+    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id${ps.sql}) product_count
+      FROM scenic_spot s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, [...ps.params, ...sc.params])
   },
   'POST /admin/scenics': async (req) => {
     const a = await requireAdmin(req, ['super'])
