@@ -511,9 +511,12 @@ const admin = {
     const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
       UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
       WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
+    const before = new Set((await q('SELECT id FROM settlement WHERE period = ? OR period LIKE ?', [period, period + '-%'])).map((r) => Number(r.id)))
     const ids = []
     for (const mm of merchants) ids.push(await promo.generateSettlement(Number(mm.mid), period))
-    return { period, settlementIds: ids.filter(i => i > 0) }
+    const settlementIds = [...new Set(ids.filter((i) => i > 0))]
+    // created：本次新出的单（含同周期的补充单 2026-W45-2…）；其余是已存在、本次没有新增内容的单
+    return { period, settlementIds, created: settlementIds.filter((i) => !before.has(i)) }
   },
   'POST /admin/settlements/:id/confirm': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])

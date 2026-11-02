@@ -10,7 +10,7 @@
 | `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`）：`core.js` 公共层、`pages/` 各栏目、`workspace.js` 外壳 |
 | `mini-a/` | 游客微信小程序 |
 | `mini-b/` | 商户微信小程序 |
-| `api/db/migration/` | 表结构迁移（V1–V32；V15/V16 编号空缺是历史原因，不是漏文件） |
+| `api/db/migration/` | 表结构迁移（V1–V33；V15/V16 编号空缺是历史原因，不是漏文件） |
 
 不在运行链路上的内容：
 

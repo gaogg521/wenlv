@@ -103,15 +103,22 @@ export async function generateSettlement(merchantId, period) {
   // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账
   return await tx(async (c) => {
   await c.one('SELECT id FROM merchant WHERE id = ? FOR UPDATE', [merchantId])
-  const existing = await c.one('SELECT id FROM settlement WHERE merchant_id = ? AND period = ?', [merchantId, period])
-  if (existing) return Number(existing.id)
   const orders = await c.q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
     WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id`, [merchantId])
   // 退改手续费：该商户名下已退款成功、扣了手续费、尚未计入任何结算单的退款（每笔只计一次）
   const fees = await c.q(`SELECT r.id, r.fee_amount FROM refunds r JOIN orders o ON o.id = r.order_id
     WHERE o.merchant_id = ? AND r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL FOR UPDATE`, [merchantId])
-  if (!orders.length && !fees.length) return -1
+  const existing = await c.one('SELECT id FROM settlement WHERE merchant_id = ? AND period = ?', [merchantId, period])
+  if (!orders.length && !fees.length) return existing ? Number(existing.id) : -1 // 没有新增：幂等返回已有单
+  // 本周期已出过账、之后又有新完成的订单或手续费：出一张补充单（2026-W45-2、-3…），已出的单据不改动
+  if (existing) {
+    const used = new Set((await c.q('SELECT period FROM settlement WHERE merchant_id = ? AND period LIKE ?', [merchantId, period + '-%'])).map((r) => r.period))
+    let n = 2
+    while (used.has(`${period}-${n}`)) n++
+    period = `${period}-${n}`
+    if (period.length > 12) throw new BizError(1001, `结算周期 ${period} 超长：本周期补充单过多，请联系技术处理`)
+  }
   let total = 0, promo = 0
   for (const o of orders) { total += Number(o.amount_pay); promo += Number(o.promo_amt) }
   // 五口径比例来自参数中心（settlement.split_*），生成时快照进 split_snapshot

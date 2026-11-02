@@ -130,7 +130,7 @@ function boot() {
     if (!items.length) return ''
     return `<details class="nav-section" ${['工作台','交易履约','小程序'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
-  fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
+  fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）
   const keys = [...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p)
   const requested = location.hash.slice(1)

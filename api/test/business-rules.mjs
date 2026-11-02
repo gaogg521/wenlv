@@ -72,17 +72,34 @@ try {
   })
   await t('改履约比例为 50%（双人复核）后，新结算单按新比例并快照；默认周期为 ISO 周', async () => {
     await approve(await propose('settlement.split_fulfill', 0.5))
-    const { orderNo } = await completedOrder('mock-split-' + stamp)
-    const o = await one('SELECT merchant_id, amount_pay - insurance_fee AS base FROM orders WHERE order_no = ?', [orderNo])
-    await q('UPDATE orders SET settlement_id = NULL WHERE order_no = ?', [orderNo])
-    const pre = await q('SELECT id FROM orders WHERE merchant_id = ? AND status = 50 AND settlement_id IS NULL', [o.merchant_id])
-    const r = ok(await call('POST', '/admin/settlements/generate', {}, A))
-    assert.match(r.period, /^\d{4}-W\d{2}$/)
-    const st = await one('SELECT * FROM settlement WHERE merchant_id = ? AND period = ?', [o.merchant_id, r.period])
-    const snap = typeof st.split_snapshot === 'string' ? JSON.parse(st.split_snapshot) : st.split_snapshot
-    assert.equal(snap.fulfill, 5000); assert.equal(snap.service, 1200)
-    if (pre.length === Number(st.order_count)) assert.equal(Number(st.amt_fulfill), Math.round(Number(st.total_amount) * 0.5))
-    await approve(await propose('settlement.split_fulfill', 0.58))
+    try {
+      const { orderNo } = await completedOrder('mock-split-' + stamp)
+      const r = ok(await call('POST', '/admin/settlements/generate', {}, A))
+      assert.match(r.period, /^\d{4}-W\d{2}$/)
+      const st = await one('SELECT s.* FROM settlement s JOIN orders o ON o.settlement_id = s.id WHERE o.order_no = ?', [orderNo])
+      assert.ok(st, '新完成的订单必须进入结算单（同周已出过账时进补充单）')
+      assert.ok(r.created.includes(Number(st.id)))
+      assert.ok(st.period === r.period || st.period.startsWith(r.period + '-'))
+      const snap = typeof st.split_snapshot === 'string' ? JSON.parse(st.split_snapshot) : st.split_snapshot
+      assert.equal(snap.fulfill, 5000); assert.equal(snap.service, 1200)
+      assert.equal(Number(st.amt_fulfill), Math.round(Number(st.total_amount) * 0.5))
+    } finally { await approve(await propose('settlement.split_fulfill', 0.58)) }
+  })
+  await t('同一周再出账：有新订单出补充单（原单不动），没有新增则不重复出单', async () => {
+    const r0 = ok(await call('POST', '/admin/settlements/generate', {}, A))
+    const { orderNo } = await completedOrder('mock-supp-' + stamp)
+    const m = await one('SELECT merchant_id FROM orders WHERE order_no = ?', [orderNo])
+    const beforeRows = await q('SELECT id, total_amount, order_count FROM settlement WHERE merchant_id = ? AND (period = ? OR period LIKE ?)', [m.merchant_id, r0.period, r0.period + '-%'])
+    const r1 = ok(await call('POST', '/admin/settlements/generate', {}, A))
+    const st = await one('SELECT s.* FROM settlement s JOIN orders o ON o.settlement_id = s.id WHERE o.order_no = ?', [orderNo])
+    assert.ok(st && r1.created.includes(Number(st.id)))
+    if (beforeRows.length) assert.match(st.period, new RegExp('^' + r0.period + '-\\d+$'))
+    for (const b of beforeRows) {
+      const now = await one('SELECT total_amount, order_count FROM settlement WHERE id = ?', [b.id])
+      assert.equal(Number(now.total_amount), Number(b.total_amount)); assert.equal(Number(now.order_count), Number(b.order_count))
+    }
+    const r2 = ok(await call('POST', '/admin/settlements/generate', {}, A))
+    assert.deepEqual(r2.created, [])
   })
 
   console.log('== 轮播按城市投放 ==')

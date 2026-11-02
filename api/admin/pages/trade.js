@@ -153,7 +153,12 @@ async function settlements() {
   </div>`
 }
 async function genSettlements() {
-  try { const r = await api('POST', '/admin/settlements/generate', {}); toast('已生成 ' + r.settlementIds.length + ' 份结算单'); settlements() } catch (e) { toast(e.message, true) }
+  try {
+    const r = await api('POST', '/admin/settlements/generate', {})
+    const n = (r.created || []).length
+    toast(n ? `已生成 ${n} 份结算单（${r.period}；同周已出过账的商户出补充单）` : `没有新的可结算订单或手续费（${r.period}）`)
+    settlements()
+  } catch (e) { toast(e.message, true) }
 }
 async function resolveDispute(id) {
   const note = prompt('异议处理说明（处理后交回商户重新确认）：', '')
