@@ -75,6 +75,48 @@ try {
     const r = await api('POST', '/admin/config/proposal', { key: 'order.refund_policy', newValue: '{"d7":2}', reason: 't' }, adminT)
     assert.equal(r.code, 1001); assert.match(r.msg, /非法/)
   })
+  console.log('== 手续费计入结算 ==')
+  const prod = await one('SELECT merchant_id FROM tour_product WHERE id = ?', [sess.product_id])
+  const mid = Number(prod.merchant_id)
+  const unsettled = async () => Number((await one(`SELECT COALESCE(SUM(r.fee_amount),0) s FROM refunds r JOIN orders o ON o.id = r.order_id
+    WHERE o.merchant_id = ? AND r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`, [mid])).s)
+  const gen = async (period) => {
+    const r = await api('POST', '/admin/settlements/generate', { period }, adminT)
+    assert.equal(r.code, 0, r.msg)
+    return await one('SELECT * FROM settlement WHERE merchant_id = ? AND period = ?', [mid, period])
+  }
+  await t('商户单独约定分成 40%：手续费按比例计入结算单，应付 = 履约 + 分成', async () => {
+    await shift(4)
+    const no = await paidOrder()
+    assert.equal((await api('POST', `/c/orders/${no}/refund`, {}, buyerT)).code, 0)
+    assert.equal((await api('PUT', '/admin/entities/merchant/' + mid, { values: { refund_fee_share: 40 } }, adminT)).code, 0)
+    const expected = await unsettled()
+    assert.ok(expected > 0)
+    const st = await gen('FT' + Date.now().toString(36))
+    assert.equal(Number(st.fee_total), expected); assert.equal(Number(st.fee_share_bp), 4000)
+    assert.equal(Number(st.fee_merchant), Math.floor(expected * 0.4)); assert.equal(Number(st.fee_merchant) + Number(st.fee_platform), expected)
+    assert.equal(await unsettled(), 0, '计入后不再是未结算')
+    const ev = await one(`SELECT canonical FROM attest_event WHERE biz_type = 'settlement' AND biz_ref = ? ORDER BY id DESC LIMIT 1`, ['settle-' + st.id])
+    const c = typeof ev.canonical === 'string' ? JSON.parse(ev.canonical) : ev.canonical
+    assert.equal(c.feeMerchant, Number(st.fee_merchant), '存证快照包含手续费分成')
+  })
+  await t('同一笔手续费不会计入第二张结算单', async () => {
+    const st = await gen('FT2' + Date.now().toString(36))
+    assert.ok(!st || Number(st.fee_total) === 0)
+  })
+  await t('清除商户约定后按参数中心比例（默认 0 = 全部归平台）；只有手续费也能出账', async () => {
+    assert.equal((await api('PUT', '/admin/entities/merchant/' + mid, { values: { refund_fee_share: '' } }, adminT)).code, 0)
+    await shift(4)
+    const no = await paidOrder()
+    assert.equal((await api('POST', `/c/orders/${no}/refund`, {}, buyerT)).code, 0)
+    const fee = await unsettled()
+    const st = await gen('FT3' + Date.now().toString(36))
+    assert.equal(Number(st.fee_total), fee); assert.equal(Number(st.fee_merchant), 0); assert.equal(Number(st.fee_platform), fee)
+  })
+  await t('参数中心拒绝超出 0~1 的分成比例', async () => {
+    const r = await api('POST', '/admin/config/proposal', { key: 'settlement.refund_fee_merchant_pct', newValue: '1.5', reason: 't' }, adminT)
+    assert.equal(r.code, 1001)
+  })
 } finally {
   await q('UPDATE tour_session SET depart_date = ? WHERE id = ?', [origDepart, sess.id])
 }

@@ -59,7 +59,9 @@ async function tickCommission() {
 async function tickSettlement() {
   if (new Date().getDay() !== 1) return // 周一
   const period = new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
-  const merchants = await q('SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50')
+  const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
+      UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
   for (const m of merchants) await promo.generateSettlement(Number(m.mid), period)
   console.log('[job:settlement]', merchants.length, 'merchants', period)
 }

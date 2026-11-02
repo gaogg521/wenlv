@@ -459,10 +459,11 @@ async function settlements() {
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
       <button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button></div>
-    <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。</p>
+    <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
+      退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
     ${rows.length ? rows.map((s) => {
       const parts = [Number(s.amt_fulfill), Number(s.amt_service), Number(s.amt_promoter), Number(s.amt_beanbudget), Number(s.amt_retained)]
-      const total = Number(s.total_amount) || 1
+      const total = Number(s.total_amount) || 1 // 只有手续费、无订单的结算单 total=0，按 1 防除零
       return `<div style="padding:14px 0;border-bottom:1px solid #f1f4f8">
       <div class="row" style="justify-content:space-between;margin:0 0 10px">
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
@@ -470,9 +471,12 @@ async function settlements() {
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
           ${s.status === 1 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
-      <div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>
+      ${Number(s.total_amount) > 0 ? `<div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>` : '<p class="muted" style="margin:0">本期无完成订单，仅计入退改手续费</p>'}
       ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}
-      <div class="split-legend">${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
+      <div class="split-legend" ${Number(s.total_amount) > 0 ? '' : 'hidden'}>${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
+      ${Number(s.fee_total) ? `<div class="fee-line"><span>退改手续费 <b>${fen(s.fee_total)}</b>（${s.fee_count} 笔）</span>
+        <span>商户分成 ${s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—'} · <b>${fen(s.fee_merchant)}</b></span><span>平台 <b>${fen(s.fee_platform)}</b></span></div>` : ''}
+      <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}</span></div>
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
   </div>`
 }

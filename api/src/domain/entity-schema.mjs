@@ -173,6 +173,7 @@ const S = {
         { k: 'bank_name', label: '开户行', type: 'text', max: 60 },
         { k: 'account_no', label: '银行账号', type: 'text', max: 32, pattern: '^[0-9 ]{8,32}$', patternMsg: '只能包含数字', sensitive: true },
         { k: 'invoice_title', label: '发票抬头', type: 'text', max: 60 },
+        { k: 'refund_fee_share', label: '退改手续费分成', type: 'bp', min: 0, max: 100, help: '游客按梯度退款时扣的手续费，分给本商户的比例；留空 = 按参数中心 settlement.refund_fee_merchant_pct' },
       ] },
       { title: '联系人与合作', fields: [
         { k: 'contacts', label: '联系人', type: 'repeat', span: 2, max: 6, of: [

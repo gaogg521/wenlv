@@ -597,6 +597,7 @@ const m = {
       settlementId: s.id, period: s.period, orderCount: s.order_count, totalAmount: s.total_amount,
       amtFulfill: s.amt_fulfill, amtService: s.amt_service, amtPromoter: s.amt_promoter,
       amtBeanbudget: s.amt_beanbudget, amtRetained: s.amt_retained, status: Number(s.status),
+      feeCount: Number(s.fee_count || 0), feeTotal: Number(s.fee_total || 0), feeMerchant: Number(s.fee_merchant || 0), feePlatform: Number(s.fee_platform || 0),
       payloadHash: e ? e.payload_hash : null,
       merkleRoot: e ? e.merkle_root : null,
     }, publicBase(req))
@@ -1044,6 +1045,9 @@ const admin = {
     if (key === 'order.refund_policy') {
       try { refundPolicy.parsePolicy(newValue) } catch (e) { throw new BizError(1001, e.message) }
     }
+    if (key === 'settlement.refund_fee_merchant_pct' && !(Number(newValue) >= 0 && Number(newValue) <= 1)) {
+      throw new BizError(1001, '商户分成比例需在 0~1 之间（如 0.5 = 50%）')
+    }
     // 影响预览：旅豆/佣金类参数回溯近 30 日
     let preview = null
     if (key.startsWith('bean.order_rate')) {
@@ -1119,7 +1123,9 @@ const admin = {
   'POST /admin/settlements/generate': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
     const period = req.body.period || new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
-    const merchants = await q('SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50')
+    const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
+      UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
     const ids = []
     for (const mm of merchants) ids.push(await promo.generateSettlement(Number(mm.mid), period))
     return { period, settlementIds: ids.filter(i => i > 0) }
@@ -1189,7 +1195,8 @@ const admin = {
       rows = await q(`SELECT p.id, p.title, p.channel, p.city_code, p.cat, p.price_from, p.bean_gift, p.status, m.name merchant_name
         FROM tour_product p JOIN merchant m ON m.id = p.merchant_id ORDER BY p.id`)
     } else if (what === 'settlements') {
-      rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained, s.status
+      rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained,
+          s.fee_count, s.fee_total, s.fee_merchant, s.fee_platform, s.amt_fulfill + s.fee_merchant AS payable_to_merchant, s.status
         FROM settlement s JOIN merchant m ON m.id = s.merchant_id ORDER BY s.id DESC LIMIT 2000`)
     } else if (what === 'merchants') {
       rows = await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, apply_mobile, approved_at, created_at FROM merchant ORDER BY id`)

@@ -120,3 +120,4 @@ page {
 .hero { background: radial-gradient(520rpx 320rpx at 90% -10%, rgba(255,178,122,.4), rgba(255,178,122,0) 70%), linear-gradient(135deg, #2b211b 0%, #4a2e1f 55%, #8a4422 100%) !important; }
 .btn { background: linear-gradient(135deg, #e5743b 0%, #c64e28 60%, #a93f1e 100%); box-shadow: 0 12rpx 28rpx rgba(198,78,40,.28); }
 .card { border-radius: 30rpx; }
+.fee-box { margin-top: 14rpx; padding: 16rpx 20rpx; border-radius: 16rpx; background: #fbf6ee; font-size: 23rpx; color: #6b5d4b; line-height: 1.8; }

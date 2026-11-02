@@ -146,13 +146,15 @@ console.log('== A14 数字身份（VC）公开能力 ==')
 
 console.log('== A15 结算记录的隐私边界 ==')
 {
-  const st = await row('SELECT id, total_amount FROM settlement ORDER BY id DESC LIMIT 1')
+  // 取金额有辨识度的结算单（总额为 0 的手续费单会让"不含该数值"的检查误报）
+  const st = await row('SELECT id, total_amount, fee_total FROM settlement WHERE total_amount > 99 ORDER BY id DESC LIMIT 1')
   if (st) {
     const r = await fetch(`${API}/open/verify/settlement/${st.id}`).then((x) => x.json())
     const d = r.data || {}
     const keys = Object.keys(d)
     ok(!keys.some((k) => /amount|amt|total|price|merchantName/i.test(k)), '公开复核不返回任何金额/商户名字段', keys)
     ok(!JSON.stringify(d).includes(String(st.total_amount)), '响应体不含结算总额数值')
+    if (Number(st.fee_total) > 99) ok(!JSON.stringify(d).includes(String(st.fee_total)), '响应体不含退改手续费数值')
     ok(String(d.merkleRoot || '').length === 64, '返回 64 位校验码')
   } else ok(false, '无结算单可测（先跑 npm run e2e）')
 }

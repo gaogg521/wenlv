@@ -292,6 +292,11 @@ export function settlementReportDoc(v, baseUrl) {
       { k: '权益预算', v: (Number(v.amtBeanbudget) / 100).toFixed(2) + ' 元' },
       { k: '留存毛利', v: (Number(v.amtRetained) / 100).toFixed(2) + ' 元' },
       { k: '五项合计', v: (Number(v.totalAmount) / 100).toFixed(2) + ' 元（恒等：合计 = 结算总额）', mono: false },
+      ...(Number(v.feeTotal) > 0 ? [
+        { k: '退改手续费', v: (Number(v.feeTotal) / 100).toFixed(2) + ' 元（' + v.feeCount + ' 笔）', mono: false },
+        { k: '其中商户分成', v: (Number(v.feeMerchant) / 100).toFixed(2) + ' 元', mono: false },
+      ] : []),
+      { k: '应付商户', v: ((Number(v.amtFulfill) + Number(v.feeMerchant || 0)) / 100).toFixed(2) + ' 元（履约结算 + 手续费分成）', mono: false },
       { k: '整单校验码', v: v.merkleRoot || v.payloadHash || '—', small: true },
     ],
     path: [],

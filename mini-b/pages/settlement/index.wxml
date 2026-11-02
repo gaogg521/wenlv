@@ -6,23 +6,27 @@
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
     <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
       <view style="font-size:34rpx;font-weight:800">¥{{s.total_amount/100}}</view></view>
-    <view style="text-align:right"><view class="tiny">本店应结（履约口径）</view>
-      <view class="money" style="font-size:34rpx">¥{{s.amt_fulfill/100}}</view></view>
+    <view style="text-align:right"><view class="tiny">本店应结{{s.fee_merchant > 0 ? '（含手续费分成）' : '（履约口径）'}}</view>
+      <view class="money" style="font-size:34rpx">¥{{s.payableLabel}}</view></view>
   </view>
-  <view style="font-size:22rpx;color:var(--sub);margin-top:6rpx">五口径分账（总额拆分，恒等校验）</view>
-  <view class="split-bar">
+  <view wx:if="{{s.total_amount > 0}}" style="font-size:22rpx;color:var(--sub);margin-top:6rpx">五口径分账（总额拆分，恒等校验）</view>
+  <view class="split-bar" wx:if="{{s.total_amount > 0}}">
     <i style="width:{{s.amt_fulfill / s.total_amount * 100}}%;background:#7b5aa6"></i>
     <i style="width:{{s.amt_service / s.total_amount * 100}}%;background:#a97fd1"></i>
     <i style="width:{{s.amt_promoter / s.total_amount * 100}}%;background:#f0b429"></i>
     <i style="width:{{s.amt_beanbudget / s.total_amount * 100}}%;background:#38bdf8"></i>
     <i style="width:{{s.amt_retained / s.total_amount * 100}}%;background:#0f9d58"></i>
   </view>
-  <view class="split-legend">
+  <view class="split-legend" wx:if="{{s.total_amount > 0}}">
     <text><em style="background:#7b5aa6"></em>履约 ¥{{s.amt_fulfill/100}}</text>
     <text><em style="background:#a97fd1"></em>服务费 ¥{{s.amt_service/100}}</text>
     <text><em style="background:#f0b429"></em>推广 ¥{{s.amt_promoter/100}}</text>
     <text><em style="background:#38bdf8"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
     <text><em style="background:#0f9d58"></em>留存 ¥{{s.amt_retained/100}}</text>
+  </view>
+  <view class="fee-box" wx:if="{{s.fee_total > 0}}">
+    <view>游客退改手续费 ¥{{s.fee_total/100}}（{{s.fee_count}} 笔）</view>
+    <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.fee_merchant/100}}</text></view>
   </view>
   <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
   <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
@@ -38,6 +42,10 @@
     </view>
   </view>
   <view wx:if="{{s.status === 0}}" class="btn ghost" bindtap="dispute" data-id="{{s.id}}">金额有误，发起异议</view>
+  <view class="fee-box" wx:if="{{s.fee_total > 0}}">
+    <view>游客退改手续费 ¥{{s.fee_total/100}}（{{s.fee_count}} 笔）</view>
+    <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.fee_merchant/100}}</text></view>
+  </view>
   <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
 </view>
 <view wx:if="{{!list.length && loaded}}" class="empty"><view class="e-ico">🧮</view>暂无结算单（每周一出账）</view>
