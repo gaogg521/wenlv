@@ -10,7 +10,7 @@
 | `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`）：`core.js` 公共层、`pages/` 各栏目、`workspace.js` 外壳 |
 | `mini-a/` | 游客微信小程序 |
 | `mini-b/` | 商户微信小程序 |
-| `api/db/migration/` | 表结构迁移（V1–V34；V15/V16 编号空缺是历史原因，不是漏文件） |
+| `api/db/migration/` | 表结构迁移（V1–V35；V15/V16 编号空缺是历史原因，不是漏文件） |
 
 不在运行链路上的内容：
 
@@ -45,7 +45,7 @@ JWT_SECRET=dev PASS_SECRET=dev npm start
 ```bash
 cd api
 npm test                                  # 语法 + import 路径 + Web3/退改/凭据密钥单元测试 + 小程序用语合规 + 小程序↔后台映射完整性（不碰数据库）
-DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心、业务规则、内容审核（需服务在跑，且与服务同一 JWT_SECRET）
+DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心、业务规则、内容审核、主体管理（需服务在跑，且与服务同一 JWT_SECRET）
 DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作灌演示数据
 ```
 
@@ -60,6 +60,7 @@ DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作�
 | 资料编辑器 | 商品/团期/商户/景区/供应商/FAQ/轮播/勋章/推广服务商/旅豆预算/共创人/约稿/暗号/逐品佣金 | 字段定义集中在 `api/src/domain/entity-schema.mjs`，新增字段改一行配置 |
 | 小程序装修与映射 | 小程序 → 装修与映射 | 小程序全部文案与配置可改；28 个页面逐项列出"在后台哪里改"，`npm test` 校验新页面必须登记 |
 | 小程序用语合规 | 自动 | 小程序可见字段录入时拦截区块链/虚拟资产类词汇（词表 `domain/wording.mjs`）；`npm test` 扫描小程序源码与 `/c`、`/m` 接口返回 |
+| 主体管理 | 用户与内容 → 用户中心；商户与进件 →「全景」；商品 →「数据」 | 用户分群/搜索/画像/冻结/风险，商户全景与商品数据；设计见 [后台管理体系设计](后台管理体系设计-20261102.md) |
 | 链接入中心 | 可信存证 → 链接入中心 | 联盟链：链数根、腾讯云 TBaaS/至信链、蚂蚁链、FISCO BCOS、通用网关（长安链/BSN/星火·链网/百度超级链模板，HMAC-SHA256 / 国密 SM3）；公链：EVM（Ethereum/Polygon/Base/BNB/Arbitrum/Optimism/Conflux eSpace）。配置加密保存、离线自检、只读探测、输入标识确认后热切换；异步链回调 `POST /callback/chain/{gateway|chaingen}` |
 
 ## 可信存证（Web3）现状

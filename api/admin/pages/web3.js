@@ -280,10 +280,9 @@ const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpi
 function cube3d(tone, opt = {}) {
   const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : ''].filter(Boolean).join(' ')
   // 特效层全部是 .cube3d 的兄弟节点：不参与 preserve-3d，加光晕/滤镜不会把立方体压平
+  // 特效集中在区块本身：面网格 + 棱线流光 + 呼吸内核 + 悬停展开；外围只保留底座涟漪、一圈轨道和瞄准角标
   const fx = opt.ghost ? '' : '<span class="fx-ripple"></span><span class="fx-ripple r2"></span>'
-    + '<span class="fx-orbit"><i></i></span>' + (opt.sm ? '' : '<span class="fx-orbit o2"><i></i></span>')
-    + '<span class="fx-beam"></span><span class="fx-spark s1"></span><span class="fx-spark s2"></span><span class="fx-spark s3"></span>'
-    + '<span class="fx-hud"></span>'
+    + '<span class="fx-orbit"><i></i></span>' + '<span class="fx-hud"></span>'
   return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}>${fx}<div class="cube3d">`
     + '<div class="fc"></div>'.repeat(6) + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
     + (opt.label ? `<div class="ghost-label">${opt.label}</div>` : '') + '</div>'
@@ -321,9 +320,10 @@ function blockNodeHTML(b) {
   const dayClose = Number(b.is_day_close) === 1
   const st = Number(b.status)
   const root8 = String(b.merkle_root).slice(0, 8)
-  const tone = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
+  const tone = st === 0 ? 'gray' : st === 3 ? 'red' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
   const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
-  return `<div class="${cls}" id="bnode-${b.id}" onclick="openBlock(${b.id})">
+  return `<div class="${cls}" id="bnode-${b.id}" tabindex="0" onclick="openBlock(${b.id})"
+    onmouseenter="chainTip(event, 'b', ${b.id})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'b', ${b.id})" onblur="chainTipHide()">
     ${cube3d(tone, { pulse: st === 5 })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
@@ -332,6 +332,77 @@ function blockNodeHTML(b) {
     <div class="blk-line">${BLOCK_ST[st] || ''}</div>
   </div>`
 }
+/* ---- 区块悬停信息卡：先用列表里已有的批次字段即时显示，事件构成按需拉取并缓存 ---- */
+const TIP_ST = ['待打包', '已打包·待锚定', '已锚定', '锚定失败', '', '已提交·待确认']
+const tipCache = {}
+function tipEl() {
+  let el = document.getElementById('chainTip')
+  if (!el) { el = document.createElement('div'); el.id = 'chainTip'; el.className = 'chain-tip'; el.setAttribute('role', 'tooltip'); el.hidden = true; document.body.appendChild(el) }
+  return el
+}
+const tipRow = (k, v) => v == null || v === '' ? '' : `<div class="tip-row"><span>${k}</span><b>${v}</b></div>`
+const tipTime = (t) => t ? esc(String(t).slice(0, 19).replace('T', ' ')) : ''
+function blockTipHtml(b) {
+  const st = Number(b.status), day = Number(b.is_day_close) === 1
+  const mix = tipCache[b.id]
+  return `<div class="tip-head"><span class="tip-kind ${day ? 'gold' : ''}">${day ? '账本日终' : '业务区块'}</span><b>#${b.seq}</b>
+      <span class="dpill ${st === 2 ? 'ok' : st === 3 ? 'err' : st === 0 ? 'warn' : 'info'}">${TIP_ST[st] || '—'}</span>${window.__demoChain ? '<span class="dpill warn">演示</span>' : ''}</div>
+    ${tipRow('业务日', esc(String(b.biz_date || '').slice(0, 10)))}
+    ${tipRow('事件数', Number(b.leaf_count) + ' 条')}
+    <div class="tip-hash"><span>Merkle 根</span><code>${esc(b.merkle_root || '')}</code></div>
+    <div class="tip-hash"><span>前根 prev_root</span><code>${b.prev_root ? esc(b.prev_root) : '— 创世区块'}</code></div>
+    ${tipRow('算法', b.merkle_kind ? esc(b.merkle_kind) + (b.merkle_version ? ' · v' + Number(b.merkle_version) : '') : (b.merkle_version ? 'v' + Number(b.merkle_version) : ''))}
+    ${tipRow('链适配器', b.chain_provider ? esc(b.chain_provider) : '')}
+    ${tipRow('交易', b.chain_tx_ref ? `<code>${esc(String(b.chain_tx_ref).slice(0, 22))}${String(b.chain_tx_ref).length > 22 ? '…' : ''}</code>` : '')}
+    ${tipRow('链上区块 / 确认数', b.chain_block ? esc(b.chain_block) + (b.confirmations != null ? ' / ' + Number(b.confirmations) : '') : '')}
+    ${tipRow('提交时间', tipTime(b.submitted_at))}
+    ${tipRow('锚定时间', tipTime(b.anchored_at))}
+    ${Number(b.attempt) ? tipRow('重试次数', Number(b.attempt)) : ''}
+    ${b.last_err ? `<div class="tip-err">最近错误：${esc(String(b.last_err).slice(0, 120))}</div>` : ''}
+    <div class="tip-mix">${mix === undefined ? '<span class="muted">事件构成加载中…</span>' : mix === null ? '' : Object.entries(mix).map(([k, n]) => `<span>${esc(BIZ_CN[k] || k)} <b>${n}</b></span>`).join('')}</div>
+    <div class="tip-foot">点击查看批内事件与证明路径</div>`
+}
+function flowTipHtml(i) {
+  const s = ((window.__flowData || {}).steps || [])[i]
+  const e = s && s.ev
+  if (!e) return ''
+  const st = Number(e.status)
+  return `<div class="tip-head"><span class="tip-kind">${esc(s.no || '')}</span><b>${esc(s.label || '')}</b><span class="dpill ${st === 2 ? 'ok' : st === 0 ? 'warn' : 'info'}">${TIP_ST[st] || '—'}</span></div>
+    ${tipRow('业务类型', esc(BIZ_CN[e.biz_type] || e.biz_type || ''))}
+    ${tipRow('业务单号', e.biz_ref ? `<code>${esc(e.biz_ref)}</code>` : '')}
+    ${tipRow('版本', e.version_no != null ? 'v' + Number(e.version_no) : '')}
+    ${tipRow('产生时间', tipTime(e.created_at))}
+    ${tipRow('所在批次', e.seq != null ? '#' + e.seq : '尚未打包')}
+    ${e.payload_hash ? `<div class="tip-hash"><span>载荷哈希</span><code>${esc(e.payload_hash)}</code></div>` : ''}
+    ${e.merkle_root ? `<div class="tip-hash"><span>批次根</span><code>${esc(e.merkle_root)}</code></div>` : ''}
+    ${tipRow('链上交易', e.chain_tx_ref ? `<code>${esc(String(e.chain_tx_ref).slice(0, 22))}</code>` : '')}
+    <div class="tip-foot">点击查看本步证明</div>`
+}
+function chainTip(ev, kind, id) {
+  const el = tipEl()
+  const render = () => { el.innerHTML = kind === 'b' ? blockTipHtml((window.__chainMap || {})[id] || {}) : flowTipHtml(id) }
+  render()
+  if (!el.innerHTML.trim()) return
+  el.hidden = false; el.dataset.key = kind + id
+  chainTipMove(ev)
+  if (kind === 'b' && tipCache[id] === undefined) {
+    if (window.__demoChain) { tipCache[id] = null; return render() }
+    api('GET', '/admin/attest/batch/' + id).then((r) => {
+      tipCache[id] = (r.events || []).reduce((m, x) => { m[x.biz_type] = (m[x.biz_type] || 0) + 1; return m }, {})
+      if (el.dataset.key === kind + id && !el.hidden) { render(); chainTipMove(ev) }
+    }).catch(() => { tipCache[id] = null })
+  }
+}
+function chainTipMove(ev) {
+  const el = document.getElementById('chainTip'); if (!el || el.hidden) return
+  const r = ev.clientX != null && ev.type !== 'focus' ? { x: ev.clientX, y: ev.clientY } : (() => { const b = ev.currentTarget.getBoundingClientRect(); return { x: b.right, y: b.top } })()
+  const w = el.offsetWidth, h = el.offsetHeight
+  let x = r.x + 18, y = r.y + 14
+  if (x + w > innerWidth - 8) x = r.x - w - 18
+  if (y + h > innerHeight - 8) y = Math.max(8, innerHeight - h - 8)
+  el.style.left = Math.max(8, x) + 'px'; el.style.top = y + 'px'
+}
+function chainTipHide() { const el = document.getElementById('chainTip'); if (el) { el.hidden = true; el.dataset.key = '' } }
 function blockLinkHTML(prevBranch, curBranch) {
   const y = (p) => p ? 133 : 59
   const y1 = y(prevBranch), y2 = y(curBranch)
@@ -353,6 +424,7 @@ async function web3dash() {
   const anchorN = demo ? batches.filter((b) => Number(b.status) === 2).reduce((s, b) => s + Number(b.leaf_count), 0) : d.anchoredEvents
   const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
   const lastSeq = batches.length ? batches[batches.length - 1].seq : 0
+  window.__chainMap = Object.fromEntries(batches.map((b) => [b.id, b]))
   const nodes = []
   batches.forEach((b, i) => {
     if (i) nodes.push(blockLinkHTML(Number(batches[i - 1].is_day_close) === 1, Number(b.is_day_close) === 1))
@@ -366,7 +438,7 @@ async function web3dash() {
   }
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
   $('#app').innerHTML = `
-  <div class="chain-panel" id="chainViz"><div class="chain-scan-clip" aria-hidden="true"><div class="chain-scan"></div></div>
+  <div class="chain-panel" id="chainViz">
     <div class="chain-glow"></div>
     <div class="chain-head">
       <span class="chain-name">⛓ 向往自由链 · 链路视图</span><span class="chain-live"><i></i>LIVE</span>
@@ -482,7 +554,8 @@ function flowStepHTML(s, i) {
     <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div></div>`
   const st = Number(e.status)
   const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
-  return `<div class="chain-node" style="width:150px" id="fnode-${i}" onclick="openFlowStep(${i})">
+  return `<div class="chain-node" style="width:150px" id="fnode-${i}" tabindex="0" onclick="openFlowStep(${i})"
+    onmouseenter="chainTip(event, 'f', ${i})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'f', ${i})" onblur="chainTipHide()">
     ${cube3d(tone, { sm: true })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
     <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>

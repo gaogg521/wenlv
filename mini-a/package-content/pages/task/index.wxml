@@ -48,6 +48,7 @@
   <view style="height:150rpx"></view>
   <view class="dt-bottom" wx:if="{{t.status === 0}}">
     <view class="dt-bottom-price">{{t.reward_beans}}<text class="muted2" style="font-size:22rpx;font-weight:400"> 旅豆{{t.cash_reward_label ? ' + ¥' + t.cash_reward_label : ''}}</text></view>
-    <view class="btn dt-cta" bindtap="claim">领取任务</view>
+    <view class="btn dt-cta off" wx:if="{{t.full}}">名额已满</view>
+    <view class="btn dt-cta" wx:else bindtap="claim">领取任务{{t.slotsLeft !== null ? '（剩 ' + t.slotsLeft + ' 个名额）' : ''}}</view>
   </view>
 </block>

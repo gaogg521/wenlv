@@ -35,7 +35,7 @@
     <view class="tour-title">{{item.title}}</view>
     <view class="muted2" style="margin:4rpx 0">{{item.brief}}</view>
     <view class="dt-meta"><text class="tag">{{item.categoryLabel}}</text><text class="tag blue" wx:for="{{item.tags}}" wx:for-item="tg" wx:key="*this">#{{tg}}</text></view>
-    <view class="muted2" wx:if="{{item.deadline || item.platforms.length}}">{{item.platforms.length ? item.platforms.join('/') + ' · ' : ''}}{{item.deadline ? '截止 ' + item.deadline : ''}}</view>
+    <view class="muted2" wx:if="{{item.deadline || item.platforms.length || item.slotsLeft !== null}}">{{item.platforms.length ? item.platforms.join('/') + ' · ' : ''}}{{item.deadline ? '截止 ' + item.deadline : ''}}{{item.slotsLeft !== null ? ' · 剩 ' + item.slotsLeft + ' 个名额' : ''}}</view>
   </view>
   <view class="tk-reward"><view class="tour-price" style="font-size:30rpx">{{item.reward_beans}}豆</view><view class="tk-cash" wx:if="{{item.cashLabel}}">+¥{{item.cashLabel}}</view><view class="muted2">查看 ›</view></view>
 </view>

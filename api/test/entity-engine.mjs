@@ -145,12 +145,16 @@ await t('共创人：分润按百分比填、按 bp 存，超过 50% 拒绝；�
   assert.equal(ok(await call('GET', '/admin/entities/cocreator/' + d.id, null, A)).values.share_pct, 8.5)
   await q('DELETE FROM co_creator WHERE id = ?', [d.id])
 })
-await t('约稿任务：标签存逗号串、读回数组；进入审核后不可编辑', async () => {
+await t('约稿任务：标签存逗号串、读回数组；有人领取后仍可编辑，但名额不能少于已领取人数', async () => {
   const d = ok(await call('POST', '/admin/entities/task', { values: { title: '测试约稿', brief: '写一篇游记', tags: ['古镇', '剧本杀'], must_mention: ['集合点'], platforms: ['xhs'] } }, A))
   assert.equal((await one('SELECT tags FROM content_task WHERE id = ?', [d.id])).tags, '古镇,剧本杀')
   assert.deepEqual(ok(await call('GET', '/admin/entities/task/' + d.id, null, A)).values.tags, ['古镇', '剧本杀'])
-  await q('UPDATE content_task SET status = 2 WHERE id = ?', [d.id])
-  assert.equal((await call('PUT', '/admin/entities/task/' + d.id, { values: { title: '改' } }, A)).code, 1001)
+  const users = await q('SELECT id FROM user_account ORDER BY id LIMIT 2')
+  for (const u of users) await q('INSERT INTO content_task_entry (task_id, user_id, status) VALUES (?,?,1)', [d.id, u.id])
+  ok(await call('PUT', '/admin/entities/task/' + d.id, { values: { title: '改标题' } }, A))
+  const r = await call('PUT', '/admin/entities/task/' + d.id, { values: { max_participants: 1 } }, A)
+  assert.equal(r.code, 1001); assert.ok(r.data.fieldErrors.max_participants)
+  await q('DELETE FROM content_task_entry WHERE task_id = ?', [d.id])
   await q('DELETE FROM content_task WHERE id = ?', [d.id])
 })
 await t('暗号：上下半句须成对、不能相同；线路名称只读不被改写', async () => {

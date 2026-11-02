@@ -23,8 +23,9 @@
     pointassets: '旅豆发行批次、持有人与年度总量哨兵。', badges: '勋章定义与发放记录，发放即进入存证队列。',
     wallets: '用户积分、等级、勋章与存证事件的汇总视图。', vc: '可携出的旅行凭证：签发、验签与吊销。',
     terms: '后台术语与小程序合规用语的对照表。',
+    users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
   }
-  const renderers = { dash, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
@@ -85,6 +86,7 @@
       if (!key) return Promise.resolve()
     }
     const ticket = ++generation
+    if (typeof chainTipHide === 'function') chainTipHide() // 切页时收起链路悬停卡
     current = key
     app.classList.toggle('dashboard', key === 'dash')
     closeModal()

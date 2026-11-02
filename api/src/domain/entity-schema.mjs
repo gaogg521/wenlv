@@ -473,7 +473,12 @@ const S = {
       ] },
     ],
     async validate(v, ctx) {
-      if (ctx.row && Number(ctx.row.status) >= 2) return { title: '任务已进入审核，不能再编辑' }
+      // 已有人领取：名额不能调到比已领取人数还少
+      if (ctx.row && Number(v.max_participants) > 0) {
+        const { one } = await import('../db.mjs')
+        const n = Number((await one('SELECT COUNT(*) n FROM content_task_entry WHERE task_id = ?', [ctx.row.id])).n)
+        if (Number(v.max_participants) < n) return { max_participants: `已有 ${n} 人领取，名额不能少于 ${n}` }
+      }
       if (ctx.creating && v.deadline && v.deadline < bizDay() + ' 00:00:00') return { deadline: '截止时间不能早于今天' }
     },
     async create(c, v) {
