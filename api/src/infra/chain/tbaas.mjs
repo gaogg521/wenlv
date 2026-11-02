@@ -5,6 +5,14 @@
 //
 // 注：不同客户开通的 TBaaS 版本 Action / FuncName 不同，函数名与参数全部可配，不写死。
 //     对接时只需按控制台里真实的合约方法填 4 个 env 即可。
+//
+// 两种形态（按配置自动区分，默认仍是原来的 Fabric 形态）：
+//   · Fabric 形态：配 TBAAS_CHANNEL，FuncParam 是数组 [root, prevRoot, bizDate]。
+//   · 长安链形态：配 TBAAS_CHAIN_ID（+ TBAAS_CONTRACT），FuncParam 是 key/value 都是字符串的 JSON 对象，
+//     由 TBAAS_PARAM_TEMPLATE 描述；Action/Version/地域按腾讯云文档填，例如长安链体验网络：
+//     Action=InvokeChainMakerDemoContract · Version=2018-04-16 · Region=ap-beijing（见 config/chains/腾讯TBaaS.env）。
+// 响应：交易号既可能在 Response.Txid（旧），也可能在 Response.Result.TxId（长安链）；
+//       Result.Code 不为 0 即合约执行失败，不能当成功。
 import { E } from './conf.mjs'
 import crypto from 'node:crypto'
 
@@ -17,6 +25,9 @@ const env = () => ({
   version: E.TBAAS_VERSION || '2020-04-17',
   clusterId: E.TBAAS_CLUSTER_ID || '',
   channel: E.TBAAS_CHANNEL || '',
+  chainId: E.TBAAS_CHAIN_ID || '',
+  contract: E.TBAAS_CONTRACT || '',
+  paramTpl: E.TBAAS_PARAM_TEMPLATE || '',
   rootFunc: E.TBAAS_ROOT_FUNC || 'writeRoot',
   mintFunc: E.TBAAS_MINT_FUNC || '',
   nftContract: E.TBAAS_NFT_CONTRACT || '',
@@ -28,8 +39,16 @@ function missing() {
   if (!e.secretId) m.push('TBAAS_SECRET_ID')
   if (!e.secretKey) m.push('TBAAS_SECRET_KEY')
   if (!e.clusterId) m.push('TBAAS_CLUSTER_ID')
-  if (!e.channel) m.push('TBAAS_CHANNEL')
+  if (!e.channel && !e.chainId) m.push('TBAAS_CHANNEL 或 TBAAS_CHAIN_ID')
   return m
+}
+
+/** 长安链形态：把模板渲染成 key/value 都是字符串的对象（占位符 {root} {prevRoot} {bizDate}） */
+export function renderParamTemplate(tpl, vars) {
+  const filled = tpl.replace(/\{(root|prevRoot|bizDate)\}/g, (_, k) => String(vars[k]))
+  const obj = JSON.parse(filled)
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('TBAAS_PARAM_TEMPLATE 必须是 JSON 对象')
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, String(v)]))
 }
 
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex')
@@ -85,18 +104,27 @@ async function call(payload) {
   if (!res.ok || r.Error) {
     throw new Error(`tbaas ${res.status}: ${(r.Error && (r.Error.Code + ' ' + r.Error.Message)) || text.slice(0, 160)}`)
   }
-  const txRef = r.Txid || r.TxId || r.txid || r.transactionId || ''
+  // 长安链：交易号与执行结果在 Response.Result 里；Code 不为 0 是合约执行失败（HTTP 与 Response.Error 都正常）
+  const result = r.Result && typeof r.Result === 'object' ? r.Result : null
+  if (result && result.Code != null && Number(result.Code) !== 0) {
+    throw new Error(`tbaas 合约执行失败: Code ${result.Code} ${result.CodeMessage || result.Message || ''}`.trim())
+  }
+  const txRef = r.Txid || r.TxId || r.txid || r.transactionId || result?.TxId || result?.Txid || ''
   if (!txRef) throw new Error('tbaas 响应缺少 Txid')
   return { txRef, block: String(r.BlockNumber ?? r.blockNumber ?? ''), raw: r }
 }
 
-const invoke = (funcName, params, contract) => call({
-  ClusterId: env().clusterId,
-  ChannelId: env().channel,
-  FuncName: funcName,
-  FuncParam: JSON.stringify(params),
-  ...(contract ? { ContractName: contract } : {}),
-})
+const invoke = (funcName, params, contract) => {
+  const e = env()
+  return call({
+    ClusterId: e.clusterId,
+    ...(e.channel ? { ChannelId: e.channel } : {}),
+    ...(e.chainId ? { ChainId: e.chainId } : {}),
+    FuncName: funcName,
+    FuncParam: JSON.stringify(params),
+    ...(contract ? { ContractName: contract } : {}),
+  })
+}
 
 export default {
   id: 'tbaas',
@@ -111,8 +139,12 @@ export default {
   }),
   async anchor({ root, prevRoot, bizDate }) {
     if (missing().length) return { txRef: null, block: null, mode: 'noop' }
+    const e = env()
     const biz = Number(String(bizDate || '').replace(/-/g, '')) || 0
-    const r = await invoke(env().rootFunc, [root, prevRoot || '0'.repeat(64), biz])
+    const prev = prevRoot || '0'.repeat(64)
+    // 配了入参模板 → 长安链形态（字符串键值对象）；否则保持原来的数组形态
+    const params = e.paramTpl ? renderParamTemplate(e.paramTpl, { root, prevRoot: prev, bizDate: biz }) : [root, prev, biz]
+    const r = await invoke(e.rootFunc, params, e.contract || undefined)
     return { txRef: r.txRef, block: r.block, mode: 'real' }
   },
   // TBaaS 没有"按根反查"的标准接口；幂等以本地 台账 + 上游 txRef 为准

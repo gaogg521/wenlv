@@ -72,6 +72,7 @@ const integrations = {
       if (val === '' && req.body.clear?.includes?.(k)) { await delSecret(k); changed.push(k); continue }
       if (val === '') continue // 留空 = 不修改（密钥项不回显，留空即保持原值）
       if (k === 'GW_BODY_TEMPLATE') { try { JSON.parse(val.replace(/\{\w+\}/g, '0')) } catch { throw new BizError(1001, '请求体模板需为合法 JSON（占位符外）') } }
+      if (k === 'TBAAS_PARAM_TEMPLATE') { try { const o = JSON.parse(val.replace(/\{\w+\}/g, '0')); if (!o || typeof o !== 'object' || Array.isArray(o)) throw 0 } catch { throw new BizError(1001, '入参模板需为合法 JSON 对象（占位符外）') } }
       if (k === 'EVM_NETWORK' && !chain.NETWORKS[val.toLowerCase()]) throw new BizError(1001, '未知网络：' + val)
       if (/_URL$|ENDPOINT$/.test(k) && !/^https?:\/\//.test(val)) throw new BizError(1001, allowed.get(k).label + ' 需以 http(s):// 开头')
       await setSecret(k, val, 'admin:' + a.name)
