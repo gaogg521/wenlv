@@ -4,6 +4,7 @@
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, whereMobile } from '../infra/mobile.mjs'
+import { partnerPerformance } from './partner-performance.mjs'
 
 const N = (v) => Number(v || 0)
 const maskName = (s) => (s ? String(s).slice(0, 1) + '*'.repeat(Math.max(1, String(s).length - 1)) : '')
@@ -27,6 +28,7 @@ const ORDER_AGG = `LEFT JOIN (SELECT user_id, COUNT(*) cnt, SUM(CASE WHEN status
   FROM orders WHERE status IN ${VALID} GROUP BY user_id) o ON o.user_id = u.id`
 
 export const people = {
+  ...partnerPerformance,
   'GET /admin/content-dashboard': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'review', 'city_partner', 'readonly'])
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
