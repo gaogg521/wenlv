@@ -183,3 +183,4 @@ page {
 .qty-box { display: flex; gap: 20rpx; align-items: center; }
 .qty-btn { width: 52rpx; height: 52rpx; line-height: 50rpx; text-align: center; border: 1.5rpx solid var(--line); border-radius: 50%; font-size: 30rpx; color: var(--ink); }
 .qty-btn.off { color: #c9ced6; }
+.refund-tier { padding-left: 24rpx; font-size: 24rpx; }

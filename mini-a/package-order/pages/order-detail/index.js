@@ -34,14 +34,26 @@ Page({
 
   async refund() {
     const unpaid = this.data.o && this.data.o.status === 10
-    // 文案必须与服务端真实规则一致：未核销订单全额原路退回，抵扣的旅豆同步返还
-    const ok = await new Promise(r => wx.showModal(unpaid
-      ? { title: '取消订单', content: '订单尚未支付，取消后名额将释放。确认取消？', success: r }
-      : { title: '申请退款', content: '凭证未核销，支付金额将全额原路退回，抵扣的旅豆同步返还。确认申请？', success: r }))
+    let content
+    if (unpaid) {
+      content = '订单尚未支付，取消后名额将释放。确认取消？'
+    } else {
+      // 先试算：弹窗里的金额就是实际退回金额（与服务端扣费同一函数）
+      let qt
+      try { qt = await api.refundQuote(this.no) } catch (e) { return wx.showToast({ title: e.msg || '暂时无法试算，请稍后重试', icon: 'none' }) }
+      if (!qt.allowed) {
+        return wx.showModal({ title: '暂不支持自助退款', content: qt.reason + '\n\n' + (qt.rules || []).join('\n'), showCancel: false, confirmText: '知道了' })
+      }
+      const beans = qt.beanReturn ? '，抵扣的 ' + qt.beanReturn + ' 旅豆全额返还' : ''
+      content = qt.feeFen > 0
+        ? '距出发 ' + qt.daysToDepart + ' 天，按退改规则收取 ' + Math.round(qt.rate * 1000) / 10 + '% 手续费 ¥' + qt.feeLabel + '。\n实际退回 ¥' + qt.refundLabel + beans + '。确认申请？'
+        : '距出发 ' + qt.daysToDepart + ' 天，免手续费，¥' + qt.refundLabel + ' 全额原路退回' + beans + '。确认申请？'
+    }
+    const ok = await new Promise(r => wx.showModal({ title: unpaid ? '取消订单' : '申请退款', content, confirmText: unpaid ? '确认取消' : '确认退款', success: r }))
     if (!ok.confirm) return
     try {
       await api.refund(this.no, '用户申请')
-      wx.showToast({ title: this.data.o && this.data.o.status === 10 ? '订单已取消' : '退款已受理' })
+      wx.showToast({ title: unpaid ? '订单已取消' : '退款已受理' })
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }
   },

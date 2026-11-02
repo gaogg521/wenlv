@@ -56,7 +56,8 @@
   <view class="card">
     <view class="hl-item"><text class="hl-dot">·</text>下单后 {{rules.payTimeoutMin}} 分钟内完成支付，超时订单自动关闭并释放名额。</view>
     <view class="hl-item"><text class="hl-dot">·</text>出行当天出示订单里的动态核销码，由商户现场扫码核验。</view>
-    <view class="hl-item"><text class="hl-dot">·</text>凭证核销前可在订单中申请退款，支付金额全额原路退回，抵扣的旅豆同步返还。</view>
+    <view class="hl-item"><text class="hl-dot">·</text>凭证核销前可在订单中申请退款，按以下退改规则原路退回，抵扣的旅豆全额返还：</view>
+    <view class="hl-item refund-tier" wx:for="{{rules.refundRules}}" wx:key="*this"><text class="hl-dot ok">›</text>{{item}}</view>
     <view class="hl-item" wx:if="{{minGo > 1}}"><text class="hl-dot">·</text>本线路 {{minGo}} 人成团；未成团时可免费改签同类团期或全额退款。</view>
     <view class="hl-item"><text class="hl-dot">·</text>旅豆最多抵扣订单金额的 {{rules.deductPct}}%，{{rules.beanPerYuan}} 旅豆抵 1 元。</view>
   </view>

@@ -8,6 +8,14 @@
       <text class="st-tag">{{stName[o.status] || '—'}}</text></view>
   </view>
 
+  <view class="card" wx:if="{{o.refundInfo}}">
+    <view class="sec-title">退款明细</view>
+    <view class="kv"><text>实付金额</text><text>¥{{o.amountPayLabel}}</text></view>
+    <view class="kv" wx:if="{{o.refundInfo.feeLabel !== '0.00'}}"><text>退改手续费</text><text>−¥{{o.refundInfo.feeLabel}}</text></view>
+    <view class="kv"><text>{{o.refundInfo.status === 2 ? '已原路退回' : '退款处理中'}}</text><text class="tour-price" style="font-size:30rpx">¥{{o.refundInfo.refundLabel}}</text></view>
+    <view class="note" wx:if="{{o.bean_deducted > 0}}">抵扣的 {{o.bean_deducted}} 旅豆已全额返还</view>
+  </view>
+
   <view class="card" wx:if="{{passes.length}}">
     <view class="sec-title">入园凭证（出行当日向商户出示）</view>
     <view class="pass-row" wx:for="{{passes}}" wx:key="id" bindtap="goCode" data-id="{{item.id}}">

@@ -38,7 +38,11 @@
       <switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
     <view class="kv" wx:if="{{useBean && priceSummary.deduct !== '0.00'}}"><text>抵扣金额</text><text style="color:var(--green)">−¥{{priceSummary.deduct}}</text></view>
   </view>
-  <view class="note">凭证核销前可申请全额退款，旅豆同步返还。最终金额以提交时的实时价格为准。</view>
+  <view class="card" wx:if="{{p.bookingRules && p.bookingRules.refundRules.length}}">
+    <view class="fee-h">退改规则</view>
+    <view class="hl-item" wx:for="{{p.bookingRules.refundRules}}" wx:key="*this"><text class="hl-dot">·</text>{{item}}</view>
+  </view>
+  <view class="note">退款按上述规则从实付金额中扣除手续费，抵扣的旅豆全额返还。最终金额以提交时的实时价格为准。</view>
   <view style="height:150rpx"></view>
 
   <view class="dt-bottom">

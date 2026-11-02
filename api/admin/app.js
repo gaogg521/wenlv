@@ -293,20 +293,37 @@ async function orderDrawer(no) {
     </table>
     ${o.passes?.length ? `<h3 style="margin:16px 0 8px">入园凭证</h3><table>
       ${o.passes.map((p) => `<tr><td>#${p.id} ${esc(p.name)}</td><td><span class="pill ${p.status === 1 ? 's30' : p.status === 2 ? 's50' : 'off'}">${['', '待核销', '已核销', '已过期', '已冲正'][p.status]}</span></td></tr>`).join('')}</table>` : ''}
+    ${o.refunds?.length ? `<h3 style="margin:16px 0 8px">退款单</h3><table>
+      ${o.refunds.map((r) => `<tr><td class="num">${esc(r.refund_no)}<div class="td-sub">${esc(r.operator || '')} · ${esc(r.reason || '')}</div></td>
+        <td>实退 <b>${fen(r.amount)}</b>${Number(r.fee_amount) ? `<div class="td-sub">手续费 ${fen(r.fee_amount)}（${Math.round(Number(r.fee_rate) * 1000) / 10}% · 距出发 ${r.days_to_depart} 天）</div>` : '<div class="td-sub">全额</div>'}</td>
+        <td><span class="pill ${Number(r.status) === 2 ? 's50' : 's60'}">${['申请', '处理中', '已退款', '已拒绝'][r.status] || r.status}</span></td></tr>`).join('')}</table>` : ''}
     <h3 style="margin:16px 0 10px">状态机时间线（order_event 审计）</h3>
     <ul class="tl">${(o.events || []).map((e) => `<li>
       <div class="t">${ST[e.from_st] || e.from_st} → ${ST[e.to_st] || e.to_st}</div>
       <div class="d">${esc(String(e.detail || '').replace(/"/g, ''))} · ${esc(e.actor)} · ${esc(String(e.created_at).slice(5, 19))}</div></li>`).join('')}</ul>`)
 }
 async function refundOrder(no) {
-  modal('退款确认', `<p>确认对 <code>${esc(no)}</code> 发起退款？</p>
-    <p class="muted" style="margin-top:8px">将自动执行全量冲正：原路退款 · 退回抵扣旅豆 · 入园凭证作废 · 关联佣金置无效。</p>`,
+  let qt = null
+  try { qt = (await api('GET', '/admin/orders/' + no)).refundQuote } catch (e) { /* 试算失败不阻断客服全额处理 */ }
+  const policyLine = !qt ? '<p class="muted">该订单已核销或状态不适用退改梯度，只能由客服全额处理。</p>'
+    : qt.allowed ? `<p>按退改规则：距出发 <b>${qt.daysToDepart}</b> 天，手续费 <b>${fen(qt.feeFen)}</b>（${Math.round(qt.rate * 1000) / 10}%），实退 <b>${fen(qt.refundFen)}</b>。</p>`
+    : `<p class="muted">按退改规则不可自助退款：${esc(qt.reason)}</p>`
+  modal('退款处理', `<p>订单 <code>${esc(no)}</code></p>${policyLine}
+    <label>处理原因（写入审计与存证）</label><textarea id="rf_reason" placeholder="如：游客行程变更 / 已核销售后，经核实服务未履约"></textarea>
+    <p class="muted" style="margin-top:8px">两种方式都会执行全量冲正：原路退款 · 退回抵扣旅豆 · 入园凭证作废 · 关联佣金置无效。</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn danger" onclick="doRefund('${no}')">确认退款</button>`)
+     ${qt && qt.allowed ? `<button class="btn ghost" onclick="doRefund('${no}','policy')">按规则退 ${fen(qt.refundFen)}</button>` : ''}
+     <button class="btn danger" onclick="doRefund('${no}','full')">全额退款（客服特批）</button>`)
 }
-async function doRefund(no) {
-  try { const r = await api('POST', '/admin/orders/' + no + '/refund', { reason: '后台退款' }); closeModal(); toast(r.refunded ? '退款完成，冲正已执行' : '退款已受理，待支付通道确认'); orders() }
-  catch (e) { toast(e.message, true) }
+async function doRefund(no, mode) {
+  const reason = ($('#rf_reason')?.value || '').trim()
+  if (mode === 'full' && !reason) return toast('全额特批请填写处理原因', true)
+  try {
+    const r = await api('POST', '/admin/orders/' + no + '/refund', { mode, reason })
+    closeModal()
+    toast(r.refunded ? `退款完成：实退 ${fen(r.refundFen)}${r.feeFen ? '，手续费 ' + fen(r.feeFen) : ''}` : '退款已受理，待支付通道确认')
+    orders()
+  } catch (e) { toast(e.message, true) }
 }
 async function completeOrder(no) {
   try { await api('POST', '/admin/dev/complete', { orderNo: no }); toast('观察期结束：返豆与佣金已入账'); orders() }

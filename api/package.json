@@ -7,8 +7,8 @@
     "start": "node src/index.mjs",
     "start:win": "node --env-file=.env src/index.mjs",
     "migrate": "node scripts/migrate.mjs",
-    "test": "node scripts/check-syntax.mjs && node test/web3-core.mjs",
-    "test:db": "node test/web3-core.mjs && node test/web3-integrity.mjs",
+    "test": "node scripts/check-syntax.mjs && node test/web3-core.mjs && node test/refund-policy.mjs",
+    "test:db": "node test/web3-core.mjs && node test/web3-integrity.mjs && node test/refund-e2e.mjs",
     "e2e": "node test/api-e2e.mjs",
     "seed:scenario": "node test/scenario-populate.mjs"
   },

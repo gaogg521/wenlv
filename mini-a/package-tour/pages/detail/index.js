@@ -73,5 +73,5 @@ function weekday(dateStr) {
 
 function rulesOf(d) {
   const r = d.bookingRules || {}
-  return { payTimeoutMin: r.payTimeoutMin || 15, deductPct: Math.round((r.beanDeductMaxPct != null ? r.beanDeductMaxPct : 0.1) * 100), beanPerYuan: r.beanPerYuan || 10 }
+  return { refundRules: r.refundRules || [], payTimeoutMin: r.payTimeoutMin || 15, deductPct: Math.round((r.beanDeductMaxPct != null ? r.beanDeductMaxPct : 0.1) * 100), beanPerYuan: r.beanPerYuan || 10 }
 }

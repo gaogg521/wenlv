@@ -1,6 +1,6 @@
 // 路由层：/c 游客端 · /m 商户端 · /admin 运营后台 · /callback/wxpay 支付回调
 import { q, one, count, tx, BizError } from './db.mjs'
-import { cfgAll, cfgNum, cfgArr, loadConfig } from './config.mjs'
+import { cfg, cfgAll, cfgNum, cfgArr, loadConfig } from './config.mjs'
 import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from './auth.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
@@ -11,6 +11,7 @@ import * as group from './domain/group.mjs'
 import * as wxpay from './domain/wxpay.mjs'
 import * as attestDomain from './domain/attest.mjs'
 import * as merkleLib from './domain/merkle.mjs'
+import * as refundPolicy from './domain/refund-policy.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
 import * as asset from './domain/asset.mjs'
@@ -102,7 +103,8 @@ const c = {
     }),
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
-      bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10 } }
+      bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
+        refundRules: refundPolicy.describe(await cfg('order.refund_policy')) } }
   },
 
   // 评价列表（公开；仅展示态）
@@ -195,7 +197,10 @@ const c = {
          AND s.quota - s.booked >= ? AND s.id <> ?
        ORDER BY s.depart_date LIMIT 10`,
       [o.product_id, Number(o.qty), Number(o.amount_goods), Number(o.qty), o.session_id]) : []
-    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions }
+    const lastRefund = await one('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, status, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC LIMIT 1', [o.id])
+    const refundInfo = lastRefund ? { refundNo: lastRefund.refund_no, refundLabel: fen2yuan(lastRefund.amount), feeLabel: fen2yuan(lastRefund.fee_amount),
+      feeRate: lastRefund.fee_rate != null ? Number(lastRefund.fee_rate) : null, status: Number(lastRefund.status) } : null
+    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
@@ -270,6 +275,15 @@ const c = {
     return { url: '/uploads/' + name }
   },
 
+  // 退款试算：与真正扣费同一函数，确认弹窗里的金额就是实际退回金额
+  'GET /c/orders/:no/refund-quote': async (req) => {
+    const u = requireUser(req)
+    const o = await order.byNo(req.params.no)
+    if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    const qt = await refund.quoteFor(o)
+    return { ...qt, feeLabel: qt.feeFen != null ? fen2yuan(qt.feeFen) : null, refundLabel: qt.refundFen != null ? fen2yuan(qt.refundFen) : null,
+      amountPayLabel: fen2yuan(o.amount_pay), rules: refundPolicy.describe(await cfg('order.refund_policy')) }
+  },
   'POST /c/orders/:no/refund': async (req) => {
     const u = requireUser(req)
     const o = await order.byNo(req.params.no)
@@ -279,7 +293,8 @@ const c = {
     // 自助退款只覆盖"已支付、未核销"：核销即服务已发生，全额自助退款会让用户玩完再全退。
     // 已核销订单的售后由客服在后台处理（后台退款接口不受此限制，并留审计）
     if (![20, 30].includes(Number(o.status))) throw new BizError(2002, Number(o.status) === 40 ? '凭证已核销，如需售后请联系客服' : '当前状态不可退款')
-    const r = await refund.fullRefund({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid })
+    // 按退改梯度（order.refund_policy）扣手续费；不在任何档位内（如出发当天）直接拒绝并提示联系客服
+    const r = await refund.refundOrder({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid, applyPolicy: true })
     await q("UPDATE orders SET close_reason = 'user_refund' WHERE order_no = ? AND status = 70", [o.order_no])
     return r
   },
@@ -759,7 +774,10 @@ const admin = {
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const pay = await one('SELECT wx_trans_no, status, amount, callback_at FROM payment WHERE order_id = ?', [o.id])
-    return { ...o, events, passes, pay }
+    const refunds = await q('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC', [o.id])
+    // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
+    const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
+    return { ...o, events, passes, pay, refunds, refundQuote: quote }
   },
 
   'POST /admin/orders/:no/refund': async (req) => {
@@ -767,7 +785,13 @@ const admin = {
     const o = await order.byNo(req.params.no)
     if (!o) throw new BizError(2003, '订单不存在')
     if (![20, 30, 40].includes(o.status)) throw new BizError(2002, '状态不可退款')
-    return refund.fullRefund({ orderNo: o.order_no, reason: req.body.reason || '后台退款', operator: 'admin:' + a.name })
+    // mode=policy 按退改梯度扣手续费；默认 full 为客服全额处理（已核销售后、平台原因等），操作人与原因进审计和存证
+    const mode = req.body.mode === 'policy' ? 'policy' : 'full'
+    const reason = String(req.body.reason || '').trim() || (mode === 'full' ? '客服全额退款' : '后台按规则退款')
+    const r = await refund.refundOrder({ orderNo: o.order_no, reason, operator: 'admin:' + a.name, applyPolicy: mode === 'policy' })
+    await tx(async (cc) => audit(cc, 'admin:' + a.name, 'order', 'refund-' + mode, o.order_no, { status: Number(o.status) },
+      { refundFen: r.refundFen, feeFen: r.feeFen || 0, reason }))
+    return r
   },
 
   // 商品/团期管理（"简单内容填充"的落点）
@@ -927,6 +951,9 @@ const admin = {
     const cur = await one('SELECT v, `sensitive` FROM rule_config WHERE k = ?', [key])
     if (!cur) throw new BizError(1004, '参数不存在')
     const oldV = typeof cur.v === 'string' ? cur.v : JSON.stringify(cur.v)
+    if (key === 'order.refund_policy') {
+      try { refundPolicy.parsePolicy(newValue) } catch (e) { throw new BizError(1001, e.message) }
+    }
     // 影响预览：旅豆/佣金类参数回溯近 30 日
     let preview = null
     if (key.startsWith('bean.order_rate')) {
