@@ -230,3 +230,37 @@ page {
 .dest-card { overflow: hidden; }
 .dest-cover { width: calc(100% + 48rpx); height: 240rpx; margin: -24rpx -24rpx 18rpx; display: block; }
 .doc-card { line-height: 1.9; }
+
+/* ===================== 精修层（与后台同一视觉语言：暖墨深色 + 珊瑚橙渐变 + 柔和层次）=====================
+   只覆盖既有类名的视觉属性，不改结构；如需回退，删除本段即可 */
+page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1f2a2e; --ink2: #4a5754; --bg: #f7f4ef;
+  --shadow: 0 2rpx 6rpx rgba(58,46,31,.04), 0 12rpx 32rpx rgba(58,46,31,.06); }
+.hero { background: radial-gradient(520rpx 320rpx at 90% -10%, rgba(255,178,122,.45), rgba(255,178,122,0) 70%), linear-gradient(135deg, #2b211b 0%, #4a2e1f 50%, #8a4422 100%);
+  border-radius: 0 0 44rpx 44rpx; padding: 52rpx 40rpx 64rpx; }
+.hero::before { background: rgba(255,255,255,.06); filter: none; }
+.hero::after { background: none; border: 1rpx solid rgba(255,255,255,.12); width: 260rpx; height: 260rpx; left: auto; right: -70rpx; bottom: -120rpx; }
+.hero .hi { font-size: 44rpx; letter-spacing: 2rpx; }
+.hero .sub2 { color: #ead9c8; opacity: 1; }
+.hero .hero-chip { background: rgba(255,255,255,.1); border-color: rgba(255,214,180,.35); color: #ffe3c9; }
+.card { border-radius: 32rpx; box-shadow: var(--shadow); border: 1rpx solid rgba(238,232,222,.8); }
+.sec-title { font-size: 32rpx; letter-spacing: 1rpx; color: var(--ink); }
+.sec-title::before { width: 8rpx; height: 32rpx; background: linear-gradient(180deg, #f08a4b, #c64e28); }
+.chip { border-color: #ece4d8; color: #6b625a; }
+.chip.on { background: linear-gradient(135deg, #e5743b, #c64e28); border-color: transparent; box-shadow: 0 8rpx 20rpx rgba(198,78,40,.28); }
+.btn { background: linear-gradient(135deg, #e5743b 0%, #c64e28 60%, #a93f1e 100%); box-shadow: 0 12rpx 28rpx rgba(198,78,40,.3); letter-spacing: 3rpx; }
+.btn.ghost { color: #b4492a; border-color: #e4b38f; background: #fffaf5; }
+.tag { background: #fbf1e6; color: #a8552e; }
+.tag.blue { background: #eef3fb; color: #3b5b8f; }
+.tour-item { border-radius: 32rpx; padding: 24rpx; border: 1rpx solid rgba(238,232,222,.8); }
+.tour-img { border-radius: 22rpx; }
+.tour-title { color: var(--ink); letter-spacing: .5rpx; }
+.tour-price { color: #c64e28; }
+.home-intro { background: radial-gradient(560rpx 300rpx at 100% 0%, rgba(255,214,180,.6), rgba(255,214,180,0) 70%), linear-gradient(180deg, #f7ede0, #f7f4ef); }
+.home-title { color: #2b211b; }
+.home-title text { color: #c64e28; }
+.theme-tile { border: none; border-radius: 24rpx; box-shadow: 0 8rpx 22rpx rgba(58,46,31,.07); }
+.theme-symbol { color: #c64e28; }
+.dt-bottom { box-shadow: 0 -8rpx 28rpx rgba(58,46,31,.08); }
+.dt-bottom-price { color: #c64e28; }
+.book-bar { border-radius: 32rpx; box-shadow: 0 16rpx 40rpx rgba(58,46,31,.1); }
+.bean-rule { border-radius: 24rpx; box-shadow: 0 12rpx 30rpx rgba(58,46,31,.1); }

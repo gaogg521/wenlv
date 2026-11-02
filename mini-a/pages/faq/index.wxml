@@ -1,4 +1,4 @@
-<view class="hero" style="background:linear-gradient(135deg,#1f3a5f,#243b55)">
+<view class="hero">
   <view class="hi">常见问题</view>
   <view class="sub2">预订 · 出行 · 旅豆 · 退款 · 一站答疑</view>
 </view>

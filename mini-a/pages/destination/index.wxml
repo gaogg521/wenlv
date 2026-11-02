@@ -1,4 +1,4 @@
-<view class="hero" style="background:linear-gradient(135deg,#2f6f9f,#243b55)">
+<view class="hero">
   <view class="hi">目的地</view>
   <view class="sub2">{{caption}}</view>
 </view>

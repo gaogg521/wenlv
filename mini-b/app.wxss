@@ -115,3 +115,8 @@ page {
 .stock-row{display:block!important}.stock-row>view:last-child{margin-top:20rpx;flex-wrap:wrap;gap:14rpx}.stock-row .pill{padding:12rpx 22rpx}.stock-row b{font-size:28rpx}
 .notice-card { background: #fffaf2; border: 1rpx solid #f3dcc0; font-size: 25rpx; line-height: 1.7; }
 .notice-h { font-weight: 700; margin-bottom: 8rpx; }
+
+/* 精修层：商户端与平台同一视觉语言（暖墨深色首屏 + 珊瑚橙主操作） */
+.hero { background: radial-gradient(520rpx 320rpx at 90% -10%, rgba(255,178,122,.4), rgba(255,178,122,0) 70%), linear-gradient(135deg, #2b211b 0%, #4a2e1f 55%, #8a4422 100%) !important; }
+.btn { background: linear-gradient(135deg, #e5743b 0%, #c64e28 60%, #a93f1e 100%); box-shadow: 0 12rpx 28rpx rgba(198,78,40,.28); }
+.card { border-radius: 30rpx; }

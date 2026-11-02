@@ -1,4 +1,4 @@
-<view class="hero" style="background:linear-gradient(135deg,#e87722,#f5a623)">
+<view class="hero">
   <view class="hi">创作中心</view>
   <view class="sub2">发布旅行笔记 · 内容过安全检测后展示 · 好内容获旅豆奖励</view>
 </view>

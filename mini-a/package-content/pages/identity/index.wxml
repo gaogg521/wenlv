@@ -1,5 +1,5 @@
 <block wx:if="{{d}}">
-  <view class="hero" style="background:linear-gradient(135deg,#243b55,#0f766e)">
+  <view class="hero">
     <view class="sub2">{{lex.did}} · Travel ID</view>
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
     <view class="sub2">{{d.profile.levelName}} · 成长值 {{d.profile.growth}}</view>

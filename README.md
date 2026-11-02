@@ -10,7 +10,7 @@
 | `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`） |
 | `mini-a/` | 游客微信小程序 |
 | `mini-b/` | 商户微信小程序 |
-| `api/db/migration/` | 表结构迁移（V1–V25；V15/V16 编号空缺是历史原因，不是漏文件） |
+| `api/db/migration/` | 表结构迁移（V1–V30；V15/V16 编号空缺是历史原因，不是漏文件） |
 
 不在运行链路上的内容：
 
@@ -36,23 +36,31 @@ JWT_SECRET=dev PASS_SECRET=dev npm start
 | `DB_HOST` `DB_PORT` `DB_USER` `DB_PASS` `DB_NAME` | 数据库 | `127.0.0.1` / `3306` / `root` / `root` / `wanderlust` |
 | `PUBLIC_BASE` | 对外访问基址（图片、复核链接、PDF 二维码）。真机/外网**必须**设置为 HTTPS 域名 | 按请求头推断 |
 | `BIZ_TZ` | 业务时区：旅豆日终根、批次业务日按此切日 | `Asia/Shanghai` |
-| `CHAIN_PROVIDER` | `noop` / `chaingen` / `tbaas` / `antchain` / `evm` / `mock`（非生产） | 按已有凭据推断，否则 `noop` |
-| `EVM_RPC_URL` `EVM_ANCHOR_TO` `EVM_CONFIRMATIONS` | EVM 链锚定的核验节点、落根目标地址、所需确认数 | — / — / `12` |
+| `SECRETS_KEY` | 凭据加密主密钥（64 位十六进制）；未设置时由 `JWT_SECRET` 派生，**换 JWT_SECRET 会导致已保存凭据无法解密** | — |
 
-其余支付、小程序、链凭据在后台「集成中心」保存（AES-256-GCM 加密落库）。
+支付、小程序凭据在后台「集成中心」保存；**链凭据在后台「可信存证 → 链接入中心」保存**（均为 AES-256-GCM 加密落库，保存即生效，无需重启）。环境变量仍可用作兜底。
 
 ## 测试
 
 ```bash
 cd api
-npm test                                  # 语法检查（api + 两个小程序）+ Web3 内核单元测试，不碰数据库
-DB_NAME=wanderlust_qa npm run test:db     # 含锚定终局集成测试与存证完整性检查，写库
+npm test                                  # 语法检查 + Web3/退改单元测试 + 小程序用语合规 + 小程序↔后台映射完整性（不碰数据库）
+DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心（需服务在跑，且与服务同一 JWT_SECRET）
 DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作灌演示数据
 ```
 
 会清空或改写数据的脚本（`seed:scenario`、`e2e`）带有数据库守卫：未设置 `DB_NAME` 或指向演示库 `wanderlust` 时**拒绝运行**。一次性容器内可设 `ALLOW_DESTRUCTIVE=1` 放行。
 
 小程序页面巡检（`test/remediation-*.mjs`）依赖 Windows 上的微信开发者工具，操作要点见 [CLI 避坑手册](CLI调试-AI交接手册.md)。
+
+## 后台能力速览
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 资料编辑器 | 商品/团期/商户/景区/供应商/FAQ/轮播/勋章/推广服务商/旅豆预算/共创人/约稿/暗号/逐品佣金 | 字段定义集中在 `api/src/domain/entity-schema.mjs`，新增字段改一行配置 |
+| 小程序装修与映射 | 小程序 → 装修与映射 | 小程序全部文案与配置可改；28 个页面逐项列出"在后台哪里改"，`npm test` 校验新页面必须登记 |
+| 小程序用语合规 | 自动 | 小程序可见字段录入时拦截区块链/虚拟资产类词汇（词表 `domain/wording.mjs`）；`npm test` 扫描小程序源码与 `/c`、`/m` 接口返回 |
+| 链接入中心 | 可信存证 → 链接入中心 | 联盟链：链数根、腾讯云 TBaaS/至信链、蚂蚁链、FISCO BCOS、通用网关（长安链/BSN/星火·链网/百度超级链模板，HMAC-SHA256 / 国密 SM3）；公链：EVM（Ethereum/Polygon/Base/BNB/Arbitrum/Optimism/Conflux eSpace）。配置加密保存、离线自检、只读探测、输入标识确认后热切换；异步链回调 `POST /callback/chain/{gateway|chaingen}` |
 
 ## 可信存证（Web3）现状
 
@@ -62,7 +70,7 @@ DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作�
 | Merkle 批次 + inclusion proof + `prev_root` 存证链 | 已实现；新批次用 v2 算法（RFC 6962 域隔离），历史批次按 v1 继续可验证 |
 | 旅豆账本日终根（借贷恒等才封存） | 已实现，按业务时区切日 |
 | 公开复核页：浏览器本地重算 + 由公开载荷重算叶哈希 | 已实现 |
-| 锚定上链 | 适配器就绪，**真实上链 0 笔**（未配置凭据，停在"已打包·待锚定"） |
+| 锚定上链 | 8 个适配器就绪（见链接入中心），**真实上链 0 笔**（未配置凭据，停在"已打包·待锚定"） |
 | 锚定终局 | 需要确认的链（EVM）提交后为"已提交·待确认"，核验回执、确认数、交易内容后才记"已锚定" |
 
 后台「可信存证 → 链路总览」用 3D 区块展示批次链，「演示 · 多节点形态」按钮可预览多区块效果（模拟数据，有明确标识）。

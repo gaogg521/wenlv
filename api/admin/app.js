@@ -158,6 +158,14 @@ const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
 const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
 
 /* ============ 驾驶舱 ============ */
+const KPI_ICON = {
+  gmv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18M16.5 7.5c-.8-1.5-2.5-2.3-4.5-2.3-2.6 0-4.5 1.4-4.5 3.4 0 4.6 9.5 2.5 9.5 7.2 0 2-2 3.5-4.8 3.5-2.2 0-4-.9-4.8-2.6"/></svg>',
+  order: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.6L16 9.5"/></svg>',
+  bean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="12" rx="6.5" ry="9" transform="rotate(35 12 12)"/><path d="M9 16c2-1.5 3.5-5 6-8"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.3"/></svg>',
+  trend: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+}
 async function dash() {
   try {
   $('#app').innerHTML = `<div class="kpi-grid">${Array(6).fill('<div class="kpi"><div class="sk" style="width:44px;height:44px;border-radius:12px"></div><div style="flex:1"><div class="sk" style="height:12px;width:60%;margin-bottom:8px"></div><div class="sk" style="height:22px;width:40%"></div></div></div>').join('')}</div>
@@ -168,12 +176,12 @@ async function dash() {
   const recent = orders.slice(0, 8)
   const cityTag = k.scopeCity ? `本城 ${k.scopeCity} 口径` : '全域口径'
   const kpis = [
-    ['💰', 'var(--brand-soft)', '今日 GMV', '¥' + k.gmvToday, cityTag],
-    ['🧾', '#e8effd', '今日订单', k.ordersToday, '含已支付以上状态'],
-    ['✅', '#e3f6ec', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
-    ['🫘', '#fdf3e0', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
-    ['⚠️', '#fdecec', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
-    ['📈', '#f1e9fd', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],
+    ['gmv', 't-amber', '今日 GMV', '¥' + k.gmvToday, cityTag],
+    ['order', 't-blue', '今日订单', k.ordersToday, '含已支付以上状态'],
+    ['check', 't-green', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
+    ['bean', 't-gold', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
+    ['alert', 't-red', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
+    ['trend', 't-violet', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],
   ]
   const trend = k.trend || []
   const maxG = Math.max(...trend.map((t) => Number(t.gmv)), 1)
@@ -186,7 +194,12 @@ async function dash() {
   const P_ = ins ? ins.pending : null
   const todoTotal = P_ ? P_.notes + P_.merchants + P_.withdrawals + P_.conflicts + P_.tasks : 0
   const todo = (k, label, n, verb) => `<button class="task-link${n ? ' has' : ''}" onclick="go('${k}')"><span>${label}</span><b>${n}</b>${n ? verb + ' →' : '已清空'}</button>`
+  const hour = new Date().getHours()
+  const hello = (hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好') + '，' + esc(ME?.displayName || ME?.username || '')
   $('#app').innerHTML = `
+  <section class="dash-hero"><div><div class="dash-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
+    <h2>${hello}</h2><p>${todoTotal ? `今天有 <b>${todoTotal}</b> 项待处理，建议先从下方待办开始。` : '待办已全部处理完毕，可以看看经营趋势。'}</p></div>
+    <div class="dash-hero-kpi"><span>近 7 日 GMV</span><b>¥${(k.trend || []).reduce((s, t) => s + Number(t.gmv || 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</b><small>${esc(cityTag)} · ${(k.trend || []).reduce((s, t) => s + t.orders, 0)} 单</small></div></section>
   ${P_ ? `<div class="card todo-card"><div class="card-head"><h3>今日待办 <span class="muted">· ${cityTag}</span></h3>
       <span class="${todoTotal ? 'pill s10' : 'pill s50'}">${todoTotal ? '共 ' + todoTotal + ' 项待处理' : '全部处理完毕'}</span></div>
     <div class="todo-row">
@@ -197,7 +210,7 @@ async function dash() {
       ${todo('tasks', '约稿待审', P_.tasks, '去处理')}
     </div></div>` : ''}
   <div class="kpi-grid">${kpis.map(([ic, bg, l, v, s]) => `
-    <div class="kpi"><div class="ico" style="background:${bg}">${ic}</div>
+    <div class="kpi ${bg}"><div class="ico">${KPI_ICON[ic] || ''}</div>
     <div><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div></div>`).join('')}
   </div>
   <div class="card chart-box">

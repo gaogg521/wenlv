@@ -1,4 +1,4 @@
-<view class="hero" style="background:linear-gradient(135deg,#2f6f9f,#5ba8c9)">
+<view class="hero">
   <view class="sub2">推广服务商{{ov && ov.promoter ? ' · ' + nameMap[ov.tier] : ''}}</view>
   <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{ov.withdrawableYuan}}</view>
   <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>

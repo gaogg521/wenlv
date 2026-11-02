@@ -1,5 +1,5 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
-<view class="hero" style="background:linear-gradient(140deg,#4a6fa5 0%,#243b55 60%,#16263c 100%)">
+<view class="hero">
   <view class="sub2" style="position:relative">我的旅豆（消费返豆 {{bean.orderRatePct}}%）</view>
   <view class="bean-num" wx:if="{{bean}}">{{bean.balance}}</view>
   <view class="sub2" wx:if="{{bean}}" style="position:relative">100 豆可抵 ¥10</view>
