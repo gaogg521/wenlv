@@ -18,6 +18,8 @@ import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportD
 import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
+import * as taskReview from '../domain/task-review.mjs'
+import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -144,14 +146,35 @@ const adminEco = {
     return { status: st }
   },
 
+  // 笔记审核材料：全文（清洗后）、图片、字数、机审结果、作者、被哪些约稿任务引用
+  'GET /admin/content/:id': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'review'])
+    const n = await one('SELECT * FROM content_note WHERE id = ?', [req.params.id])
+    if (!n) throw new BizError(1004, '笔记不存在')
+    const author = await one(`SELECT u.id, u.nickname, u.creator_tag,
+        (SELECT COUNT(*) FROM content_note x WHERE x.user_id = u.id AND x.status = 2) published,
+        (SELECT COUNT(*) FROM content_note x WHERE x.user_id = u.id AND x.status = 3) rejected
+      FROM user_account u WHERE u.id = ?`, [n.user_id])
+    const product = n.related_product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [n.related_product_id]) : null
+    const tasks = await q('SELECT id, title, status FROM content_task WHERE note_id = ?', [n.id])
+    return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
+  },
   'POST /admin/content/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'review'])
-    const passed = req.body.pass
+    const passed = req.body.pass === true
+    const reason = String(req.body.reason || '').trim()
+    if (!passed && reason.length < 4) throw new BizError(1001, '请填写驳回原因（至少 4 个字），作者会在小程序里看到')
+    if (reason.length > 300) throw new BizError(1001, '原因最多 300 字')
+    const bad = findBanned(reason)
+    if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
     const st = passed ? 2 : 3
-    const n = await q('UPDATE content_note SET status = ? WHERE id = ? AND status IN (0,1)', [st, req.params.id])
-    if (n.affectedRows === 1 && passed) await q('UPDATE content_note SET published_at = NOW(3) WHERE id = ? AND status = 2', [req.params.id])
-    await tx(async (c) => audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st }))
-    return { status: st }
+    return tx(async (c) => {
+      const n = await c.upd(`UPDATE content_note SET status = ?, reject_reason = ?, published_at = IF(? = 2, NOW(3), published_at)
+        WHERE id = ? AND status IN (0,1)`, [st, passed ? null : reason, st, req.params.id])
+      if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
+      await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
+      return { status: st }
+    })
   },
   'POST /admin/merchants/:id/approve': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])

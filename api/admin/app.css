@@ -388,3 +388,31 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
   .cube3d .fc::after, .fx-orbit, .fx-beam, .fx-spark, .fx-ripple, .chain-link s, .chain-scan, .chain-live i { animation: none; }
   .fx-spark, .fx-ripple, .chain-link s, .chain-scan { display: none; }
 }
+
+/* ---- 投稿审核抽屉（约稿任务 / 笔记共用）---- */
+.drawer.review-drawer { width: 1040px; max-width: 96vw; }
+.review-drawer .drawer-body { flex: 1; }
+.rv-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 900px) { .rv-grid { grid-template-columns: 1fr; } }
+.rv-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 11px; color: #8a928c; }
+.rv-title { font-size: 18px; margin: 10px 0 8px; color: #3e4c4e; }
+.rv-body { max-height: 46vh; overflow: auto; background: #fffdf9; }
+.rv-body img { max-width: 100%; border-radius: 6px; }
+.rv-imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.rv-imgs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.rv-reason { margin-top: 10px; padding: 8px 12px; background: #fff0eb; color: #b4523d; border-radius: 8px; font-size: 12px; }
+.rv-box { border: 1px solid #eeede6; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #fff; font-size: 12px; line-height: 1.7; }
+.rv-h { font-size: 11px; color: #8c8a7a; letter-spacing: .5px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+.rv-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+.rv-check { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+.rv-check span { font-weight: 700; width: 14px; }
+.rv-check.ok span { color: #0b7a45; } .rv-check.bad { color: #b42318; }
+.rv-check em { margin-left: auto; font-style: normal; color: #8a928c; font-size: 11px; }
+.rv-rule { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; }
+.rv-rule input { margin-top: 3px; }
+.rv-hist { padding: 6px 0; border-top: 1px dashed #eeede6; } .rv-hist:first-of-type { border-top: 0; }
+.rv-more summary { cursor: pointer; color: #a25434; margin-top: 6px; }
+.rv-foot { border-top: 1px solid #eee3d3; padding: 14px 24px; background: #fffdf9; display: flex; flex-direction: column; gap: 10px; }
+.rv-foot textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical; }
+.rv-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.rv-actions .btn[disabled] { opacity: .45; cursor: not-allowed; }

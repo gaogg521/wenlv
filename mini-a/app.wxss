@@ -97,6 +97,9 @@ page {
 .empty { text-align: center; color: var(--sub); padding: 90rpx 0; font-size: 26rpx; }
 .empty .e-ico { font-size: 68rpx; margin-bottom: 14rpx; opacity: .4; }
 .note { font-size: 22rpx; color: var(--sub); text-align: center; padding: 26rpx; line-height: 1.7; }
+.reject-tip { margin: 16rpx 0; padding: 18rpx 22rpx; background: #fff3ee; border-radius: 16rpx; font-size: 24rpx; color: #9a3d26; line-height: 1.7; }
+.reject-h { font-weight: 700; margin-bottom: 4rpx; }
+.reject-sub { font-size: 22rpx; color: #b07a69; margin-top: 6rpx; }
 .fade-up { animation: fadeup .32s ease-out both; }
 @keyframes fadeup { from { opacity: 0; transform: translateY(16rpx); } }
 .skeleton { height: 160rpx; background: linear-gradient(90deg,#f0f1f3,#e8eaee,#f0f1f3); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: 20rpx; margin: 20rpx 24rpx; }
