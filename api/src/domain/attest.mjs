@@ -150,6 +150,7 @@ export async function anchorToChain(batchId) {
   if (!b) throw new Error('批次不存在')
   if (Number(b.status) === 2) return { batchId, skipped: true, reason: '已锚定' }
   if (Number(b.status) === 5) return { batchId, skipped: true, reason: '已提交，等待链上确认' }
+  if (Number(b.status) === 4 && chain.providerId() === 'tbaas') return { batchId, skipped: true, reason: '需人工核对原交易，禁止自动重新提交' }
   if (chain.chainMode() === 'noop') {
     return { batchId, anchored: false, mode: 'noop', reason: '未配置链：存证停留在已打包' }
   }
@@ -163,6 +164,8 @@ export async function anchorToChain(batchId) {
     })
     if (!r || !r.txRef) throw new Error('链适配器未返回交易号')
   } catch (e) {
+    // 提交是否抵达云端可能未知；缺交易号时转人工，不能自动补锚造成重复写入。
+    if (chain.providerId() === 'tbaas') return await markFailed({ ...b, attempt: 4 }, e)
     return await markFailed(b, e)
   }
   // 提交已成功：此后的数据库异常不能记成"提交失败"，否则重试会重复上链
@@ -237,6 +240,13 @@ async function confirmRows(rows) {
         out.push({ batchId: b.id, anchored: false, pending: true, confirmations: c.confirmations ?? null, reason: c.reason || null })
       }
     } catch (e) {
+      // TBaaS 查询失败或记录不匹配不能证明原交易不存在；保留交易号以免重试造成重复提交。
+      if (b.chain_provider === 'tbaas') {
+        const reason = String(e.message || e).slice(0, 255)
+        await q('UPDATE attest_batch SET last_err = ? WHERE id = ? AND status = 5', [reason, b.id])
+        out.push({ batchId: b.id, anchored: false, pending: true, reason })
+        continue
+      }
       // 交易失败、被替换、或链上内容与根不符：这次提交作废，回到可重试
       out.push(await markFailed(b, e))
     }

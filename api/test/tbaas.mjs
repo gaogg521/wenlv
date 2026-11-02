@@ -15,7 +15,7 @@ const srv = http.createServer((req, res) => {
   req.on('end', () => {
     seen.push({ h: req.headers, body: JSON.parse(b), at: Date.now() })
     res.setHeader('content-type', 'application/json')
-    res.end(JSON.stringify(reply))
+    res.end(JSON.stringify(typeof reply === 'function' ? reply(req.headers, JSON.parse(b)) : reply))
   })
 })
 await new Promise((r) => srv.listen(0, '127.0.0.1', r))
@@ -91,7 +91,7 @@ try {
     assert.equal((await tbaas.confirm({ txRef: TX })).final, false)
     reset(); base(); process.env.TBAAS_CHANNEL = 'ch1'
     assert.equal(tbaas.capabilities.confirm, false)
-    await assert.rejects(() => tbaas.confirm({ txRef: TX }), /仅支持长安链体验网络/)
+    await assert.rejects(() => tbaas.confirm({ txRef: TX }), /仅支持长安链网络/)
   })
   await t('错误回执不得记终局：失败、交易号错、缺 Code、无效块高', async () => {
     demo()
@@ -114,6 +114,23 @@ try {
     assert.equal((await tbaas.probe()).ok, true)
     assert.ok(seen.every(s => s.h['x-tc-action'] === 'QueryChainMakerDemoContract'))
     assert.deepEqual(JSON.parse(seen[0].body.FuncParam), { key: 'wenlv-test-001', field: 'ticket_status' })
+  })
+  await t('正式网络确认必须核对回执以及合约记录中的根、交易号、前根与日期', async () => {
+    reset(); base(); seen.length = 0
+    Object.assign(process.env, { TBAAS_CHAIN_ID: 'chain_formal', TBAAS_CONTRACT: 'RootAnchor', TBAAS_ACTION: 'InvokeChainMakerContract', TBAAS_VERSION: '2018-04-16', TBAAS_REGION: 'ap-beijing' })
+    assert.equal(tbaas.mode(), 'noop')
+    process.env.TBAAS_PARAM_TEMPLATE = '{"root":"{root}","prevRoot":"{prevRoot}","bizDate":"{bizDate}"}'
+    assert.equal(tbaas.mode(), 'real')
+    const record = { root: ROOT, prevRoot: '0'.repeat(64), bizDate: '20261102', txId: TX }
+    reply = (h) => h['x-tc-action'] === 'QueryChainMakerTransaction'
+      ? { Response: { Result: { Code: 0, TxId: TX, BlockHeight: 12 } } }
+      : { Response: { Result: { Code: 0, Result: Buffer.from(JSON.stringify(record)).toString('base64') } } }
+    assert.equal(tbaas.capabilities.confirm, true)
+    assert.equal((await tbaas.confirm({ txRef: TX, root: ROOT, bizDate: '2026-11-02' })).final, true)
+    assert.equal(seen[1].h['x-tc-action'], 'QueryChainMakerContract')
+    assert.deepEqual(JSON.parse(seen[1].body.FuncParam), { root: ROOT })
+    record.txId = 'b'.repeat(64)
+    await assert.rejects(() => tbaas.confirm({ txRef: TX, root: ROOT, bizDate: '2026-11-02' }), /不一致/)
   })
   await t('并发请求间隔至少 1 秒，失败后队列仍可继续且不重发写交易', async () => {
     demo(); seen.length = 0
@@ -163,6 +180,25 @@ try {
         assert.equal(r.pending, true)
         assert.match(r.reason, /不支持回执确认/)
         assert.equal(Number((await one('SELECT status FROM attest_batch WHERE id=?', [created[1]])).status), 5)
+      })
+      await t('隔离库：TBaaS 回查失败保留交易号，不触发重复提交', async () => {
+        process.env.TBAAS_ACTION = 'InvokeChainMakerDemoContract'
+        reply = { Response: { Error: { Code: 'InternalError', Message: 'temporary' } } }
+        const r = await attest.confirmBatch(created[1])
+        assert.equal(r.pending, true)
+        const row = await one('SELECT status, chain_tx_ref FROM attest_batch WHERE id=?', [created[1]])
+        assert.equal(Number(row.status), 5); assert.equal(row.chain_tx_ref, TX)
+      })
+      await t('隔离库：TBaaS 提交结果未知转人工，重复调用不会再次提交', async () => {
+        const last = await one('SELECT seq FROM attest_batch ORDER BY seq DESC LIMIT 1')
+        const createdRow = await q(`INSERT INTO attest_batch (seq,biz_date,merkle_root,leaf_count,merkle_kind,merkle_version,status) VALUES (?,CURDATE(),?,0,'tbaas-unit',2,1)`, [Number(last.seq)+1, 'f'.repeat(64)])
+        created.push(createdRow.insertId)
+        reply = { Response: { Error: { Code: 'InternalError', Message: 'unknown outcome' } } }
+        const result = await attest.anchorToChain(createdRow.insertId)
+        assert.equal(result.status, 4)
+        const n = seen.length
+        assert.equal((await attest.anchorToChain(createdRow.insertId)).skipped, true)
+        assert.equal(seen.length, n)
       })
     } finally {
       for (const id of created) await q('DELETE FROM attest_batch WHERE id=?', [id])
