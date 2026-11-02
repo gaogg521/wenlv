@@ -62,23 +62,26 @@ export function requirementsOf(t) {
   }
 }
 
-/** 约稿任务的审核材料：要求、投稿、作者、自动核对、历次审核记录 */
-export async function taskReviewPack(taskId, img) {
-  const t = await one('SELECT * FROM content_task WHERE id = ?', [taskId])
-  if (!t) return null
+/** 某位参与者的审核材料：约稿要求、当前投稿、作者、自动核对、该参与者的历次审核记录 */
+export async function entryReviewPack(entryId, img) {
+  const e = await one('SELECT * FROM content_task_entry WHERE id = ?', [entryId])
+  if (!e) return null
+  const t = await one('SELECT * FROM content_task WHERE id = ?', [e.task_id])
   const req = requirementsOf(t)
-  const author = t.claimed_by ? await one(`SELECT u.id, u.nickname, u.creator_tag,
+  const author = await one(`SELECT u.id, u.nickname, u.creator_tag,
       (SELECT COUNT(*) FROM content_note n WHERE n.user_id = u.id AND n.status = 2) published,
-      (SELECT COUNT(*) FROM content_task k WHERE k.claimed_by = u.id AND k.status = 3) done_tasks
-    FROM user_account u WHERE u.id = ?`, [t.claimed_by]) : null
-  const note = t.note_id ? await one('SELECT * FROM content_note WHERE id = ?', [t.note_id]) : null
+      (SELECT COUNT(*) FROM content_task_entry k WHERE k.user_id = u.id AND k.status = 3) done_tasks
+    FROM user_account u WHERE u.id = ?`, [e.user_id])
+  const note = e.note_id ? await one('SELECT * FROM content_note WHERE id = ?', [e.note_id]) : null
   const submission = note ? noteView(note, img) : null
   const product = t.product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [t.product_id]) : null
-  const history = await q('SELECT id, note_id, verdict, reason, reviewer, created_at FROM content_task_review WHERE task_id = ? ORDER BY id DESC LIMIT 20', [taskId])
+  const history = await q('SELECT id, note_id, verdict, reason, reviewer, created_at FROM content_task_review WHERE entry_id = ? ORDER BY id DESC LIMIT 20', [e.id])
   return {
-    task: { id: Number(t.id), task_no: t.task_no, title: t.title, status: Number(t.status), submitted_at: t.submitted_at, claimed_at: t.claimed_at, finished_at: t.finished_at },
+    task: { id: Number(t.id), task_no: t.task_no, title: t.title, status: Number(t.status) },
+    entry: { id: Number(e.id), status: Number(e.status), claimed_at: e.claimed_at, submitted_at: e.submitted_at, finished_at: e.finished_at,
+      reward_beans: Number(e.reward_beans), cash_reward: Number(e.cash_reward), cash_status: Number(e.cash_status), cash_ref: e.cash_ref, cash_paid_at: e.cash_paid_at },
     requirements: req, product, author, submission,
-    checks: submission ? autoChecks(req, submission, t.submitted_at) : [],
+    checks: submission ? autoChecks(req, submission, e.submitted_at) : [],
     history,
   }
 }

@@ -150,7 +150,7 @@ const admin = {
     const pendingConflicts = await one("SELECT COUNT(*) c FROM verify_offline_conflict WHERE status = 0")
     const pendingNotes = await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
     const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant WHERE status = 0")
-    const pendingTasks = await one("SELECT COUNT(*) c FROM content_task WHERE status = 2")
+    const pendingTasks = await one('SELECT COUNT(*) c FROM content_task_entry WHERE status = 2')
     const topTours = await q(`SELECT p.id, p.title, COUNT(o.id) orders, COALESCE(SUM(o.amount_pay),0) gmv
       FROM orders o JOIN tour_product p ON p.id = o.product_id
       WHERE o.status >= 20 GROUP BY p.id, p.title ORDER BY orders DESC LIMIT 5`)
@@ -607,13 +607,35 @@ const admin = {
   // 约稿任务管理（P2 四态机：创建/审核）
   'GET /admin/content-tasks': async (req) => {
     await requireAdmin(req)
-    return await q(`SELECT t.*, u.nickname claimer, p.title product_title,
-      (t.note_id IS NOT NULL) submitted,
-      (SELECT COUNT(*) FROM content_task_review r WHERE r.task_id = t.id) review_count
+    // 进度按参与记录统计：领取人数 / 创作中 / 待审核 / 已通过 / 现金待打款
+    return await q(`SELECT t.*, p.title product_title,
+        COUNT(e.id) taken, SUM(e.status = 1) doing, SUM(e.status = 2) reviewing, SUM(e.status = 3) passed, SUM(e.cash_status = 1) cash_pending,
+        (SELECT COUNT(*) FROM content_task_review r WHERE r.task_id = t.id) review_count
       FROM content_task t
-      LEFT JOIN user_account u ON u.id = t.claimed_by
+      LEFT JOIN content_task_entry e ON e.task_id = t.id
       LEFT JOIN tour_product p ON p.id = t.product_id
-      ORDER BY t.id DESC LIMIT 100`)
+      GROUP BY t.id ORDER BY t.id DESC LIMIT 100`)
+  },
+  // 某任务的参与者列表
+  'GET /admin/content-tasks/:id/entries': async (req) => {
+    await requireAdmin(req)
+    return await q(`SELECT e.*, u.nickname, u.creator_tag, n.title note_title,
+        (SELECT COUNT(*) FROM content_task_review r WHERE r.entry_id = e.id AND r.verdict = 0) rejected_times
+      FROM content_task_entry e JOIN user_account u ON u.id = e.user_id LEFT JOIN content_note n ON n.id = e.note_id
+      WHERE e.task_id = ? ORDER BY FIELD(e.status, 2, 1, 3), e.id`, [req.params.id])
+  },
+  // 下线 / 重新上线（下线后不能再领取，已领取的人仍可投稿与审核）
+  'POST /admin/content-tasks/:id/status': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const st = Number(req.body.status)
+    if (![0, 4].includes(st)) throw new BizError(1001, '状态只能是招募中或已下线')
+    const n = await tx(async (c) => {
+      const r = await c.upd('UPDATE content_task SET status = ? WHERE id = ?', [st, req.params.id])
+      await audit(c, 'admin:' + a.name, 'content-task', st ? 'offline' : 'online', 'task-' + req.params.id, null, { status: st })
+      return r
+    })
+    if (!n) throw new BizError(1004, '任务不存在')
+    return { status: st }
   },
   'POST /admin/content-tasks': async (req) => {
     const a = await requireAdmin(req)
@@ -659,13 +681,14 @@ const admin = {
     return { updated: r.affectedRows > 0 }
   },
   // 审核材料：约稿要求 + 投稿全文与图片 + 自动核对 + 历次审核记录（审核员据此判定）
-  'GET /admin/content-tasks/:id/review': async (req) => {
+  // 审核材料（按参与记录）：约稿要求 + 投稿全文与图片 + 自动核对 + 该参与者的历次审核
+  'GET /admin/task-entries/:id/review': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'review'])
-    const pack = await taskReview.taskReviewPack(req.params.id, (u) => apiImg(u, req))
-    if (!pack) throw new BizError(1004, '任务不存在')
+    const pack = await taskReview.entryReviewPack(req.params.id, (u) => apiImg(u, req))
+    if (!pack) throw new BizError(1004, '参与记录不存在')
     return pack
   },
-  'POST /admin/content-tasks/:id/verdict': async (req) => {
+  'POST /admin/task-entries/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'review'])
     const passed = req.body.pass === true
     const reason = String(req.body.reason || '').trim()
@@ -674,37 +697,61 @@ const admin = {
     const bad = findBanned(reason)
     if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
     return tx(async (cc) => {
-      const t = await cc.one('SELECT * FROM content_task WHERE id = ? FOR UPDATE', [req.params.id])
-      if (!t || Number(t.status) !== 2) throw new BizError(2002, '仅审核中任务可处理')
+      const e = await cc.one('SELECT * FROM content_task_entry WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!e || Number(e.status) !== 2) throw new BizError(2002, '仅审核中的投稿可处理')
+      const t = await cc.one('SELECT * FROM content_task WHERE id = ?', [e.task_id])
       const reqs = taskReview.requirementsOf(t)
       const confirmed = Array.isArray(req.body.rules) ? req.body.rules : []
       if (passed && reqs.review_rules.some((_, i) => confirmed[i] !== true)) throw new BizError(1001, '请逐条确认审核标准后再通过')
-      const note = t.note_id ? await cc.one('SELECT * FROM content_note WHERE id = ?', [t.note_id]) : null
+      const note = e.note_id ? await cc.one('SELECT * FROM content_note WHERE id = ?', [e.note_id]) : null
       if (passed && (!note || Number(note.status) !== 2)) throw new BizError(1001, '投稿作品已下架或不存在，不能通过')
-      const auto = note ? taskReview.autoChecks(reqs, taskReview.noteView(note), t.submitted_at) : []
+      const auto = note ? taskReview.autoChecks(reqs, taskReview.noteView(note), e.submitted_at) : []
+      const cash = Number(t.cash_reward) || 0
       if (passed) {
         const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
-        if (!budget || !t.claimed_by) throw new BizError(5002, '缺少可用奖励预算或领取人，任务保持审核中')
-        await bean.grant(Number(t.claimed_by), Number(t.reward_beans), bean.BIZ.TASK, t.task_no, budget.id, cc)
-        await cc.upd('UPDATE content_task SET status=3, finished_at=NOW(3) WHERE id=?', [t.id])
+        if (!budget) throw new BizError(5002, '缺少可用奖励预算，投稿保持审核中')
+        await bean.grant(Number(e.user_id), Number(t.reward_beans), bean.BIZ.TASK, t.task_no + '-E' + e.id, budget.id, cc)
+        // 奖励按通过时的任务设置快照；有现金加奖的进入"待打款"，由财务登记打款流水
+        await cc.upd('UPDATE content_task_entry SET status=3, finished_at=NOW(3), reward_beans=?, cash_reward=?, cash_status=? WHERE id=?',
+          [Number(t.reward_beans), cash, cash > 0 ? 1 : 0, e.id])
       } else {
-        // 驳回：退回进行中，清掉本次投稿，作者修改后可重新提交（投稿与原因留在审核记录里）
-        await cc.upd('UPDATE content_task SET status=1, note_id=NULL, submitted_at=NULL WHERE id=?', [t.id])
+        // 驳回：退回创作中，清掉本次投稿，作者修改后可重新提交（投稿与原因留在审核记录里）
+        await cc.upd('UPDATE content_task_entry SET status=1, note_id=NULL, submitted_at=NULL WHERE id=?', [e.id])
       }
-      await cc.ins(`INSERT INTO content_task_review (task_id, note_id, user_id, verdict, reason, checks, reviewer) VALUES (?,?,?,?,?,?,?)`,
-        [t.id, t.note_id || null, t.claimed_by || null, passed ? 1 : 0, reason || null,
+      await cc.ins(`INSERT INTO content_task_review (task_id, entry_id, note_id, user_id, verdict, reason, checks, reviewer) VALUES (?,?,?,?,?,?,?,?)`,
+        [t.id, e.id, e.note_id || null, e.user_id, passed ? 1 : 0, reason || null,
           JSON.stringify({ auto, rules: reqs.review_rules.map((r, i) => ({ rule: r, ok: confirmed[i] === true })) }), 'admin:' + a.name])
-      await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'task-' + t.id, { status: 2 },
-        { status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, reason: reason || null })
-      return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: Number(t.cash_reward) || 0 } : { rejected: true, backTo: '进行中' }
+      await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'entry-' + e.id, { status: 2 },
+        { task: t.id, status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, cash: passed ? cash : 0, reason: reason || null })
+      return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash } : { rejected: true, backTo: '创作中' }
+    })
+  },
+  // 现金加奖：待打款列表 / 登记打款（财务；流水号唯一，防重复登记）
+  'GET /admin/task-cash': async (req) => {
+    await requireAdmin(req, ['super', 'finance', 'ops'])
+    return await q(`SELECT e.id, e.task_id, t.title, t.task_no, e.user_id, u.nickname, e.cash_reward, e.cash_status, e.finished_at, e.cash_ref, e.cash_paid_at, e.cash_by
+      FROM content_task_entry e JOIN content_task t ON t.id = e.task_id JOIN user_account u ON u.id = e.user_id
+      WHERE e.cash_status IN (1, 2) ORDER BY e.cash_status, e.finished_at DESC LIMIT 200`)
+  },
+  'POST /admin/task-entries/:id/cash-paid': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance'])
+    const ref = String(req.body.ref || '').trim()
+    if (!/^[\w-]{6,64}$/.test(ref)) throw new BizError(1001, '请填写打款流水号（6–64 位字母、数字、- 或 _）')
+    return tx(async (c) => {
+      const e = await c.one('SELECT * FROM content_task_entry WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!e || Number(e.cash_status) !== 1) throw new BizError(2002, '该笔现金加奖不是待打款状态')
+      if (await c.one('SELECT id FROM content_task_entry WHERE cash_ref = ?', [ref])) throw new BizError(2002, '该流水号已登记过')
+      await c.upd('UPDATE content_task_entry SET cash_status = 2, cash_ref = ?, cash_paid_at = NOW(3), cash_by = ? WHERE id = ?', [ref, 'admin:' + a.name, e.id])
+      await audit(c, 'admin:' + a.name, 'content-task', 'cash-paid', 'entry-' + e.id, { cash_status: 1 }, { cash_status: 2, ref, amount: Number(e.cash_reward) })
+      return { paid: true }
     })
   },
   'POST /admin/content-tasks/:id/delete': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
     const t = await one('SELECT id, status, title FROM content_task WHERE id = ?', [req.params.id])
     if (!t) throw new BizError(1004, '任务不存在')
-    // 有人领取后删除会让作者的投稿和奖励记录失去归属：只允许删待领取 / 已下线的任务
-    if (![0, 4].includes(Number(t.status))) throw new BizError(1001, '已有人领取的任务不能删除')
+    // 有人领取后删除会让作者的投稿和奖励记录失去归属：有参与记录的只能下线
+    if (await one('SELECT id FROM content_task_entry WHERE task_id = ? LIMIT 1', [t.id])) throw new BizError(1001, '已有人领取的任务不能删除，可以下线')
     await tx(async (c) => { await c.q('DELETE FROM content_task WHERE id = ?', [t.id]); await audit(c, 'admin:' + a.name, 'content-task', 'delete', 'task-' + t.id, { title: t.title }, null) })
     return { deleted: true }
   },

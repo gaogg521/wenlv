@@ -478,39 +478,56 @@ const cNotes = {
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {
     const u = requireUser(req)
-    const raw = await q("SELECT * FROM content_task WHERE status = 0 AND (deadline IS NULL OR deadline >= NOW()) ORDER BY id DESC LIMIT 20")
+    // 可领取：招募中、未截止、还有名额（0 = 不限）、我还没领过
+    const raw = await q(`SELECT t.*, (SELECT COUNT(*) FROM content_task_entry e WHERE e.task_id = t.id) taken FROM content_task t
+      WHERE t.status = 0 AND (t.deadline IS NULL OR t.deadline >= NOW())
+        AND NOT EXISTS (SELECT 1 FROM content_task_entry m WHERE m.task_id = t.id AND m.user_id = ?)
+      HAVING t.max_participants = 0 OR taken < t.max_participants ORDER BY t.id DESC LIMIT 20`, [u.uid])
     const CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
     const open = raw.map((t) => {
       const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
       return { id: t.id, task_no: t.task_no, title: t.title, brief: t.brief, reward_beans: t.reward_beans, cover: pp.cover_img || null,
         categoryLabel: CAT[t.category] || '图文笔记', tags: pp.tags || [], platforms: pp.platforms_labels || [],
         cashLabel: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null, deadline: t.deadline ? String(t.deadline).slice(0, 16) : null,
-        minWords: Number(t.min_words) || 0, minImages: Number(t.min_images) || 0 }
+        minWords: Number(t.min_words) || 0, minImages: Number(t.min_images) || 0,
+        slotsLeft: Number(t.max_participants) ? Number(t.max_participants) - Number(t.taken) : null }
     })
-    // 被驳回退回进行中的任务，带上最近一次的驳回原因，作者据此修改后重新提交
-    const mine = (await q(`SELECT t.id, t.task_no, t.title, t.status, t.reward_beans, t.submitted_at,
-        (SELECT CONCAT(r.verdict, '|', COALESCE(r.reason, '')) FROM content_task_review r WHERE r.task_id = t.id ORDER BY r.id DESC LIMIT 1) last_review
-      FROM content_task t WHERE t.claimed_by = ? ORDER BY t.id DESC LIMIT 20`, [u.uid]))
+    // 我参与的：被驳回退回创作中的，带上最近一次驳回原因，作者据此修改后重新提交
+    const mine = (await q(`SELECT t.id, t.task_no, t.title, e.id entry_id, e.status, t.reward_beans, e.submitted_at,
+        (SELECT CONCAT(r.verdict, '|', COALESCE(r.reason, '')) FROM content_task_review r WHERE r.entry_id = e.id ORDER BY r.id DESC LIMIT 1) last_review
+      FROM content_task_entry e JOIN content_task t ON t.id = e.task_id WHERE e.user_id = ? ORDER BY e.id DESC LIMIT 20`, [u.uid]))
       .map(({ last_review, ...t }) => ({ ...t, rejectReason: Number(t.status) === 1 && String(last_review || '').startsWith('0|') ? String(last_review).slice(2) : null }))
     return { open, mine }
   },
   'GET /c/tasks/:id': async (req) => {
     const u = requireUser(req)
     const t = await one('SELECT * FROM content_task WHERE id = ?', [req.params.id])
-    if (!t || (Number(t.status) !== 0 && Number(t.claimed_by) !== Number(u.uid))) throw new BizError(1004, '任务不存在或已被领取')
+    const e = t ? await one('SELECT * FROM content_task_entry WHERE task_id = ? AND user_id = ?', [t.id, u.uid]) : null
+    if (!t || (Number(t.status) !== 0 && !e)) throw new BizError(1004, '任务不存在或已下线')
+    const taken = Number((await one('SELECT COUNT(*) n FROM content_task_entry WHERE task_id = ?', [t.id])).n)
     const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
     const prod = t.product_id ? await one('SELECT id, title FROM tour_product WHERE id = ? AND status = 1', [t.product_id]) : null
-    const mine = Number(t.claimed_by) === Number(u.uid)
-    const last = mine ? await one('SELECT verdict, reason FROM content_task_review WHERE task_id = ? ORDER BY id DESC LIMIT 1', [t.id]) : null
-    return { id: t.id, status: Number(t.status), mine, product: prod,
+    const last = e ? await one('SELECT verdict, reason FROM content_task_review WHERE entry_id = ? ORDER BY id DESC LIMIT 1', [e.id]) : null
+    return { id: t.id, mine: !!e, product: prod,
+      // status：已参与时是我的进度（1 创作中 2 审核中 3 已通过），未参与时 0 = 可领取
+      status: e ? Number(e.status) : 0,
+      full: !e && Number(t.max_participants) > 0 && taken >= Number(t.max_participants),
+      slotsLeft: Number(t.max_participants) ? Math.max(0, Number(t.max_participants) - taken) : null,
       ...pp, cash_reward_label: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null,
-      rejectReason: mine && Number(t.status) === 1 && last && Number(last.verdict) === 0 ? last.reason : null }
+      rejectReason: e && Number(e.status) === 1 && last && Number(last.verdict) === 0 ? last.reason : null }
   },
   'POST /c/tasks/:id/claim': async (req) => {
     const u = requireUser(req)
-    const n = await tx(async (c) => c.upd("UPDATE content_task SET status = 1, claimed_by = ?, claimed_at = NOW(3) WHERE id = ? AND status = 0", [u.uid, req.params.id]))
-    if (n !== 1) throw new BizError(2002, '任务已被领取或不可领取')
-    return { claimed: true }
+    return tx(async (c) => {
+      const t = await c.one('SELECT * FROM content_task WHERE id = ? FOR UPDATE', [req.params.id]) // 锁任务行，名额判断与写入串行
+      if (!t || Number(t.status) !== 0) throw new BizError(2002, '任务已下线')
+      if (t.deadline && new Date(t.deadline) < new Date()) throw new BizError(2002, '任务已截止')
+      if (await c.one('SELECT id FROM content_task_entry WHERE task_id = ? AND user_id = ?', [t.id, u.uid])) throw new BizError(2002, '你已领取过这个任务')
+      const taken = Number((await c.one('SELECT COUNT(*) n FROM content_task_entry WHERE task_id = ?', [t.id])).n)
+      if (Number(t.max_participants) > 0 && taken >= Number(t.max_participants)) throw new BizError(2002, '名额已满')
+      const id = await c.ins('INSERT INTO content_task_entry (task_id, user_id, status) VALUES (?,?,1)', [t.id, u.uid])
+      return { claimed: true, entryId: id }
+    })
   },
   'POST /c/tasks/:id/submit': async (req) => {
     const u = requireUser(req)
@@ -518,8 +535,9 @@ const cNotes = {
     const note = await one('SELECT id, user_id, status FROM content_note WHERE id = ?', [noteId])
     if (!note || Number(note.user_id) !== Number(u.uid)) throw new BizError(1004, '笔记不存在')
     if (Number(note.status) !== 2) throw new BizError(1001, '仅已发布的笔记可提交审核')
-    const n = await tx(async (c) => c.upd("UPDATE content_task SET status = 2, note_id = ?, submitted_at = NOW(3) WHERE id = ? AND status = 1 AND claimed_by = ?", [noteId, req.params.id, u.uid]))
-    if (n !== 1) throw new BizError(2002, '仅进行中任务可提交')
+    const n = await tx(async (c) => c.upd('UPDATE content_task_entry SET status = 2, note_id = ?, submitted_at = NOW(3) WHERE task_id = ? AND user_id = ? AND status = 1',
+      [noteId, req.params.id, u.uid]))
+    if (n !== 1) throw new BizError(2002, '仅创作中的任务可提交')
     return { submitted: true }
   },
   // 常见问题（小程序「我的-常见问题」）

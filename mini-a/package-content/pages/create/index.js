@@ -15,7 +15,7 @@ Page({
   async fetchTasks() {
     try {
       const t = await api.request('/c/tasks')
-      const TASK_ST = { 0: '待领取', 1: '进行中', 2: '审核中', 3: '已完成' }
+      const TASK_ST = { 0: '待领取', 1: '创作中', 2: '审核中', 3: '已通过' }
       t.mine = (t.mine || []).map((m) => ({ ...m, statusText: TASK_ST[m.status] || '待领取' }))
       this.setData({ tasks: t })
     } catch (e) {}

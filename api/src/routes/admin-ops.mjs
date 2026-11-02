@@ -156,7 +156,7 @@ const adminEco = {
         (SELECT COUNT(*) FROM content_note x WHERE x.user_id = u.id AND x.status = 3) rejected
       FROM user_account u WHERE u.id = ?`, [n.user_id])
     const product = n.related_product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [n.related_product_id]) : null
-    const tasks = await q('SELECT id, title, status FROM content_task WHERE note_id = ?', [n.id])
+    const tasks = await q('SELECT t.id, t.title, e.status FROM content_task_entry e JOIN content_task t ON t.id = e.task_id WHERE e.note_id = ?', [n.id])
     return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
   },
   'POST /admin/content/:id/verdict': async (req) => {
@@ -305,7 +305,7 @@ const adminEdit = {
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id) note_count,
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
       (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count,
-      (SELECT COUNT(*) FROM content_task t WHERE t.claimed_by = u.id AND t.status = 3) task_done,
+      (SELECT COUNT(*) FROM content_task_entry t WHERE t.user_id = u.id AND t.status = 3) task_done,
       (SELECT MAX(c.published_at) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) last_published
       FROM user_account u
       WHERE u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id)

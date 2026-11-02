@@ -36,43 +36,76 @@ async function toggleReview(id, show) {
 // ---- 富表单共享组件：富文本编辑器 / 单图上传（各页复用）----
 async function tasks() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const [list, prods] = await Promise.all([api('GET', '/admin/content-tasks'), api('GET', '/admin/products')])
-  const ST = { 0: '<span class="pill warn">待领取</span>', 1: '<span class="pill s20">进行中</span>', 2: '<span class="pill s30">审核中</span>', 3: '<span class="pill ok">已完成</span>' }
-  const cnt = (s) => list.filter((t) => t.status === s).length
-  const beans = list.reduce((s, t) => s + Number(t.reward_beans) || 0, 0)
-  const cash = list.reduce((s, t) => s + Number(t.cash_reward) || 0, 0)
+  const [list, cashRows] = await Promise.all([api('GET', '/admin/content-tasks'), api('GET', '/admin/task-cash').catch(() => [])])
+  const N = (v) => Number(v || 0)
+  const now = Date.now()
+  const stateOf = (t) => t.status === 4 ? 'off' : (t.deadline && new Date(String(t.deadline).replace(' ', 'T')).getTime() < now) ? 'ended'
+    : (N(t.max_participants) && N(t.taken) >= N(t.max_participants)) ? 'full' : 'open'
+  const ST = { open: '<span class="pill warn">招募中</span>', full: '<span class="pill s20">名额已满</span>', ended: '<span class="pill off">已截止</span>', off: '<span class="pill off">已下线</span>' }
+  const sum = (k) => list.reduce((s, t) => s + N(t[k]), 0)
+  const cashPending = cashRows.filter((r) => Number(r.cash_status) === 1)
   window.__taskSt = window.__taskSt === undefined ? '' : window.__taskSt
-  const frs = window.__taskSt === '' ? list : list.filter((t) => String(t.status) === window.__taskSt)
-  const TABS = [['', '全部'], ['0', '待领取'], ['1', '进行中'], ['2', '审核中'], ['3', '已完成']]
+  const TABS = [['', '全部', list.length], ['review', '有待审', list.filter((t) => N(t.reviewing)).length], ['open', '招募中', list.filter((t) => stateOf(t) === 'open').length], ['off', '已下线', list.filter((t) => t.status === 4).length]]
+  const frs = list.filter((t) => window.__taskSt === '' || (window.__taskSt === 'review' ? N(t.reviewing) > 0 : window.__taskSt === 'off' ? t.status === 4 : stateOf(t) === 'open'))
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdf3e0">📢</div><div><div class="l">待领取</div><div class="v" style="font-size:20px">${cnt(0)}</div><div class="s">游客可在小程序领取</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">✍️</div><div><div class="l">进行中</div><div class="v" style="font-size:20px">${cnt(1)}</div><div class="s">创作进行中</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#f1e9fd">🔎</div><div><div class="l">审核中</div><div class="v" style="font-size:20px">${cnt(2)}</div><div class="s">等待人工判定</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">已完成</div><div class="v" style="font-size:20px">${cnt(3)}</div><div class="s">奖励已发放</div></div></div>
-    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">💰</div><div><div class="l">悬赏总额</div><div class="v" style="font-size:20px">${beans.toLocaleString()} 豆</div><div class="s">${cash ? '含现金 ' + fen(cash) : '纯旅豆激励'}</div></div></div>
+    <div class="kpi"><div class="ico">📢</div><div><div class="l">招募中任务</div><div class="v" style="font-size:20px">${list.filter((t) => stateOf(t) === 'open').length}</div><div class="s">游客可在小程序领取</div></div></div>
+    <div class="kpi"><div class="ico">✍️</div><div><div class="l">创作中</div><div class="v" style="font-size:20px">${sum('doing')}</div><div class="s">已领取未投稿 / 驳回待修改</div></div></div>
+    <div class="kpi"><div class="ico">🔎</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sum('reviewing')}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
+    <div class="kpi"><div class="ico">✅</div><div><div class="l">已通过</div><div class="v" style="font-size:20px">${sum('passed')}</div><div class="s">旅豆已发放</div></div></div>
+    <div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>约稿任务</h2>
-      <div class="cfg-tabs" style="margin:0">${TABS.map(([v, n]) => `<div class="cfg-tab ${String(window.__taskSt) === v ? 'on' : ''}" onclick="window.__taskSt='${v}';tasks()">${n} ${v !== '' ? cnt(Number(v)) : ''}</div>`).join('')}</div>
+      <div class="cfg-tabs" style="margin:0">${TABS.map(([v, n, c]) => `<div class="cfg-tab ${String(window.__taskSt) === v ? 'on' : ''}" onclick="window.__taskSt='${v}';tasks()">${n} ${c}</div>`).join('')}</div>
       <button class="btn primary sm" onclick="taskModal()">＋ 新建任务</button></div>
-    ${frs.length ? `<table><thead><tr><th>任务</th><th>类型</th><th>报酬</th><th>交付要求</th><th>领取</th><th>截止</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${frs.length ? `<table><thead><tr><th>任务</th><th>类型</th><th>报酬</th><th>交付要求</th><th>名额</th><th>进度</th><th>截止</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((t) => `<tr>
       <td><div style="display:flex;gap:8px;align-items:center">${t.cover_img ? `<img src="${esc(t.cover_img)}" style="width:56px;height:38px;object-fit:cover;border-radius:6px;flex:none">` : ''}
         <div><div class="td-main">${esc(t.title)}</div><div class="td-sub">${esc((t.tags || '').split(',').filter(Boolean).map((x) => '#' + x.trim()).join(' ') || (t.product_title ? '目标：' + t.product_title : String(t.brief || '').slice(0, 26)))}</div></div></div></td>
       <td><span class="pill off">${TASK_CAT[t.category] || esc(t.category)}</span></td>
-      <td class="num"><b>${Number(t.reward_beans)}</b> 豆${Number(t.cash_reward) ? '<br>+' + fen(t.cash_reward) : ''}</td>
-      <td class="td-sub">${[t.min_words ? Number(t.min_words) + ' 字' : '', t.min_images ? Number(t.min_images) + ' 图' : '', t.max_participants ? '限 ' + t.max_participants + ' 人' : ''].filter(Boolean).join(' · ') || '不限'}</td>
-      <td class="num">${t.claimed_by ? esc(t.claimer || '用户#' + t.claimed_by) : '待领取'}</td>
+      <td class="num"><b>${N(t.reward_beans)}</b> 豆${N(t.cash_reward) ? '<br>+' + fen(t.cash_reward) : ''}</td>
+      <td class="td-sub">${[t.min_words ? N(t.min_words) + ' 字' : '', t.min_images ? N(t.min_images) + ' 图' : ''].filter(Boolean).join(' · ') || '不限'}</td>
+      <td class="num">${N(t.taken)} / ${N(t.max_participants) || '不限'}</td>
+      <td class="td-sub">${N(t.taken) ? `创作中 ${N(t.doing)} · <b style="color:${N(t.reviewing) ? 'var(--brand)' : 'inherit'}">待审 ${N(t.reviewing)}</b> · 通过 ${N(t.passed)}` : '暂无人领取'}</td>
       <td class="td-sub">${t.deadline ? esc(String(t.deadline).slice(0, 10)) : '长期'}</td>
-      <td>${ST[t.status] || ''}</td>
+      <td>${ST[stateOf(t)]}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${t.status === 2 ? `<button class="btn primary sm" onclick="reviewTask(${t.id})">审核投稿</button>` : ''}
-        ${t.status !== 2 && (t.note_id || Number(t.review_count)) ? `<button class="btn ghost sm" onclick="reviewTask(${t.id})">${t.status === 3 ? '查看投稿' : '审核记录'}</button>` : ''}
-        ${t.status <= 1 ? `<button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>` : ''}
+        ${N(t.taken) ? `<button class="btn ${N(t.reviewing) ? 'primary' : 'ghost'} sm" onclick="taskEntries(${t.id})">${N(t.reviewing) ? '审核投稿 ' + N(t.reviewing) : '参与者 ' + N(t.taken)}</button>` : ''}
+        <button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>
         ${t.rich_brief ? `<button class="btn ghost sm" onclick="taskDetail(${t.id})">说明</button>` : ''}
-        ${[0, 4].includes(t.status) ? `<button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该状态下暂无任务')}</div>`
+        <button class="btn ghost sm" onclick="taskStatus(${t.id}, ${t.status === 4 ? 0 : 4})">${t.status === 4 ? '重新上线' : '下线'}</button>
+        ${N(t.taken) ? '' : `<button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button>`}</div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该筛选下暂无任务')}</div>
+  ${cashRows.length ? `<div class="card"><div class="card-head"><h2>现金加奖打款</h2><span class="muted">投稿通过后进入待打款；财务线下打款后登记流水号（唯一，防重复）</span></div>
+    <table><thead><tr><th>任务</th><th>作者</th><th>金额</th><th>通过时间</th><th>状态</th><th>打款流水</th><th>操作</th></tr></thead><tbody>
+    ${cashRows.map((r) => `<tr><td class="td-main">${esc(r.title)}<div class="td-sub">${esc(r.task_no)} · 参与#${r.id}</div></td><td>${esc(r.nickname || '用户#' + r.user_id)}</td>
+      <td class="money num">${fen(r.cash_reward)}</td><td class="td-sub">${esc(String(r.finished_at || '').slice(0, 16).replace('T', ' '))}</td>
+      <td>${Number(r.cash_status) === 2 ? '<span class="pill ok">已打款</span>' : '<span class="pill warn">待打款</span>'}</td>
+      <td class="td-sub">${r.cash_ref ? esc(r.cash_ref) + '<br>' + esc(String(r.cash_paid_at || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(r.cash_by || '') : '—'}</td>
+      <td>${Number(r.cash_status) === 1 ? `<button class="btn primary sm" onclick="taskCashPaid(${r.id}, '${fen(r.cash_reward)}')">登记打款</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`
+}
+async function taskStatus(id, status) {
+  if (status === 4 && !confirm('下线后游客不能再领取；已领取的人仍可投稿，审核照常。确定下线？')) return
+  try { await api('POST', `/admin/content-tasks/${id}/status`, { status }); toast(status ? '已下线' : '已重新上线'); tasks() } catch (e) { toast(e.message, true) }
+}
+async function taskCashPaid(entryId, amount) {
+  const ref = prompt(`登记现金加奖打款 ${amount}\n请输入打款流水号（银行/支付平台流水，唯一）：`)
+  if (!ref) return
+  try { await api('POST', `/admin/task-entries/${entryId}/cash-paid`, { ref: ref.trim() }); toast('已登记打款'); tasks() } catch (e) { toast(e.message, true) }
+}
+const ENTRY_ST = { 1: '<span class="pill s20">创作中</span>', 2: '<span class="pill warn">待审核</span>', 3: '<span class="pill ok">已通过</span>' }
+async function taskEntries(taskId) {
+  let rows
+  try { rows = await api('GET', `/admin/content-tasks/${taskId}/entries`) } catch (e) { return toast(e.message, true) }
+  const t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === taskId) || { title: '' }
+  reviewDrawer(`参与者 · ${esc(t.title)}`, rows.length ? `<table><thead><tr><th>作者</th><th>进度</th><th>投稿</th><th>领取 / 投稿时间</th><th>操作</th></tr></thead><tbody>
+    ${rows.map((e) => `<tr><td>${esc(e.nickname || '用户#' + e.user_id)}${e.creator_tag && e.creator_tag !== 'none' ? ` <span class="pill s40">${esc(CREATOR_TAG[e.creator_tag] || '')}</span>` : ''}</td>
+      <td>${ENTRY_ST[e.status] || ''}${Number(e.rejected_times) ? `<div class="td-sub">被驳回 ${e.rejected_times} 次</div>` : ''}${Number(e.cash_status) === 1 ? '<div class="td-sub">现金待打款</div>' : ''}</td>
+      <td class="td-sub">${e.note_title ? esc(e.note_title) : '—'}</td>
+      <td class="td-sub">${esc(String(e.claimed_at || '').slice(5, 16).replace('T', ' '))}${e.submitted_at ? ' / ' + esc(String(e.submitted_at).slice(5, 16).replace('T', ' ')) : ''}</td>
+      <td>${Number(e.status) === 2 ? `<button class="btn primary sm" onclick="reviewEntry(${e.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewEntry(${e.id})">查看</button>`}</td></tr>`).join('')}</tbody></table>`
+    : emptyBox('还没有人领取'), '')
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
 async function taskModal(id) { return entityEditor('task', id || null, { onSaved: () => tasks() }) }
@@ -117,10 +150,10 @@ function authorHtml(u, extra) {
     ${u.creator_tag && u.creator_tag !== 'none' ? ` <span class="pill s40">${esc(CREATOR_TAG[u.creator_tag] || u.creator_tag)}</span>` : ''}
     <div class="td-sub">已发布作品 ${Number(u.published || 0)} 篇${extra || ''}</div></div>`
 }
-async function reviewTask(id) {
+async function reviewEntry(id) {
   let p
-  try { p = await api('GET', `/admin/content-tasks/${id}/review`) } catch (e) { return toast(e.message, true) }
-  const r = p.requirements, live = p.task.status === 2 && p.submission
+  try { p = await api('GET', `/admin/task-entries/${id}/review`) } catch (e) { return toast(e.message, true) }
+  const r = p.requirements, live = p.entry.status === 2 && p.submission
   const fails = p.checks.filter((c) => !c.ok).length
   const right = `
     <div class="rv-box"><div class="rv-h">约稿要求</div><p>${esc(r.brief || '')}</p>
@@ -133,13 +166,14 @@ async function reviewTask(id) {
       <div class="td-sub" style="margin-top:6px">字数按去空白后的字符计；提及/禁用词按标题+正文包含判断，仅供参考，以人工判断为准。</div></div>` : ''}
     ${live && r.review_rules.length ? `<div class="rv-box"><div class="rv-h">审核标准（逐条确认后才能通过）</div>
       ${r.review_rules.map((x, i) => `<label class="rv-rule"><input type="checkbox" data-rule="${i}" onchange="rvSync()"> ${esc(x)}</label>`).join('')}</div>` : ''}
-    <div class="rv-box"><div class="rv-h">奖励</div><b>${r.reward_beans} 旅豆</b>${r.cash_reward ? ` + ${fen(r.cash_reward)} 现金<div class="td-sub">现金加奖不会自动发放：通过后请财务另行打款并留痕</div>` : ''}</div>
+    <div class="rv-box"><div class="rv-h">奖励</div><b>${r.reward_beans} 旅豆</b>${r.cash_reward ? ` + ${fen(r.cash_reward)} 现金<div class="td-sub">通过后进入「现金加奖打款」待打款，由财务线下打款并登记流水号</div>` : ''}
+      ${p.entry.status === 3 ? `<div class="td-sub">已发放 ${p.entry.reward_beans} 旅豆${p.entry.cash_reward ? ' · 现金 ' + fen(p.entry.cash_reward) + (p.entry.cash_status === 2 ? '（已打款 ' + esc(p.entry.cash_ref || '') + '）' : '（待打款）') : ''}</div>` : ''}</div>
     ${authorHtml(p.author, p.author ? ` · 完成约稿 ${Number(p.author.done_tasks || 0)} 单` : '')}
     ${p.history.length ? `<div class="rv-box"><div class="rv-h">审核记录</div>${p.history.map((h) => `<div class="rv-hist"><span class="pill ${Number(h.verdict) ? 'ok' : 's70'}">${Number(h.verdict) ? '通过' : '驳回'}</span>
       <span class="td-sub">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))} · ${esc(h.reviewer)}${h.note_id ? ' · 作品#' + h.note_id : ''}</span>${h.reason ? `<div>${esc(h.reason)}</div>` : ''}</div>`).join('')}</div>` : ''}`
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）/ 通过备注（选填）"></textarea>
-    <div class="rv-actions"><button class="btn danger" onclick="taskVerdict(${id}, false)">驳回，退回修改</button>
-      <button class="btn primary" id="rvPass" onclick="taskVerdict(${id}, true, ${fails})">通过并发放 ${r.reward_beans} 旅豆</button></div>` : ''
+    <div class="rv-actions"><button class="btn danger" onclick="entryVerdict(${id}, false, 0, ${p.task.id})">驳回，退回修改</button>
+      <button class="btn primary" id="rvPass" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id})">通过并发放 ${r.reward_beans} 旅豆</button></div>` : ''
   reviewDrawer(`${live ? '审核投稿' : '投稿与审核记录'} · ${esc(p.task.title)}`, `<div class="rv-grid"><div>${submissionHtml(p.submission)}</div><div>${right}</div></div>`, foot)
   rvSync()
 }
@@ -150,15 +184,15 @@ function rvSync() {
   pass.disabled = left > 0
   pass.title = left ? `还有 ${left} 条审核标准未确认` : ''
 }
-async function taskVerdict(id, pass, fails = 0) {
+async function entryVerdict(id, pass, fails = 0, taskId) {
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
   if (pass && fails && !confirm(`有 ${fails} 项自动核对未通过，确定仍然通过？`)) return
   const rules = [...document.querySelectorAll('[data-rule]')].map((b) => b.checked)
   try {
-    const r = await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass, reason, rules })
-    toast(pass ? `已通过，发放 ${r.rewarded} 旅豆${r.cashReward ? '；现金加奖请财务另行打款' : ''}` : '已驳回，任务退回作者修改')
-    closeModal(); tasks()
+    const r = await api('POST', '/admin/task-entries/' + id + '/verdict', { pass, reason, rules })
+    toast(pass ? `已通过，发放 ${r.rewarded} 旅豆${r.cashReward ? '；现金加奖已进入待打款' : ''}` : '已驳回，退回作者修改')
+    await tasks(); taskEntries(taskId)
   } catch (e) { toast(e.message, true) }
 }
 async function reviewNote(id) {
