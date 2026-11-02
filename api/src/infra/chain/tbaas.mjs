@@ -29,6 +29,7 @@ function scheduled(fn) {
   return pending
 }
 const isDemo = () => env().action === 'InvokeChainMakerDemoContract' && !!env().chainId
+const isFormal = () => env().action === 'InvokeChainMakerContract' && !!env().chainId
 
 const env = () => ({
   secretId: E.TBAAS_SECRET_ID || '',
@@ -54,6 +55,17 @@ function missing() {
   if (!e.secretKey) m.push('TBAAS_SECRET_KEY')
   if (!e.clusterId) m.push('TBAAS_CLUSTER_ID')
   if (!e.channel && !e.chainId) m.push('TBAAS_CHANNEL 或 TBAAS_CHAIN_ID')
+  if (isFormal()) {
+    if (!e.contract) m.push('TBAAS_CONTRACT')
+    if (e.channel) m.push('正式长安链不得配置 TBAAS_CHANNEL')
+    if (e.version !== '2018-04-16') m.push('TBAAS_VERSION=2018-04-16')
+    if (e.region !== 'ap-beijing') m.push('TBAAS_REGION=ap-beijing')
+    if (e.rootFunc !== 'writeRoot') m.push('TBAAS_ROOT_FUNC=writeRoot')
+    try {
+      const p = JSON.parse(e.paramTpl)
+      if (Object.keys(p).length !== 3 || p.root !== '{root}' || p.prevRoot !== '{prevRoot}' || p.bizDate !== '{bizDate}') throw 0
+    } catch { m.push('TBAAS_PARAM_TEMPLATE（正式落根合约模板）') }
+  }
   return m
 }
 
@@ -146,7 +158,7 @@ export default {
   id: 'tbaas',
   label: '腾讯云 TBaaS / 至信链',
   docs: '需已部署落根合约（默认 writeRoot）；资产发行需另配 TBAAS_MINT_FUNC / TBAAS_NFT_CONTRACT',
-  get capabilities() { return { anchor: true, queryByRoot: false, assets: true, did: false, confirm: isDemo() } },
+  get capabilities() { return { anchor: true, queryByRoot: false, assets: true, did: false, confirm: isDemo() || isFormal() } },
   mode: () => (missing().length ? 'noop' : 'real'),
   status: () => ({
     provider: 'tbaas', mode: missing().length ? 'noop' : 'real', missing: missing(),
@@ -167,19 +179,30 @@ export default {
   },
   /** 体验网络按交易 ID 查询回执。正式长安链与 Fabric 不套用体验网络协议。 */
   async queryTransaction(txRef) {
-    if (!isDemo()) throw new Error('交易回查目前仅支持长安链体验网络')
+    if (!isDemo() && !isFormal()) throw new Error('交易回查目前仅支持长安链网络')
     if (!/^[0-9a-f]{64}$/i.test(txRef || '')) throw new Error('交易 ID 必须是 64 位十六进制')
     const e = env()
-    const r = await call({ ClusterId: e.clusterId, ChainId: e.chainId, TxID: txRef }, 'QueryChainMakerDemoTransaction')
+    const r = await call({ ClusterId: e.clusterId, ChainId: e.chainId, TxID: txRef }, isDemo() ? 'QueryChainMakerDemoTransaction' : 'QueryChainMakerTransaction')
     const receipt = r.Result
     if (!receipt || typeof receipt !== 'object' || receipt.Code == null) throw new Error('tbaas 交易回执缺少结果码')
     if (receipt.TxId !== txRef) throw new Error('tbaas 回执交易号不一致')
     return { txRef, block: receipt.BlockHeight, code: Number(receipt.Code), requestId: r.RequestId }
   },
-  async confirm({ txRef }) {
+  async confirm({ txRef, root, prevRoot, bizDate }) {
     const r = await this.queryTransaction(txRef)
     if (!Number.isSafeInteger(r.block) || r.block < 0) throw new Error('tbaas 回执区块高度无效')
     if (r.block === 0) return { final: false, reason: '等待出块', confirmations: 0 }
+    if (isFormal()) {
+      if (!root || !bizDate) throw new Error('正式网络确认需要批次根与业务日期')
+      const e = env()
+      const result = await call({ ClusterId: e.clusterId, ChainId: e.chainId, ContractName: e.contract,
+        FuncName: 'readRoot', FuncParam: JSON.stringify({ root }) }, 'QueryChainMakerContract')
+      if (result.Result?.Code !== 0 || typeof result.Result.Result !== 'string') throw new Error('落根合约读回格式无效')
+      let record
+      try { record = JSON.parse(Buffer.from(result.Result.Result, 'base64').toString('utf8')) } catch { throw new Error('落根合约读回不是有效 JSON') }
+      const expectedDate = String(bizDate).slice(0, 10).replaceAll('-', '')
+      if (record.root !== root || record.txId !== txRef || record.prevRoot !== (prevRoot || '0'.repeat(64)) || record.bizDate !== expectedDate) throw new Error('落根合约记录与批次或交易不一致')
+    }
     return { final: true, block: String(r.block), confirmations: 1 }
   },
   /** 仅体验合约的 get；读回值不能作为该交易携带根的密码学证明。 */
