@@ -9,18 +9,33 @@
 //          任何区块浏览器都能看到该根，无需部署合约即可起步。
 // 资产做法：ERC-1155 mint（需 relayer 已托管有 mint 权限的账户）。
 //          calldata 用 src/infra/abi.mjs 真编码（含 4 字节选择器），签名可用 EVM_MINT_SIGNATURE 校准。
+import { E } from './conf.mjs'
 import { encodeCall, selectorOf, selfTest as abiSelfTest } from '../abi.mjs'
 
+// 网络预置：选网络后 chainId / 浏览器 / 默认确认数自动带出（仍可用对应变量单独覆盖）
+export const NETWORKS = {
+  ethereum: { label: 'Ethereum 主网', chainId: 1, explorer: 'https://etherscan.io/tx/', confirmations: 12 },
+  polygon: { label: 'Polygon PoS', chainId: 137, explorer: 'https://polygonscan.com/tx/', confirmations: 64 },
+  base: { label: 'Base', chainId: 8453, explorer: 'https://basescan.org/tx/', confirmations: 12 },
+  bnb: { label: 'BNB Smart Chain', chainId: 56, explorer: 'https://bscscan.com/tx/', confirmations: 15 },
+  arbitrum: { label: 'Arbitrum One', chainId: 42161, explorer: 'https://arbiscan.io/tx/', confirmations: 12 },
+  optimism: { label: 'OP Mainnet', chainId: 10, explorer: 'https://optimistic.etherscan.io/tx/', confirmations: 12 },
+  conflux: { label: 'Conflux eSpace（树图·国内合规公链）', chainId: 1030, explorer: 'https://evm.confluxscan.io/tx/', confirmations: 50 },
+  sepolia: { label: 'Sepolia 测试网', chainId: 11155111, explorer: 'https://sepolia.etherscan.io/tx/', confirmations: 3 },
+  amoy: { label: 'Polygon Amoy 测试网', chainId: 80002, explorer: 'https://amoy.polygonscan.com/tx/', confirmations: 3 },
+}
+const net = () => NETWORKS[(E.EVM_NETWORK || '').toLowerCase()] || null
+
 const env = () => ({
-  relayer: (process.env.EVM_RELAYER_URL || '').replace(/\/+$/, ''),
-  token: process.env.EVM_RELAYER_TOKEN || '',
-  rpc: (process.env.EVM_RPC_URL || '').replace(/\/+$/, ''),
-  chainId: process.env.EVM_CHAIN_ID || '',
-  contract: process.env.EVM_NFT_CONTRACT || '',      // ERC-1155 合约地址（资产发行用）
-  to: process.env.EVM_ANCHOR_TO || '',              // 落根交易的目标地址（可以是自己的地址）
-  explorer: (process.env.EVM_EXPLORER || '').replace(/\/+$/, ''), // 例：https://polygonscan.com/tx/
-  mintSig: process.env.EVM_MINT_SIGNATURE || 'mint(address,uint256,uint256,bytes)',
-  confirmations: Math.max(1, Number(process.env.EVM_CONFIRMATIONS || 12)),
+  relayer: (E.EVM_RELAYER_URL || '').replace(/\/+$/, ''),
+  token: E.EVM_RELAYER_TOKEN || '',
+  rpc: (E.EVM_RPC_URL || '').replace(/\/+$/, ''),
+  chainId: E.EVM_CHAIN_ID || (net() ? String(net().chainId) : ''),
+  contract: E.EVM_NFT_CONTRACT || '',      // ERC-1155 合约地址（资产发行用）
+  to: E.EVM_ANCHOR_TO || '',              // 落根交易的目标地址（可以是自己的地址）
+  explorer: (E.EVM_EXPLORER || (net() ? net().explorer : '')).replace(/\/+$/, '/'), // 例：https://polygonscan.com/tx/
+  mintSig: E.EVM_MINT_SIGNATURE || 'mint(address,uint256,uint256,bytes)',
+  confirmations: Math.max(1, Number(E.EVM_CONFIRMATIONS || (net() ? net().confirmations : 12))),
 })
 
 function missing() {
@@ -106,6 +121,16 @@ export default {
     return { final: true, block: String(block), confirmations }
   },
   async queryByRoot() { return null }, // 反查需索引器；以本地台账 + 浏览器为准
+  /** 连通性探测（只读）：RPC 可达、chainId 与配置一致、当前块高 */
+  async probe() {
+    const e = env()
+    if (!e.rpc) throw new Error('未配置 EVM_RPC_URL')
+    const t0 = Date.now()
+    const id = BigInt(await rpc('eth_chainId', []))
+    const head = BigInt(await rpc('eth_blockNumber', []))
+    if (e.chainId && BigInt(e.chainId) !== id) throw new Error(`RPC 返回 chainId=${id}，与配置 ${e.chainId} 不一致（可能接错网络）`)
+    return { ok: true, detail: `chainId ${id} · 块高 ${head} · ${Date.now() - t0}ms` }
+  },
   async issueAsset({ to, tokenId, amount = 1, uri }) {
     const e = env()
     if (!e.contract) throw new Error('EVM 未配置 NFT 合约（EVM_NFT_CONTRACT）')

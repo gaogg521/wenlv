@@ -16,6 +16,8 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' }
 
 async function bootstrap() {
+  // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
+  await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   // 后台超管种子（首次启动；密码 ADMIN_INIT_PASSWORD，默认 admin123，登录后必须修改）
   const c = await one('SELECT COUNT(*) c FROM admin_user')
   if (Number(c.c) === 0) {

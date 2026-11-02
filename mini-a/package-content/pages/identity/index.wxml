@@ -19,8 +19,8 @@
   </view>
   <view class="sec-title">{{lex.attest_list}}（{{d.attestations.length}}）<text class="more">消费与权益的可信记录</text></view>
   <view class="card" wx:for="{{d.attestations}}" wx:key="orderNo">
-    <view class="kv"><text class="ts">{{item.orderNo}}</text><text class="v">{{item.anchored?'已封存':'校验中'}}</text></view>
-    <view class="muted2" style="word-break:break-all">校验码 {{item.hash}}</view>
+    <view class="kv"><text class="ts">{{item.orderNo}}</text><text class="v">{{item.sealed?'已封存':'校验中'}}</text></view>
+    <view class="muted2">校验码 {{item.code}}</view>
   </view>
   <view class="note">{{lex.note}}</view>
 </block>

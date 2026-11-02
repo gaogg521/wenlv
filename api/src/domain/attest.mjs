@@ -168,10 +168,11 @@ export async function anchorToChain(batchId) {
   // 提交已成功：此后的数据库异常不能记成"提交失败"，否则重试会重复上链
   const needConfirm = chain.needsConfirmation() && !existed
   if (needConfirm) {
-    await q(`UPDATE attest_batch SET status = 5, chain_tx_ref = ?, submitted_at = NOW(3), last_err = NULL WHERE id = ?`,
-      [r.txRef, batchId])
+    await q(`UPDATE attest_batch SET status = 5, chain_tx_ref = ?, chain_provider = ?, submitted_at = NOW(3), last_err = NULL WHERE id = ?`,
+      [r.txRef, chain.providerId(), batchId])
     return { batchId, anchored: false, submitted: true, txRef: r.txRef, reason: '已提交，等待链上确认' }
   }
+  await q('UPDATE attest_batch SET chain_provider = ? WHERE id = ?', [chain.providerId(), batchId])
   return await markAnchored(batchId, r.txRef, r.block, null, !!existed)
 }
 
@@ -202,12 +203,21 @@ async function markFailed(b, e) {
  * - 交易被回滚/内容不符 → 置 3（可重试，重新提交）
  * - 还没够确认数 → 保持 5
  */
+/** 外部回调确认（异步链）：对方推送"某交易已上链"，核对交易号与根一致后置为已锚定 */
+export async function confirmByCallback({ provider, txRef, root, block }) {
+  const b = await one('SELECT * FROM attest_batch WHERE chain_tx_ref = ? AND status = 5', [txRef])
+  if (!b) return { matched: false, reason: '无待确认批次对应该交易号' }
+  if (b.chain_provider && b.chain_provider !== provider) return { matched: false, reason: '交易号属于其他链' }
+  if (root && root !== b.merkle_root) return { matched: false, reason: '回调中的根与批次不一致' }
+  return { matched: true, ...(await markAnchored(b.id, txRef, block || null, null)) }
+}
+
 export async function confirmPending(limit = 50) {
   const rows = await q(`SELECT * FROM attest_batch WHERE status = 5 ORDER BY seq ASC LIMIT ${Number(limit)}`)
   const out = []
   for (const b of rows) {
     try {
-      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root })
+      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, provider: b.chain_provider })
       if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
       else {
         await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',

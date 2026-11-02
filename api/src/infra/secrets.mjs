@@ -56,3 +56,11 @@ export async function delSecret(key) {
 export async function listSecretMeta() {
   return await q('SELECT k, hint, updated_by, updated_at FROM app_secret ORDER BY k')
 }
+
+/** 同步读取（链适配器在同步代码里取配置用）：只读缓存，缓存由 warmSecrets() 启动预热并每 15 秒刷新 */
+export function secretSync(key) { return cache && cache[key] ? cache[key] : '' }
+let timer = null
+export async function warmSecrets() {
+  await load(true)
+  if (!timer) { timer = setInterval(() => load(true).catch(() => {}), 15_000); timer.unref?.() }
+}

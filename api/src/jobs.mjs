@@ -121,6 +121,7 @@ async function tickRiskNotify() {
 }
 
 async function main() {
+  await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00')
   let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = ''
   for (;;) {

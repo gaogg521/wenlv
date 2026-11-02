@@ -32,7 +32,7 @@ const NAV = [
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['用户与内容', [['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
-  ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
   ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
   ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
 ]
@@ -148,7 +148,7 @@ function go(page) {
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
     budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控事件', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链路总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
+    web3dash: '链路总览', chainhub: '链接入中心', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
   $('#crumb').textContent = name
   const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }[page] || dash)
   Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })

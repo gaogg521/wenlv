@@ -2,12 +2,13 @@
 // 契约：POST /v1/attest/anchor 提交 Merkle 根 → 返回 txRef；GET /v1/attest/root/{root} 幂等查重
 // 签名：HMAC-SHA256(key, `${METHOD}\n${PATH}\n${ts}\n${rawBody}`) → x-signature
 // 能力：只做存证锚定（联盟链不对个人发资产），不支持 NFT 发行
+import { E } from './conf.mjs'
 import crypto from 'node:crypto'
 
 const env = () => ({
-  endpoint: (process.env.CHAIN_ENDPOINT || '').replace(/\/+$/, ''),
-  account: process.env.CHAIN_ACCOUNT || '',
-  key: process.env.CHAIN_KEY || '',
+  endpoint: (E.CHAIN_ENDPOINT || '').replace(/\/+$/, ''),
+  account: E.CHAIN_ACCOUNT || '',
+  key: E.CHAIN_KEY || '',
 })
 
 function missing() {
@@ -58,6 +59,13 @@ export default {
     const r = await call('GET', `/v1/attest/root/${encodeURIComponent(root)}`)
     if (!r || !r.found) return null
     return { txRef: r.txRef, block: String(r.blockHeight ?? '') }
+  },
+  /** 连通性探测（只读）：按一枚随机根查询，验证地址、账号与签名被对方接受；不产生交易 */
+  async probe() {
+    if (missing().length) throw new Error('缺少 ' + missing().join(' / '))
+    const t0 = Date.now()
+    const r = await call('GET', `/v1/attest/root/${crypto.randomBytes(32).toString('hex')}`)
+    return { ok: true, detail: `签名通过，查询返回 found=${!!(r && r.found)}，${Date.now() - t0}ms` }
   },
   /** 离线自检：用假密钥走一遍签名，不联网、不需要凭据 */
   selfTest() {
