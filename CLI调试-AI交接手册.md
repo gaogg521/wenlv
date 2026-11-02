@@ -35,7 +35,7 @@ bash C:/Users/allenzhao/Desktop/文旅项目/wanderlust/debug-cli.sh
 | 路径 | 是什么 | 能否预览/上传 |
 |---|---|---|
 | `mini-a/` | 正式小程序，appid `wx39208e393c439be5` | 可（但见 §5） |
-| `mini-b/` | appid `touristappid` 测试号 | **不可**，预览必报「不存在此 AppID」 |
+| `mini-b/` | appid `touristappid` 测试号 | **CLI 起不来**：`auto` / `open` / `preview` 三条路都在 appid 校验处被拒（`APPID_ERROR: 不存在此 AppID`）。要么在 **GUI 里手动打开**（测试号在 GUI 合法），要么换成真实 appid |
 | `api/` | 后端 + 全部自动化脚本（`api/test/automator-*.mjs`） | — |
 | `admin-web/` `server/` | Next 管理端 / Java 后端 | — |
 
@@ -69,6 +69,28 @@ MSYS_NO_PATHCONV=1 node test/automator-mini-a-flow.mjs
 
 期望输出：每页一行 `[auto] OK <path> -> <path>`；首页断言 `卡片数: 3`、`首个价格: ¥298`；
 链路末尾 `[flow] FLOW DONE`，并产出 4 张 `flow-*.png`。
+
+---
+
+### 2.1 同时启动多个小程序
+
+每个项目一个 `auto` + 一个独立端口，端口不能重复：
+
+```bash
+CLI="/d/Program Files (x86)/Tencent/微信web开发者工具/cli.bat"
+A="C:/Users/allenzhao/Desktop/文旅项目/wanderlust/mini-a"
+"$CLI" quit; sleep 8                      # 先全退，否则第二个 auto 会 wait IDE port timeout
+"$CLI" auto --project "$A" --auto-port 9421
+"$CLI" auto --project "<另一个项目>" --auto-port 9422
+
+# 一键校验两个是否真的起来了（连上 + 出首屏 + 截图）
+cd api && MSYS_NO_PATHCONV=1 node test/check-launch.mjs \
+  mini-a:ws://127.0.0.1:9421 另一个:ws://127.0.0.1:9422
+```
+
+两条实测结论：
+- **`touristappid` 项目 CLI 起不来**（`auto`/`open`/`preview` 全部在 appid 校验处报 `不存在此 AppID`），只能 GUI 手动打开或换真实 appid。
+- 第二个项目启动失败**会把第一个的会话带崩**（症状：第一个也突然连不上）。所以一次只起一个、确认成功了再起下一个；失败后先 `quit` 再重来，不要连续重试。
 
 ---
 
@@ -204,7 +226,6 @@ code: 10, message: 'Error: 错误 undefined (code 10)'
 ---
 
 ## 6. 本次改动的文件
-
 | 文件 | 改动 | 原因 |
 |---|---|---|
 | `wanderlust/debug-cli.sh` | **新增**，一键脚本 | 把环境差异、顺序依赖、exit code 汇总固化下来 |
@@ -217,6 +238,7 @@ code: 10, message: 'Error: 错误 undefined (code 10)'
 | `mini-a/package-content/pages/identity/index.wxml` | 改用 `{{d.profile.levelName}}` / `{{item.statusText}}` | 同上 |
 | `api/test/diag-code.mjs` | **新增**：读 `__wxAppCode__` 判断分包是否真被编译 | 坑 #7/#8 的唯一可靠判据 |
 | `api/test/diag-shots.mjs` | **新增**：导航后立即截图 + 抓 console | 区分"没打开 / 打开了但白屏 / 报错页" |
+| `api/test/check-launch.mjs` | **新增**：连多个自动化通道，校验"是否真的起来了"（连接 + 首屏 + 截图） | 启动多个小程序时的一键验收；也用来抓"起了一个、第二个把第一个带崩"的问题 |
 
 ---
 
