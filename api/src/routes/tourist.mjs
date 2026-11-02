@@ -438,7 +438,7 @@ const cPromo = {
 const cNotes = {
   'GET /c/notes': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT c.id, c.title, c.status, c.like_count, c.published_at FROM content_note c
+    return await q(`SELECT c.id, c.title, c.status, c.like_count, c.published_at, c.reject_reason FROM content_note c
       WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 30`, [u.uid])
   },
   'POST /c/notes': async (req) => {
@@ -458,7 +458,7 @@ const cNotes = {
     }
     const id = await tx(async (c) => c.ins(
       'INSERT INTO content_note (user_id, title, body, status, sec_check_id, related_product_id) VALUES (?,?,?,?,?,?)',
-      [u.uid, title || null, JSON.stringify({ text: body, images: imgUrls, imgSec }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null]))
+      [u.uid, title || null, JSON.stringify({ text: sanitizeRich(String(body)), images: imgUrls, imgSec }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null]))
     return { id, status, secMock: sec.mock, imgChecked: imgSec.length,
       msg: status === 2 ? '已发布' : status === 0 ? '图片机审中' : '进入人工审核' }
   },
@@ -487,7 +487,11 @@ const cNotes = {
         cashLabel: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null, deadline: t.deadline ? String(t.deadline).slice(0, 16) : null,
         minWords: Number(t.min_words) || 0, minImages: Number(t.min_images) || 0 }
     })
-    const mine = await q("SELECT id, task_no, title, status, reward_beans, submitted_at FROM content_task WHERE claimed_by = ? ORDER BY id DESC LIMIT 20", [u.uid])
+    // 被驳回退回进行中的任务，带上最近一次的驳回原因，作者据此修改后重新提交
+    const mine = (await q(`SELECT t.id, t.task_no, t.title, t.status, t.reward_beans, t.submitted_at,
+        (SELECT CONCAT(r.verdict, '|', COALESCE(r.reason, '')) FROM content_task_review r WHERE r.task_id = t.id ORDER BY r.id DESC LIMIT 1) last_review
+      FROM content_task t WHERE t.claimed_by = ? ORDER BY t.id DESC LIMIT 20`, [u.uid]))
+      .map(({ last_review, ...t }) => ({ ...t, rejectReason: Number(t.status) === 1 && String(last_review || '').startsWith('0|') ? String(last_review).slice(2) : null }))
     return { open, mine }
   },
   'GET /c/tasks/:id': async (req) => {
@@ -496,8 +500,11 @@ const cNotes = {
     if (!t || (Number(t.status) !== 0 && Number(t.claimed_by) !== Number(u.uid))) throw new BizError(1004, '任务不存在或已被领取')
     const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
     const prod = t.product_id ? await one('SELECT id, title FROM tour_product WHERE id = ? AND status = 1', [t.product_id]) : null
-    return { id: t.id, status: Number(t.status), mine: Number(t.claimed_by) === Number(u.uid), product: prod,
-      ...pp, cash_reward_label: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null }
+    const mine = Number(t.claimed_by) === Number(u.uid)
+    const last = mine ? await one('SELECT verdict, reason FROM content_task_review WHERE task_id = ? ORDER BY id DESC LIMIT 1', [t.id]) : null
+    return { id: t.id, status: Number(t.status), mine, product: prod,
+      ...pp, cash_reward_label: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null,
+      rejectReason: mine && Number(t.status) === 1 && last && Number(last.verdict) === 0 ? last.reason : null }
   },
   'POST /c/tasks/:id/claim': async (req) => {
     const u = requireUser(req)

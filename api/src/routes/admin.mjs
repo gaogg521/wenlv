@@ -18,6 +18,8 @@ import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportD
 import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
+import * as taskReview from '../domain/task-review.mjs'
+import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -606,7 +608,8 @@ const admin = {
   'GET /admin/content-tasks': async (req) => {
     await requireAdmin(req)
     return await q(`SELECT t.*, u.nickname claimer, p.title product_title,
-      (t.note_id IS NOT NULL) submitted
+      (t.note_id IS NOT NULL) submitted,
+      (SELECT COUNT(*) FROM content_task_review r WHERE r.task_id = t.id) review_count
       FROM content_task t
       LEFT JOIN user_account u ON u.id = t.claimed_by
       LEFT JOIN tour_product p ON p.id = t.product_id
@@ -655,25 +658,54 @@ const admin = {
     })
     return { updated: r.affectedRows > 0 }
   },
+  // 审核材料：约稿要求 + 投稿全文与图片 + 自动核对 + 历次审核记录（审核员据此判定）
+  'GET /admin/content-tasks/:id/review': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'review'])
+    const pack = await taskReview.taskReviewPack(req.params.id, (u) => apiImg(u, req))
+    if (!pack) throw new BizError(1004, '任务不存在')
+    return pack
+  },
   'POST /admin/content-tasks/:id/verdict': async (req) => {
-    const a = await requireAdmin(req, ['super','ops','review'])
+    const a = await requireAdmin(req, ['super', 'ops', 'review'])
     const passed = req.body.pass === true
-    return tx(async cc => {
-      const t = await cc.one('SELECT * FROM content_task WHERE id=? FOR UPDATE',[req.params.id])
-      if (!t || Number(t.status)!==2) throw new BizError(2002,'仅审核中任务可处理')
+    const reason = String(req.body.reason || '').trim()
+    if (!passed && reason.length < 4) throw new BizError(1001, '请填写驳回原因（至少 4 个字），作者会在小程序里看到')
+    if (reason.length > 300) throw new BizError(1001, '原因最多 300 字')
+    const bad = findBanned(reason)
+    if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
+    return tx(async (cc) => {
+      const t = await cc.one('SELECT * FROM content_task WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!t || Number(t.status) !== 2) throw new BizError(2002, '仅审核中任务可处理')
+      const reqs = taskReview.requirementsOf(t)
+      const confirmed = Array.isArray(req.body.rules) ? req.body.rules : []
+      if (passed && reqs.review_rules.some((_, i) => confirmed[i] !== true)) throw new BizError(1001, '请逐条确认审核标准后再通过')
+      const note = t.note_id ? await cc.one('SELECT * FROM content_note WHERE id = ?', [t.note_id]) : null
+      if (passed && (!note || Number(note.status) !== 2)) throw new BizError(1001, '投稿作品已下架或不存在，不能通过')
+      const auto = note ? taskReview.autoChecks(reqs, taskReview.noteView(note), t.submitted_at) : []
       if (passed) {
         const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
-        if (!budget || !t.claimed_by) throw new BizError(5002,'缺少可用奖励预算或领取人，任务保持审核中')
-        await bean.grant(Number(t.claimed_by),Number(t.reward_beans),bean.BIZ.TASK,t.task_no,budget.id,cc)
-        await cc.upd('UPDATE content_task SET status=3,finished_at=NOW(3) WHERE id=?',[t.id])
-      } else await cc.upd('UPDATE content_task SET status=1 WHERE id=?',[t.id])
-      await audit(cc,'admin:'+a.name,'content-task',passed?'approve':'reject','task-'+t.id,{status:2},{status:passed?3:1,reward:passed?Number(t.reward_beans):0})
-      return passed?{finished:true,rewarded:Number(t.reward_beans)}:{rejected:true,backTo:'进行中'}
+        if (!budget || !t.claimed_by) throw new BizError(5002, '缺少可用奖励预算或领取人，任务保持审核中')
+        await bean.grant(Number(t.claimed_by), Number(t.reward_beans), bean.BIZ.TASK, t.task_no, budget.id, cc)
+        await cc.upd('UPDATE content_task SET status=3, finished_at=NOW(3) WHERE id=?', [t.id])
+      } else {
+        // 驳回：退回进行中，清掉本次投稿，作者修改后可重新提交（投稿与原因留在审核记录里）
+        await cc.upd('UPDATE content_task SET status=1, note_id=NULL, submitted_at=NULL WHERE id=?', [t.id])
+      }
+      await cc.ins(`INSERT INTO content_task_review (task_id, note_id, user_id, verdict, reason, checks, reviewer) VALUES (?,?,?,?,?,?,?)`,
+        [t.id, t.note_id || null, t.claimed_by || null, passed ? 1 : 0, reason || null,
+          JSON.stringify({ auto, rules: reqs.review_rules.map((r, i) => ({ rule: r, ok: confirmed[i] === true })) }), 'admin:' + a.name])
+      await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'task-' + t.id, { status: 2 },
+        { status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, reason: reason || null })
+      return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: Number(t.cash_reward) || 0 } : { rejected: true, backTo: '进行中' }
     })
   },
   'POST /admin/content-tasks/:id/delete': async (req) => {
-    await requireAdmin(req)
-    await q('DELETE FROM content_task WHERE id = ?', [req.params.id])
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const t = await one('SELECT id, status, title FROM content_task WHERE id = ?', [req.params.id])
+    if (!t) throw new BizError(1004, '任务不存在')
+    // 有人领取后删除会让作者的投稿和奖励记录失去归属：只允许删待领取 / 已下线的任务
+    if (![0, 4].includes(Number(t.status))) throw new BizError(1001, '已有人领取的任务不能删除')
+    await tx(async (c) => { await c.q('DELETE FROM content_task WHERE id = ?', [t.id]); await audit(c, 'admin:' + a.name, 'content-task', 'delete', 'task-' + t.id, { title: t.title }, null) })
     return { deleted: true }
   },
   // 离线核销冲突人工队列（治理）

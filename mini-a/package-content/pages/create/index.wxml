@@ -43,13 +43,17 @@
   <view class="kv" wx:for="{{tasks.mine}}" wx:key="id">
     <text>{{item.title}}</text>
     <view class="v">{{item.statusText}}</view>
-    <view wx:if="{{item.status === 1}}" class="v" bindtap="submitTask" data-id="{{item.id}}" style="color:var(--brand)">选择作品提交</view>
+    <view wx:if="{{item.status === 1}}" class="v" bindtap="submitTask" data-id="{{item.id}}" style="color:var(--brand)">{{item.rejectReason ? '修改后重新提交' : '选择作品提交'}}</view>
   </view>
+  <view class="reject-tip" wx:for="{{tasks.mine}}" wx:key="id" wx:if="{{item.rejectReason}}"><view class="reject-h">「{{item.title}}」未通过</view>{{item.rejectReason}}</view>
 </view>
 <view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
 
 <view class="sec-title">我的作品（{{notes.length}}）</view>
 <view class="card" wx:if="{{notes.length}}">
-  <view class="kv" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">{{item.statusText}} ›</text></view>
+  <block wx:for="{{notes}}" wx:key="id">
+    <view class="kv" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">{{item.statusText}} ›</text></view>
+    <view class="reject-tip" wx:if="{{item.status === 3 && item.reject_reason}}"><view class="reject-h">未通过原因</view>{{item.reject_reason}}</view>
+  </block>
 </view>
 <view class="note">领取任务后，选择一篇已发布的作品提交审核。审核通过后发放任务奖励。</view>

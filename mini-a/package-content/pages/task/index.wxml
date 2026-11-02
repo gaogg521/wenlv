@@ -1,6 +1,7 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="load">重新加载</view></view>
 <view wx:elif="{{!t}}" class="skeleton" style="height:360rpx;margin-top:20rpx"></view>
 <block wx:else>
+  <view class="reject-tip" wx:if="{{t.rejectReason}}"><view class="reject-h">上次投稿未通过</view>{{t.rejectReason}}<view class="reject-sub">按意见修改后，回到「创作中心」重新选择作品提交</view></view>
   <image wx:if="{{t.cover_img}}" class="gallery" src="{{t.cover_img}}" mode="aspectFill" />
   <view class="book-bar dt-head" style="{{t.cover_img ? '' : 'margin-top:24rpx'}}">
     <view class="dt-title">{{t.title}}</view>

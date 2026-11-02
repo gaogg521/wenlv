@@ -10,11 +10,10 @@ async function content() {
     <div class="card-head"><h2>笔记审核</h2><span class="muted">P0 笔记只读 · P1 开放发布后进入此队列（机审+人工）</span></div>
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
-      <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(n.body).slice(0, 50))}</td>
+      <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(noteExcerpt(n.body))}</td>
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
-      <td>${[0, 1].includes(n.status) ? `<button class="btn primary sm" onclick="verdict('content', ${n.id}, true)">通过</button>
-        <button class="btn danger sm" onclick="verdict('content', ${n.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
+      <td>${[0, 1].includes(n.status) ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('暂无待审内容（P1 开放笔记发布后进入此队列）')}
   </div>
   <div class="card">
@@ -58,7 +57,7 @@ async function tasks() {
       <div class="cfg-tabs" style="margin:0">${TABS.map(([v, n]) => `<div class="cfg-tab ${String(window.__taskSt) === v ? 'on' : ''}" onclick="window.__taskSt='${v}';tasks()">${n} ${v !== '' ? cnt(Number(v)) : ''}</div>`).join('')}</div>
       <button class="btn primary sm" onclick="taskModal()">＋ 新建任务</button></div>
     ${frs.length ? `<table><thead><tr><th>任务</th><th>类型</th><th>报酬</th><th>交付要求</th><th>领取</th><th>截止</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${list.map((t) => `<tr>
+    ${frs.map((t) => `<tr>
       <td><div style="display:flex;gap:8px;align-items:center">${t.cover_img ? `<img src="${esc(t.cover_img)}" style="width:56px;height:38px;object-fit:cover;border-radius:6px;flex:none">` : ''}
         <div><div class="td-main">${esc(t.title)}</div><div class="td-sub">${esc((t.tags || '').split(',').filter(Boolean).map((x) => '#' + x.trim()).join(' ') || (t.product_title ? '目标：' + t.product_title : String(t.brief || '').slice(0, 26)))}</div></div></div></td>
       <td><span class="pill off">${TASK_CAT[t.category] || esc(t.category)}</span></td>
@@ -68,10 +67,11 @@ async function tasks() {
       <td class="td-sub">${t.deadline ? esc(String(t.deadline).slice(0, 10)) : '长期'}</td>
       <td>${ST[t.status] || ''}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
+        ${t.status === 2 ? `<button class="btn primary sm" onclick="reviewTask(${t.id})">审核投稿</button>` : ''}
+        ${t.status !== 2 && (t.note_id || Number(t.review_count)) ? `<button class="btn ghost sm" onclick="reviewTask(${t.id})">${t.status === 3 ? '查看投稿' : '审核记录'}</button>` : ''}
         ${t.status <= 1 ? `<button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>` : ''}
         ${t.rich_brief ? `<button class="btn ghost sm" onclick="taskDetail(${t.id})">说明</button>` : ''}
-        <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`
+        ${[0, 4].includes(t.status) ? `<button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`
     : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该状态下暂无任务')}</div>`
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
@@ -86,8 +86,97 @@ async function taskDetail(id) {
       截止 ${t.deadline ? String(t.deadline).slice(0, 10) : '长期'}${t.product_title ? ' · 目标商品：' + esc(t.product_title) : ''}</span></div>`,
     `<button class="btn primary" onclick="closeModal()">关闭</button>`)
 }
-async function taskVerdict(id, pass) {
-  try { await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass }); toast(pass ? '任务已通过' : '任务已驳回'); tasks() } catch (e) { toast(e.message, true) }
+/* ============ 投稿审核（约稿任务 / 笔记共用）============ */
+// 审核员必须看得到投稿全文与图片，并对照约稿要求逐项核对后再判定；驳回原因作者可见。
+function noteExcerpt(body) {
+  let b = body
+  if (typeof b === 'string') { try { b = JSON.parse(b) } catch { b = { text: b } } }
+  return String((b && b.text) || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '（无正文）'
+}
+function reviewDrawer(title, bodyHtml, footHtml) {
+  $('#modalRoot').innerHTML = `<div class="drawer-overlay" onclick="closeModal()"></div>
+    <div class="drawer review-drawer"><div class="drawer-head"><h3>${title}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+    <div class="drawer-body">${bodyHtml}</div>${footHtml ? `<div class="rv-foot">${footHtml}</div>` : ''}</div>`
+}
+const NOTE_ST = ['机审中', '人工审核', '已发布', '已驳回', '已下架']
+function submissionHtml(n) {
+  if (!n) return `<div class="empty"><div class="e-ico">🗒</div>当前没有投稿（被驳回后作者尚未重新提交）</div>`
+  return `<div class="rv-sub">
+    <div class="rv-meta"><span class="pill ${n.status === 2 ? 'ok' : 'warn'}">${NOTE_ST[n.status] || '—'}</span>
+      <span>${n.wordCount} 字</span><span>${n.imageCount} 张图</span><span>${esc(n.machineCheck)}</span>
+      ${n.publishedAt ? `<span>发布于 ${esc(String(n.publishedAt).slice(0, 16).replace('T', ' '))}</span>` : ''}</div>
+    <h2 class="rv-title">${esc(n.title || '（无题）')}</h2>
+    <div class="rv-body rt-preview">${n.html || esc(n.text) || '<span class="muted">（无正文）</span>'}</div>
+    ${n.images.length ? `<div class="rv-h" style="margin-top:12px">图片一览（${n.images.length}，点击看原图）</div><div class="rv-imgs">${n.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="投稿图片" loading="lazy"></a>`).join('')}</div>` : ''}
+    ${n.rejectReason ? `<p class="rv-reason">上次驳回原因：${esc(n.rejectReason)}</p>` : ''}
+  </div>`
+}
+function authorHtml(u, extra) {
+  if (!u) return ''
+  return `<div class="rv-box"><div class="rv-h">作者</div><b>${esc(u.nickname || '用户#' + u.id)}</b>
+    ${u.creator_tag && u.creator_tag !== 'none' ? ` <span class="pill s40">${esc(CREATOR_TAG[u.creator_tag] || u.creator_tag)}</span>` : ''}
+    <div class="td-sub">已发布作品 ${Number(u.published || 0)} 篇${extra || ''}</div></div>`
+}
+async function reviewTask(id) {
+  let p
+  try { p = await api('GET', `/admin/content-tasks/${id}/review`) } catch (e) { return toast(e.message, true) }
+  const r = p.requirements, live = p.task.status === 2 && p.submission
+  const fails = p.checks.filter((c) => !c.ok).length
+  const right = `
+    <div class="rv-box"><div class="rv-h">约稿要求</div><p>${esc(r.brief || '')}</p>
+      ${r.must_mention.length ? `<div class="rv-chips">必须提及：${r.must_mention.map((w) => `<span class="pill s20">${esc(w)}</span>`).join('')}</div>` : ''}
+      ${r.forbidden.length ? `<div class="rv-chips">禁止出现：${r.forbidden.map((w) => `<span class="pill s70">${esc(w)}</span>`).join('')}</div>` : ''}
+      <div class="td-sub">${[r.min_words ? `≥ ${r.min_words} 字` : '', r.min_images ? `≥ ${r.min_images} 图` : '', r.deadline ? '截止 ' + esc(String(r.deadline).slice(0, 16)) : '长期'].filter(Boolean).join(' · ')}${p.product ? ' · 种草线路：' + esc(p.product.title) : ''}</div>
+      ${r.rich_brief ? `<details class="rv-more"><summary>任务详细说明</summary><div class="rt-preview">${r.rich_brief}</div></details>` : ''}</div>
+    ${p.checks.length ? `<div class="rv-box"><div class="rv-h">自动核对 ${fails ? `<span class="pill s70">${fails} 项未通过</span>` : '<span class="pill ok">全部通过</span>'}</div>
+      ${p.checks.map((c) => `<div class="rv-check ${c.ok ? 'ok' : 'bad'}"><span>${c.ok ? '✓' : '✗'}</span>${esc(c.label)}<em>${esc(c.detail)}</em></div>`).join('')}
+      <div class="td-sub" style="margin-top:6px">字数按去空白后的字符计；提及/禁用词按标题+正文包含判断，仅供参考，以人工判断为准。</div></div>` : ''}
+    ${live && r.review_rules.length ? `<div class="rv-box"><div class="rv-h">审核标准（逐条确认后才能通过）</div>
+      ${r.review_rules.map((x, i) => `<label class="rv-rule"><input type="checkbox" data-rule="${i}" onchange="rvSync()"> ${esc(x)}</label>`).join('')}</div>` : ''}
+    <div class="rv-box"><div class="rv-h">奖励</div><b>${r.reward_beans} 旅豆</b>${r.cash_reward ? ` + ${fen(r.cash_reward)} 现金<div class="td-sub">现金加奖不会自动发放：通过后请财务另行打款并留痕</div>` : ''}</div>
+    ${authorHtml(p.author, p.author ? ` · 完成约稿 ${Number(p.author.done_tasks || 0)} 单` : '')}
+    ${p.history.length ? `<div class="rv-box"><div class="rv-h">审核记录</div>${p.history.map((h) => `<div class="rv-hist"><span class="pill ${Number(h.verdict) ? 'ok' : 's70'}">${Number(h.verdict) ? '通过' : '驳回'}</span>
+      <span class="td-sub">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))} · ${esc(h.reviewer)}${h.note_id ? ' · 作品#' + h.note_id : ''}</span>${h.reason ? `<div>${esc(h.reason)}</div>` : ''}</div>`).join('')}</div>` : ''}`
+  const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）/ 通过备注（选填）"></textarea>
+    <div class="rv-actions"><button class="btn danger" onclick="taskVerdict(${id}, false)">驳回，退回修改</button>
+      <button class="btn primary" id="rvPass" onclick="taskVerdict(${id}, true, ${fails})">通过并发放 ${r.reward_beans} 旅豆</button></div>` : ''
+  reviewDrawer(`${live ? '审核投稿' : '投稿与审核记录'} · ${esc(p.task.title)}`, `<div class="rv-grid"><div>${submissionHtml(p.submission)}</div><div>${right}</div></div>`, foot)
+  rvSync()
+}
+function rvSync() {
+  const pass = document.getElementById('rvPass'); if (!pass) return
+  const boxes = [...document.querySelectorAll('[data-rule]')]
+  const left = boxes.filter((b) => !b.checked).length
+  pass.disabled = left > 0
+  pass.title = left ? `还有 ${left} 条审核标准未确认` : ''
+}
+async function taskVerdict(id, pass, fails = 0) {
+  const reason = (document.getElementById('rvReason')?.value || '').trim()
+  if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
+  if (pass && fails && !confirm(`有 ${fails} 项自动核对未通过，确定仍然通过？`)) return
+  const rules = [...document.querySelectorAll('[data-rule]')].map((b) => b.checked)
+  try {
+    const r = await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass, reason, rules })
+    toast(pass ? `已通过，发放 ${r.rewarded} 旅豆${r.cashReward ? '；现金加奖请财务另行打款' : ''}` : '已驳回，任务退回作者修改')
+    closeModal(); tasks()
+  } catch (e) { toast(e.message, true) }
+}
+async function reviewNote(id) {
+  let p
+  try { p = await api('GET', `/admin/content/${id}`) } catch (e) { return toast(e.message, true) }
+  const n = p.note, live = [0, 1].includes(n.status)
+  const right = `${authorHtml(p.author, ` · 被驳回 ${Number(p.author?.rejected || 0)} 篇`)}
+    ${p.product ? `<div class="rv-box"><div class="rv-h">关联线路</div>${esc(p.product.title)}</div>` : ''}
+    ${p.tasks.length ? `<div class="rv-box"><div class="rv-h">作为约稿投稿</div>${p.tasks.map((t) => esc(t.title)).join('<br>')}</div>` : ''}
+    <div class="rv-box"><div class="rv-h">审核要点</div><div class="td-sub">是否原创、图文是否相符、有无广告导流/联系方式、有无不实承诺或违规内容。驳回原因会展示给作者。</div></div>`
+  const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）"></textarea>
+    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false)">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true)">通过并发布</button></div>` : ''
+  reviewDrawer(`${live ? '审核笔记' : '查看笔记'} · ${esc(n.title || '（无题）')}`, `<div class="rv-grid"><div>${submissionHtml(n)}</div><div>${right}</div></div>`, foot)
+}
+async function noteVerdict(id, pass) {
+  const reason = (document.getElementById('rvReason')?.value || '').trim()
+  if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
+  try { await api('POST', `/admin/content/${id}/verdict`, { pass, reason }); toast(pass ? '已通过并发布' : '已驳回，作者可看到原因'); closeModal(); content() } catch (e) { toast(e.message, true) }
 }
 async function deleteTask(id) {
   if (!confirm('删除该任务？')) return
