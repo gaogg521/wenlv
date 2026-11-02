@@ -441,8 +441,12 @@ const cPromo = {
 const cNotes = {
   'GET /c/notes': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT c.id, c.title, c.status, c.like_count, c.published_at, c.reject_reason FROM content_note c
-      WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 30`, [u.uid])
+    if(u.end!=='c')throw new BizError(1003,'仅游客账号可查看作品')
+    return await q(`SELECT c.id,c.title,c.status,c.like_count,c.published_at,c.reject_reason,
+      m.reason offline_reason,a.status appeal_status,a.resolution appeal_resolution,
+      (c.status=4 AND c.moderation_id IS NOT NULL AND a.id IS NULL) can_appeal
+      FROM content_note c LEFT JOIN content_moderation m ON m.id=(SELECT x.id FROM content_moderation x WHERE x.note_id=c.id ORDER BY x.id DESC LIMIT 1)
+      LEFT JOIN content_appeal a ON a.moderation_id=m.id WHERE c.user_id=? ORDER BY c.id DESC LIMIT 30`,[u.uid])
   },
   'POST /c/notes': async (req) => {
     const u = requireUser(req)
@@ -460,8 +464,8 @@ const cNotes = {
       if (!r.mock) status = 0 // 真实异步机审 → 机审中，等回执
     }
     const id = await tx(async (c) => c.ins(
-      'INSERT INTO content_note (user_id, title, body, status, sec_check_id, related_product_id) VALUES (?,?,?,?,?,?)',
-      [u.uid, title || null, JSON.stringify({ text: sanitizeRich(String(body)), images: imgUrls, imgSec }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null]))
+      'INSERT INTO content_note (user_id, title, body, status, sec_check_id, related_product_id,published_at) VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))',
+      [u.uid, title || null, JSON.stringify({ text: sanitizeRich(String(body)), images: imgUrls, imgSec }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null,status]))
     return { id, status, secMock: sec.mock, imgChecked: imgSec.length,
       msg: status === 2 ? '已发布' : status === 0 ? '图片机审中' : '进入人工审核' }
   },
