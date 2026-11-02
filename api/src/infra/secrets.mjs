@@ -4,32 +4,50 @@
 import crypto from 'node:crypto'
 import { q, one } from '../db.mjs'
 
-const master = (() => {
-  const hex = process.env.SECRETS_KEY
-  if (hex && hex.length === 64) return Buffer.from(hex, 'hex')
-  return crypto.createHash('sha256').update(process.env.JWT_SECRET || 'wanderlust-dev-jwt-secret-change-me').digest()
-})()
+/** 主密钥来源：'env'（SECRETS_KEY）或 'derived'（由 JWT_SECRET 派生，换 JWT_SECRET 会导致已存凭据无法解密） */
+export function resolveMasterKey(env = process.env) {
+  const hex = env.SECRETS_KEY
+  if (hex) {
+    // 设置了但格式不对时直接拒绝启动：静默回落到派生密钥，会让之后保存的凭据换了把钥匙
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('SECRETS_KEY 必须是 64 位十六进制（32 字节）。生成：node scripts/secrets-key.mjs new')
+    return { key: Buffer.from(hex, 'hex'), source: 'env' }
+  }
+  return { key: crypto.createHash('sha256').update(env.JWT_SECRET || 'wanderlust-dev-jwt-secret-change-me').digest(), source: 'derived' }
+}
+const { key: master, source: keySource } = resolveMasterKey()
+export { keySource }
 
-let cache = null, loadedAt = 0
+let cache = null, loadedAt = 0, undecryptable = []
 async function load(force = false) {
   if (!force && cache && Date.now() - loadedAt < 15_000) return cache
-  try { const rows = await q('SELECT k, enc_value FROM app_secret'); cache = Object.fromEntries(rows.map((r) => [r.k, dec(r.enc_value)])) }
-  catch { cache = {} }
-  loadedAt = Date.now()
+  let rows = []
+  try { rows = await q('SELECT k, enc_value FROM app_secret') } catch { rows = [] }
+  // 逐条解密：一条坏了不影响其他条；解不开的记下来，在运维控制台告警（通常是换了 JWT_SECRET / SECRETS_KEY）
+  const next = {}, bad = []
+  for (const r of rows) { try { next[r.k] = decWith(master, r.enc_value) } catch { bad.push(r.k) } }
+  if (bad.length && bad.join() !== undecryptable.join()) console.warn(`[secrets] ${bad.length} 条凭据无法用当前主密钥解密：${bad.join(', ')}（检查 SECRETS_KEY / JWT_SECRET 是否被更换）`)
+  cache = next; undecryptable = bad; loadedAt = Date.now()
   return cache
 }
-function dec(buf) {
+export function decWith(key, buf) {
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
   const iv = b.subarray(0, 12), tag = b.subarray(12, 28), ct = b.subarray(28)
-  const c = crypto.createDecipheriv('aes-256-gcm', master, iv)
+  const c = crypto.createDecipheriv('aes-256-gcm', key, iv)
   c.setAuthTag(tag)
   return Buffer.concat([c.update(ct), c.final()]).toString('utf8')
 }
-function enc(str) {
+export function encWith(key, str) {
   const iv = crypto.randomBytes(12)
-  const c = crypto.createCipheriv('aes-256-gcm', master, iv)
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv)
   const ct = Buffer.concat([c.update(str, 'utf8'), c.final()])
   return Buffer.concat([iv, c.getAuthTag(), ct])
+}
+const enc = (str) => encWith(master, str)
+
+/** 运维控制台用：主密钥来源、已存条数、解不开的条目 */
+export async function secretsHealth() {
+  await load(true)
+  return { keySource, stored: Object.keys(cache).length + undecryptable.length, undecryptable: [...undecryptable] }
 }
 
 /** 读取：缓存→库→环境变量（.env 迁移兼容） */

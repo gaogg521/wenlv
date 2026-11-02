@@ -1,0 +1,159 @@
+// 向往的自由 · 运营后台 SPA（零依赖，设计系统见 app.css）
+const $ = (s) => document.querySelector(s)
+let TOKEN = localStorage.getItem('admin_token') || ''
+let ME = JSON.parse(localStorage.getItem('admin_me') || 'null')
+
+const ICONS = {
+  sys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>',
+  flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4c4-2 8 2 12 0v9c-4 2-8-2-12 0"/></svg>',
+  content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>',
+  eco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3c3 3.5 3 14.5 0 18M3.5 9h17M3.5 15h17"/></svg>',
+  withdraw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5h.01M18 14.5h.01"/></svg>',
+  sys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>',
+  flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4c4-2 8 2 12 0v9c-4 2-8-2-12 0"/></svg>',
+  content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>',
+  eco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3c3 3.5 3 14.5 0 18M3.5 9h17M3.5 15h17"/></svg>',
+  withdraw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5h.01M18 14.5h.01"/></svg>',
+  dash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 13h6V4H4zM14 20h6V4h-6zM4 20h6v-4H4z"/></svg>',
+  orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg>',
+  products: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3z"/></svg>',
+  merchants: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16l-1.5 11h-13zM8 9V6a4 4 0 0 1 8 0v3"/></svg>',
+  settlements: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M4 4v16M8 16v-5M12 16V8M16 16v-3M20 16V6"/></svg>',
+  budgets: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10c.5-1 4.5-1 4.5 1s-4.5 1-4.5 3 4.5 2 5 1"/></svg>',
+  promoters: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-4 3-6 6.5-6s5.7 2 6.5 6M16 4a3.5 3.5 0 0 1 0 7M17.5 14c2.5.6 3.7 2.5 4 6"/></svg>',
+  config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.5 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.5-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>',
+  risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 3 20h18zM12 10v4M12 17.5v.5"/></svg>',
+  audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
+}
+// 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
+const NAV = [
+  ['工作台', [['dash', '驾驶舱', 'dash']]],
+  ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
+  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
+  ['小程序', [['miniapp', '装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
+  ['用户与内容', [['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
+  ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
+  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
+]
+
+const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
+  refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行' }
+/** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]） */
+function auditDiff(before, after) {
+  const obj = (v) => { if (v == null) return {}; if (typeof v === 'string') { try { return JSON.parse(v) } catch { return { value: v } } } return v }
+  const b = obj(before), a = obj(after)
+  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])]
+  if (!keys.length) return '—'
+  const show = (v) => v === undefined ? '∅' : esc((typeof v === 'object' ? JSON.stringify(v) : String(v)).slice(0, 40))
+  return '<div class="audit-diff">' + keys.slice(0, 6).map((k) => b[k] === a[k]
+    ? `<div><span class="k">${esc(k)}</span> ${show(a[k])}</div>`
+    : `<div><span class="k">${esc(k)}</span> <del>${show(b[k])}</del> → <ins>${show(a[k])}</ins></div>`).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
+}
+const bizTag = (t) => `<span class="biz-tag">${BIZ_CN[t] || t}<small>${t}</small></span>`
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
+
+function toast(msg, err) {
+  const d = document.createElement('div')
+  d.className = 'toast' + (err ? ' err' : '')
+  d.textContent = msg
+  $('#toastWrap').appendChild(d)
+  setTimeout(() => d.remove(), 2600)
+}
+function modal(title, bodyHtml, foots) {
+  const root = $('#modalRoot')
+  root.innerHTML = `<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-head"><h3>${title}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">${bodyHtml}</div>
+    <div class="modal-foot">${foots}</div></div></div>`
+}
+function closeModal() { $('#modalRoot').innerHTML = '' }
+function drawer(title, bodyHtml) {
+  const root = $('#modalRoot')
+  root.innerHTML = `<div class="drawer-overlay" onclick="closeModal()"></div>
+    <div class="drawer"><div class="drawer-head"><h3 style="color:#fff">${title}</h3>
+    <button class="modal-x" style="color:#fff" onclick="closeModal()">✕</button></div>
+    <div class="drawer-body">${bodyHtml}</div></div>`
+}
+
+window.fill = (u, p) => { document.querySelector('#luser').value = u; document.querySelector('#lpass').value = p; document.querySelector('#lerr').textContent = '' }
+// 全角→半角 + 去空格（中文输入法防手滑）
+const norm = (s) => String(s ?? '').replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, ' ').trim()
+
+let MFA_CHALLENGE = null
+function login() {
+  $('#lerr').textContent = ''
+  api('POST', '/admin/login', { username: norm(document.querySelector('#luser').value), password: norm(document.querySelector('#lpass').value) }).then((d) => {
+    if (d.mfaRequired) {
+      MFA_CHALLENGE = d.challenge
+      const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
+      $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+      $('#step1').style.display = 'none'
+      $('#step2').style.display = 'block'
+      document.querySelector('#mfacode')?.focus()
+      return
+    }
+    TOKEN = d.token; ME = d.user
+    localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
+    boot()
+  }).catch((e) => { $('#lerr').textContent = e.message })
+}
+async function mfaSubmit() {
+  $('#lerr2').textContent = ''
+  try {
+    const d = await api('POST', '/admin/login/mfa', { challenge: MFA_CHALLENGE, code: norm(document.querySelector('#mfacode').value) })
+    TOKEN = d.token; ME = d.user
+    localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
+    MFA_CHALLENGE = null
+    boot()
+  } catch (e) { $('#lerr2').textContent = e.message }
+}
+async function mfaResend() {
+  try { await api('POST', '/admin/login/mfa', { challenge: MFA_CHALLENGE, resend: true }); toast('验证码已重新发送') } catch (e) { toast(e.message, true) }
+}
+function backToStep1() { $('#step2').style.display = 'none'; $('#step1').style.display = 'block'; MFA_CHALLENGE = null }
+function logout() { TOKEN = ''; ME = null; localStorage.clear(); location.reload() }
+
+function boot() {
+  if (!TOKEN) { $('#login').style.display = 'flex'; $('#frame').style.display = 'none'; return }
+  $('#login').style.display = 'none'; $('#frame').style.display = 'flex'
+  const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
+  const nameCn = ME?.displayName || ME?.username || ''
+  $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
+  const access = { ops: ['dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','conflicts','audit'] }
+  const allowed = access[ME?.role]
+  $('#nav').innerHTML = NAV.map(([g, items]) => {
+    items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
+    if (!items.length) return ''
+    return `<details class="nav-section" ${['工作台','交易履约','小程序'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+  }).join('')
+  fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
+  // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）
+  const keys = [...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p)
+  const requested = location.hash.slice(1)
+  const destination = keys.includes(requested) ? requested : keys[0]
+  history.replaceState(null, '', '#' + destination)
+  go(destination, { history: false })
+}
+
+const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
+const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
+
+
+// ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
+const RESOURCE_ST = { 1: '<span class="pill ok">合作中</span>', 0: '<span class="pill warn">暂缓</span>', 2: '<span class="pill s70">清退</span>' }
+const CAT_CN = { script: '剧本闯关', yoga: '瑜伽之旅', sister: '姐姐系列', single: '单身社交', sport: '体育竞技', family: '亲子主题', red: '红色文旅', shop: '商城 SKU' }
+const CITY_CN = { 310118: '上海·青浦', 310000: '上海', 320508: '苏州·姑苏', 330500: '湖州', 330523: '湖州·安吉' }
+const SUP_KIND = { ticket: '门票', hotel: '住宿', transport: '交通', ground: '地接', catering: '餐饮', other: '其他' }
+const MERCHANT_KIND = { catering: '餐饮', hotel: '住宿', ticket: '门票', transport: '交通', experience: '体验', other: '其他' }
+const SETTLE_MODE = { monthly: '月结', per_order: '单结', prepaid: '预付' }
+
+
+/* ============ CSV 导出（下载逻辑见 workspace.js 的 downloadExport）============ */
+const EXPBTN = (what, label) => `<button class="btn ghost sm" style="margin-left:auto" onclick="downloadExport('${what}')">⬇ 导出${label || ''}</button>`
+
+
+document.addEventListener('DOMContentLoaded', () => boot(), { once: true })

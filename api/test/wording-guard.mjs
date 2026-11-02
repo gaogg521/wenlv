@@ -59,7 +59,8 @@ try {
   const staff = await one(`SELECT s.merchant_id, u.mini_b_openid FROM merchant_staff s JOIN user_account u ON u.id = s.user_id
     JOIN merchant m ON m.id = s.merchant_id WHERE s.status = 1 AND m.status = 1 AND u.mini_b_openid IS NOT NULL ORDER BY s.role DESC LIMIT 1`)
   const mT = staff ? (await login('/m/auth/login', { code: String(staff.mini_b_openid).replace(/^mock-openid-b?-?/, ''), merchantId: staff.merchant_id }))?.token : null
-  const src = fs.readFileSync(path.join(root, 'api/src/routes.mjs'), 'utf8')
+  const rdir = path.join(root, 'api/src/routes')
+  const src = fs.readdirSync(rdir).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(rdir, f), 'utf8')).join('\n')
   const routes = [...src.matchAll(/'GET (\/(?:c|m)\/[^']+)'/g)].map((m) => m[1])
   const fill = (r) => r.replace(':no', any?.order_no || 'X').replace(':id', String(any?.product_id || 1)).replace(':kind', 'merchant')
   let n = 0

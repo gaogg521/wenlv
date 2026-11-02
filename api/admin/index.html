@@ -71,7 +71,17 @@
 <div id="toastWrap" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="/admin-ui/app.js"></script>
+<!-- 普通脚本，共享全局作用域：core 先加载（全局状态、导航、登录、通用组件），pages/ 为各栏目页面，workspace 为外壳（api/go/订单列表/无障碍） -->
+<script src="/admin-ui/core.js"></script>
+<script src="/admin-ui/pages/dashboard.js"></script>
+<script src="/admin-ui/pages/trade.js"></script>
+<script src="/admin-ui/pages/growth.js"></script>
+<script src="/admin-ui/pages/content.js"></script>
+<script src="/admin-ui/pages/resources.js"></script>
+<script src="/admin-ui/pages/play.js"></script>
+<script src="/admin-ui/pages/system.js"></script>
+<script src="/admin-ui/pages/web3.js"></script>
+<script src="/admin-ui/pages/actions.js"></script>
 <script src="/admin-ui/entity-editor.js"></script>
 <script src="/admin-ui/chainhub.js"></script>
 <script src="/admin-ui/miniapp.js"></script>

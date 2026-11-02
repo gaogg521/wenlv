@@ -90,6 +90,7 @@ tbody tr:last-child td { border-bottom: none; }
 .pill.s70 { background: #fdecec; color: var(--red); } .pill.s90 { background: #eef1f5; color: #6b7280; }
 .pill.ok { background: #e3f6ec; color: #0b7a45; } .pill.off { background: #eef1f5; color: #6b7280; }
 .pill.warn { background: #fdf3e0; color: #b45309; }
+.pill.err { background: #fde8e8; color: #b42318; }
 
 /* ===== KPI ===== */
 .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px; }
