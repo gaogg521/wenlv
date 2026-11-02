@@ -27,6 +27,36 @@ const ORDER_AGG = `LEFT JOIN (SELECT user_id, COUNT(*) cnt, SUM(CASE WHEN status
   FROM orders WHERE status IN ${VALID} GROUP BY user_id) o ON o.user_id = u.id`
 
 export const people = {
+  'GET /admin/content-dashboard': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'review', 'city_partner', 'readonly'])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const page = Number(req.query.page || 1), size = 20
+    if (!Number.isSafeInteger(page) || page < 1 || page > 1000000) throw new BizError(1001, '页码无效')
+    const ps = scopeFilter(a, 'p.city_code'), os = scopeFilter(a, 'o.city_code')
+    const from = `FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE 1=1${ps.sql}`
+    const raw = await one(`SELECT COUNT(*) total, SUM(n.status=2) published, SUM(n.status IN (2,4)) passed,
+      SUM(n.status IN (2,3,4)) reviewed, SUM(n.status IN (0,1)) pending, SUM(n.status=3) rejected,
+      SUM(n.status=4) offline, COALESCE(SUM(n.like_count),0) likes,
+      SUM(p.id IS NULL) unlinked ${from}`, ps.params)
+    const stats = Object.fromEntries(Object.entries(raw).map(([k,v]) => [k,N(v)]))
+    stats.passRate = stats.reviewed ? stats.passed / stats.reviewed : null
+    const daily = await q(`SELECT DATE_FORMAT(n.published_at,'%Y-%m-%d') d, COUNT(*) n ${from}
+      AND n.status IN (2,4) AND n.published_at >= CURDATE() - INTERVAL 13 DAY GROUP BY d ORDER BY d`, ps.params)
+    // EXISTS 去重线路；这是关联关系下的经营数据，并非笔记点击/购买归因。
+    const linked = `EXISTS (SELECT 1 FROM content_note n WHERE n.related_product_id=p.id AND n.status=2)`
+    const trade = await one(`SELECT COUNT(*) orders, COALESCE(SUM(o.qty),0) travelers, COALESCE(SUM(o.amount_pay),0) gmv
+      FROM orders o JOIN tour_product p ON p.id=o.product_id WHERE ${linked}${ps.sql}${os.sql} AND o.status IN ${PAID}`, [...ps.params,...os.params])
+    const total = N((await one(`SELECT COUNT(*) n FROM tour_product p WHERE ${linked}${ps.sql}`,ps.params)).n)
+    const products = await q(`SELECT p.id,p.title,p.city_code,p.status,
+      (SELECT COUNT(*) FROM content_note n WHERE n.related_product_id=p.id AND n.status=2) notes,
+      (SELECT COALESCE(SUM(n.like_count),0) FROM content_note n WHERE n.related_product_id=p.id AND n.status=2) likes,
+      (SELECT COUNT(*) FROM orders o WHERE o.product_id=p.id AND o.status IN ${PAID}${os.sql}) orders,
+      (SELECT COALESCE(SUM(o.amount_pay),0) FROM orders o WHERE o.product_id=p.id AND o.status IN ${PAID}${os.sql}) gmv
+      FROM tour_product p WHERE ${linked}${ps.sql} ORDER BY gmv DESC,p.id DESC LIMIT ? OFFSET ?`, [...os.params,...os.params,...ps.params,size,(page-1)*size])
+    const notes = await q(`SELECT n.id,n.title,n.like_count,n.published_at,p.title product_title ${from}
+      AND n.status=2 ORDER BY n.like_count DESC,n.id DESC LIMIT 10`,ps.params)
+    return { stats, daily, trade, products, notes, total, page, size, scopeCity: a.scopeCity || null }
+  },
   'GET /admin/scenics/:id/overview': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner', 'readonly'])
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
