@@ -1,5 +1,7 @@
 // 演示内容录入 + 用户旅程 —— 全程走真实 HTTP 接口（与后台 SPA / 小程序完全同路径），
 // 模拟真实操作顺序，暴露链路问题。运行：node test/scenario-populate.mjs
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/scenario-populate.mjs')
 import { hashPassword } from '../src/auth.mjs'
 import { q } from '../src/db.mjs'
 import fs from 'node:fs'
@@ -27,7 +29,7 @@ async function api(method, path, body, token) {
 async function main() {
   // ===== 环境准备（唯一不走 HTTP 的一步：清场 + 保证管理员在） =====
   await q('SET FOREIGN_KEY_CHECKS = 0')
-  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema='wanderlust' AND table_name NOT IN ('rule_config','bean_global_cap','admin_user')")) {
+  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','schema_migration')")) {
     await q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')

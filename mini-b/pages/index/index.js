@@ -6,6 +6,7 @@ Page({
     this.setData({ greet: h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好',
       role: getApp().globalData.role || 0, merchant: getApp().globalData.merchant || wx.getStorageSync('merchant') || null })
     if (!getApp().globalData.token) return this.setData({ err: 'login' })
+    api.request('/m/site').then((s) => this.setData({ notice: s.notice || '' })).catch(() => {})
     api.request('/m/workbench').then((wb) => this.setData({ wb, err: '' })).catch((e) => this.setData({ err: e.msg || 'error' }))
     api.request('/m/stats').then((st) => {
       const max = Math.max(...st.week.map((w) => w.orders), 1)

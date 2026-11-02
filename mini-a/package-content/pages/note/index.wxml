@@ -1,5 +1,5 @@
 <view wx:if="{{n}}">
-  <view class="hero" style="background:linear-gradient(135deg,#0f766e,#155e75)">
+  <view class="hero">
     <view class="hi" style="font-size:40rpx">{{n.title || '旅行笔记'}}</view>
     <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
   </view>

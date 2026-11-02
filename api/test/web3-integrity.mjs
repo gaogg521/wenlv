@@ -42,7 +42,7 @@ const have = types.map((t) => t.biz_type)
 ok(need.every((t) => have.includes(t)), `${need.length} 类事件全部有埋点（实际 ${have.length} 类）`, have)
 
 console.log('== A3 inclusion proof 可离线重算 ==')
-const batches = await rows(`SELECT id, merkle_root FROM attest_batch WHERE status >= 1`)
+const batches = await rows(`SELECT id, merkle_root, merkle_version FROM attest_batch WHERE status >= 1`)
 let checked = 0
 let bad = []
 for (const b of batches) {
@@ -52,7 +52,7 @@ for (const b of batches) {
     const path = typeof e.leaf_path === 'string' ? JSON.parse(e.leaf_path) : e.leaf_path
     if (!path) { bad.push({ batch: b.id, event: e.id, why: 'no proof' }); continue }
     checked++
-    if (!verifyProof(e.payload_hash, path, b.merkle_root)) bad.push({ batch: b.id, event: e.id, why: 'root mismatch' })
+    if (!verifyProof(e.payload_hash, path, b.merkle_root, b.merkle_version)) bad.push({ batch: b.id, event: e.id, why: 'root mismatch' })
   }
 }
 ok(checked > 0 && bad.length === 0, `逐条重算 ${checked} 片叶子，全部等于批次根`, bad.slice(0, 3))
@@ -146,13 +146,15 @@ console.log('== A14 数字身份（VC）公开能力 ==')
 
 console.log('== A15 结算记录的隐私边界 ==')
 {
-  const st = await row('SELECT id, total_amount FROM settlement ORDER BY id DESC LIMIT 1')
+  // 取金额有辨识度的结算单（总额为 0 的手续费单会让"不含该数值"的检查误报）
+  const st = await row('SELECT id, total_amount, fee_total FROM settlement WHERE total_amount > 99 ORDER BY id DESC LIMIT 1')
   if (st) {
     const r = await fetch(`${API}/open/verify/settlement/${st.id}`).then((x) => x.json())
     const d = r.data || {}
     const keys = Object.keys(d)
     ok(!keys.some((k) => /amount|amt|total|price|merchantName/i.test(k)), '公开复核不返回任何金额/商户名字段', keys)
     ok(!JSON.stringify(d).includes(String(st.total_amount)), '响应体不含结算总额数值')
+    if (Number(st.fee_total) > 99) ok(!JSON.stringify(d).includes(String(st.fee_total)), '响应体不含退改手续费数值')
     ok(String(d.merkleRoot || '').length === 64, '返回 64 位校验码')
   } else ok(false, '无结算单可测（先跑 npm run e2e）')
 }

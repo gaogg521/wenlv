@@ -1,6 +1,6 @@
 // 路由层：/c 游客端 · /m 商户端 · /admin 运营后台 · /callback/wxpay 支付回调
 import { q, one, count, tx, BizError } from './db.mjs'
-import { cfgAll, cfgNum, cfgArr, loadConfig } from './config.mjs'
+import { cfg, cfgAll, cfgNum, cfgArr, loadConfig } from './config.mjs'
 import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from './auth.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
@@ -10,6 +10,11 @@ import * as refund from './domain/refund.mjs'
 import * as group from './domain/group.mjs'
 import * as wxpay from './domain/wxpay.mjs'
 import * as attestDomain from './domain/attest.mjs'
+import * as merkleLib from './domain/merkle.mjs'
+import * as refundPolicy from './domain/refund-policy.mjs'
+import { sanitizeRich } from './infra/sanitize.mjs'
+import { bizDay } from './infra/bizdate.mjs'
+import * as entities from './domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
 import * as asset from './domain/asset.mjs'
@@ -23,7 +28,8 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 
 const fen2yuan = (f) => (Number(f) / 100).toFixed(2)
-const apiImg = (u) => (u && /^https?:/.test(u)) ? u : (u ? 'http://127.0.0.1:8080' + u : u)
+// 相对路径图片补全为对外基址（PUBLIC_BASE 或按请求头推断），真机/外网不能拿到 127.0.0.1
+const apiImg = (u, req) => (u && /^https?:/.test(u)) ? u : (u ? publicBase(req) + u : u)
 // CSV 序列化：RFC4180 转义 + UTF-8 BOM（Excel 直开不乱码）
 function toCsv(rows) {
   if (!rows.length) return '\uFEFF(空)\n'
@@ -79,26 +85,74 @@ const c = {
 
   'GET /c/tours': async (req) => {
     const { cat = 'all', kw = '', city = '' } = req.query
-    const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days
-      FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''} ${kw ? 'AND p.title LIKE ?' : ''} ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
-      [...(cat !== 'all' ? [cat] : []), ...(kw ? ['%' + kw + '%'] : []), ...(city ? [city] : [])])
-    return rows.map(r => ({ ...r, loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    // 搜索同时命中标题、副标题，以及后台维护的「搜索关键词」「标签」
+    const like = '%' + kw + '%'
+    const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
+        JSON_EXTRACT(p.profile, '$.tags') tags_json
+      FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''}
+      ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
+      ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
+      [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
+    return rows.map(({ tags_json, ...r }) => ({ ...r, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
   },
 
   'GET /c/tours/:id': async (req) => {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
     if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
-      price_adult, early_price, early_days, status
+      price_adult, early_price, early_days, status, profile
       FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 ORDER BY depart_date`, [p.id])
+    const img = (u) => apiImg(u, req)
+    const merchantRow = await one('SELECT * FROM merchant WHERE id = ?', [p.merchant_id])
+    const scenicRow = p.scenic_id ? await one('SELECT * FROM scenic_spot WHERE id = ? AND status = 1', [p.scenic_id]) : null
+    const relatedFaqs = await q(`SELECT id, question, answer FROM faq WHERE status = 1 AND JSON_CONTAINS(COALESCE(JSON_EXTRACT(profile, '$.related_products'), JSON_ARRAY()), CAST(? AS JSON)) ORDER BY is_hot DESC, sort, id LIMIT 5`, [String(p.id)])
     const agg = await one(`SELECT COALESCE(AVG(rating),0) avg_rating, COUNT(*) count FROM review WHERE product_id = ? AND status = 1`, [p.id])
-    return { ...p, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from), sessions: sessions.map((s) => {
+    // 只下发白名单字段：此前 p.* 会把商家暗号下半句、未支付可见的上半句、单品佣金、合同编号等内部字段带给游客
+    const PUB_COLS = ['id', 'channel', 'city_code', 'cat', 'title', 'subtitle', 'days_desc', 'price_from', 'bean_gift', 'merchant_id', 'scenic_id',
+      'status', 'rich_desc', 'images', 'meeting_point', 'safety_note', 'insurance_note', 'insurance_fee', 'merchant_name']
+    const PUB_PROFILE = ['tags', 'suitable', 'age_range', 'group_size', 'itinerary', 'transport', 'meeting_geo', 'notice', 'share_title', 'share_image', 'keywords']
+    const pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
+    const pub = Object.fromEntries(PUB_COLS.map((k) => [k, p[k]]))
+    pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
+    return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
+      merchantCard: entities.publicProfile('merchant', merchantRow, img),
+      scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
+      relatedFaqs,
+      sessions: sessions.map(({ profile, ...s }) => {
       const ep = order.priceForSession(s)
-      return { ...s, priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
+      return { ...s, info: entities.publicProfile('session', { ...s, profile }), priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
         isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
         groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
     }),
-      rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) } }
+      rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
+      // 预订须知用的实时规则：页面不写死参数中心可调的数值
+      bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
+        refundRules: refundPolicy.describe(await cfg('order.refund_policy')) } }
+  },
+
+  // 小程序装修（公开，首屏可用）：文案与配置来自后台「小程序装修」；旅豆数值来自参数中心，页面不写死
+  'GET /c/site': async (req) => {
+    const row = await one('SELECT * FROM site_config WHERE id = 1')
+    const v = row ? entities.readValues('site', row) : {}
+    const img = (u) => (u ? apiImg(u, req) : u)
+    const { merchant_notice, merchant_join_tip, ...pub } = v // 商户端内容不给游客端
+    for (const k of ['share_image', 'service_qr']) pub[k] = img(pub[k])
+    pub.destinations = (pub.destinations || []).map((d) => ({ ...d, cover: img(d.cover) }))
+    return { ...pub, beanRules: { orderRatePct: Math.round(await cfgNum('bean.order_rate') * 100), deductMaxPct: Math.round(await cfgNum('bean.deduct_max_pct') * 100),
+      expireMonths: await cfgNum('bean.expire_months'), beanPerYuan: 10 } }
+  },
+  // 履约商户 / 景区 公开资料页（白名单字段）
+  'GET /c/places/:kind/:id': async (req) => {
+    const kind = req.params.kind
+    if (!['merchant', 'scenic'].includes(kind)) throw new BizError(1004, '不支持的类型')
+    const row = kind === 'merchant'
+      ? await one('SELECT * FROM merchant WHERE id = ? AND status = 1', [req.params.id])
+      : await one('SELECT * FROM scenic_spot WHERE id = ? AND status = 1', [req.params.id])
+    if (!row) throw new BizError(1004, '未找到或已停止合作')
+    const col = kind === 'merchant' ? 'merchant_id' : 'scenic_id'
+    const tours = await q(`SELECT id, title, price_from, images, city_code, cat, days_desc FROM tour_product WHERE ${col} = ? AND status = 1 ORDER BY id DESC LIMIT 10`, [row.id])
+    return { kind, id: row.id, ...entities.publicProfile(kind, row, (u) => apiImg(u, req)),
+      tours: tours.map((t) => ({ ...t, priceLabel: fen2yuan(t.price_from) })) }
   },
 
   // 评价列表（公开；仅展示态）
@@ -191,7 +245,17 @@ const c = {
          AND s.quota - s.booked >= ? AND s.id <> ?
        ORDER BY s.depart_date LIMIT 10`,
       [o.product_id, Number(o.qty), Number(o.amount_goods), Number(o.qty), o.session_id]) : []
-    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions }
+    const lastRefund = await one('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, status, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC LIMIT 1', [o.id])
+    const refundInfo = lastRefund ? { refundNo: lastRefund.refund_no, refundLabel: fen2yuan(lastRefund.amount), feeLabel: fen2yuan(lastRefund.fee_amount),
+      feeRate: lastRefund.fee_rate != null ? Number(lastRefund.fee_rate) : null, status: Number(lastRefund.status) } : null
+    // 已支付后才给领队联系方式；商户只给公开营业信息
+    const paid = [20, 30, 40, 50].includes(Number(o.status))
+    const sRow = await one('SELECT * FROM tour_session WHERE id = ?', [o.session_id])
+    const trip = sRow ? { departDate: String(sRow.depart_date).slice(0, 10), ...(paid ? entities.sessionForOrder(sRow) : entities.publicProfile('session', sRow)) } : null
+    const mRow = await one('SELECT * FROM merchant WHERE id = ?', [o.merchant_id])
+    const mp = entities.publicProfile('merchant', mRow, (u) => apiImg(u, req)) || {}
+    const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
+    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
@@ -211,7 +275,9 @@ const c = {
   'GET /c/bean/account': async (req) => {
     requireUser(req)
     const bal = await bean.balance(requireUser(req).uid)
-    return { balance: bal, rule: '消费返豆 10% · 100 豆≈10 元 · 单笔抵扣上限 10% · 滚动 12 个月有效 · 不可转账不可购买' }
+    const rate = Math.round(await cfgNum('bean.order_rate') * 100), cap = Math.round(await cfgNum('bean.deduct_max_pct') * 100), months = await cfgNum('bean.expire_months')
+    return { balance: bal, orderRatePct: rate, deductMaxPct: cap, expireMonths: months,
+      rule: `消费返豆 ${rate}% · 100 豆可抵 10 元 · 单笔抵扣上限 ${cap}% · 滚动 ${months} 个月有效 · 不可转让不可购买` }
   },
 
   'GET /c/bean/ledger': async (req) => {
@@ -266,13 +332,26 @@ const c = {
     return { url: '/uploads/' + name }
   },
 
+  // 退款试算：与真正扣费同一函数，确认弹窗里的金额就是实际退回金额
+  'GET /c/orders/:no/refund-quote': async (req) => {
+    const u = requireUser(req)
+    const o = await order.byNo(req.params.no)
+    if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    const qt = await refund.quoteFor(o)
+    return { ...qt, feeLabel: qt.feeFen != null ? fen2yuan(qt.feeFen) : null, refundLabel: qt.refundFen != null ? fen2yuan(qt.refundFen) : null,
+      amountPayLabel: fen2yuan(o.amount_pay), rules: refundPolicy.describe(await cfg('order.refund_policy')) }
+  },
   'POST /c/orders/:no/refund': async (req) => {
     const u = requireUser(req)
     const o = await order.byNo(req.params.no)
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     const { reason } = req.body
     if (o.status === 10) { await order.fire(o.order_no, 'CLOSE_TIMEOUT', 'user'); return { closed: true } }
-    const r = await refund.fullRefund({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid })
+    // 自助退款只覆盖"已支付、未核销"：核销即服务已发生，全额自助退款会让用户玩完再全退。
+    // 已核销订单的售后由客服在后台处理（后台退款接口不受此限制，并留审计）
+    if (![20, 30].includes(Number(o.status))) throw new BizError(2002, Number(o.status) === 40 ? '凭证已核销，如需售后请联系客服' : '当前状态不可退款')
+    // 按退改梯度（order.refund_policy）扣手续费；不在任何档位内（如出发当天）直接拒绝并提示联系客服
+    const r = await refund.refundOrder({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid, applyPolicy: true })
     await q("UPDATE orders SET close_reason = 'user_refund' WHERE order_no = ? AND status = 70", [o.order_no])
     return r
   },
@@ -513,11 +592,12 @@ const m = {
     if (!s) throw new BizError(1004, '结算单不存在')
     const e = await one(`SELECT e.payload_hash, e.status, e.version_no, e.leaf_path, b.merkle_root, b.seq, b.chain_tx_ref
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = 'settlement' AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, ['settle-' + s.id])
+      WHERE e.biz_type = 'settlement' AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, ['settle-' + s.id])
     const doc = settlementReportDoc({
       settlementId: s.id, period: s.period, orderCount: s.order_count, totalAmount: s.total_amount,
       amtFulfill: s.amt_fulfill, amtService: s.amt_service, amtPromoter: s.amt_promoter,
       amtBeanbudget: s.amt_beanbudget, amtRetained: s.amt_retained, status: Number(s.status),
+      feeCount: Number(s.fee_count || 0), feeTotal: Number(s.fee_total || 0), feeMerchant: Number(s.fee_merchant || 0), feePlatform: Number(s.fee_platform || 0),
       payloadHash: e ? e.payload_hash : null,
       merkleRoot: e ? e.merkle_root : null,
     }, publicBase(req))
@@ -566,14 +646,6 @@ const SUP_CATS = ['ticket', 'hotel', 'transport', 'ground', 'catering', 'other']
 const CREATOR_TAGS = ['none', 'signed', 'star', 'limited']
 
 // 富文本白名单清洗（后台编辑内容入库前统一过一道：去脚本/事件/外域脚本）
-function sanitizeRich(html) {
-  let s = String(html || '')
-  s = s.replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-       .replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[^>]*\/?>/gi, '')
-       .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-       .replace(/(href|src)\s*=\s*(?:"|')?\s*javascript:[^"'\s>]*/gi, '$1="#"')
-  return s.slice(0, 200000)
-}
 
 async function audit(c, actor, module_, action, bizRef, before, after) {
   await c.q('INSERT INTO audit_log (actor, module, action, biz_ref, before_val, after_val) VALUES (?,?,?,?,?,?)',
@@ -752,7 +824,10 @@ const admin = {
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const pay = await one('SELECT wx_trans_no, status, amount, callback_at FROM payment WHERE order_id = ?', [o.id])
-    return { ...o, events, passes, pay }
+    const refunds = await q('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC', [o.id])
+    // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
+    const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
+    return { ...o, events, passes, pay, refunds, refundQuote: quote }
   },
 
   'POST /admin/orders/:no/refund': async (req) => {
@@ -760,7 +835,13 @@ const admin = {
     const o = await order.byNo(req.params.no)
     if (!o) throw new BizError(2003, '订单不存在')
     if (![20, 30, 40].includes(o.status)) throw new BizError(2002, '状态不可退款')
-    return refund.fullRefund({ orderNo: o.order_no, reason: req.body.reason || '后台退款', operator: 'admin:' + a.name })
+    // mode=policy 按退改梯度扣手续费；默认 full 为客服全额处理（已核销售后、平台原因等），操作人与原因进审计和存证
+    const mode = req.body.mode === 'policy' ? 'policy' : 'full'
+    const reason = String(req.body.reason || '').trim() || (mode === 'full' ? '客服全额退款' : '后台按规则退款')
+    const r = await refund.refundOrder({ orderNo: o.order_no, reason, operator: 'admin:' + a.name, applyPolicy: mode === 'policy' })
+    await tx(async (cc) => audit(cc, 'admin:' + a.name, 'order', 'refund-' + mode, o.order_no, { status: Number(o.status) },
+      { refundFen: r.refundFen, feeFen: r.feeFen || 0, reason }))
+    return r
   },
 
   // 商品/团期管理（"简单内容填充"的落点）
@@ -802,10 +883,11 @@ const admin = {
     const p = await one('SELECT rich_desc FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     const old = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
-    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
+    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, excludes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
     const rich = { intro: intro !== undefined ? sanitizeRich(intro) : (old.intro || ''), includes: includes !== undefined ? arr(includes) : (old.includes || []),
-      highlights: highlights !== undefined ? arr(highlights) : (old.highlights || []) }
+      highlights: highlights !== undefined ? arr(highlights) : (old.highlights || []),
+      excludes: excludes !== undefined ? arr(excludes) : (old.excludes || []) }
     if (supplierId && !(await one('SELECT id FROM supplier WHERE id=?', [supplierId]))) throw new BizError(1001, '关联供应商不存在')
     if (scenicId && !(await one('SELECT id FROM scenic_spot WHERE id=?', [scenicId]))) throw new BizError(1001, '关联景区不存在')
     const r = await q(`UPDATE tour_product SET title = COALESCE(?, title), subtitle = COALESCE(?, subtitle),
@@ -879,6 +961,13 @@ const admin = {
     await q('UPDATE tour_product SET status = ? WHERE id = ?', [Number(req.body.status), req.params.id])
     return { ok: true }
   },
+  'GET /admin/products/:id/sessions': async (req) => {
+    await requireAdmin(req)
+    const p = await one('SELECT id, title, price_from FROM tour_product WHERE id = ?', [req.params.id])
+    if (!p) throw new BizError(1004, '商品不存在')
+    const sessions = await q('SELECT id, depart_date, quota, booked, min_go, price_adult, early_price, status FROM tour_session WHERE product_id = ? ORDER BY depart_date DESC', [p.id])
+    return { title: p.title, priceFrom: Number(p.price_from), sessions }
+  },
   'POST /admin/sessions': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
     const { productId, departDate, quota, minGo, priceAdult, earlyPrice, earlyDays } = req.body
@@ -894,6 +983,40 @@ const admin = {
   },
 
   'GET /admin/merchants': async (req) => { const a = await requireAdmin(req); const sc=scopeFilter(a); return await q('SELECT * FROM merchant WHERE 1=1 '+sc.sql+' ORDER BY id',sc.params) },
+  // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====
+  'GET /admin/entity-schemas/:kind': async (req) => {
+    const a = await requireAdmin(req)
+    const sch = entities.publicSchema(req.params.kind)
+    const fill = async (fs) => { for (const f of fs) { if (f.type === 'ref') f.options = await entities.refOptions(f.ref, a); if (f.of) await fill(f.of) } }
+    for (const s of sch.sections) await fill(s.fields)
+    return sch
+  },
+  'GET /admin/entities/:kind/:id': async (req) => {
+    await requireAdmin(req)
+    const sc = entities.get(req.params.kind)
+    const row = await one(`SELECT * FROM ${sc.table} WHERE ${sc.idCol} = ?`, [req.params.id])
+    if (!row) throw new BizError(1004, sc.label + '不存在')
+    const values = entities.readValues(req.params.kind, row)
+    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values) }
+  },
+  // 列表页用：一次取回某类实体全部的扩展资料完整度（不返回资料本身）
+  'GET /admin/entities/:kind': async (req) => {
+    await requireAdmin(req)
+    const sc = entities.get(req.params.kind)
+    const rows = await q(`SELECT * FROM ${sc.table}`)
+    return rows.map((r) => { const v = entities.readValues(req.params.kind, r); return { id: r[sc.idCol], completeness: entities.completeness(req.params.kind, v), cover: v.logo || v.cover || v.icon_img || (v.images || [])[0] || v.image || null } })
+  },
+  'POST /admin/entities/:kind': async (req) => {
+    const a = await requireAdmin(req)
+    return entities.save(req.params.kind, req.body.values || {}, { admin: a, parentId: Number(req.body.parentId) || null,
+      audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
+  },
+  'PUT /admin/entities/:kind/:id': async (req) => {
+    const a = await requireAdmin(req)
+    return entities.save(req.params.kind, req.body.values || {}, { admin: a, id: req.params.id,
+      audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
+  },
+
   'POST /admin/merchants': async (req) => {
     const a = await requireAdmin(req, ['super'])
     const { name, cityCode, wxpaySubMchid, bizLicense, kind } = req.body
@@ -919,6 +1042,12 @@ const admin = {
     const cur = await one('SELECT v, `sensitive` FROM rule_config WHERE k = ?', [key])
     if (!cur) throw new BizError(1004, '参数不存在')
     const oldV = typeof cur.v === 'string' ? cur.v : JSON.stringify(cur.v)
+    if (key === 'order.refund_policy') {
+      try { refundPolicy.parsePolicy(newValue) } catch (e) { throw new BizError(1001, e.message) }
+    }
+    if (key === 'settlement.refund_fee_merchant_pct' && !(Number(newValue) >= 0 && Number(newValue) <= 1)) {
+      throw new BizError(1001, '商户分成比例需在 0~1 之间（如 0.5 = 50%）')
+    }
     // 影响预览：旅豆/佣金类参数回溯近 30 日
     let preview = null
     if (key.startsWith('bean.order_rate')) {
@@ -994,7 +1123,9 @@ const admin = {
   'POST /admin/settlements/generate': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
     const period = req.body.period || new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
-    const merchants = await q('SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50')
+    const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
+      UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
     const ids = []
     for (const mm of merchants) ids.push(await promo.generateSettlement(Number(mm.mid), period))
     return { period, settlementIds: ids.filter(i => i > 0) }
@@ -1064,7 +1195,8 @@ const admin = {
       rows = await q(`SELECT p.id, p.title, p.channel, p.city_code, p.cat, p.price_from, p.bean_gift, p.status, m.name merchant_name
         FROM tour_product p JOIN merchant m ON m.id = p.merchant_id ORDER BY p.id`)
     } else if (what === 'settlements') {
-      rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained, s.status
+      rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained,
+          s.fee_count, s.fee_total, s.fee_merchant, s.fee_platform, s.amt_fulfill + s.fee_merchant AS payable_to_merchant, s.status
         FROM settlement s JOIN merchant m ON m.id = s.merchant_id ORDER BY s.id DESC LIMIT 2000`)
     } else if (what === 'merchants') {
       rows = await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, apply_mobile, approved_at, created_at FROM merchant ORDER BY id`)
@@ -1279,7 +1411,7 @@ const adminSys = {
     if (name === 'close-timeout') n = await closeTimeout()
     else if (name === 'commission-due') n = await settleDue()
     else if (name === 'attest-pack') { const b = await attestDomain.packBatch(); n = b.leaves }
-    else if (name === 'attest-anchor') { const r = await attestDomain.reanchorPending(50); n = r.filter((x) => x.anchored).length }
+    else if (name === 'attest-anchor') { const c = await attestDomain.confirmPending(50); const r = await attestDomain.reanchorPending(50); n = [...c, ...r].filter((x) => x.anchored).length }
     else if (name === 'bean-day-close') { const r = await attestDomain.closeBeanDay(req.body && req.body.date); n = r.leaves || 0 }
     else if (name === 'attest-reconcile') { const r = await attestDomain.reconcile(); n = r.checks.filter((x) => x.ok).length }
     else if (name === 'complete-due') { const { completeOrder } = await import('./jobs.mjs'); const rows = await q("SELECT order_no FROM orders WHERE status = 40 AND refund_deadline <= NOW(3) LIMIT 50"); for (const x of rows) await completeOrder(x.order_no); n = rows.length }
@@ -1533,8 +1665,10 @@ const adminNew = {
   // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
   'GET /admin/rate-overrides': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from FROM tour_product p
-      WHERE p.promo_rate_bp IS NOT NULL ORDER BY p.id DESC`)
+    return await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from,
+        JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_start')) rate_start, JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_end')) rate_end,
+        JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_reason')) rate_reason
+      FROM tour_product p WHERE p.promo_rate_bp IS NOT NULL ORDER BY p.id DESC`)
   },
   'POST /admin/rate-overrides/:pid': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -1659,6 +1793,102 @@ const cWithdraw = {
 
 // ---------- 集成中心（第三方凭据后台化：.env 仅自举）----------
 const integrations = {
+  // ===== 链接入中心：联盟链 / 公链接入的配置、自检、探测、切换（只超管）=====
+  'GET /admin/chain/hub': async (req) => {
+    await requireAdmin(req, ['super'])
+    const { listSecretMeta, secretSync } = await import('./infra/secrets.mjs')
+    const stored = Object.fromEntries((await listSecretMeta()).map((r) => [r.k, r]))
+    const cur = chain.providerId()
+    const counts = (await q(`SELECT chain_provider p, status, COUNT(*) n FROM attest_batch WHERE chain_provider IS NOT NULL GROUP BY chain_provider, status`))
+      .reduce((m, r) => { (m[r.p] ||= {})[Number(r.status)] = Number(r.n); return m }, {})
+    const pending = await one('SELECT COUNT(*) n FROM attest_batch WHERE status IN (1,3)')
+    const waiting = await one('SELECT COUNT(*) n FROM attest_batch WHERE status = 5')
+    const base = publicBase(req)
+    const providers = Object.values(chain.PROVIDERS).map((p) => {
+      const meta = chain.CATALOG[p.id] || { group: 'dev', keys: [], protocol: {} }
+      const st = p.status()
+      return { id: p.id, label: p.label, docs: p.docs, capabilities: p.capabilities, group: meta.group, vendor: meta.vendor, protocol: meta.protocol,
+        mode: st.mode, missing: st.missing || [], note: st.note || '', current: p.id === cur,
+        hasProbe: typeof p.probe === 'function', hasSelfTest: typeof p.selfTest === 'function',
+        stats: counts[p.id] || {}, callbackUrl: base + '/callback/chain/' + p.id,
+        keys: meta.keys.map((k) => ({ ...k, configured: !!(secretSync(k.key) || process.env[k.key]),
+          source: stored[k.key] ? 'admin' : (process.env[k.key] ? 'env' : null),
+          // 非密钥项回显当前值，密钥项只给尾号提示
+          value: k.secret ? null : (secretSync(k.key) || process.env[k.key] || ''), hint: stored[k.key]?.hint || null,
+          updatedBy: stored[k.key]?.updated_by || null, updatedAt: stored[k.key]?.updated_at || null })) }
+    })
+    return { current: cur, mode: chain.chainMode(), pendingBatches: Number(pending.n), waitingConfirm: Number(waiting.n), providers,
+      networks: chain.NETWORKS, gatewayPresets: chain.GATEWAY_PRESETS,
+      checklist: ['接入主体与资质（是否需要文旅/数据类备案）', '自建节点还是公共网关', '计费口径（按笔/包年）与额度', '能否出具带公章的存证证明或在线证明页',
+        '是否提供 DID 签发', '资产发行的资质、内容审核流程与周期', 'SLA 与故障告知机制（最长中断时长）'] }
+  },
+  'POST /admin/chain/creds/:provider': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const meta = chain.CATALOG[req.params.provider]
+    if (!meta) throw new BizError(1004, '未知的链适配器')
+    const allowed = new Map(meta.keys.map((k) => [k.key, k]))
+    const { setSecret, delSecret } = await import('./infra/secrets.mjs')
+    const changed = []
+    for (const [k, v] of Object.entries(req.body.values || {})) {
+      if (!allowed.has(k)) throw new BizError(1001, `配置项 ${k} 不属于该链`)
+      const val = String(v ?? '').trim()
+      if (val === '' && req.body.clear?.includes?.(k)) { await delSecret(k); changed.push(k); continue }
+      if (val === '') continue // 留空 = 不修改（密钥项不回显，留空即保持原值）
+      if (k === 'GW_BODY_TEMPLATE') { try { JSON.parse(val.replace(/\{\w+\}/g, '0')) } catch { throw new BizError(1001, '请求体模板需为合法 JSON（占位符外）') } }
+      if (k === 'EVM_NETWORK' && !chain.NETWORKS[val.toLowerCase()]) throw new BizError(1001, '未知网络：' + val)
+      if (/_URL$|ENDPOINT$/.test(k) && !/^https?:\/\//.test(val)) throw new BizError(1001, allowed.get(k).label + ' 需以 http(s):// 开头')
+      await setSecret(k, val, 'admin:' + a.name)
+      changed.push(k)
+    }
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'chain', 'creds', req.params.provider, null, { keys: changed }))
+    return { saved: changed.length, keys: changed, status: chain.providerById(req.params.provider).status() }
+  },
+  // 一键套用网关预置模板 / EVM 网络（只写非密钥项）
+  'POST /admin/chain/preset/:provider': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { setSecret } = await import('./infra/secrets.mjs')
+    let vals
+    if (req.params.provider === 'gateway') {
+      const p = chain.GATEWAY_PRESETS[req.body.preset]
+      if (!p) throw new BizError(1004, '未知预置')
+      vals = Object.fromEntries(Object.entries(p).filter(([k]) => k.startsWith('GW_')))
+    } else if (req.params.provider === 'evm') {
+      if (!chain.NETWORKS[req.body.preset]) throw new BizError(1004, '未知网络')
+      vals = { EVM_NETWORK: req.body.preset }
+    } else throw new BizError(1001, '该链没有预置')
+    for (const [k, v] of Object.entries(vals)) await setSecret(k, String(v), 'admin:' + a.name)
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'chain', 'preset', req.params.provider, null, { preset: req.body.preset }))
+    return { applied: Object.keys(vals) }
+  },
+  'POST /admin/chain/selftest/:provider': async (req) => {
+    await requireAdmin(req, ['super'])
+    const p = chain.providerById(req.params.provider)
+    if (!p || typeof p.selfTest !== 'function') throw new BizError(1004, '该链无离线自检')
+    return p.selfTest()
+  },
+  'POST /admin/chain/probe/:provider': async (req) => {
+    await requireAdmin(req, ['super'])
+    const p = chain.providerById(req.params.provider)
+    if (!p || typeof p.probe !== 'function') throw new BizError(1004, '该链无只读探测接口，请用离线自检 + 小额试锚验证')
+    try { return { ...(await p.probe()), at: new Date().toISOString() } } catch (e) { return { ok: false, detail: e.message, at: new Date().toISOString() } }
+  },
+  'POST /admin/chain/activate': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const id = String(req.body.provider || '')
+    const p = chain.providerById(id)
+    if (!p) throw new BizError(1004, '未知的链适配器')
+    if (id === 'mock' && process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁止使用自测链')
+    if (id !== 'noop' && p.mode() !== 'real') throw new BizError(1001, '该链凭据不完整，缺少：' + (p.status().missing || []).join(' / '))
+    // 待确认批次按原链核验（chain_provider），切换不会误确认；这里只提示数量
+    const waiting = await one('SELECT COUNT(*) n FROM attest_batch WHERE status = 5')
+    if (String(req.body.confirm || '') !== id) throw new BizError(1001, '请输入目标链标识以确认切换')
+    const { setSecret } = await import('./infra/secrets.mjs')
+    const before = chain.providerId()
+    await setSecret('CHAIN_PROVIDER', id, 'admin:' + a.name)
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'chain', 'activate', 'chain', { provider: before }, { provider: id }))
+    return { current: chain.providerId(), waitingConfirm: Number(waiting.n), note: Number(waiting.n) ? `仍有 ${waiting.n} 个批次在原链等待确认，将继续在原链核验` : '' }
+  },
+
   'GET /admin/integrations': async (req) => {
     await requireAdmin(req, ['super'])
     const { listSecretMeta } = await import('./infra/secrets.mjs')
@@ -1728,24 +1958,28 @@ const web3 = {
   // 单号验证（后台+开放页共用逻辑）：返回可离线重算的 inclusion proof
   async _verify(bizType, bizRef) {
     const e = await one(`SELECT e.*, b.merkle_root, b.prev_root, b.chain_tx_ref, b.chain_block, b.anchored_at,
-        b.seq, b.leaf_count, b.is_day_close
+        b.seq, b.leaf_count, b.is_day_close, b.merkle_version, b.status AS batch_status
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     if (!e) return { found: false }
     const path = e.leaf_path || null
-    const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root) : null
+    const mv = Number(e.merkle_version || 1)
+    const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root, mv) : null
+    // 叶哈希必须能由公开的 canonical 重算出来：否则"平台给的哈希"只是一句话，不是证据
+    const canonicalValid = e.canonical ? attestDomain.hashOf(attestDomain.canonicalize(typeof e.canonical === 'string' ? JSON.parse(e.canonical) : e.canonical)) === e.payload_hash : null
     const anchored = Number(e.status) === 2 && e.chain_tx_ref && !String(e.chain_tx_ref).startsWith('NOOP')
     return {
       found: true, bizType, bizRef, versionNo: Number(e.version_no),
-      payloadHash: e.payload_hash, status: Number(e.status),
-      merkleRoot: e.merkle_root, leafIndex: e.leaf_index, leafPath: path,
+      payloadHash: e.payload_hash, status: Number(e.status), canonicalValid,
+      merkleRoot: e.merkle_root, merkleVersion: mv, leafIndex: e.leaf_index, leafPath: path,
       prevRoot: e.prev_root, leafCount: e.leaf_count,
       proofValid, batchSeq: e.seq, isDayClose: !!Number(e.is_day_close),
       chainRef: anchored ? e.chain_tx_ref : null, chainBlock: anchored ? e.chain_block : null,
       anchoredAt: anchored ? e.anchored_at : null,
-      note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根'
-        : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）'),
-      verifyTip: '重算方法：从 payloadHash 起，按 leafPath 逐层 sha256(左+右)（p=R 表示兄弟在右），结果应等于 merkleRoot',
+      note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根，再到链上核对该根'
+        : (Number(e.batch_status) === 5 ? '已提交上链·等待确认：确认数达标前不视为已锚定'
+        : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）')),
+      verifyTip: merkleLib.describe(mv),
     }
   },
 
@@ -1788,7 +2022,7 @@ const web3 = {
     if (!o) throw new BizError(1201, '订单不存在')
     const COLS = 'e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq, b.merkle_root, b.status AS batch_status'
     const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
     const passes = await q('SELECT id, name, serial_no FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
     const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
@@ -1798,7 +2032,7 @@ const web3 = {
       { key: 'order', no: '②', label: '支付成功', hint: '订单事实入链', ev: await ev('order', orderNo) },
       { key: 'issue', no: '③', label: '出票', hint: passes.length > 1 ? `权益凭证 ×${passes.length}` : '权益凭证', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
       { key: 'verify', no: '④', label: '核销', hint: '到店扫码', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.id DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
       { key: 'grant', no: '⑤', label: '返豆', hint: '消费奖励', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
       { key: 'settle', no: '⑥', label: '结算', hint: '五口径分账', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
     ]
@@ -1912,7 +2146,7 @@ const web3 = {
     const attestations = []
     for (const o of orders) {
       const e = await one("SELECT status, payload_hash, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ?", [o.order_no])
-      if (e) attestations.push({ orderNo: o.order_no, hash: e.payload_hash, anchored: e.status === 2, at: e.created_at })
+      if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
     return { profile: u, balance: acc ? acc.balance : 0, ledger, badges, attestations,
       statement: '消费与权益记录的可信存证流水，作为贡献分与数字身份的依据（不对应股权或可交易 Token）' }
@@ -2050,7 +2284,7 @@ const open = {
     if (!o) throw new BizError(1004, '未找到该订单的记录')
     const COLS = 'e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq'
     const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
     const passes = await q('SELECT id FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
     const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
@@ -2060,7 +2294,7 @@ const open = {
       { no: '②', key: 'order', label: '支付成功', hint: '待支付', ev: await ev('order', orderNo) },
       { no: '③', key: 'issue', label: '出票', hint: passes.length > 1 ? '待出票 ×' + passes.length : '待出票', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
       { no: '④', key: 'verify', label: '核销', hint: '待到店', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
-          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.id DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
       { no: '⑤', key: 'grant', label: '返豆', hint: '待完成', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
       { no: '⑥', key: 'settle', label: '结算', hint: '待结算', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
     ]
@@ -2090,6 +2324,7 @@ const open = {
       found: r.found, bizType: 'settlement', bizRef: 'settle-' + id, settlementId: id,
       payloadHash: r.payloadHash || null, merkleRoot: r.merkleRoot || null, prevRoot: r.prevRoot || null,
       leafPath: r.leafPath || null, leafIndex: r.leafIndex ?? null, proofValid: r.proofValid ?? null,
+      merkleVersion: r.merkleVersion ?? null, canonicalValid: r.canonicalValid ?? null,
       batchSeq: r.batchSeq ?? null, status: Number(s.status),
       chainRef: r.chainRef || null, anchoredAt: r.anchoredAt || null,
       note: r.found ? r.note : '该结算单已生成，但尚未打包封存',
@@ -2277,9 +2512,26 @@ const cNotes = {
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {
     const u = requireUser(req)
-    const open = await q("SELECT id, task_no, title, brief, reward_beans FROM content_task WHERE status = 0 ORDER BY id DESC LIMIT 20")
+    const raw = await q("SELECT * FROM content_task WHERE status = 0 AND (deadline IS NULL OR deadline >= NOW()) ORDER BY id DESC LIMIT 20")
+    const CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
+    const open = raw.map((t) => {
+      const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
+      return { id: t.id, task_no: t.task_no, title: t.title, brief: t.brief, reward_beans: t.reward_beans, cover: pp.cover_img || null,
+        categoryLabel: CAT[t.category] || '图文笔记', tags: pp.tags || [], platforms: pp.platforms_labels || [],
+        cashLabel: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null, deadline: t.deadline ? String(t.deadline).slice(0, 16) : null,
+        minWords: Number(t.min_words) || 0, minImages: Number(t.min_images) || 0 }
+    })
     const mine = await q("SELECT id, task_no, title, status, reward_beans, submitted_at FROM content_task WHERE claimed_by = ? ORDER BY id DESC LIMIT 20", [u.uid])
     return { open, mine }
+  },
+  'GET /c/tasks/:id': async (req) => {
+    const u = requireUser(req)
+    const t = await one('SELECT * FROM content_task WHERE id = ?', [req.params.id])
+    if (!t || (Number(t.status) !== 0 && Number(t.claimed_by) !== Number(u.uid))) throw new BizError(1004, '任务不存在或已被领取')
+    const pp = entities.publicProfile('task', t, (x) => apiImg(x, req))
+    const prod = t.product_id ? await one('SELECT id, title FROM tour_product WHERE id = ? AND status = 1', [t.product_id]) : null
+    return { id: t.id, status: Number(t.status), mine: Number(t.claimed_by) === Number(u.uid), product: prod,
+      ...pp, cash_reward_label: Number(t.cash_reward) ? fen2yuan(t.cash_reward) : null }
   },
   'POST /c/tasks/:id/claim': async (req) => {
     const u = requireUser(req)
@@ -2300,28 +2552,50 @@ const cNotes = {
   // 常见问题（小程序「我的-常见问题」）
   'GET /c/faqs': async (req) => {
     requireUser(req)
-    return await q('SELECT id, question, answer FROM faq WHERE status = 1 ORDER BY sort, id')
+    const rows = await q('SELECT id, question, answer, category, is_hot, profile FROM faq WHERE status = 1 ORDER BY is_hot DESC, sort, id')
+    // 同义问法只用于搜索命中，随条目下发
+    return rows.map(({ profile, ...f }) => ({ ...f, keywords: ((typeof profile === 'string' ? JSON.parse(profile || '{}') : profile) || {}).keywords || [] }))
   },
   // 首页轮播
   'GET /c/banners': async (req) => {
     requireUser(req)
-    const rows = await q(`SELECT id, title, sub_title, image, link FROM banner WHERE status = 1
+    const rows = await q(`SELECT id, title, sub_title, image, link, profile FROM banner WHERE status = 1
       AND (start_at IS NULL OR start_at <= NOW(3)) AND (end_at IS NULL OR end_at >= NOW(3))
-      ORDER BY sort, id LIMIT 6`)
-    return rows.map((b) => ({ ...b, image: apiImg(b.image) }))
+      ORDER BY sort, id LIMIT 12`)
+    // 投放城市：传了 city 时只给面向该城市（或未限定城市）的轮播；未传时给全部
+    const city = String(req.query.city || '')
+    return rows.map(({ profile, ...b }) => {
+      const pf = (typeof profile === 'string' ? JSON.parse(profile || '{}') : profile) || {}
+      return { ...b, image: apiImg(b.image, req), bgColor: pf.bg_color || null, cities: pf.cities || [] }
+    }).filter((b) => !city || !b.cities.length || b.cities.includes(city)).slice(0, 6)
   },
   // 目的地城市聚合（P2）
   'GET /c/destinations': async (req) => {
     requireUser(req)
     const rows = await q(`SELECT p.city_code, COUNT(*) products, MIN(p.price_from) price_from
       FROM tour_product p WHERE p.status = 1 GROUP BY p.city_code ORDER BY products DESC`)
-    const NAMES = { '310118': '上海·青浦朱家角', '320508': '苏州·姑苏' }
-    return rows.map((r) => ({ ...r, cityName: NAMES[r.city_code] || r.city_code,
-      priceFromLabel: (Number(r.price_from) / 100).toFixed(0) }))
+    // 目的地名称、介绍、封面来自后台「小程序装修 · 目的地」；未配置的城市回退为城市名
+    const site = await one('SELECT * FROM site_config WHERE id = 1')
+    const dests = site ? (entities.readValues('site', site).destinations || []) : []
+    const CITY = Object.fromEntries(entities.DICT.city)
+    const order = dests.map((d) => d.city)
+    return rows.map((r) => {
+      const d = dests.find((x) => x.city === r.city_code) || {}
+      return { ...r, cityName: d.name || CITY[r.city_code] || r.city_code, intro: d.intro || '', cover: d.cover ? apiImg(d.cover, req) : null,
+        priceFromLabel: (Number(r.price_from) / 100).toFixed(0) }
+    }).sort((a, b) => (order.indexOf(a.city_code) + 1 || 99) - (order.indexOf(b.city_code) + 1 || 99))
   },
 }
 
 // 商户进件自助化（P2）：无 token 提交申请 → 后台审核
+// ---------- 商户端：装修公告 ----------
+const mSite = {
+  'GET /m/site': async (req) => {
+    const row = await one('SELECT * FROM site_config WHERE id = 1')
+    const v = row ? entities.readValues('site', row) : {}
+    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '' }
+  },
+}
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------
 const mPhrase = {
   // 核销员输入游客说出的暗号 → 与本店已出票订单的产品用户暗号比对；命中即核销该订单全部有效凭证
@@ -2330,19 +2604,35 @@ const mPhrase = {
     const { phrase, orderNo } = req.body
     const said = String(phrase || '').trim()
     if (!said) throw new BizError(1001, '请输入游客说出的暗号')
+    // 暗号配置来自后台「暗号管理」编辑器：上半句 + 可接受变体 + 启停日期
+    const norm = (x) => String(x || '').replace(/[\s，,。.！!？?、；;：:"'“”‘’]/g, '')
+    const accepts = (row) => {
+      const pf = (typeof row.profile === 'string' ? JSON.parse(row.profile || '{}') : row.profile) || {}
+      return [row.phrase_user, ...(pf.phrase_alts || [])].map(norm).filter(Boolean).includes(norm(said))
+    }
+    const windowErr = (row) => {
+      const pf = (typeof row.profile === 'string' ? JSON.parse(row.profile || '{}') : row.profile) || {}
+      const today = bizDay()
+      if (pf.phrase_start && today < pf.phrase_start) return '该线路暗号 ' + pf.phrase_start + ' 起启用'
+      if (pf.phrase_end && today > pf.phrase_end) return '该线路暗号已于 ' + pf.phrase_end + ' 停用，请改用扫码核销'
+      return null
+    }
     let o = null
     if (orderNo) {
-      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant FROM orders o
+      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
         JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ? AND o.merchant_id = ?`,
         [orderNo, u.merchantId])
     } else {
-      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant FROM orders o
+      const cands = await q(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
         JOIN tour_product p ON p.id = o.product_id
-        WHERE o.merchant_id = ? AND p.phrase_user = ? AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 1`,
-        [u.merchantId, said])
+        WHERE o.merchant_id = ? AND p.phrase_user IS NOT NULL AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 200`,
+        [u.merchantId])
+      o = cands.find(accepts) || null
     }
     if (!o || !o.phrase_user) return { ok: false, reason: '未找到对应该暗号的在途订单' }
-    if (said !== o.phrase_user) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+    if (!accepts(o)) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+    const werr = windowErr(o)
+    if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
     const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
     for (const pid of ids) {
       await pass.adminConfirmPass(pid, u.uid)
@@ -2398,9 +2688,12 @@ const cPhraseKyc = {
     const o = await order.byNo(req.params.no)
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     if (!o.paid_at) throw new BizError(2002, '支付后可见暗号')
-    const p = await one('SELECT phrase_user, phrase_merchant FROM tour_product WHERE id = ?', [o.product_id])
+    const p = await one('SELECT phrase_user, phrase_merchant, profile FROM tour_product WHERE id = ?', [o.product_id])
     if (!p || !p.phrase_user) return { enabled: false }
-    return { enabled: true, userPhrase: p.phrase_user, hint: '到达剧情点位后，向 NPC 说出你的暗号' }
+    const pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
+    // 只下发游客需要的：上半句、提示、角色与地点；下半句与剧情说明只给核销员
+    return { enabled: true, userPhrase: p.phrase_user, hint: pf.phrase_hint || '到达剧情点位后，向 NPC 说出你的暗号',
+      role: pf.phrase_role || null, location: pf.phrase_location || null }
   },
 
   // KYC 实名提交（一户一档：重复提交=更新待审资料）
@@ -2432,16 +2725,27 @@ const cIdentity = {
     const u = requireUser(req)
     const acc = await one('SELECT nickname, member_level, growth_value, created_at FROM user_account WHERE id = ?', [u.uid])
     const passes = await q('SELECT id, name, kind, status, valid_to, created_at FROM travel_pass WHERE user_id = ? ORDER BY id DESC LIMIT 20', [u.uid])
-    const badges = await q(`SELECT b.name, b.icon_key, ub.granted_at FROM user_badge ub JOIN badge b ON b.id = ub.badge_id WHERE ub.user_id = ?`, [u.uid])
+    // 勋章墙：全部勋章（已获得点亮、未获得置灰并给出获得条件），有效期从授予日起算
+    const defs = await q('SELECT * FROM badge')
+    const owned = await q('SELECT badge_id, MAX(granted_at) granted_at FROM user_badge WHERE user_id = ? GROUP BY badge_id', [u.uid])
+    const badges = defs.map((b) => {
+      const pp = entities.publicProfile('badge', b, (x) => apiImg(x, req))
+      const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
+      const days = Number(pp.valid_days) || 0
+      const expireAt = got && days ? new Date(new Date(String(got.granted_at).replace(' ', 'T') + '+08:00').getTime() + days * 86400000).toISOString().slice(0, 10) : null
+      return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
+        color: pp.color || null, description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0,
+        owned: !!got, granted_at: got ? got.granted_at : null, expireAt, expired: !!(expireAt && expireAt < bizDay()) }
+    }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
     const myOrders = await q('SELECT order_no FROM orders WHERE user_id = ?', [u.uid])
     const attestations = []
     for (const o of myOrders.slice(0, 10)) {
       const e = await one("SELECT payload_hash, status, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ?", [o.order_no])
-      if (e) attestations.push({ orderNo: o.order_no, hash: e.payload_hash, anchored: e.status === 2, at: e.created_at })
+      if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
     return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, growth: acc.growth_value, joinedAt: acc.created_at },
       passes, badges, attestations,
-      statement: '消费与权益记录的可信存证流水，作为贡献分与数字身份的依据' }
+      statement: '消费与权益的可信记录，作为贡献分与会员成长的依据' }
   },
   // 数字身份凭证（VC-JWT）：用户可取走、可出示、他方可验。微信内不展示字样（D6），由 B/G 端与生态 H5 使用
   'GET /c/vc': async (req) => {
@@ -2490,6 +2794,29 @@ async function handlePayNotify(orderNo, transNo, mock = false) {
 }
 
 const callback = {
+  // 异步链的上链结果回调：对方确认出块后推送 { txRef, root, block }，验签通过并与待确认批次匹配才置为已锚定
+  // 支持：gateway（按网关签名规则验签）、chaingen（HMAC-SHA256：METHOD\nPATH\nts\nbody）
+  'POST /callback/chain/:provider': async (req) => {
+    const id = req.params.provider
+    const path = '/callback/chain/' + id
+    let ok = false
+    if (id === 'gateway') {
+      const gw = chain.providerById('gateway'), h = gw.callbackHeaders()
+      ok = gw.verifyCallback({ path, ts: req.headers[h.ts], nonce: req.headers[h.nonce], body: req.rawBody || '', signature: String(req.headers[h.sign] || '') })
+    } else if (id === 'chaingen') {
+      const { E } = await import('./infra/chain/conf.mjs')
+      const ts = req.headers['x-timestamp'], sig = String(req.headers['x-signature'] || '')
+      const expect = crypto.createHmac('sha256', E.CHAIN_KEY || '').update(['POST', path, ts, req.rawBody || ''].join('\n')).digest('hex')
+      ok = !!E.CHAIN_KEY && !!ts && Math.abs(Date.now() - Number(ts)) < 5 * 60_000 && sig.length === expect.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))
+    } else throw new BizError(1004, '该链不使用回调确认')
+    if (!ok) throw new BizError(1003, '回调验签失败')
+    const b = req.body || {}
+    const txRef = String(b.txRef || b.txId || b.tx_hash || b.transactionHash || '')
+    if (!txRef) throw new BizError(1001, '回调缺少交易号')
+    if (b.success === false || b.status === 'FAILED') return { accepted: true, matched: false, reason: '对方报告失败，等待重试' }
+    const r = await attestDomain.confirmByCallback({ provider: id, txRef, root: b.root || b.hash || null, block: b.blockHeight ?? b.block ?? null })
+    return { accepted: true, ...r }
+  },
   'POST /callback/wxpay': async (req) => {
     const v = await wxpay.verifyCallback(req.headers, req.rawBody || '')
     if (!v.ok) throw new BizError(1003, v.reason)
@@ -2503,7 +2830,7 @@ const callback = {
   },
 }
 
-export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
@@ -2517,7 +2844,7 @@ for (const [key, handler] of Object.entries(routes)) {
   routes[key] = async (req, res) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
-    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications'].includes(key)) {
+    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'].includes(key)) {
       const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
         WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])
       if (!staff) throw new BizError(1003, '尚未加入门店或账号已停用')

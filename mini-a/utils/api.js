@@ -103,6 +103,8 @@ async function getOrder(no) { return await request('/c/orders/' + no) }
 async function getPassCode(passId) { return await request('/c/pass/' + passId + '/code') }
 async function getMe() { return await request('/c/me') }
 async function refund(no, reason) { return await request('/c/orders/' + no + '/refund', 'POST', { reason }) }
+/** 退款试算：与服务端实际扣费同一规则 */
+async function refundQuote(no) { return await request('/c/orders/' + no + '/refund-quote') }
 async function getPhoneNumber(code) { return await request('/c/auth/phone', 'POST', { code }) }
 async function getPromoQrcode() { return await request('/c/promote/qrcode') }
 async function getNotifyTemplates() { return await request('/c/notify/templates') }
@@ -123,6 +125,6 @@ function coverFor(product) {
 
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
-  createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund,
+  createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
   getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, FALLBACK,
 }

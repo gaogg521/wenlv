@@ -1,12 +1,17 @@
 // 推广域（一级 CPS 三档）+ 结算域（五口径恒等）
+import crypto from 'node:crypto'
 import { q, one, tx, BizError } from '../db.mjs'
-import { cfgArr, cfgNum } from '../config.mjs'
+import { cfg, cfgArr, cfgNum } from '../config.mjs'
 import { attest } from './attest.mjs'
+import { bizDay } from '../infra/bizdate.mjs'
 
 /** 结算单锚定：version_no 默认 = 结算主状态（0生成/1商户确认/2分账/3完成/4异议），
  *  异议解除回 0 时用 40，避免与"生成"撞同一版本号被幂等吞掉 */
 export async function attestSettlement(settlementId, conn, versionNo) {
-  const s = await one('SELECT * FROM settlement WHERE id = ?', [settlementId])
+  // 必须用同一事务连接读：在 tx() 里刚改的状态还没提交，用全局连接会读到旧状态，
+  // 结果是"复核通过(v2)"那条存证里写的却是 status=1 —— 证据与事实不符
+  const s = conn ? await conn.one('SELECT * FROM settlement WHERE id = ?', [settlementId])
+    : await one('SELECT * FROM settlement WHERE id = ?', [settlementId])
   if (!s) return null
   const v = versionNo != null ? Number(versionNo) : Number(s.status)
   return attest('settlement', 'settle-' + s.id, {
@@ -15,6 +20,10 @@ export async function attestSettlement(settlementId, conn, versionNo) {
     amtFulfill: Number(s.amt_fulfill), amtService: Number(s.amt_service),
     amtPromoter: Number(s.amt_promoter), amtBeanbudget: Number(s.amt_beanbudget),
     amtRetained: Number(s.amt_retained), status: Number(s.status),
+    feeCount: Number(s.fee_count || 0), feeTotal: Number(s.fee_total || 0), feeMerchant: Number(s.fee_merchant || 0), feePlatform: Number(s.fee_platform || 0),
+    feeShareBp: s.fee_share_bp != null ? Number(s.fee_share_bp) : null,
+    // 回单号只存哈希：可证明"登记的是哪张回单"，又不把银行流水号公开到复核页
+    paymentRefHash: s.payment_ref ? crypto.createHash('sha256').update(String(s.payment_ref)).digest('hex') : null,
   }, conn, v)
 }
 
@@ -41,15 +50,19 @@ export async function hit(scene, userId) {
 
 /** 订单 50 后计佣（幂等） */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee, paid_at FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
   if (!a) return false
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
   if (!p) return false
   // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
-  const prod = await one('SELECT promo_rate_bp FROM tour_product WHERE id = ?', [o.product_id])
-  const rateBp = Math.min(prod && prod.promo_rate_bp != null ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
+  const prod = await one('SELECT promo_rate_bp, profile FROM tour_product WHERE id = ?', [o.product_id])
+  // 单品覆盖只在后台「逐品佣金」设置的生效期内有效（按订单支付日判断），期外回落到推广服务商档位
+  const pf = prod ? ((typeof prod.profile === 'string' ? JSON.parse(prod.profile || '{}') : prod.profile) || {}) : {}
+  const payDay = o.paid_at ? String(o.paid_at).slice(0, 10) : bizDay()
+  const inWindow = (!pf.rate_start || payDay >= pf.rate_start) && (!pf.rate_end || payDay <= pf.rate_end)
+  const rateBp = Math.min(prod && prod.promo_rate_bp != null && inWindow ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
   const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10 - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣
   const amount = Math.floor(base * rateBp / 10000)
   try {
@@ -70,6 +83,15 @@ export async function settleDue() {
   return r.affectedRows
 }
 
+/** 退改手续费商户分成（万分比）：商户资料「退改手续费分成」优先，否则参数中心 settlement.refund_fee_merchant_pct */
+export async function feeShareBp(c, merchantId) {
+  const m = await c.one('SELECT profile FROM merchant WHERE id = ?', [merchantId])
+  const pf = m ? ((typeof m.profile === 'string' ? JSON.parse(m.profile || '{}') : m.profile) || {}) : {}
+  if (pf.refund_fee_share != null && pf.refund_fee_share !== '') return Math.max(0, Math.min(10000, Math.round(Number(pf.refund_fee_share))))
+  const pct = Number(await cfg('settlement.refund_fee_merchant_pct').catch(() => 0)) || 0
+  return Math.max(0, Math.min(10000, Math.round(pct * 10000)))
+}
+
 // ===== 结算（五口径：履约58% / 服务12% / 权益5% / 推广=实际佣金 / 留存=差额兜底）=====
 export async function generateSettlement(merchantId, period) {
   // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账
@@ -80,30 +102,42 @@ export async function generateSettlement(merchantId, period) {
   const orders = await c.q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
     WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id`, [merchantId])
-  if (!orders.length) return -1
+  // 退改手续费：该商户名下已退款成功、扣了手续费、尚未计入任何结算单的退款（每笔只计一次）
+  const fees = await c.q(`SELECT r.id, r.fee_amount FROM refunds r JOIN orders o ON o.id = r.order_id
+    WHERE o.merchant_id = ? AND r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL FOR UPDATE`, [merchantId])
+  if (!orders.length && !fees.length) return -1
   let total = 0, promo = 0
   for (const o of orders) { total += Number(o.amount_pay); promo += Number(o.promo_amt) }
   const fulfill = Math.round(total * 0.58)
   const service = Math.round(total * 0.12)
   const beanBudget = Math.round(total * 0.05)
   const retained = total - fulfill - service - beanBudget - promo
+  // 分成比例：商户资料单独约定优先，否则取参数中心；生成时快照进结算单，事后改参数不影响已出账单
+  const shareBp = await feeShareBp(c, merchantId)
+  const feeTotal = fees.reduce((a, f) => a + Number(f.fee_amount), 0)
+  const feeMerchant = Math.floor(feeTotal * shareBp / 10000)
+  const feePlatform = feeTotal - feeMerchant
     const sid = await c.ins(`INSERT INTO settlement (merchant_id, period, order_count, total_amount,
-      amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status)
-      VALUES (?,?,?,?,?,?,?,?,?,0)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained])
-    await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
-    // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）
-    await c.q(`INSERT IGNORE INTO co_profit (settlement_id, co_creator_id, product_id, period, base_amount, amount)
+      amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status,
+      fee_count, fee_total, fee_merchant, fee_platform, fee_share_bp)
+      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained,
+      fees.length, feeTotal, feeMerchant, feePlatform, fees.length ? shareBp : null])
+    if (orders.length) await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
+    if (fees.length) await c.q(`UPDATE refunds SET settlement_id = ? WHERE id IN (${fees.map((f) => f.id).join(',')}) AND settlement_id IS NULL`, [sid])
+    // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）；只有订单收入时才计
+    if (orders.length && total > 0) await c.q(`INSERT IGNORE INTO co_profit (settlement_id, co_creator_id, product_id, period, base_amount, amount)
       SELECT ?, cc.id, cc.product_id, ?, ROUND(? * pg.gmv / ?), ROUND(? * pg.gmv / ? * cc.share_pct / 10000)
       FROM co_creator cc
       JOIN (SELECT product_id, SUM(amount_pay - insurance_fee) gmv FROM orders WHERE settlement_id = ? GROUP BY product_id) pg
         ON pg.product_id = cc.product_id
       WHERE cc.status = 1 AND cc.share_pct > 0`,
       [sid, period, retained, total, retained, total, sid])
-    // 生成即锚定（同事务）：五口径恒等的快照一旦入链，事后无法悄悄改数
+    // 生成即锚定（同事务）：五口径恒等与手续费分成的快照一旦封存，事后无法悄悄改数
     await attest('settlement', 'settle-' + sid, {
       settlementId: Number(sid), merchantId: Number(merchantId), period,
       orderCount: orders.length, totalAmount: total, amtFulfill: fulfill, amtService: service,
       amtPromoter: promo, amtBeanbudget: beanBudget, amtRetained: retained, status: 0,
+      feeCount: fees.length, feeTotal, feeMerchant, feePlatform, feeShareBp: fees.length ? shareBp : null,
     }, c, 0)
     return sid
   })

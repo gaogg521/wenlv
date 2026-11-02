@@ -206,7 +206,9 @@ export function orderReportDoc(v, baseUrl) {
     path: (v.leafPath || []).map((p, i) => ({ level: i + 1, dir: p.p, h: p.h, dup: p.dup })),
     steps: [
       '打开上方二维码或链接，在浏览器内当场重算哈希（Web Crypto，无需登录）',
-      '从「载荷哈希」起，按第三节顺序逐层计算 sha256(左 + 右)，末值应等于 Merkle 根',
+      Number(v.merkleVersion) === 2
+        ? '从「载荷哈希」起，先算 sha256(0x00‖叶)，再按第三节顺序逐层 sha256(0x01‖左‖右)（字节拼接），末值应等于 Merkle 根'
+        : '从「载荷哈希」起，按第三节顺序逐层计算 sha256(左 + 右)，末值应等于 Merkle 根',
       v.chainRef ? '持「链上编号」到链数根链上浏览器查询，可看到该 Merkle 根与锚定时间' : '待锚定：链接入完成后，链上编号自动出现在此证明中',
     ],
     notes: [
@@ -290,6 +292,11 @@ export function settlementReportDoc(v, baseUrl) {
       { k: '权益预算', v: (Number(v.amtBeanbudget) / 100).toFixed(2) + ' 元' },
       { k: '留存毛利', v: (Number(v.amtRetained) / 100).toFixed(2) + ' 元' },
       { k: '五项合计', v: (Number(v.totalAmount) / 100).toFixed(2) + ' 元（恒等：合计 = 结算总额）', mono: false },
+      ...(Number(v.feeTotal) > 0 ? [
+        { k: '退改手续费', v: (Number(v.feeTotal) / 100).toFixed(2) + ' 元（' + v.feeCount + ' 笔）', mono: false },
+        { k: '其中商户分成', v: (Number(v.feeMerchant) / 100).toFixed(2) + ' 元', mono: false },
+      ] : []),
+      { k: '应付商户', v: ((Number(v.amtFulfill) + Number(v.feeMerchant || 0)) / 100).toFixed(2) + ' 元（履约结算 + 手续费分成）', mono: false },
       { k: '整单校验码', v: v.merkleRoot || v.payloadHash || '—', small: true },
     ],
     path: [],

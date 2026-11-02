@@ -1,4 +1,4 @@
-<view class="hero" style="background:linear-gradient(135deg,#e87722,#f5a623)">
+<view class="hero">
   <view class="hi">创作中心</view>
   <view class="sub2">发布旅行笔记 · 内容过安全检测后展示 · 好内容获旅豆奖励</view>
 </view>
@@ -29,11 +29,15 @@
 </view>
 
 <view class="sec-title">约稿任务</view>
-<view class="card" wx:if="{{tasks.open.length}}">
-  <view class="kv" wx:for="{{tasks.open}}" wx:key="id">
-    <view style="flex:1"><text>{{item.title}}</text><view class="note">{{item.brief}}</view></view>
-    <view class="v" bindtap="claim" data-id="{{item.id}}" style="color:var(--brand)">领 {{item.reward_beans}} 豆</view>
+<view class="card tk-card" wx:for="{{tasks.open}}" wx:key="id" bindtap="openTask" data-id="{{item.id}}">
+  <image wx:if="{{item.cover}}" class="tk-cover" src="{{item.cover}}" mode="aspectFill" />
+  <view style="flex:1;min-width:0">
+    <view class="tour-title">{{item.title}}</view>
+    <view class="muted2" style="margin:4rpx 0">{{item.brief}}</view>
+    <view class="dt-meta"><text class="tag">{{item.categoryLabel}}</text><text class="tag blue" wx:for="{{item.tags}}" wx:for-item="tg" wx:key="*this">#{{tg}}</text></view>
+    <view class="muted2" wx:if="{{item.deadline || item.platforms.length}}">{{item.platforms.length ? item.platforms.join('/') + ' · ' : ''}}{{item.deadline ? '截止 ' + item.deadline : ''}}</view>
   </view>
+  <view class="tk-reward"><view class="tour-price" style="font-size:30rpx">{{item.reward_beans}}豆</view><view class="tk-cash" wx:if="{{item.cashLabel}}">+¥{{item.cashLabel}}</view><view class="muted2">查看 ›</view></view>
 </view>
 <view class="card" wx:if="{{tasks.mine.length}}">
   <view class="kv" wx:for="{{tasks.mine}}" wx:key="id">

@@ -1,55 +1,120 @@
 <view wx:if="{{loading}}" class="skeleton" style="height:400rpx;margin-top:20rpx"></view>
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <block wx:elif="{{p}}">
-  <!-- 图集轮播：有实拍图用图集，无图回退品牌渐变 -->
-  <swiper wx:if="{{gallery.length}}" class="gallery" indicator-dots circular
-          bindchange="onSwiper" current="{{gIdx}}">
+  <!-- 图集：有实拍图用图集，无图用主题插画 -->
+  <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
     <swiper-item wx:for="{{gallery}}" wx:key="index">
-      <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load />
+      <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
     </swiper-item>
   </swiper>
-  <view wx:if="{{gallery.length}}" class="g-count">{{illustrated ? '主题插画' : gIdx + 1 + '/' + gallery.length}}</view>
-  <view wx:else class="hero">
-    <view class="hi">{{p.title}}</view>
-    <view class="sub2">{{p.days_desc || p.days}} · {{p.city_code || ''}} · 履约商户：{{p.merchant_name || '—'}}</view>
-    <view style="margin-top:16rpx"><text class="tour-price" style="color:#fff;font-size:48rpx">¥{{p.priceLabel}}</text>
-      <text style="opacity:.9;font-size:24rpx;margin-left:16rpx">完成得 {{p.beanGift}} 旅豆</text></view>
+  <view class="g-count">{{illustrated ? '主题插画' : gIdx + 1 + '/' + gallery.length}}</view>
+
+  <!-- 标题区：先回答"这是什么、多久、在哪、多少钱" -->
+  <view class="book-bar dt-head">
+    <view class="dt-title">{{p.title}}</view>
+    <view class="dt-sub" wx:if="{{p.subtitle}}">{{p.subtitle}}</view>
+    <view class="dt-meta">
+      <text class="tag">{{p.days_desc || '1天'}}</text>
+      <text class="tag blue" wx:if="{{cityName}}">{{cityName}}</text>
+      <text class="tag" wx:if="{{rv.count > 0}}">★ {{rv.avg}} · {{rv.count}} 条评价</text>
+      <text class="tag" wx:for="{{extra.tags}}" wx:key="*this">{{item}}</text>
+    </view>
+    <view class="dt-fit" wx:if="{{extra.suitable || extra.groupSize || extra.ageRange}}">
+      <text wx:if="{{extra.suitable}}">适合：{{extra.suitable}}</text>
+      <text wx:if="{{extra.groupSize}}">{{extra.groupSize}}</text>
+      <text wx:if="{{extra.ageRange}}">{{extra.ageRange}}</text>
+    </view>
+    <view class="dt-price-row">
+      <view><text class="tour-price" style="font-size:44rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text><text class="muted2"> 起/人</text></view>
+      <text class="muted2" wx:if="{{p.beanGift}}">完成后得 {{p.beanGift}} 旅豆</text>
+    </view>
   </view>
 
-  <!-- 报名条（有图集时价格挂这里） -->
-  <view class="book-bar" wx:if="{{gallery.length}}">
-    <view><text class="tour-price" style="font-size:40rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text>
-      <text class="muted2" style="margin-left:12rpx">完成得 {{p.beanGift}} 旅豆</text></view>
-    <text class="muted2">履约商户：{{p.merchant_name || '—'}}</text>
+  <!-- 近期团期：不用进下一页就知道哪天能去 -->
+  <view class="sec-title">近期团期 <text class="more" wx:if="{{sessions.length}}" bindtap="goBooking">全部 {{sessions.length}} 个 ›</text></view>
+  <view class="card" wx:if="{{sessPreview.length}}">
+    <view class="sess-row" wx:for="{{sessPreview}}" wx:key="id" bindtap="goBooking">
+      <view><view class="sess-date">{{item.date}}</view><view class="muted2">{{item.state}}</view></view>
+      <view style="text-align:right"><view class="tour-price" style="font-size:30rpx">¥{{item.price}}</view><view class="muted2">{{item.seats}}</view></view>
+    </view>
   </view>
+  <view class="card" wx:else><view class="muted2">近期暂无可预订团期，可先收藏分享，稍后再来看看。</view></view>
 
-  <!-- 评分 + 标签行 -->
-  <view class="rating-row" wx:if="{{rv.count > 0}}">
-    <text class="star">★ {{rv.avg}}</text><text class="muted2">{{rv.count}} 条真实评价</text>
-    <text class="tag" wx:if="{{p.meeting_point}}">📍 有集合点</text>
-    <text class="tag blue">✓ 商户核验</text>
-  </view>
-
-  <view class="card"><view class="kv"><text>出行安排</text><text>{{sessions.length}} 个可选团期</text></view><view class="btn" bindtap="goBooking">选择团期 · 立即预订</view><view class="note">先了解行程，再确认日期与费用</view></view>
-  <!-- 内容区：行程介绍 / 亮点 / 费用包含 / 集合 / 安全 -->
-  <view class="sec-title" wx:if="{{rich.intro || rich.highlights.length}}">玩法介绍</view>
-  <view class="card" wx:if="{{rich.intro || rich.highlights.length}}">
+  <view class="sec-title" wx:if="{{rich.highlights.length || rich.intro}}">玩法介绍</view>
+  <view class="card" wx:if="{{rich.highlights.length || rich.intro}}">
     <view class="hl-item" wx:for="{{rich.highlights}}" wx:key="*this"><text class="hl-dot">◆</text>{{item}}</view>
     <rich-text class="rich-p" wx:if="{{rich.intro}}" nodes="{{rich.intro}}"></rich-text>
   </view>
 
-  <view class="sec-title" wx:if="{{rich.includes.length}}">费用包含</view>
-  <view class="card" wx:if="{{rich.includes.length}}">
+  <!-- 行程时间线：后台「行程节点」逐条维护 -->
+  <view class="sec-title" wx:if="{{extra.itinerary.length}}">行程安排</view>
+  <view class="card" wx:if="{{extra.itinerary.length}}">
+    <view class="iti" wx:for="{{extra.itinerary}}" wx:key="index">
+      <view class="iti-dot"></view>
+      <view class="iti-body">
+        <view class="iti-time" wx:if="{{item.time}}">{{item.time}}</view>
+        <view class="iti-title">{{item.title}}</view>
+        <view class="iti-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
+        <image wx:if="{{item.image}}" class="iti-img" src="{{item.image}}" mode="aspectFill" lazy-load />
+      </view>
+    </view>
+    <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">🚌 {{extra.transport}}</view>
+  </view>
+
+  <view class="sec-title" wx:if="{{rich.includes.length || rich.excludes.length}}">费用说明</view>
+  <view class="card" wx:if="{{rich.includes.length || rich.excludes.length}}">
+    <view class="fee-h" wx:if="{{rich.includes.length}}">费用包含</view>
     <view class="hl-item" wx:for="{{rich.includes}}" wx:key="*this"><text class="hl-dot ok">✓</text>{{item}}</view>
+    <view class="fee-h" wx:if="{{rich.excludes.length}}" style="margin-top:14rpx">费用不含</view>
+    <view class="hl-item" wx:for="{{rich.excludes}}" wx:key="*this"><text class="hl-dot no">✕</text>{{item}}</view>
   </view>
 
   <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
-  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view></view>
+  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
+    <view wx:if="{{extra.meetingGeo}}" class="btn ghost sm-btn" bindtap="navMeeting">导航到集合点</view></view>
+
+  <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
+  <view class="sec-title" wx:if="{{scenic || merchant}}">在哪里玩 · 谁来接待</view>
+  <view class="card place-card" wx:if="{{scenic}}" bindtap="goPlace" data-kind="scenic" data-id="{{scenic.id}}">
+    <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
+    <view style="flex:1;min-width:0">
+      <view class="place-name">{{scenic.name}} <text class="tag" wx:if="{{scenic.scenic_level}}">{{scenic.scenic_level}}</text></view>
+      <view class="muted2" wx:if="{{scenic.open_hours}}">🕘 {{scenic.open_hours}}</view>
+      <view class="muted2" wx:if="{{scenic.address}}">📍 {{scenic.address}}</view>
+    </view><text class="pl-link">›</text>
+  </view>
+  <view class="card place-card" wx:if="{{merchant}}" bindtap="goPlace" data-kind="merchant" data-id="{{p.merchant_id}}">
+    <image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
+    <view style="flex:1;min-width:0">
+      <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
+      <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
+      <view class="dt-meta" wx:if="{{merchant.tags.length}}"><text class="tag blue" wx:for="{{merchant.tags}}" wx:key="*this">{{item}}</text></view>
+    </view><text class="pl-link">›</text>
+  </view>
+
+  <!-- 预订须知：与服务端真实规则一致，不写系统做不到的承诺 -->
+  <view class="sec-title">预订须知</view>
+  <view class="card">
+    <view class="hl-item"><text class="hl-dot">·</text>下单后 {{rules.payTimeoutMin}} 分钟内完成支付，超时订单自动关闭并释放名额。</view>
+    <view class="hl-item"><text class="hl-dot">·</text>出行当天出示订单里的动态核销码，由商户现场扫码核验。</view>
+    <view class="hl-item"><text class="hl-dot">·</text>凭证核销前可在订单中申请退款，按以下退改规则原路退回，抵扣的旅豆全额返还：</view>
+    <view class="hl-item refund-tier" wx:for="{{rules.refundRules}}" wx:key="*this"><text class="hl-dot ok">›</text>{{item}}</view>
+    <view class="hl-item" wx:if="{{minGo > 1}}"><text class="hl-dot">·</text>本线路 {{minGo}} 人成团；未成团时可免费改签同类团期或全额退款。</view>
+    <rich-text wx:if="{{extra.notice}}" class="rich-p" nodes="{{extra.notice}}"></rich-text>
+    <view class="hl-item"><text class="hl-dot">·</text>旅豆最多抵扣订单金额的 {{rules.deductPct}}%，{{rules.beanPerYuan}} 旅豆抵 1 元。</view>
+  </view>
 
   <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
   <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
 
-  <!-- 评价 -->
+  <view class="sec-title" wx:if="{{faqs.length}}">关于这条线路的常见问题</view>
+  <view class="card" wx:if="{{faqs.length}}">
+    <view wx:for="{{faqs}}" wx:key="id">
+      <view class="kv" bindtap="toggleFaq" data-i="{{index}}"><text style="flex:1">{{item.question}}</text><text class="v">{{faqOpen === index ? '−' : '+'}}</text></view>
+      <rich-text wx:if="{{faqOpen === index}}" class="rich-p" nodes="{{item.answer}}"></rich-text>
+    </view>
+  </view>
+
   <view class="sec-title">真实评价 <text class="more" wx:if="{{rv.count}}">{{rv.count}} 条 · 均分 {{rv.avg}}</text></view>
   <view class="card" wx:if="{{rv.list.length}}">
     <view class="rv-item" wx:for="{{rv.list}}" wx:key="index">
@@ -61,5 +126,14 @@
       <view class="muted2" style="margin-top:6rpx">{{item.created_at}}</view>
     </view>
   </view>
-  <view wx:elif="{{rv.count === 0}}" class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后第一评价就是你</view>
+  <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后可以写第一条</view>
+  <view class="note" wx:if="{{!merchant}}">履约商户：{{p.merchant_name || '—'}}</view>
+  <view style="height:150rpx"></view>
+
+  <!-- 底部常驻预订栏：滚动到任何位置都能下单 -->
+  <view class="dt-bottom">
+    <button class="dt-share" open-type="share">分享</button>
+    <view class="dt-bottom-price"><text class="rmb">¥</text>{{p.priceLabel}}<text class="muted2"> 起</text></view>
+    <view class="btn dt-cta {{sessions.length ? '' : 'off'}}" bindtap="goBooking">{{sessions.length ? '选择日期' : '暂无团期'}}</view>
+  </view>
 </block>

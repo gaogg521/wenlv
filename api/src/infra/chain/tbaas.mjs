@@ -5,20 +5,21 @@
 //
 // 注：不同客户开通的 TBaaS 版本 Action / FuncName 不同，函数名与参数全部可配，不写死。
 //     对接时只需按控制台里真实的合约方法填 4 个 env 即可。
+import { E } from './conf.mjs'
 import crypto from 'node:crypto'
 
 const env = () => ({
-  secretId: process.env.TBAAS_SECRET_ID || '',
-  secretKey: process.env.TBAAS_SECRET_KEY || '',
-  endpoint: (process.env.TBAAS_ENDPOINT || 'https://tbaas.tencentcloudapi.com').replace(/\/+$/, ''),
-  region: process.env.TBAAS_REGION || 'ap-shanghai',
-  action: process.env.TBAAS_ACTION || 'Invoke',
-  version: process.env.TBAAS_VERSION || '2020-04-17',
-  clusterId: process.env.TBAAS_CLUSTER_ID || '',
-  channel: process.env.TBAAS_CHANNEL || '',
-  rootFunc: process.env.TBAAS_ROOT_FUNC || 'writeRoot',
-  mintFunc: process.env.TBAAS_MINT_FUNC || '',
-  nftContract: process.env.TBAAS_NFT_CONTRACT || '',
+  secretId: E.TBAAS_SECRET_ID || '',
+  secretKey: E.TBAAS_SECRET_KEY || '',
+  endpoint: (E.TBAAS_ENDPOINT || 'https://tbaas.tencentcloudapi.com').replace(/\/+$/, ''),
+  region: E.TBAAS_REGION || 'ap-shanghai',
+  action: E.TBAAS_ACTION || 'Invoke',
+  version: E.TBAAS_VERSION || '2020-04-17',
+  clusterId: E.TBAAS_CLUSTER_ID || '',
+  channel: E.TBAAS_CHANNEL || '',
+  rootFunc: E.TBAAS_ROOT_FUNC || 'writeRoot',
+  mintFunc: E.TBAAS_MINT_FUNC || '',
+  nftContract: E.TBAAS_NFT_CONTRACT || '',
 })
 
 function missing() {

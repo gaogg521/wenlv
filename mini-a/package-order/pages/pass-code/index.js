@@ -14,7 +14,7 @@ Page({
       const no = this.data.orderNo || (this.data.code && this.data.code.orderNo)
       if (!no) return
       const ph = await api.request('/c/orders/' + no + '/phrase')
-      if (ph && ph.enabled) this.setData({ phrase: ph.userPhrase, phraseHint: ph.hint })
+      if (ph && ph.enabled) this.setData({ phrase: ph.userPhrase, phraseHint: ph.hint, phraseWho: [ph.location, ph.role].filter(Boolean).join(' · ') })
     } catch (e) { /* 非剧本游产品无暗号，静默 */ }
   },
   onHide() { this.stop() },

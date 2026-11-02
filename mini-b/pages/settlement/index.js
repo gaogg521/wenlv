@@ -13,7 +13,10 @@ Page({
   onShow() { this.fetch() },
   fetch() {
     if (!getApp().globalData.token) return this.setData({ loaded: true })
-    api.request('/m/settlements').then((l) => this.setData({ list: l.map(s => ({ ...s, statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status] })), loaded: true, error: '' })).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
+    api.request('/m/settlements').then((l) => this.setData({ list: l.map(s => ({ ...s, statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status],
+      // 应结 = 履约结算 + 退改手续费分成（分成比例生成时快照，见后台参数中心/商户资料）
+      payableLabel: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0)) / 100).toFixed(2),
+      feeShareText: s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—' })), loaded: true, error: '' })).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
   },
   dispute(e) {
     const id = e.currentTarget.dataset.id

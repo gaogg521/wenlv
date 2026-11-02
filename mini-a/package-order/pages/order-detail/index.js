@@ -1,4 +1,5 @@
 const api = require('../../../utils/api')
+const place = require('../../../utils/place')
 Page({
   data: { o: null, passes: [], stName: { 10: '待支付', 20: '已支付', 30: '待出行·待核销', 40: '已核销', 50: '已完成', 70: '已退款', 90: '已关闭' },
     passSt: { 1: '有效 · 待核销', 2: '已核销', 3: '已撤销', 4: '已冲正' },
@@ -32,12 +33,31 @@ Page({
     } catch (e) { wx.showToast({ title: e.msg || '改签失败', icon: 'none' }) }
   },
 
+  callLeader() { place.call(this.data.o.trip && this.data.o.trip.leader_phone) },
+  callMerchant() { place.call(this.data.o.merchantContact.phone) },
+  navMerchant() { const m = this.data.o.merchantContact; place.openGeo(m.geo, m.name, m.address) },
   async refund() {
-    const ok = await new Promise(r => wx.showModal({ title: '申请退款', content: '按平台退改梯度执行，确认？', success: r }))
+    const unpaid = this.data.o && this.data.o.status === 10
+    let content
+    if (unpaid) {
+      content = '订单尚未支付，取消后名额将释放。确认取消？'
+    } else {
+      // 先试算：弹窗里的金额就是实际退回金额（与服务端扣费同一函数）
+      let qt
+      try { qt = await api.refundQuote(this.no) } catch (e) { return wx.showToast({ title: e.msg || '暂时无法试算，请稍后重试', icon: 'none' }) }
+      if (!qt.allowed) {
+        return wx.showModal({ title: '暂不支持自助退款', content: qt.reason + '\n\n' + (qt.rules || []).join('\n'), showCancel: false, confirmText: '知道了' })
+      }
+      const beans = qt.beanReturn ? '，抵扣的 ' + qt.beanReturn + ' 旅豆全额返还' : ''
+      content = qt.feeFen > 0
+        ? '距出发 ' + qt.daysToDepart + ' 天，按退改规则收取 ' + Math.round(qt.rate * 1000) / 10 + '% 手续费 ¥' + qt.feeLabel + '。\n实际退回 ¥' + qt.refundLabel + beans + '。确认申请？'
+        : '距出发 ' + qt.daysToDepart + ' 天，免手续费，¥' + qt.refundLabel + ' 全额原路退回' + beans + '。确认申请？'
+    }
+    const ok = await new Promise(r => wx.showModal({ title: unpaid ? '取消订单' : '申请退款', content, confirmText: unpaid ? '确认取消' : '确认退款', success: r }))
     if (!ok.confirm) return
     try {
       await api.refund(this.no, '用户申请')
-      wx.showToast({ title: '退款已受理' })
+      wx.showToast({ title: unpaid ? '订单已取消' : '退款已受理' })
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }
   },

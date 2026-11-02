@@ -10,20 +10,28 @@
     tasks: '发布创作邀约，跟进投稿与奖励发放。', config: '调整运营参数，保留变更与复核记录。',
     integrations: '管理外部服务与凭据，核对通道是否就绪。', attest: '核对业务记录、证明路径与锚定状态。',
     security: '管理账号验证与访问安全。', audit: '追踪操作记录，核对关键业务变更。',
+    budgets: '旅豆发放双闸：批次额度与年度总量，严禁超发。', promoters: '一级推广服务商的开通、档位与成交。',
+    withdrawals: '推广服务费提现复核，打款流水必须留痕。', agreements: '商户分账协议变更的审批与生效。',
+    phrases: '为剧本游配置入戏暗号，店员凭口令核销。', conflicts: '断网核销恢复后校验失败的凭证，人工确认或驳回。',
+    rateov: '单品佣金覆盖推广档位，上限 12%。', cocreate: '共创人投资与分润入账。', kyc: '实名资料人工审核，证件号仅显示脱敏值。',
+    banners: '小程序首页轮播位与投放窗口。', faqs: '小程序常见问题的分类与排序。', risk: '核销重放、退款滥用、锚定失败等风险告警。',
+    features: '按角色、端与城市灰度开放能力。', system: '服务健康、后台任务与手动干预。',
+    web3dash: '每个区块是一批 Merkle 根：本地打包 → 提交上链 → 确认后锚定。',
+    miniapp: '小程序的每个页面在后台哪里改：装修文案集中维护，其余内容一键直达对应栏目。',
+    chainhub: '联盟链与公链的接入配置、离线自检、连通性探测与热切换；凭据加密保存，不需要重启服务。', chainassets: '当前接入的链、能力边界与资产发行台账。',
+    pointassets: '旅豆发行批次、持有人与年度总量哨兵。', badges: '勋章定义与发放记录，发放即进入存证队列。',
+    wallets: '用户积分、等级、勋章与存证事件的汇总视图。', vc: '可携出的旅行凭证：签发、验签与吊销。',
+    terms: '后台术语与小程序合规用语的对照表。',
   }
   const renderers = { dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
+  if (typeof window.chainhub === 'function') renderers.chainhub = window.chainhub
+  if (typeof window.miniapp === 'function') renderers.miniapp = window.miniapp
   let current = '', generation = 0, rendering = Promise.resolve(), previousFocus = null
   let orderRows = [], orderQuery = '', orderPage = 1, orderStatus = 0
   const pageSize = 15
-  window.productModal = () => {
-    const field = document.getElementById('p_title')
-    if (!field) return
-    field.closest('.row').scrollIntoView({ behavior: 'smooth', block: 'center' })
-    field.focus({ preventScroll: true })
-  }
   const allowedItems = () => [...document.querySelectorAll('#nav [data-p]')]
   const titleFor = key => key === 'dash' ? '经营概览' : allowedItems().find(el => el.dataset.p === key)?.textContent.trim() || '工作台'
   downloadExport = async function (what) {
@@ -51,7 +59,11 @@
         localStorage.removeItem('admin_token'); localStorage.removeItem('admin_me'); location.reload()
         throw new Error('登录已过期，请重新登录')
       }
-      if (!response.ok || result.code !== 0) throw new Error(result.msg || result.data?.message || '操作失败，请重试')
+      if (!response.ok || result.code !== 0) {
+        const error = new Error(result.msg || result.data?.message || '操作失败，请重试')
+        error.fieldErrors = result.data?.fieldErrors || null // 表单引擎据此定位到具体字段
+        throw error
+      }
       return result.data
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('请求超时，请检查网络后重试')
@@ -92,15 +104,7 @@
       if (ticket !== generation) return
       try {
         await renderers[key]()
-        if (key === 'dash') {
-          const intro = app.querySelector('.workspace-intro'), kpis = app.querySelector('.kpi-grid')
-          if (!intro || !kpis) throw new Error('经营数据暂时无法加载，请稍后重试')
-          if (intro && kpis) {
-            intro.after(kpis)
-            const charts = [...app.querySelectorAll('.chart-box')]
-            if (charts.length) kpis.after(...charts)
-          }
-        }
+        if (key === 'dash' && !app.querySelector('.kpi-grid')) throw new Error('经营数据暂时无法加载，请稍后重试')
       } catch (error) {
         if (ticket !== generation) return
         app.innerHTML = `<section class="card error-state"><h2>暂时无法加载${esc(titleFor(key))}</h2><p>${esc(error.message)}</p><button class="btn primary" id="retryWorkspace">重新加载</button></section>`

@@ -1,7 +1,8 @@
 const api = require('../../utils/api')
+const siteData = require('../../utils/site')
 
 Page({
-  data: { loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
+  data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
   onLoad(q) {
     const h = new Date().getHours()
     this.setData({ greet: h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好' })
@@ -12,10 +13,12 @@ Page({
         wx.showToast({ title: '专属邀请已生效', icon: 'none' })
       }
     }
-    this.fetch(); this.fetchBanners()
+    this.fetchBanners()
+    siteData.get().then((site) => this.setData({ site }))
   },
   onShow() {
-    this.fetch()
+    // 首次进入 onLoad→onShow 只请求一次；从其他页返回时，超过 60 秒才刷新，避免来回切 tab 反复请求
+    if (!this.lastFetch || Date.now() - this.lastFetch > 60000) this.fetch()
     // 首页可转发（分享/朋友圈入口）
     wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] })
   },
@@ -23,7 +26,8 @@ Page({
   goTours(e) { wx.setStorageSync('tourFilter', { cat: e.currentTarget.dataset.cat || 'all', city: '' }); wx.switchTab({ url: '/pages/tour-list/index' }) },
   fetch(done) {
     if (typeof done !== 'function') done = undefined
-    this.setData({ loading: true, error: '' })
+    this.lastFetch = Date.now()
+    if (!this.data.tours.length) this.setData({ loading: true, error: '' })
     api.getTours('all').then(list => {
       // 首页「即将成团」只展示主题游线路；有实拍图用真图，无图回退渐变封面
       const tours = (list || []).filter(t => (t.cat || '') !== 'shop')
@@ -45,9 +49,10 @@ Page({
     if (b && b.link) wx.navigateTo({ url: b.link, fail: () => wx.showToast({ title: '该入口已下线', icon: 'none' }) })
   },
   onShareAppMessage() {
-    return { title: '向往的自由 · 主题游·预约制', path: '/pages/home/index', imageUrl: '' }
+    const s = this.data.site || {}
+    return { title: s.share_title || s.brand_name || '向往的自由', path: '/pages/home/index', imageUrl: s.share_image || '' }
   },
   onShareTimeline() {
-    return { title: '向往的自由 · 主题游·预约制', query: '' }
+    return { title: (this.data.site || {}).share_title || '向往的自由', query: '' }
   },
 })

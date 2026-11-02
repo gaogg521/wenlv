@@ -16,6 +16,8 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' }
 
 async function bootstrap() {
+  // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
+  await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   // 后台超管种子（首次启动；密码 ADMIN_INIT_PASSWORD，默认 admin123，登录后必须修改）
   const c = await one('SELECT COUNT(*) c FROM admin_user')
   if (Number(c.c) === 0) {
@@ -41,7 +43,7 @@ async function bootstrap() {
 
 function json(res, code, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify({ code, msg: code === 0 ? 'ok' : (data && data.message) || 'error', data: code === 0 ? data : null, traceId: 't' + Date.now().toString(36) }))
+  res.end(JSON.stringify({ code, msg: code === 0 ? 'ok' : (data && data.message) || 'error', data: code === 0 ? data : (data && data.fieldErrors ? { fieldErrors: data.fieldErrors } : null), traceId: 't' + Date.now().toString(36) }))
 }
 
 const server = http.createServer(async (req, res) => {
@@ -119,7 +121,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ code: 'FAIL', message: '支付通知校验失败' }))
     }
-    if (e && e.code) return json(res, e.code, { message: e.message })
+    if (e && e.code) return json(res, e.code, { message: e.message, fieldErrors: e.data && e.data.fieldErrors })
     console.error('[err]', req.method, pathname, e)
     json(res, 9000, { message: '系统错误：' + e.message }, 500)
   }

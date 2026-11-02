@@ -59,7 +59,9 @@ async function tickCommission() {
 async function tickSettlement() {
   if (new Date().getDay() !== 1) return // 周一
   const period = new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
-  const merchants = await q('SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50')
+  const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
+      UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
   for (const m of merchants) await promo.generateSettlement(Number(m.mid), period)
   console.log('[job:settlement]', merchants.length, 'merchants', period)
 }
@@ -81,7 +83,9 @@ export async function tickExpire() {
 
 /** 存证打包（小时级）：本地 Merkle 根 + inclusion proof；随后尝试锚定（NOOP 下停留在"已打包"） */
 export async function tickAttest() {
-  const { packBatch, reanchorPending } = await import('./domain/attest.mjs')
+  const { packBatch, reanchorPending, confirmPending } = await import('./domain/attest.mjs')
+  const confirmed = await confirmPending(50)
+  if (confirmed.length) console.log('[job:attest-confirm]', confirmed.filter((x) => x.anchored).length, '/', confirmed.length, 'confirmed')
   const r = await packBatch()
   if (r.leaves > 0) console.log('[job:attest] batch #' + r.batchId, 'seq', r.seq, 'leaves', r.leaves, 'root', String(r.root).slice(0, 12))
   const anchored = await reanchorPending(20)
@@ -119,6 +123,7 @@ async function tickRiskNotify() {
 }
 
 async function main() {
+  await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00')
   let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = ''
   for (;;) {

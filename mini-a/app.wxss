@@ -157,3 +157,110 @@ page {
 .theme-grid{display:flex;gap:12rpx;padding:24rpx}.theme-tile{background:#fff;flex:1;min-width:0;padding:22rpx 12rpx;border:1rpx solid #eee6da;border-radius:18rpx}.theme-symbol{font-size:38rpx;color:#b86a39}.theme-name{font-size:24rpx;font-weight:700;margin-top:12rpx}.theme-sub{font-size:18rpx;color:#8a8175;margin-top:7rpx}
 .home-footer{text-align:center;padding:40rpx 24rpx 70rpx;font-size:24rpx;color:#71695d}.home-footer view{font-size:20rpx;letter-spacing:3rpx;margin-top:12rpx;color:#a59b8c}
 .btn[disabled]{opacity:.5}.state-error{padding:40rpx;text-align:center;color:#8c492f}.state-error .btn{margin-top:20rpx}
+
+/* ---- 详情页 v2：标题区 / 团期预览 / 费用说明 / 底部预订栏 ---- */
+.dt-head { flex-direction: column; align-items: stretch; gap: 10rpx; }
+.dt-title { font-size: 36rpx; font-weight: 800; line-height: 1.4; }
+.dt-sub { font-size: 25rpx; color: var(--ink2); }
+.dt-meta { display: flex; flex-wrap: wrap; gap: 10rpx; }
+.dt-price-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6rpx; }
+.sess-row { display: flex; justify-content: space-between; align-items: center; padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }
+.sess-row:last-child { border-bottom: none; }
+.sess-date { font-size: 28rpx; font-weight: 600; }
+.fee-h { font-size: 24rpx; font-weight: 700; color: var(--ink); }
+.hl-dot.no { color: var(--sub); }
+.dt-bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: center; gap: 20rpx;
+  background: #fff; padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); box-shadow: 0 -4rpx 20rpx rgba(30,30,60,.08); }
+.dt-share { margin: 0; padding: 0 8rpx; background: transparent; font-size: 22rpx; color: var(--ink2); line-height: 1.4; }
+.dt-share::after { border: none; }
+.dt-bottom-price { flex: 1; font-size: 40rpx; font-weight: 800; color: var(--brand); }
+.dt-bottom-price .rmb { font-size: 24rpx; }
+.dt-cta { margin: 0; min-width: 260rpx; }
+.dt-cta.off { background: #c9ced6; }
+/* ---- 确认订单 ---- */
+.bk-head { display: flex; flex-direction: column; gap: 8rpx; }
+.chip.full { opacity: .45; text-decoration: line-through; }
+.qty-box { display: flex; gap: 20rpx; align-items: center; }
+.qty-btn { width: 52rpx; height: 52rpx; line-height: 50rpx; text-align: center; border: 1.5rpx solid var(--line); border-radius: 50%; font-size: 30rpx; color: var(--ink); }
+.qty-btn.off { color: #c9ced6; }
+.refund-tier { padding-left: 24rpx; font-size: 24rpx; }
+.faq-a { text-align: left; }
+/* ---- 详情页：适合人群 / 行程时间线 ---- */
+.dt-fit { display: flex; flex-wrap: wrap; gap: 8rpx 20rpx; font-size: 23rpx; color: var(--ink2); }
+.iti { display: flex; gap: 18rpx; position: relative; padding-bottom: 26rpx; }
+.iti:not(:last-child)::before { content: ''; position: absolute; left: 9rpx; top: 26rpx; bottom: 0; width: 2rpx; background: #f1dcc8; }
+.iti-dot { width: 20rpx; height: 20rpx; border-radius: 50%; background: var(--brand); margin-top: 8rpx; flex: none; box-shadow: 0 0 0 6rpx var(--brand-soft); }
+.iti-body { flex: 1; min-width: 0; }
+.iti-time { font-size: 22rpx; color: var(--brand); font-weight: 700; }
+.iti-title { font-size: 28rpx; font-weight: 700; margin-top: 4rpx; }
+.iti-desc { font-size: 25rpx; color: var(--ink2); line-height: 1.7; margin-top: 6rpx; }
+.iti-img { width: 100%; height: 300rpx; border-radius: 16rpx; margin-top: 12rpx; }
+.phrase-card { background: linear-gradient(135deg, #fff7ee, #fdf0ff); border: 1rpx solid #f1d9c4; }
+.phrase-text { font-size: 38rpx; font-weight: 800; color: #6d28d9; margin: 14rpx 0 10rpx; letter-spacing: 2rpx; }
+/* ---- 资料页 / 商户景区卡片 / 约稿 / 勋章墙 / FAQ ---- */
+.sm-btn { margin: 16rpx 0 0; padding: 12rpx 0; font-size: 24rpx; }
+.place-card { display: flex; align-items: center; gap: 20rpx; }
+.place-img { width: 150rpx; height: 112rpx; border-radius: 16rpx; flex: none; background: #f3ece2; }
+.place-img.logo { width: 96rpx; height: 96rpx; border-radius: 50%; }
+.place-name { font-size: 29rpx; font-weight: 700; margin-bottom: 6rpx; }
+.pl-link { color: var(--brand); }
+.pl-top { display: flex; align-items: center; gap: 16rpx; }
+.pl-logo { width: 88rpx; height: 88rpx; border-radius: 50%; flex: none; }
+.pl-fac { display: flex; flex-wrap: wrap; gap: 10rpx; padding-top: 16rpx; }
+.mc-ops { display: flex; gap: 28rpx; font-size: 40rpx; }
+.sess-info { margin-top: 12rpx; background: #fbfaf6; }
+.tk-card { display: flex; gap: 20rpx; align-items: flex-start; }
+.tk-cover { width: 160rpx; height: 120rpx; border-radius: 14rpx; flex: none; }
+.tk-reward { text-align: right; flex: none; }
+.tk-cash { font-size: 22rpx; color: #b45309; margin-left: 10rpx; }
+.tk-ref { display: flex; gap: 16rpx; align-items: center; padding: 14rpx 0; border-bottom: 1rpx solid var(--line); font-size: 26rpx; }
+.tk-ref:last-child { border-bottom: none; }
+.tk-ref-img { width: 120rpx; height: 90rpx; border-radius: 10rpx; }
+.badge-wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16rpx; margin: 0 24rpx 24rpx; }
+.bdg { --bc: #b8b2a7; background: #fff; border-radius: 20rpx; padding: 22rpx 10rpx; text-align: center; box-shadow: var(--shadow); filter: grayscale(1); opacity: .55; }
+.bdg.on { filter: none; opacity: 1; border: 2rpx solid var(--bc); }
+.bdg-img { width: 96rpx; height: 96rpx; }
+.bdg-ico { font-size: 64rpx; line-height: 96rpx; }
+.bdg-name { font-size: 24rpx; font-weight: 700; margin-top: 8rpx; }
+.bdg-r { font-size: 20rpx; color: var(--sub); }
+.bdg.on.r-rare .bdg-r { color: #2563eb; } .bdg.on.r-epic .bdg-r { color: #7c3aed; } .bdg.on.r-legend .bdg-r { color: #b45309; }
+.faq-search { margin: 20rpx 24rpx 0; }
+.faq-search input { background: #fff; border-radius: 999rpx; padding: 18rpx 30rpx; font-size: 26rpx; box-shadow: var(--shadow); }
+.faq-hot { font-size: 20rpx; color: #fff; background: var(--brand); border-radius: 6rpx; padding: 2rpx 8rpx; margin-left: 8rpx; }
+.dest-card { overflow: hidden; }
+.dest-cover { width: calc(100% + 48rpx); height: 240rpx; margin: -24rpx -24rpx 18rpx; display: block; }
+.doc-card { line-height: 1.9; }
+
+/* ===================== 精修层（与后台同一视觉语言：暖墨深色 + 珊瑚橙渐变 + 柔和层次）=====================
+   只覆盖既有类名的视觉属性，不改结构；如需回退，删除本段即可 */
+page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1f2a2e; --ink2: #4a5754; --bg: #f7f4ef;
+  --shadow: 0 2rpx 6rpx rgba(58,46,31,.04), 0 12rpx 32rpx rgba(58,46,31,.06); }
+.hero { background: radial-gradient(520rpx 320rpx at 90% -10%, rgba(255,178,122,.45), rgba(255,178,122,0) 70%), linear-gradient(135deg, #2b211b 0%, #4a2e1f 50%, #8a4422 100%);
+  border-radius: 0 0 44rpx 44rpx; padding: 52rpx 40rpx 64rpx; }
+.hero::before { background: rgba(255,255,255,.06); filter: none; }
+.hero::after { background: none; border: 1rpx solid rgba(255,255,255,.12); width: 260rpx; height: 260rpx; left: auto; right: -70rpx; bottom: -120rpx; }
+.hero .hi { font-size: 44rpx; letter-spacing: 2rpx; }
+.hero .sub2 { color: #ead9c8; opacity: 1; }
+.hero .hero-chip { background: rgba(255,255,255,.1); border-color: rgba(255,214,180,.35); color: #ffe3c9; }
+.card { border-radius: 32rpx; box-shadow: var(--shadow); border: 1rpx solid rgba(238,232,222,.8); }
+.sec-title { font-size: 32rpx; letter-spacing: 1rpx; color: var(--ink); }
+.sec-title::before { width: 8rpx; height: 32rpx; background: linear-gradient(180deg, #f08a4b, #c64e28); }
+.chip { border-color: #ece4d8; color: #6b625a; }
+.chip.on { background: linear-gradient(135deg, #e5743b, #c64e28); border-color: transparent; box-shadow: 0 8rpx 20rpx rgba(198,78,40,.28); }
+.btn { background: linear-gradient(135deg, #e5743b 0%, #c64e28 60%, #a93f1e 100%); box-shadow: 0 12rpx 28rpx rgba(198,78,40,.3); letter-spacing: 3rpx; }
+.btn.ghost { color: #b4492a; border-color: #e4b38f; background: #fffaf5; }
+.tag { background: #fbf1e6; color: #a8552e; }
+.tag.blue { background: #eef3fb; color: #3b5b8f; }
+.tour-item { border-radius: 32rpx; padding: 24rpx; border: 1rpx solid rgba(238,232,222,.8); }
+.tour-img { border-radius: 22rpx; }
+.tour-title { color: var(--ink); letter-spacing: .5rpx; }
+.tour-price { color: #c64e28; }
+.home-intro { background: radial-gradient(560rpx 300rpx at 100% 0%, rgba(255,214,180,.6), rgba(255,214,180,0) 70%), linear-gradient(180deg, #f7ede0, #f7f4ef); }
+.home-title { color: #2b211b; }
+.home-title text { color: #c64e28; }
+.theme-tile { border: none; border-radius: 24rpx; box-shadow: 0 8rpx 22rpx rgba(58,46,31,.07); }
+.theme-symbol { color: #c64e28; }
+.dt-bottom { box-shadow: 0 -8rpx 28rpx rgba(58,46,31,.08); }
+.dt-bottom-price { color: #c64e28; }
+.book-bar { border-radius: 32rpx; box-shadow: 0 16rpx 40rpx rgba(58,46,31,.1); }
+.bean-rule { border-radius: 24rpx; box-shadow: 0 12rpx 30rpx rgba(58,46,31,.1); }

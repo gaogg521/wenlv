@@ -25,14 +25,17 @@ const ICONS = {
   risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 3 20h18zM12 10v4M12 17.5v.5"/></svg>',
   audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
 }
+// 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
 const NAV = [
-  ['经营', [['dash', '驾驶舱', 'dash']]],
-  ['交易', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['settlements', '结算', 'settlements']]],
-  ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
-  ['资源池', [['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants'], ['creators', '创作者池', 'content']]],
-  ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['conflicts', '离线冲突', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
-  ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
-  ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['chainassets', '链与资产', 'sys'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
+  ['工作台', [['dash', '驾驶舱', 'dash']]],
+  ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
+  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
+  ['小程序', [['miniapp', '装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
+  ['用户与内容', [['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
+  ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
+  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
 ]
 
 async function api(method, path, body) {
@@ -45,6 +48,20 @@ async function api(method, path, body) {
   if (j.code !== 0) throw new Error(j.msg || j.data?.message || '请求失败')
   return j.data
 }
+const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
+  refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行' }
+/** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]） */
+function auditDiff(before, after) {
+  const obj = (v) => { if (v == null) return {}; if (typeof v === 'string') { try { return JSON.parse(v) } catch { return { value: v } } } return v }
+  const b = obj(before), a = obj(after)
+  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])]
+  if (!keys.length) return '—'
+  const show = (v) => v === undefined ? '∅' : esc((typeof v === 'object' ? JSON.stringify(v) : String(v)).slice(0, 40))
+  return '<div class="audit-diff">' + keys.slice(0, 6).map((k) => b[k] === a[k]
+    ? `<div><span class="k">${esc(k)}</span> ${show(a[k])}</div>`
+    : `<div><span class="k">${esc(k)}</span> <del>${show(b[k])}</del> → <ins>${show(a[k])}</ins></div>`).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
+}
+const bizTag = (t) => `<span class="biz-tag">${BIZ_CN[t] || t}<small>${t}</small></span>`
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
@@ -121,7 +138,7 @@ function boot() {
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
-    return `<details class="nav-section" ${['经营','交易','生态'].includes(g) ? 'open' : ''}><summary class="nav-group">${g === 'WEB3' ? '可信与权益' : g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+    return `<details class="nav-section" ${['工作台','交易履约','小程序'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   go(allowed ? allowed[0] : 'dash')
@@ -130,9 +147,9 @@ function boot() {
 function go(page) {
   document.querySelectorAll('.nav-item').forEach((a) => a.classList.toggle('on', a.dataset.p === page))
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
-    budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
+    budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控事件', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
+    web3dash: '链路总览', chainhub: '链接入中心', miniapp: '装修与映射', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
   $('#crumb').textContent = name
   const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }[page] || dash)
   Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })
@@ -141,6 +158,14 @@ const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
 const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
 
 /* ============ 驾驶舱 ============ */
+const KPI_ICON = {
+  gmv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18M16.5 7.5c-.8-1.5-2.5-2.3-4.5-2.3-2.6 0-4.5 1.4-4.5 3.4 0 4.6 9.5 2.5 9.5 7.2 0 2-2 3.5-4.8 3.5-2.2 0-4-.9-4.8-2.6"/></svg>',
+  order: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.6L16 9.5"/></svg>',
+  bean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="12" rx="6.5" ry="9" transform="rotate(35 12 12)"/><path d="M9 16c2-1.5 3.5-5 6-8"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.3"/></svg>',
+  trend: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+}
 async function dash() {
   try {
   $('#app').innerHTML = `<div class="kpi-grid">${Array(6).fill('<div class="kpi"><div class="sk" style="width:44px;height:44px;border-radius:12px"></div><div style="flex:1"><div class="sk" style="height:12px;width:60%;margin-bottom:8px"></div><div class="sk" style="height:22px;width:40%"></div></div></div>').join('')}</div>
@@ -151,12 +176,12 @@ async function dash() {
   const recent = orders.slice(0, 8)
   const cityTag = k.scopeCity ? `本城 ${k.scopeCity} 口径` : '全域口径'
   const kpis = [
-    ['💰', 'var(--brand-soft)', '今日 GMV', k.gmvToday, cityTag],
-    ['🧾', '#e8effd', '今日订单', k.ordersToday, '含已支付以上状态'],
-    ['✅', '#e3f6ec', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
-    ['🫘', '#fdf3e0', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
-    ['⚠️', '#fdecec', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
-    ['📈', '#f1e9fd', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],
+    ['gmv', 't-amber', '今日 GMV', '¥' + k.gmvToday, cityTag],
+    ['order', 't-blue', '今日订单', k.ordersToday, '含已支付以上状态'],
+    ['check', 't-green', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
+    ['bean', 't-gold', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
+    ['alert', 't-red', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
+    ['trend', 't-violet', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],
   ]
   const trend = k.trend || []
   const maxG = Math.max(...trend.map((t) => Number(t.gmv)), 1)
@@ -166,28 +191,26 @@ async function dash() {
   const area = path ? path + ` L${pts[pts.length - 1][0]},${H - P} L${pts[0][0]},${H - P} Z` : ''
   const w3 = await api('GET', '/admin/web3/overview').catch(() => null)
   const ins = await api('GET', '/admin/dash/insights').catch(() => null)
-  $('#app').innerHTML = `<div class="workspace-intro"><div><div class="workspace-eyebrow">OPERATIONS / 经营</div><h1>把每一段旅程，照顾周全。</h1><p>先处理待办，再看经营变化。当前数据范围：${esc(cityTag)}</p></div><div class="workspace-date">${new Date().toLocaleDateString('zh-CN')}<small>经营工作台</small></div></div>
-  ${ins ? `<div class="card"><div class="card-head"><h3>待审核事项（聚合）</h3></div>
-    <div class="row" style="gap:18px;margin:0">
-      <button class="task-link" onclick="go('content')"><span>内容待审</span><b>${ins.pending.notes}</b>去审核 →</button>
-      <button class="task-link" onclick="go('merchants')"><span>商户进件</span><b>${ins.pending.merchants}</b>去处理 →</button>
-      <button class="task-link" onclick="go('withdrawals')"><span>提现待审</span><b>${ins.pending.withdrawals}</b>去复核 →</button>
-      <button class="task-link" onclick="go('conflicts')"><span>核销异常</span><b>${ins.pending.conflicts}</b>去处理 →</button>
-      <button class="task-link" onclick="go('tasks')"><span>约稿待审</span><b>${ins.pending.tasks}</b>去处理 →</button>
-      <span class="muted" style="margin-left:auto">合计 ${ins.pending.notes + ins.pending.merchants + ins.pending.withdrawals + ins.pending.conflicts + ins.pending.tasks} 项</span>
-    </div>
-    <div class="card-head" style="margin-top:12px"><h3>热门主题游 TOP5（已支付口径）</h3></div>
-    <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
-    ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
-    </tbody></table>
-    <div class="card-head" style="margin-top:12px"><h3>经营指标</h3></div>
-    <div class="row" style="gap:24px;margin:0">
-      <span>报名→支付 <b>${ins.funnel.payRate}</b></span>
-      <span>复购线索 <b>${ins.funnel.rebuyRate}</b></span>
-      <span>累计抵扣 / 累计发放 <b>${ins.funnel.beanUseRate}</b></span>
+  const P_ = ins ? ins.pending : null
+  const todoTotal = P_ ? P_.notes + P_.merchants + P_.withdrawals + P_.conflicts + P_.tasks : 0
+  const todo = (k, label, n, verb) => `<button class="task-link${n ? ' has' : ''}" onclick="go('${k}')"><span>${label}</span><b>${n}</b>${n ? verb + ' →' : '已清空'}</button>`
+  const hour = new Date().getHours()
+  const hello = (hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好') + '，' + esc(ME?.displayName || ME?.username || '')
+  $('#app').innerHTML = `
+  <section class="dash-hero"><div><div class="dash-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
+    <h2>${hello}</h2><p>${todoTotal ? `今天有 <b>${todoTotal}</b> 项待处理，建议先从下方待办开始。` : '待办已全部处理完毕，可以看看经营趋势。'}</p></div>
+    <div class="dash-hero-kpi"><span>近 7 日 GMV</span><b>¥${(k.trend || []).reduce((s, t) => s + Number(t.gmv || 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</b><small>${esc(cityTag)} · ${(k.trend || []).reduce((s, t) => s + t.orders, 0)} 单</small></div></section>
+  ${P_ ? `<div class="card todo-card"><div class="card-head"><h3>今日待办 <span class="muted">· ${cityTag}</span></h3>
+      <span class="${todoTotal ? 'pill s10' : 'pill s50'}">${todoTotal ? '共 ' + todoTotal + ' 项待处理' : '全部处理完毕'}</span></div>
+    <div class="todo-row">
+      ${todo('merchants', '商户进件', P_.merchants, '去审批')}
+      ${todo('withdrawals', '提现待审', P_.withdrawals, '去复核')}
+      ${todo('conflicts', '核销异常', P_.conflicts, '去处理')}
+      ${todo('content', '内容待审', P_.notes, '去审核')}
+      ${todo('tasks', '约稿待审', P_.tasks, '去处理')}
     </div></div>` : ''}
   <div class="kpi-grid">${kpis.map(([ic, bg, l, v, s]) => `
-    <div class="kpi"><div class="ico" style="background:${bg}">${ic}</div>
+    <div class="kpi ${bg}"><div class="ico">${KPI_ICON[ic] || ''}</div>
     <div><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div></div>`).join('')}
   </div>
   <div class="card chart-box">
@@ -202,7 +225,17 @@ async function dash() {
     </svg>
     ${trend.length ? '' : emptyBox('暂无成交数据——去「商品与团期」上架第一条线路吧')}
   </div>
-  ${wxd.list && wxd.list.length ? miniVisitCard(wxd) : ''}
+  ${wxd.list && wxd.list.length && !wxd.mock ? miniVisitCard(wxd) : `<div class="card chart-box"><div class="card-head"><h3>小程序访问趋势</h3></div>
+    ${emptyBox('尚未接入微信数据分析：在「集成中心」配置小程序 AppSecret 后显示真实 PV/UV（不展示模拟曲线）')}</div>`}
+  ${ins ? `<div class="card"><div class="card-head"><h3>热门主题游 TOP5 <span class="muted">· 已支付口径</span></h3>
+      <div class="row" style="gap:20px;margin:0">
+        <span class="muted">报名→支付 <b>${ins.funnel.payRate}</b></span>
+        <span class="muted">复购线索 <b>${ins.funnel.rebuyRate}</b></span>
+        <span class="muted" title="累计抵扣旅豆 ÷ 累计发放旅豆">旅豆使用率 <b>${ins.funnel.beanUseRate}</b></span>
+      </div></div>
+    <table><thead><tr><th>#</th><th>主题游</th><th>订单</th><th>GMV</th></tr></thead><tbody>
+    ${ins.topTours.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.title)}</td><td class="num">${Number(t.orders)}</td><td class="num">¥${(Number(t.gmv) / 100).toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无数据</td></tr>'}
+    </tbody></table></div>` : ''}
   <div class="card">
     <div class="card-head"><h3>最近订单</h3><button class="btn ghost sm" onclick="go('orders')">全部订单 →</button></div>
     ${recent.length ? `<table><thead><tr><th>单号</th><th>商品</th><th>用户</th><th>金额</th><th>状态</th><th>支付时间</th></tr></thead><tbody>
@@ -274,20 +307,37 @@ async function orderDrawer(no) {
     </table>
     ${o.passes?.length ? `<h3 style="margin:16px 0 8px">入园凭证</h3><table>
       ${o.passes.map((p) => `<tr><td>#${p.id} ${esc(p.name)}</td><td><span class="pill ${p.status === 1 ? 's30' : p.status === 2 ? 's50' : 'off'}">${['', '待核销', '已核销', '已过期', '已冲正'][p.status]}</span></td></tr>`).join('')}</table>` : ''}
+    ${o.refunds?.length ? `<h3 style="margin:16px 0 8px">退款单</h3><table>
+      ${o.refunds.map((r) => `<tr><td class="num">${esc(r.refund_no)}<div class="td-sub">${esc(r.operator || '')} · ${esc(r.reason || '')}</div></td>
+        <td>实退 <b>${fen(r.amount)}</b>${Number(r.fee_amount) ? `<div class="td-sub">手续费 ${fen(r.fee_amount)}（${Math.round(Number(r.fee_rate) * 1000) / 10}% · 距出发 ${r.days_to_depart} 天）</div>` : '<div class="td-sub">全额</div>'}</td>
+        <td><span class="pill ${Number(r.status) === 2 ? 's50' : 's60'}">${['申请', '处理中', '已退款', '已拒绝'][r.status] || r.status}</span></td></tr>`).join('')}</table>` : ''}
     <h3 style="margin:16px 0 10px">状态机时间线（order_event 审计）</h3>
     <ul class="tl">${(o.events || []).map((e) => `<li>
       <div class="t">${ST[e.from_st] || e.from_st} → ${ST[e.to_st] || e.to_st}</div>
       <div class="d">${esc(String(e.detail || '').replace(/"/g, ''))} · ${esc(e.actor)} · ${esc(String(e.created_at).slice(5, 19))}</div></li>`).join('')}</ul>`)
 }
 async function refundOrder(no) {
-  modal('退款确认', `<p>确认对 <code>${esc(no)}</code> 发起退款？</p>
-    <p class="muted" style="margin-top:8px">将自动执行全量冲正：原路退款 · 退回抵扣旅豆 · 入园凭证作废 · 关联佣金置无效。</p>`,
+  let qt = null
+  try { qt = (await api('GET', '/admin/orders/' + no)).refundQuote } catch (e) { /* 试算失败不阻断客服全额处理 */ }
+  const policyLine = !qt ? '<p class="muted">该订单已核销或状态不适用退改梯度，只能由客服全额处理。</p>'
+    : qt.allowed ? `<p>按退改规则：距出发 <b>${qt.daysToDepart}</b> 天，手续费 <b>${fen(qt.feeFen)}</b>（${Math.round(qt.rate * 1000) / 10}%），实退 <b>${fen(qt.refundFen)}</b>。</p>`
+    : `<p class="muted">按退改规则不可自助退款：${esc(qt.reason)}</p>`
+  modal('退款处理', `<p>订单 <code>${esc(no)}</code></p>${policyLine}
+    <label>处理原因（写入审计与存证）</label><textarea id="rf_reason" placeholder="如：游客行程变更 / 已核销售后，经核实服务未履约"></textarea>
+    <p class="muted" style="margin-top:8px">两种方式都会执行全量冲正：原路退款 · 退回抵扣旅豆 · 入园凭证作废 · 关联佣金置无效。</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn danger" onclick="doRefund('${no}')">确认退款</button>`)
+     ${qt && qt.allowed ? `<button class="btn ghost" onclick="doRefund('${no}','policy')">按规则退 ${fen(qt.refundFen)}</button>` : ''}
+     <button class="btn danger" onclick="doRefund('${no}','full')">全额退款（客服特批）</button>`)
 }
-async function doRefund(no) {
-  try { const r = await api('POST', '/admin/orders/' + no + '/refund', { reason: '后台退款' }); closeModal(); toast(r.refunded ? '退款完成，冲正已执行' : '退款已受理，待支付通道确认'); orders() }
-  catch (e) { toast(e.message, true) }
+async function doRefund(no, mode) {
+  const reason = ($('#rf_reason')?.value || '').trim()
+  if (mode === 'full' && !reason) return toast('全额特批请填写处理原因', true)
+  try {
+    const r = await api('POST', '/admin/orders/' + no + '/refund', { mode, reason })
+    closeModal()
+    toast(r.refunded ? `退款完成：实退 ${fen(r.refundFen)}${r.feeFen ? '，手续费 ' + fen(r.feeFen) : ''}` : '退款已受理，待支付通道确认')
+    orders()
+  } catch (e) { toast(e.message, true) }
 }
 async function completeOrder(no) {
   try { await api('POST', '/admin/dev/complete', { orderNo: no }); toast('观察期结束：返豆与佣金已入账'); orders() }
@@ -297,25 +347,15 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const [rows, merchantRows, supRows, scenRows] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
-    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
+  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
+    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
-    <p class="muted" style="margin-bottom:16px">先保存草稿 → 完善行程与集合信息 → 添加团期 → 检查后上架。价格单位为元。</p><div class="row" style="margin-top:0">
-      <input id="p_title" placeholder="标题，如：朱家角剧本游 · 江南谜案">
-      <select id="p_cat"><option value="script">剧本闯关</option><option value="yoga">瑜伽之旅</option><option value="sister">姐姐系列</option>
-        <option value="single">单身社交</option><option value="sport">体育竞技</option><option value="family">亲子主题</option>
-        <option value="red">红色文旅</option><option value="shop">商城 SKU</option></select>
-      <input id="p_price" placeholder="价格（元），如 298" type="number" min="0.01" step="0.01" style="width:150px">
-      <select id="p_merchant">${merchantRows.filter(m => m.status === 1).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('') || '<option value="">请先审核商户</option>'}</select>
-      <select id="p_supplier"><option value="">供应商（选填）</option>${supOpts}</select>
-      <select id="p_scenic"><option value="">关联景区（选填）</option>${scenOpts}</select>
-      <button class="btn primary sm" onclick="addProduct()">保存草稿</button>
-    </div>
+    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button></div>
+    <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
     <div class="row" style="margin:10px 0 0">
       <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
         <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
@@ -323,54 +363,24 @@ async function products() {
         <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
       <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
     </div>
-    ${frs.length ? `<table><thead><tr><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${frs.length ? `<table><thead><tr><th></th><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((p) => `<tr>
-      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div></td>
-      <td><span class="pill off">${esc(p.cat)}</span></td><td class="num">${esc(p.city_code)}</td>
+      <td>${eeThumb(info[p.id])}</td>
+      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
+      <td><span class="pill off">${esc(CAT_CN[p.cat] || p.cat)}</span></td><td>${esc(CITY_CN[p.city_code] || p.city_code)}</td>
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionModal(${p.id}, ${p.price_from})">＋团期</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑·素材</button></td>
-    </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——用上方表单录入第一条线路')}
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button></td>
+    </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>`
 }
 
 /* 商品编辑 + 素材（P0 宣传力：实拍图集/行程/费用包含/集合点/安全告知） */
 let EDIT_P = null
-async function editProduct(id) {
-  const [p, supRows, scenRows] = await Promise.all([api('GET', '/admin/products').then((rs) => rs.find((x) => x.id === id)),
-    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
-  if (!p) return toast('商品不存在', true)
-  EDIT_P = p
-  const rich = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
-  const imgs = typeof p.images === 'string' ? JSON.parse(p.images || '[]') : (p.images || [])
-  modal(`编辑 · ${esc(p.title)}`, `
-    <label class="muted" style="display:block;margin-bottom:4px">实拍图集（首图 = 小程序封面；≤9 张，单张 ≤2MB）</label>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-      ${imgs.map((u, i) => `<div style="position:relative"><img src="${u}" style="width:72px;height:54px;object-fit:cover;border-radius:8px;display:block">
-        <button onclick="delProductImage(${id},${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:18px">×</button></div>`).join('')}
-      <label style="width:72px;height:54px;border:1.5px dashed var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--sub)">
-        ＋<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadProductImage(${id},this)"></label>
-    </div>
-    <div class="row" style="margin-top:0">
-      <select id="e_supplier"><option value="">供应商（选填）</option>${supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.supplier_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <select id="e_scenic"><option value="">关联景区（选填）</option>${scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.scenic_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-    </div>
-    <label class="muted" style="display:block">玩法亮点（每行一条）</label>
-    <textarea id="e_highlights" class="ta-full" rows="3">${esc((rich.highlights || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">行程介绍（富文本 · 小程序详情页图文混排展示）</label>
-    ${richEdit('e_intro', rich.intro || '')}
-    <label class="muted" style="display:block">费用包含（每行一条）</label>
-    <textarea id="e_includes" class="ta-full" rows="3">${esc((rich.includes || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">集合地点 / 交通</label>
-    <input id="e_meeting" style="width:100%" value="${esc(p.meeting_point || '')}" placeholder="如：地铁17号线朱家角站 2 号口，09:00 集合">
-    <label class="muted" style="display:block">安全告知</label>
-    <input id="e_safety" style="width:100%" value="${esc(p.safety_note || '')}" placeholder="如：含户外环节，已购公众责任险，请穿着运动鞋">
-    <p class="muted">保存后小程序详情页即时可见（图片经 /uploads 静态服务）</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveProduct(${id})">保存</button>`)
-}
+async function editProduct(id) { return entityEditor('product', id, { onSaved: () => products() }) }
 function lines(v) { return v.split('\n').map((s) => s.trim()).filter(Boolean) }
 async function uploadProductImage(id, input) {
   const f = input.files[0]
@@ -393,41 +403,27 @@ async function delProductImage(id, idx) {
 async function saveProduct(id) {
   try {
     await api('PUT', '/admin/products/' + id, {
-      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value),
+      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value), excludes: lines($('#e_excludes').value),
       meetingPoint: $('#e_meeting').value || null, safetyNote: $('#e_safety').value || null,
       supplierId: Number($('#e_supplier')?.value) || null, scenicId: Number($('#e_scenic')?.value) || null,
     })
     toast('已保存'); closeModal(); products()
   } catch (e) { toast(e.message, true) }
 }
-function productModal() { products().then(() => document.getElementById('p_title')?.focus()) }
-async function addProduct() {
-  try {
-    if (!$('#p_title').value.trim()) return toast('请填写标题', true)
-    await api('POST', '/admin/products', { title: $('#p_title').value.trim(), cat: $('#p_cat').value,
-      priceFrom: Math.round(Number($('#p_price').value) * 100), merchantId: Number($('#p_merchant').value), status: 0,
-      supplierId: Number($('#p_supplier').value) || null, scenicId: Number($('#p_scenic').value) || null })
-    toast('草稿已保存，请完善素材并添加团期后上架'); products()
-  } catch (e) { toast(e.message, true) }
-}
+function productModal() { return entityEditor('product', null, { onSaved: () => products() }) }
+async function addProduct() { return entityEditor('product', null, { onSaved: () => products() }) }
 async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
-function sessionModal(pid, price) {
-  const yuan = (Number(price) / 100).toFixed(2)
-  const d7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-  const d10 = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
-  modal('新增团期', `
-    <div class="field"><label>出发日期 * / 最低成团人数</label><div class="row" style="margin:0">
-      <input id="s_date" type="date" value="${d7}" style="width:170px">
-      <input id="s_mingo" type="number" value="10" style="width:100px" title="不足则不成团"></div></div>
-    <div class="field"><label>名额 * / 成人价（元）*</label><div class="row" style="margin:0">
-      <input id="s_quota" type="number" value="24" style="width:100px">
-      <input id="s_price" type="number" step="0.01" value="${yuan}" style="width:130px"></div></div>
-    <div class="field"><label>早鸟价（元，选填）/ 早鸟天数</label><div class="row" style="margin:0">
-      <input id="s_early" type="number" step="0.01" placeholder="如 ${Math.max(1, Math.round(Number(yuan) * 0.85))}" style="width:130px">
-      <input id="s_earlydays" type="number" value="7" style="width:100px" title="出发前 N 天前预订享受早鸟价">
-      <span class="muted">留空 = 不开早鸟</span></div></div>
-    <p class="muted">出发日建议选周五/周六；名额售完自动拦截（数据库 CHECK 防超卖）；早鸟价须低于成人价</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSession(${pid})">保存团期</button>`)
+function sessionModal(pid, priceFen) { return entityEditor('session', null, { parentId: pid, defaults: priceFen ? { price_adult: priceFen / 100 } : {}, onSaved: () => sessionsDrawer(pid) }) }
+/** 团期管理：列出某线路全部团期，逐个用完整编辑器维护 */
+async function sessionsDrawer(pid) {
+  const d = await api('GET', '/admin/products/' + pid + '/sessions')
+  const STS = { 1: '报名中', 2: '已成团', 3: '已截止', 4: '已取消', 5: '未成团' }
+  drawer('团期管理 · ' + esc(d.title), `
+    <div class="row" style="margin:0 0 12px"><button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button><span class="muted">${d.sessions.length} 个团期</span></div>
+    ${d.sessions.length ? `<table><thead><tr><th>出发日</th><th>价格</th><th>报名/名额</th><th>状态</th><th></th></tr></thead><tbody>
+    ${d.sessions.map((x) => `<tr><td class="num">${esc(String(x.depart_date).slice(0, 10))}</td><td class="money num">${fen(x.price_adult)}${x.early_price ? `<div class="td-sub">早鸟 ${fen(x.early_price)}</div>` : ''}</td>
+      <td class="num">${x.booked}/${x.quota}<div class="td-sub">${x.min_go} 人成团</div></td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
+      <td><button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期：点「新增团期」')}`)
 }
 async function addSession(pid) {
   try {
@@ -443,23 +439,17 @@ async function addSession(pid) {
 /* ============ 商户 ============ */
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const rows = await api('GET', '/admin/merchants')
+  const [rows, info] = await Promise.all([api('GET', '/admin/merchants'), eeCompleteness('merchant')])
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0"><input id="m_name" placeholder="商户名称"><select id="m_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
-      <input id="m_city" placeholder="城市码（310118 青浦 / 320508 姑苏）" style="width:250px">
-      <input id="m_wx" placeholder="收付通子商户号（选填）" style="width:200px"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button></div>
-    ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
-    ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td class="num">${esc(m.city_code)}</td>
+    <div class="row" style="margin-top:0"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button><span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
+    ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
+    ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
       <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
-async function addMerchant() {
-  try { await api('POST', '/admin/merchants', { name: $('#m_name').value.trim(), cityCode: $('#m_city').value.trim(), wxpaySubMchid: $('#m_wx').value.trim(), kind: $('#m_kind').value }); toast('商户已创建'); merchants() }
-  catch (e) { toast(e.message, true) }
-}
-
+async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
 /* ============ 结算 ============ */
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -469,10 +459,11 @@ async function settlements() {
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
       <button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button></div>
-    <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。</p>
+    <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
+      退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
     ${rows.length ? rows.map((s) => {
       const parts = [Number(s.amt_fulfill), Number(s.amt_service), Number(s.amt_promoter), Number(s.amt_beanbudget), Number(s.amt_retained)]
-      const total = Number(s.total_amount) || 1
+      const total = Number(s.total_amount) || 1 // 只有手续费、无订单的结算单 total=0，按 1 防除零
       return `<div style="padding:14px 0;border-bottom:1px solid #f1f4f8">
       <div class="row" style="justify-content:space-between;margin:0 0 10px">
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
@@ -480,9 +471,12 @@ async function settlements() {
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
           ${s.status === 1 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
-      <div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>
+      ${Number(s.total_amount) > 0 ? `<div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>` : '<p class="muted" style="margin:0">本期无完成订单，仅计入退改手续费</p>'}
       ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}
-      <div class="split-legend">${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
+      <div class="split-legend" ${Number(s.total_amount) > 0 ? '' : 'hidden'}>${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
+      ${Number(s.fee_total) ? `<div class="fee-line"><span>退改手续费 <b>${fen(s.fee_total)}</b>（${s.fee_count} 笔）</span>
+        <span>商户分成 ${s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—'} · <b>${fen(s.fee_merchant)}</b></span><span>平台 <b>${fen(s.fee_platform)}</b></span></div>` : ''}
+      <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}</span></div>
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
   </div>`
 }
@@ -525,23 +519,11 @@ async function budgets() {
       return `<tr><td class="td-main">${esc(b.name)}</td><td class="num">${Number(b.total).toLocaleString()}</td>
       <td><div class="num">${Number(b.granted).toLocaleString()}</div><div style="background:#eef1f5;border-radius:4px;height:5px;width:90px;margin-top:4px"><div style="background:${pct > 80 ? 'var(--red)' : 'var(--brand)'};height:5px;border-radius:4px;width:${Math.min(pct, 100)}%"></div></div></td>
       <td class="num">${Number(b.returned).toLocaleString()}</td><td class="num">${left.toLocaleString()}</td>
-      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
+      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('budget', ${b.id}, { onSaved: () => budgets() })">编辑</button> <button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
       <td class="td-sub">${esc(String(b.period_start || '').slice(0, 10))} ~ ${esc(String(b.period_end || '').slice(0, 10))}</td></tr>` }).join('')}</tbody></table>` : emptyBox('暂无预算批次')}
   </div>`
 }
-function budgetModal() {
-  const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 3)
-  modal('新建旅豆预算批次', `
-    <div class="field"><label>批次名称 *</label><input id="b_name" maxlength="40" placeholder="如：12月·消费返豆"></div>
-    <div class="field"><label>预算总额（豆）*</label><input id="b_total" type="number" min="1" placeholder="如 6000000"><p class="muted" style="margin-top:4px">全局哨兵：年度发行总量 600 万豆，超出会被数据库 CHECK 拒绝</p></div>
-    <div class="field"><label>归属渠道 / 用途说明</label><div class="row" style="margin:0">
-      <select id="b_owner"><option value="marketing">市场投放</option><option value="product">产品激励</option><option value="operation">运营活动</option><option value="content">内容约稿</option></select>
-      <input id="b_remark" placeholder="用途备注（选填）" style="width:200px"></div></div>
-    <div class="field"><label>生效周期（选填）</label><div class="row" style="margin:0">
-      <input id="b_start" type="date" style="width:160px"><span class="muted">至</span>
-      <input id="b_end" type="date" value="${nextMonth.toISOString().slice(0, 10)}" style="width:160px"></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addBudget()">创建批次</button>`)
-}
+function budgetModal() { return entityEditor('budget', null, { onSaved: () => budgets() }) }
 async function addBudget() {
   try {
     if (!$('#b_name').value.trim() || !Number($('#b_total').value)) return toast('批次名与总额必填', true)
@@ -564,7 +546,7 @@ async function promoters() {
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
       <td class="money num">${fen(p.valid_gmv_90d)}</td><td>⭐ ${p.service_score}</td>
-      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
+      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('promoter', ${p.user_id}, { onSaved: () => promoters() })">资料</button> <button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
   </div>`
 }
 function promoterModal() {
@@ -580,8 +562,12 @@ function promoterModal() {
 async function addPromoter() {
   try {
     if (!Number($('#pr_uid').value)) return toast('请填写用户 ID', true)
-    const r = await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })
-    toast('已开通，费率 ' + r.rateBp / 100 + '%'); closeModal(); promoters()
+    const uidVal = Number($('#pr_uid').value)
+    const r = { ...(await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })), userId: uidVal }
+    toast('已开通，费率 ' + r.rateBp / 100 + '%，请补全服务商资料'); closeModal()
+    const uid = Number($('#pr_uid')?.value) || null
+    await promoters()
+    if (r.userId || uid) entityEditor('promoter', r.userId || uid, { onSaved: () => promoters() })
   } catch (e) { toast(e.message, true) }
 }
 
@@ -666,7 +652,7 @@ async function audit() {
     ${rows.length ? `<table><thead><tr><th>时间</th><th>操作人</th><th>模块 / 动作</th><th>对象</th><th>变更</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td class="td-sub num">${esc(String(a.created_at).slice(5, 19))}</td><td>${esc(a.actor)}</td>
       <td><b>${esc(a.module)}</b> · ${esc(a.action)}</td><td class="td-sub">${esc(a.biz_ref || '')}</td>
-      <td>${a.before_val || a.after_val ? `<span class="diff-old">${esc(String(a.before_val || '∅').slice(0, 24))}</span> → <span class="diff-new">${esc(String(a.after_val || '∅').slice(0, 24))}</span>` : '—'}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无操作记录')}
+      <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无操作记录')}
   </div>`
 }
 
@@ -837,7 +823,7 @@ async function attest() {
     <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       ${(d.queue || []).map((qq) => `<div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
-        <div><div class="l">${esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
+        <div><div class="l">${BIZ_CN[qq.biz_type] || esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
         <div class="s">已打包 ${Number(qq.packed || 0)} · 已锚定 ${Number(qq.anchored)} · 累计 ${Number(qq.total)}</div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
     </div>
     <div class="row" style="margin-top:10px">
@@ -877,8 +863,8 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h3>最近事件</h3></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>Merkle 根</th><th>时间</th></tr></thead><tbody>
-    ${(d.recent || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
-      <td class="num">v${Number(e.version_no || 1)}</td>
+    ${(d.recent || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
+      <td class="num">v${Number(e.version_no ?? 1)}</td>
       <td>${STMAP[e.status]}</td><td class="td-sub">${e.seq ? '#' + e.seq : '—'}</td>
       <td class="td-sub">${e.merkle_root ? '<code>' + esc(String(e.merkle_root).slice(0, 16)) + '…</code>' : '—'}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('')}
@@ -904,39 +890,26 @@ async function phrases() {
       <td><code style="background:#e8effd;color:#1d4ed8">${esc(x.phrase_merchant || '—')}</code></td>
       <td><span class="pill off">${esc(x.channel || 'main')}</span></td>
       <td><div class="td-actions">
-        <button class="btn ghost sm" onclick="editPhrase(${x.id},'${esc(x.phrase_user)}','${esc(x.phrase_merchant || '')}')">编辑</button>
-        <button class="btn danger sm" onclick="editPhrase(${x.id},'','')">清除</button>
+        <button class="btn ghost sm" onclick="entityEditor('phrase', ${x.id}, { onSaved: () => phrases() })">编辑</button>
+        <button class="btn danger sm" onclick="clearPhrase(${x.id})">清除</button>
       </div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('还没有产品配暗号——下方为产品配一对口令')}
-    <div class="card-head" style="margin-top:16px"><h3>为产品配置暗号</h3></div>
+    : emptyBox('还没有产品配暗号——下方选择线路开始配置')}
+    <div class="card-head" style="margin-top:16px"><h3>为线路配置暗号</h3></div>
     <div class="row">
-      <select id="phProd" class="inp" style="width:280px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="phUser" class="inp" placeholder="用户暗号（如：放生桥边等船否）" style="width:280px">
-      <input id="phMer" class="inp" placeholder="商家暗号（如：漕港河里载秋来）" style="width:280px">
-      <button class="btn primary sm" onclick="savePhrase()">保存</button>
+      <select id="phProd" class="inp" style="width:320px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('') || '<option value="">全部线路均已配置</option>'}</select>
+      <button class="btn primary sm" onclick="savePhrase()">配置暗号与剧情 →</button>
+      <span class="muted">上下半句、NPC 角色、对暗号地点、启停日期、剧情背景、可接受变体</span>
     </div></div>`
 }
-window.editPhrase = (id, u, m) => {
-  modal('配置暗号（产品 #' + id + '）', `
-    <div class="field"><label>用户暗号（游客报给商户的上半句）</label><input id="pu_user" value="${esc(u)}" maxlength="24" placeholder="如：放生桥边等船否"></div>
-    <div class="field"><label>商家暗号（核销员对答的下半句）</label><input id="pu_mer" value="${esc(m)}" maxlength="24" placeholder="如：漕港河里载秋来"></div>
-    <p class="muted">成对出现即视为「已入戏」；两项都清空保存即取消该产品的暗号玩法。</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="savePhraseModal(${id})">保存</button>`)
+window.clearPhrase = async (id) => {
+  if (!confirm('清除后该线路不再使用暗号核销，确定？')) return
+  try { await api('PUT', '/admin/entities/phrase/' + id, { values: { phrase_user: '', phrase_merchant: '' } }); toast('暗号已清除'); phrases() } catch (e) { toast(e.message, true) }
 }
-window.savePhraseModal = async (id) => {
-  try {
-    await api('POST', '/admin/phrases/' + id, { userPhrase: $('#pu_user').value.trim(), merchantPhrase: $('#pu_mer').value.trim() })
-    toast('暗号已保存'); closeModal(); go('phrases')
-  } catch (e) { toast(e.message, true) }
-}
-// 底部快速添加表单（选择未配置产品 → 一对口令）
-window.savePhrase = async () => {
-  try {
-    const pid = $('#phProd')?.value
-    if (!pid) return toast('请先选择产品', true)
-    await api('POST', '/admin/phrases/' + pid, { userPhrase: $('#phUser').value.trim(), merchantPhrase: $('#phMer').value.trim() })
-    toast('暗号已保存'); go('phrases')
-  } catch (e) { toast(e.message, true) }
+// 选择未配置的线路 → 打开完整编辑器
+window.savePhrase = () => {
+  const pid = $('#phProd')?.value
+  if (!pid) return toast('请先选择线路', true)
+  entityEditor('phrase', pid, { onSaved: () => phrases() })
 }
 async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
@@ -951,22 +924,18 @@ async function rateov() {
   <div class="card">
     <div class="card-head"><h2>逐品佣金覆盖</h2><span class="muted">D2 扩展 · 单品费率优先于推广商档位 5/8/12%</span></div>
     <div class="row">
-      <select id="roProd" class="inp" style="width:280px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="roBp" class="inp" placeholder="费率 %（如 9.5）" style="width:150px">
-      <button class="btn primary sm" onclick="saveRate()">设置覆盖</button>
-      <button class="btn ghost sm" onclick="saveRate(true)">清除覆盖</button>
+      <select id="roProd" class="inp" style="width:320px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
+      <button class="btn primary sm" onclick="saveRate()">设置覆盖 →</button>
+      <span class="muted">需填写费率、生效期、调整原因与审批人；原因写入审计</span>
     </div>
-    ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>对比档位</th></tr></thead><tbody>
+    ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>生效期</th><th>原因</th><th>操作</th></tr></thead><tbody>
     ${ov.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
       <td class="money num"><b>${(Number(x.promo_rate_bp) / 100).toFixed(2)}%</b></td>
-      <td><span class="pill off">档位 5/8/12% → 覆盖生效</span></td></tr>`).join('')}</tbody></table>`
+      <td class="td-sub">${esc(x.rate_start || '—')} ~ ${esc(x.rate_end || '—')}</td><td class="td-sub">${esc(x.rate_reason || '—')}</td>
+      <td><button class="btn ghost sm" onclick="entityEditor('rateov', ${x.id}, { onSaved: () => rateov() })">编辑</button></td></tr>`).join('')}</tbody></table>`
     : emptyBox('暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
 }
-window.saveRate = async (clear) => {
-  const bp = clear ? null : Math.round(parseFloat($('#roBp').value) * 100)
-  await api('POST', '/admin/rate-overrides/' + $('#roProd').value, { rateBp: bp })
-  go('rateov')
-}
+window.saveRate = () => entityEditor('rateov', $('#roProd').value, { onSaved: () => rateov() })
 async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const list = await api('GET', '/admin/kyc')
@@ -1012,23 +981,16 @@ async function cocreate() {
   </div>
   <div class="card">
     <div class="card-head"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
-    <div class="row">
-      <select id="coProd" class="inp" style="width:240px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="coName" class="inp" placeholder="姓名" style="width:120px">
-      <input id="coMobile" class="inp" placeholder="手机号" style="width:150px">
-      <select id="coRole" class="inp" style="width:120px"><option value="1">资金商</option><option value="2">商品商</option></select>
-      <input id="coInvest" class="inp" placeholder="投资额(元)" style="width:120px">
-      <input id="coPct" class="inp" placeholder="分润 %（如 8）" style="width:120px">
-      <button class="btn primary sm" onclick="saveCo()">登记共创人</button>
-    </div>
+    <div class="row"><button class="btn primary sm" onclick="entityEditor('cocreator', null, { onSaved: () => cocreate() })">＋ 登记共创人</button>
+      <span class="muted">身份 · 投资与分润 · 协议与收款账户</span></div>
     ${list.length ? `<table><thead><tr><th>编号</th><th>产品</th><th>姓名</th><th>角色</th><th>投资额</th><th>分润比例</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td class="num">${esc(x.co_no)}</td><td>${esc(x.title)}</td><td>${esc(x.name)}</td>
       <td>${Number(x.role) === 1 ? '<span class="pill s60">资金商</span>' : '<span class="pill s20">商品商</span>'}</td>
       <td class="num">¥${(Number(x.invest_amount) / 100).toLocaleString()}</td>
       <td class="num"><b>${(Number(x.share_pct) / 100).toFixed(1)}%</b></td>
       <td>${Number(x.status) === 1 ? '<span class="pill ok">生效</span>' : '<span class="pill off">停用</span>'}</td>
-      <td><div class="td-actions">${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无共创人——上方登记首位共创人')}</div>
+      <td><div class="td-actions"><button class="btn ghost sm" onclick="entityEditor('cocreator', ${x.id}, { onSaved: () => cocreate() })">资料</button>${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无共创人——点「登记共创人」')}</div>
   <div class="card">
     <div class="card-head"><h3>共创分润台账</h3><span class="muted">链上分润凭证 · 结算期自动入账</span></div>
     ${profits.length ? `<table><thead><tr><th>期</th><th>共创人</th><th>产品</th><th>基数</th><th>分润额</th><th>状态</th><th>操作</th></tr></thead><tbody>
@@ -1157,34 +1119,7 @@ async function tasks() {
     : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该状态下暂无任务')}</div>`
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
-async function taskModal(id) {
-  let t = { category: 'note', reward_beans: 200 }
-  if (id) {
-    t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
-    if (!t) return toast('任务不存在', true)
-  }
-  const prods = await api('GET', '/admin/products')
-  modal(id ? '编辑任务 · ' + esc(t.title) : '新建约稿任务', `
-    <div class="field"><label>任务标题 *</label><input id="tk_title" value="${esc(t.title || '')}" maxlength="48" placeholder="如：朱家角秋日 Vlog 约稿"></div>
-    <div class="field"><label>类型 / 目标商品</label><div class="row" style="margin:0">
-      <select id="tk_cat">${Object.entries(TASK_CAT).map(([v, n]) => `<option value="${v}" ${(t.category || 'note') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
-      <select id="tk_prod"><option value="">关联商品（选填，引导种草）</option>${prods.map((p) => `<option value="${p.id}" ${Number(t.product_id) === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}</select></div></div>
-    <div class="field"><label>封面图（选填 · 展示在任务卡片，2MB 内）</label>${imgPicker('tk_cover', t.cover_img || '', '上传封面')}</div>
-    <div class="field"><label>一句话简介 *（小程序任务卡展示）</label><input id="tk_brief" value="${esc(t.brief || '')}" maxlength="60" placeholder="如：拍一条 60 秒以内的水乡秋日短视频"></div>
-    <div class="field"><label>详细任务说明（富文本 · 拍摄脚本/评分标准，后台与小程序任务详情展示）</label>
-      ${richEdit('tk_rich', t.rich_brief || '')}</div>
-    <div class="field"><label>奖励</label><div class="row" style="margin:0">
-      <input id="tk_beans" type="number" value="${Number(t.reward_beans) || 200}" style="width:110px"><span class="muted">旅豆</span>
-      <input id="tk_cash" type="number" step="0.01" value="${(Number(t.cash_reward) / 100).toFixed(2)}" style="width:110px"><span class="muted">元现金加奖（选填）</span></div></div>
-    <div class="field"><label>交付要求（0 = 不限）</label><div class="row" style="margin:0">
-      <input id="tk_words" type="number" value="${Number(t.min_words) || ''}" placeholder="最低字数" style="width:110px">
-      <input id="tk_imgs" type="number" value="${Number(t.min_images) || ''}" placeholder="最少图片" style="width:110px">
-      <input id="tk_max" type="number" value="${Number(t.max_participants) || ''}" placeholder="人数上限" style="width:110px"></div></div>
-    <div class="field"><label>投稿截止 / 标签（逗号分隔）</label><div class="row" style="margin:0">
-      <input id="tk_deadline" type="date" value="${t.deadline ? String(t.deadline).slice(0, 10) : ''}" style="width:170px">
-      <input id="tk_tags" value="${esc(t.tags || '')}" placeholder="如：秋日,vlog,水乡" style="width:220px"></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveTask(${id || 0})">${id ? '保存修改' : '发布任务'}</button>`)
-}
+async function taskModal(id) { return entityEditor('task', id || null, { onSaved: () => tasks() }) }
 async function saveTask(id) {
   try {
     const body = { title: $('#tk_title').value.trim(), brief: $('#tk_brief').value.trim(), category: $('#tk_cat').value,
@@ -1424,6 +1359,8 @@ async function retryAsset(id) {
 
 // ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
 const RESOURCE_ST = { 1: '<span class="pill ok">合作中</span>', 0: '<span class="pill warn">暂缓</span>', 2: '<span class="pill s70">清退</span>' }
+const CAT_CN = { script: '剧本闯关', yoga: '瑜伽之旅', sister: '姐姐系列', single: '单身社交', sport: '体育竞技', family: '亲子主题', red: '红色文旅', shop: '商城 SKU' }
+const CITY_CN = { 310118: '上海·青浦', 310000: '上海', 320508: '苏州·姑苏', 330500: '湖州', 330523: '湖州·安吉' }
 const SUP_KIND = { ticket: '门票', hotel: '住宿', transport: '交通', ground: '地接', catering: '餐饮', other: '其他' }
 const MERCHANT_KIND = { catering: '餐饮', hotel: '住宿', ticket: '门票', transport: '交通', experience: '体验', other: '其他' }
 const SETTLE_MODE = { monthly: '月结', per_order: '单结', prepaid: '预付' }
@@ -1452,20 +1389,7 @@ async function scenics() {
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
   </div>`
 }
-function scenicModal() {
-  modal('新增景区（G端合作台账）', `
-    <div class="field"><label>景区名称 *</label><input id="sc_name" maxlength="40" placeholder="如 朱家角古镇"></div>
-    <div class="field"><label>城市码 / 等级</label><div class="row" style="margin:0">
-      <input id="sc_city" value="310118" style="width:130px" title="310118 青浦 / 320508 姑苏">
-      <select id="sc_level"><option value="">等级</option><option>5A</option><option>4A</option><option>3A</option><option>非A</option></select></div></div>
-    <div class="field"><label>合作模式 / 票务对接方式</label><div class="row" style="margin:0">
-      <select id="sc_coop"><option value="">合作模式</option><option>票务分成</option><option>联合运营</option><option>引流合作</option></select>
-      <input id="sc_ticket" placeholder="如：二维码核销直连" style="width:200px"></div></div>
-    <div class="field"><label>联系人 / 联系电话</label><div class="row" style="margin:0">
-      <input id="sc_contact" style="width:130px"><input id="sc_phone" style="width:170px"></div></div>
-    <div class="field"><label>分成/合作条款摘要</label><input id="sc_terms" placeholder="如：门票 8 折结算，月结"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addScenic()">入库</button>`)
-}
+function scenicModal() { return entityEditor('scenic', null, { onSaved: () => scenics() }) }
 async function addScenic() {
   try {
     if (!$('#sc_name').value.trim()) return toast('请填写景区名称', true)
@@ -1476,21 +1400,7 @@ async function addScenic() {
     toast('景区已入库'); closeModal(); scenics()
   } catch (e) { toast(e.message, true) }
 }
-async function editScenic(id) {
-  const s = await api('GET', '/admin/scenics').then((rs) => rs.find((x) => x.id === id))
-  if (!s) return toast('景区不存在', true)
-  modal('编辑景区 · ' + esc(s.name), `
-    <div class="field"><label>景区名称</label><input id="es_name" value="${esc(s.name)}"></div>
-    <div class="field"><label>等级 / 合作模式</label><div class="row" style="margin:0">
-      <select id="es_level"><option value="">等级</option>${['5A', '4A', '3A', '非A'].map((l) => `<option ${s.scenic_level === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select id="es_coop"><option value="">合作模式</option>${['票务分成', '联合运营', '引流合作'].map((l) => `<option ${s.coop_mode === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
-    <div class="field"><label>票务对接方式</label><input id="es_ticket" value="${esc(s.ticket_interface || '')}" placeholder="如：二维码核销直连"></div>
-    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
-      <input id="es_contact" value="${esc(s.contact_name || '')}"><input id="es_phone" value="${esc(s.contact_phone || '')}"></div></div>
-    <div class="field"><label>分成/合作条款摘要</label><input id="es_terms" value="${esc(s.profit_terms || '')}" placeholder="如：门票 8 折结算，月结"></div>
-    <div class="field"><label>合作状态</label><select id="es_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveScenicEdit(${id})">保存</button>`)
-}
+async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
 async function saveScenicEdit(id) {
   try {
     await api('PUT', '/admin/scenics/' + id, { name: $('#es_name').value.trim(), level: $('#es_level').value,
@@ -1526,19 +1436,7 @@ async function suppliers() {
       <td><button class="btn ghost sm" onclick="editSupplier(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无供应商：门票/大巴/酒店等资源方在这里入库，商品可关联')}
   </div>`
 }
-function supplierModal() {
-  modal('新增供应商（资源供给方）', `
-    <div class="field"><label>供应商名称 *</label><input id="sp_name" maxlength="40" placeholder="如 青浦旅游车队"></div>
-    <div class="field"><label>城市码 / 类目</label><div class="row" style="margin:0">
-      <input id="sp_city" value="310118" style="width:130px">
-      <select id="sp_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div></div>
-    <div class="field"><label>资质证照号</label><input id="sp_license" placeholder="如 沪B2K198（道路运输许可）"></div>
-    <div class="field"><label>结算方式 / 联系人 / 电话</label><div class="row" style="margin:0">
-      <select id="sp_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
-      <input id="sp_contact" style="width:110px"><input id="sp_phone" style="width:150px"></div></div>
-    <div class="field"><label>备注（车队规模 / 房量 / 供应能力）</label><input id="sp_note" placeholder="如：33 座大巴 4 台，周末需提前锁车"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSupplier()">入库</button>`)
-}
+function supplierModal() { return entityEditor('supplier', null, { onSaved: () => suppliers() }) }
 async function addSupplier() {
   try {
     if (!$('#sp_name').value.trim()) return toast('请填写供应商名称', true)
@@ -1549,21 +1447,7 @@ async function addSupplier() {
     toast('供应商已入库'); closeModal(); suppliers()
   } catch (e) { toast(e.message, true) }
 }
-async function editSupplier(id) {
-  const s = await api('GET', '/admin/suppliers').then((rs) => rs.find((x) => x.id === id))
-  if (!s) return toast('供应商不存在', true)
-  modal('编辑供应商 · ' + esc(s.name), `
-    <div class="field"><label>供应商名称</label><input id="ep_name" value="${esc(s.name)}"></div>
-    <div class="field"><label>类目 / 结算方式</label><div class="row" style="margin:0">
-      <select id="ep_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}" ${s.category === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <select id="ep_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}" ${s.settle_mode === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
-    <div class="field"><label>资质证照号</label><input id="ep_license" value="${esc(s.license_no || '')}"></div>
-    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
-      <input id="ep_contact" value="${esc(s.contact_name || '')}"><input id="ep_phone" value="${esc(s.contact_phone || '')}"></div></div>
-    <div class="field"><label>备注</label><input id="ep_note" value="${esc(s.note || '')}"></div>
-    <div class="field"><label>合作状态</label><select id="ep_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveSupplierEdit(${id})">保存</button>`)
-}
+async function editSupplier(id) { return entityEditor('supplier', id, { onSaved: () => suppliers() }) }
 async function saveSupplierEdit(id) {
   try {
     await api('PUT', '/admin/suppliers/' + id, { name: $('#ep_name').value.trim(), category: $('#ep_cat').value,
@@ -1622,7 +1506,20 @@ async function saveCreatorTag(id) {
 
 // ---- 链上总览：链路视图（3D 区块链）+ KPI + 事件动态 ----
 const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>',
-  '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>']
+  '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>',
+  '<span class="dpill warn">已提交·待确认</span>']
+/** 3D 区块：tone = blue | green | gold | gray；sm = 小号；pulse = 等待链上确认中 */
+function cube3d(tone, opt = {}) {
+  const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : ''].filter(Boolean).join(' ')
+  // 特效层全部是 .cube3d 的兄弟节点：不参与 preserve-3d，加光晕/滤镜不会把立方体压平
+  const fx = opt.ghost ? '' : '<span class="fx-ripple"></span><span class="fx-ripple r2"></span>'
+    + '<span class="fx-orbit"><i></i></span>' + (opt.sm ? '' : '<span class="fx-orbit o2"><i></i></span>')
+    + '<span class="fx-beam"></span><span class="fx-spark s1"></span><span class="fx-spark s2"></span><span class="fx-spark s3"></span>'
+    + '<span class="fx-hud"></span>'
+  return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}>${fx}<div class="cube3d">`
+    + '<div class="fc"></div>'.repeat(6) + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
+    + (opt.label ? `<div class="ghost-label">${opt.label}</div>` : '') + '</div>'
+}
 // 演示模式：纯前端模拟一条 8 节点的链（含分支/待打包/已锚定），不动真库，仅供形态预览
 function mockChain() {
   const HEX = ['3f9a1c7e5d24b806', '8d02e4b1a97c33f5', '5c77aa190e6db248', 'e21b6d40fa93c715',
@@ -1656,13 +1553,10 @@ function blockNodeHTML(b) {
   const dayClose = Number(b.is_day_close) === 1
   const st = Number(b.status)
   const root8 = String(b.merkle_root).slice(0, 8)
-  const cubeCls = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : ''))
+  const tone = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
   const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
   return `<div class="${cls}" id="bnode-${b.id}" onclick="openBlock(${b.id})">
-    <div class="cube-zone"><div class="cube ${cubeCls}">
-      <div class="face f1"><b>#${b.seq}</b><i>${root8}</i></div><div class="face f2"></div><div class="face f3"></div>
-      <div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-    </div></div>
+    ${cube3d(tone, { pulse: st === 5 })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
     <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
@@ -1673,12 +1567,13 @@ function blockNodeHTML(b) {
 function blockLinkHTML(prevBranch, curBranch) {
   const y = (p) => p ? 133 : 59
   const y1 = y(prevBranch), y2 = y(curBranch)
-  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><u style="top:${y1 - 11}px">»</u></div>`
+  // <s> 是沿连线流动的数据包，表示"前一块的根被写进后一块的 prev_root"
+  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><s style="top:${y1 - 2}px"></s><s class="p2" style="top:${y1 - 2}px"></s><u style="top:${y1 - 11}px">»</u></div>`
   const down = y1 < y2
   const top = Math.min(y1, y2) - 1
   const edge = down ? 'border-top:2px dashed var(--cl);border-top-right-radius:12px' : 'border-bottom:2px dashed var(--cl);border-bottom-right-radius:12px'
   return `<div class="chain-link elbow"><i style="top:${top}px;height:${Math.abs(y2 - y1)}px;${edge};border-right:2px dashed var(--cl)"></i>
-    <b style="top:${y2 - 1}px"></b><u style="top:${y2 - 11}px">▸</u></div>`
+    <b style="top:${y2 - 1}px"></b><s class="tail" style="top:${y2 - 2}px"></s><u style="top:${y2 - 11}px">▸</u></div>`
 }
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -1697,16 +1592,16 @@ async function web3dash() {
   })
   if (Number(pendingN) > 0) {
     nodes.push(blockLinkHTML(batches.length ? Number(batches[batches.length - 1].is_day_close) === 1 : false, false))
-    nodes.push(`<div class="chain-node ghost"><div class="cube-zone"><div class="ghost-cube">待打包<br><b>${pendingN}</b> 条</div></div>
+    nodes.push(`<div class="chain-node ghost">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
       <div class="blk-title" style="opacity:.75">下一区块</div>
       <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div></div>`)
   }
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
   $('#app').innerHTML = `
-  <div class="chain-panel" id="chainViz">
+  <div class="chain-panel" id="chainViz"><div class="chain-scan-clip" aria-hidden="true"><div class="chain-scan"></div></div>
     <div class="chain-glow"></div>
     <div class="chain-head">
-      <span class="chain-name">⛓ 向往自由链 · 链路视图</span>
+      <span class="chain-name">⛓ 向往自由链 · 链路视图</span><span class="chain-live"><i></i>LIVE</span>
       ${demo ? '<span class="chip demo">演示数据</span>' : ''}
       <span class="chip">适配器 ${esc((d.chain && d.chain.label) || '—')}</span>
       <span class="chip">区块高度 <b>#${lastSeq}</b></span>
@@ -1748,7 +1643,7 @@ async function web3dash() {
   <div class="card">
     <div class="card-head"><h3>链上事件动态</h3><button class="btn ghost sm" onclick="go('attest')">进入存证中心 ›</button></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>时间</th></tr></thead><tbody>
-    ${(d.recentEvents || []).map((e) => `<tr><td><span class="pill off">${esc(e.biz_type)}</span></td><td class="num">${esc(e.biz_ref)}</td>
+    ${(d.recentEvents || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
       <td>${e.status === 2 ? '<span class="pill ok">已锚定</span>' : (e.status === 1 ? '<span class="pill s20">已打包·待锚定</span>' : '<span class="pill warn">待打包</span>')}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
@@ -1795,8 +1690,8 @@ async function openBlock(id) {
         <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${esc(String(b.biz_date).slice(0, 10))}">公开复核</a>` : ''}
     </div>
     <table style="margin-top:10px"><thead><tr><th>叶序</th><th>类型</th><th>业务单号</th><th>版本</th><th>payload 指纹</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>
-    ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td><span class="pill off">${esc(e.biz_type)}</span></td>
-      <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no || 1)}</td>
+    ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td>${bizTag(esc(e.biz_type))}</td>
+      <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no ?? 1)}</td>
       <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 16))}…</code></td>
       <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
       <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
@@ -1815,15 +1710,12 @@ const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpil
 function flowStepHTML(s, i) {
   const e = s.ev
   if (!e) return `<div class="chain-node ghost" style="width:150px">
-    <div class="cube-zone"><div class="ghost-cube" style="width:54px;height:54px;font-size:10px">待产生</div></div>
+    ${cube3d('gray', { ghost: true, sm: true, label: '待产生' })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div></div>`
   const st = Number(e.status)
-  const cubeCls = st === 2 ? 'green' : (st === 0 ? 'gray' : '')
+  const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
   return `<div class="chain-node" style="width:150px" id="fnode-${i}" onclick="openFlowStep(${i})">
-    <div class="cube-zone"><div class="cube sm ${cubeCls}">
-      <div class="face f1"><b>${s.no}</b><i>${esc(String(e.payload_hash).slice(0, 6))}</i></div>
-      <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-    </div></div>
+    ${cube3d(tone, { sm: true })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
     <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>
     <div class="blk-line">批 #${e.seq != null ? e.seq : '—'} · ${FLOW_ST[st] || ''}</div>
@@ -1838,16 +1730,13 @@ function renderFlow(d) {
   if (meta) meta.innerHTML = `${d.demo ? '<span class="chip demo">演示数据</span> ' : ''}${esc(o.orderNo || '')} · ${esc(o.productName || '—')} · ${yuan(o.amountPay || 0)}${o.beanDeducted ? '（豆抵' + o.beanDeducted + '）' : ''} · ${esc(o.statusText || '')} · <b style="color:#eaf1ff">${doneN}/6 锚点</b>`
   const parts = []
   ;(d.steps || []).forEach((s, i) => {
-    if (i) parts.push('<div class="chain-link flow-link"><i style="top:59px"></i><u style="top:49px">»</u></div>')
+    if (i) parts.push('<div class="chain-link flow-link"><i style="top:59px"></i><s style="top:58px"></s><u style="top:49px">»</u></div>')
     parts.push(flowStepHTML(s, i))
   })
   ;(d.refunds || []).forEach((e, j) => {
     parts.push('<div class="chain-link elbow"><i style="top:59px;height:74px;border-top:2px dashed rgba(252,211,77,.5);border-right:2px dashed rgba(252,211,77,.5);border-top-right-radius:12px"></i><b style="top:132px;border-top-color:rgba(252,211,77,.5)"></b><u style="top:122px;color:#fcd34d">▸</u></div>')
     parts.push(`<div class="chain-node branch" id="fnode-r${j}" onclick="openFlowStep('r${j}')">
-      <div class="cube-zone"><div class="cube sm gold">
-        <div class="face f1"><b>↩</b><i>refund</i></div>
-        <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
-      </div></div>
+      ${cube3d('gold', { sm: true })}
       <div class="blk-title">退款冲正</div>
       <div class="blk-line">${esc(e.biz_ref)} · ${yuan(e.amount || 0)}</div>
       <div class="blk-line">${FLOW_ST[Number(e.status)] || ''}</div></div>`)
@@ -1898,7 +1787,7 @@ function openFlowStep(i) {
     <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
       <span>类型 <code>${esc(e.biz_type)}</code></span>
       <span>业务单号 <code>${esc(e.biz_ref)}</code></span>
-      <span>版本 v${Number(e.version_no || 1)}</span>
+      <span>版本 v${Number(e.version_no ?? 1)}</span>
       <span>${BST[Number(e.status)] || ''}</span>
       <span>所在批次 ${e.seq != null ? '#' + e.seq : '待打包'}</span>
       <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code></span>
@@ -1949,16 +1838,11 @@ async function badges() {
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>勋章发行</h2><span class="muted">勋章发放即写入链上存证队列（badge 事件）</span></div>
-    <div class="row">
-      <input id="bgName" placeholder="勋章名称（如 朱家角探索者）" style="width:200px">
-      <input id="bgIcon" placeholder="图标键（如 badge_zjj）" style="width:160px">
-      <input id="bgRule" placeholder="授予规则说明" style="width:220px">
-      <button class="btn primary sm" onclick="createBadge()">新建定义</button>
-    </div>
+    <div class="row"><button class="btn primary sm" onclick="createBadge()">＋ 新建勋章</button><span class="muted">外观（勋章图/稀有度/故事）与获得规则（类型/阈值/发行上限/有效期）</span></div>
     <table style="margin-top:10px"><thead><tr><th>ID</th><th>名称</th><th>图标键</th><th>授予规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
     ${(d.defs || []).map((b) => `<tr><td>#${b.id}</td><td>${esc(b.name)}</td><td class="td-sub">${esc(b.icon_key)}</td>
       <td class="td-sub">${esc(b.rule_desc || '—')}</td><td class="num">${Number(b.granted)}</td>
-      <td><button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
+      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
     </tbody></table>
   </div>
   <div class="card">
@@ -1968,14 +1852,7 @@ async function badges() {
     </tbody></table>
   </div>`
 }
-async function createBadge() {
-  const name = document.getElementById('bgName').value.trim()
-  const iconKey = document.getElementById('bgIcon').value.trim()
-  if (!name || !iconKey) return toast('名称与图标键必填', true)
-  const ruleDesc = document.getElementById('bgRule').value.trim()
-  const r = await api('POST', '/admin/web3/badges', { name, iconKey, ruleDesc })
-  toast('勋章定义已创建 #' + r.id); badges()
-}
+async function createBadge() { return entityEditor('badge', null, { onSaved: () => badges() }) }
 async function grantBadge(id) {
   const userId = prompt('发放给用户 ID：')
   if (!userId) return
@@ -2058,22 +1935,7 @@ async function faqs() {
     </tbody></table>
   </div>`
 }
-async function faqModal(id) {
-  let f = { category: '通用', sort: (await api('GET', '/admin/faqs')).length + 1 }
-  if (id) {
-    f = (await api('GET', '/admin/faqs')).find((x) => x.id === id)
-    if (!f) return toast('问题不存在', true)
-  }
-  modal(id ? '编辑问题 · ' + esc(f.question) : '新增常见问题', `
-    <div class="field"><label>问题 *</label><input id="fq_q" value="${esc(f.question || '')}" maxlength="60" placeholder="如：旅豆怎么获得？"></div>
-    <div class="field"><label>分类 / 排序</label><div class="row" style="margin:0">
-      <select id="fq_cat">${FAQ_CAT.map((c) => `<option ${f.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-      <input id="fq_sort" type="number" value="${Number(f.sort) || 0}" style="width:90px" title="数字越小越靠前"></div></div>
-    <div class="field"><label>答案 *（支持多段，小程序按行展示）</label><textarea id="fq_a" rows="5" placeholder="第一行：直接结论&#10;第二行起：具体规则/步骤">${esc(f.answer || '')}</textarea></div>
-    <div class="field"><label><input type="checkbox" id="fq_hot" ${Number(f.is_hot) ? 'checked' : ''} style="width:auto"> 标记为热门问题（列表置顶标识）</label></div>
-    <div class="field"><label>状态</label><select id="fq_st"><option value="1" ${Number(f.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(f.status) === 0 ? 'selected' : ''}>下架</option></select></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveFaq(${id || 0})">保存</button>`)
-}
+async function faqModal(id) { return entityEditor('faq', id || null, { onSaved: () => faqs() }) }
 async function saveFaq(id) {
   const question = $('#fq_q').value.trim(), answer = $('#fq_a').value.trim()
   if (!question || !answer) return toast('问题与答案必填', true)
@@ -2107,27 +1969,7 @@ async function banners() {
     </tbody></table>
   </div>`
 }
-async function bannerModal(id) {
-  let b = { sort: (await api('GET', '/admin/banners')).length + 1 }
-  if (id) {
-    b = (await api('GET', '/admin/banners')).find((x) => x.id === id)
-    if (!b) return toast('轮播不存在', true)
-  }
-  modal(id ? '编辑轮播 · ' + esc(b.title) : '新增轮播', `
-    <div class="field"><label>主标题 * / 副标题（角标）</label><div class="row" style="margin:0">
-      <input id="bn_t" value="${esc(b.title || '')}" maxlength="30" placeholder="如：秋日水乡特惠季" style="width:180px">
-      <input id="bn_st" value="${esc(b.sub_title || '')}" maxlength="24" placeholder="如：立减 ¥50" style="width:120px"></div></div>
-    <div class="field"><label>轮播图 *（建议 750×360，2MB 内）</label>${imgPicker('bn_img', b.image || '', '上传轮播图')}</div>
-    <div class="field"><label>跳转路径（选填：/c/tours/商品ID 或活动页路径）</label><input id="bn_link" value="${esc(b.link || '')}" placeholder="留空 = 纯展示"></div>
-    <div class="field"><label>投放窗口（选填，留空 = 长期）</label><div class="row" style="margin:0">
-      <input id="bn_start" type="date" value="${b.start_at ? String(b.start_at).slice(0, 10) : ''}" style="width:160px">
-      <span class="muted">至</span>
-      <input id="bn_end" type="date" value="${b.end_at ? String(b.end_at).slice(0, 10) : ''}" style="width:160px"></div></div>
-    <div class="field"><label>排序 / 状态</label><div class="row" style="margin:0">
-      <input id="bn_sort" type="number" value="${Number(b.sort) || 0}" style="width:90px" title="数字越小越靠前">
-      <select id="bn_status"><option value="1" ${Number(b.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(b.status) === 0 ? 'selected' : ''}>下架</option></select></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveBanner(${id || 0})">保存</button>`)
-}
+async function bannerModal(id) { return entityEditor('banner', id || null, { onSaved: () => banners() }) }
 async function saveBanner(id) {
   const title = $('#bn_t').value.trim(), image = $('#bn_img').value
   if (!title || !image) return toast('标题与轮播图必填', true)
@@ -2268,15 +2110,7 @@ document.addEventListener('DOMContentLoaded', () => boot(), { once: true })
 async function handleRisk(id) {
   try { await api('POST', '/admin/risk/' + id + '/handle', {}); toast('风控事件已标记处理'); risk() } catch (e) { toast(e.message, true) }
 }
-async function editMerchant(id, name, cityCode, wxpaySubMchid, kind) {
-  modal('编辑商户', `
-    <div class="field"><label>商户名称</label><input id="em_name" value="${esc(name)}"></div>
-    <div class="field"><label>类目</label><select id="em_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}" ${(kind || 'other') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-    <div class="field"><label>城市码</label><input id="em_city" value="${esc(cityCode)}"></div>
-    <div class="field"><label>收付通子商户号（选填）</label><input id="em_wx" value="${esc(wxpaySubMchid)}"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn primary" onclick="saveMerchantEdit(${id})">保存</button>`)
-}
+async function editMerchant(id) { return entityEditor('merchant', id, { onSaved: () => merchants() }) }
 async function approveMerchant(id) {
   try { await api('POST', '/admin/merchants/' + id + '/approve', {}); toast('商户进件已通过'); merchants() } catch (e) { toast(e.message, true) }
 }

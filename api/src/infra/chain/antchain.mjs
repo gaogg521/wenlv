@@ -8,19 +8,20 @@
 // 签名：AntChain OpenAPI 常见两种，本适配器按 ANTCHAIN_SIGN 切换（hmac-sha256 / rsa-sha256）。
 //      字段名与签名串以对方最新文档为准 —— 这一行是刻意留的：不同版本 OpenAPI 字段会变，
 //      写死反而更难对接。
+import { E } from './conf.mjs'
 import crypto from 'node:crypto'
 
 const env = () => ({
-  endpoint: (process.env.ANTCHAIN_ENDPOINT || '').replace(/\/+$/, ''),
-  accessKey: process.env.ANTCHAIN_ACCESS_KEY || '',
-  accessSecret: process.env.ANTCHAIN_ACCESS_SECRET || '',
-  privateKey: process.env.ANTCHAIN_PRIVATE_KEY || '',       // rsa 模式：PEM
-  sign: (process.env.ANTCHAIN_SIGN || 'hmac-sha256').toLowerCase(),
-  bizId: process.env.ANTCHAIN_BIZID || '',
-  account: process.env.ANTCHAIN_ACCOUNT || '',
-  collectionId: process.env.ANTCHAIN_COLLECTION_ID || '',   // 鲸探/数字资产集合 ID
-  rootPath: process.env.ANTCHAIN_ROOT_PATH || '/v1/attest/anchor',
-  assetPath: process.env.ANTCHAIN_ASSET_PATH || '/v1/asset/issue',
+  endpoint: (E.ANTCHAIN_ENDPOINT || '').replace(/\/+$/, ''),
+  accessKey: E.ANTCHAIN_ACCESS_KEY || '',
+  accessSecret: E.ANTCHAIN_ACCESS_SECRET || '',
+  privateKey: E.ANTCHAIN_PRIVATE_KEY || '',       // rsa 模式：PEM
+  sign: (E.ANTCHAIN_SIGN || 'hmac-sha256').toLowerCase(),
+  bizId: E.ANTCHAIN_BIZID || '',
+  account: E.ANTCHAIN_ACCOUNT || '',
+  collectionId: E.ANTCHAIN_COLLECTION_ID || '',   // 鲸探/数字资产集合 ID
+  rootPath: E.ANTCHAIN_ROOT_PATH || '/v1/attest/anchor',
+  assetPath: E.ANTCHAIN_ASSET_PATH || '/v1/asset/issue',
 })
 
 function missing() {
@@ -44,7 +45,7 @@ function signHeaders(method, path, body) {
     'content-type': 'application/json',
     'x-acs-signature-method': e.sign,
     'x-acs-signature-nonce': crypto.randomBytes(8).toString('hex'),
-    'x-acs-version': process.env.ANTCHAIN_VERSION || '1.0',
+    'x-acs-version': E.ANTCHAIN_VERSION || '1.0',
     'x-acs-accesskey': e.accessKey,
     'x-acs-timestamp': ts,
     'x-acs-signature': signature,

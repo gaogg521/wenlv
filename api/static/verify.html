@@ -154,15 +154,26 @@ const sha256 = async (s) => hex(await crypto.subtle.digest('SHA-256', enc.encode
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const cut = (h, n = 24) => (h && h.length > n * 2 ? h.slice(0, n) + '…' + h.slice(-8) : String(h ?? '—'))
 
-/** 浏览器内重算：与后端 verifyProof 完全同一套规则 */
-async function recomputeLeaf(payloadHash, path) {
+/** 浏览器内重算：与后端 src/domain/merkle.mjs 完全同一套规则（按批次 merkleVersion 选算法） */
+const fromHex = (h) => new Uint8Array(h.match(/../g).map((x) => parseInt(x, 16)))
+const shaBytes = async (...parts) => {
+  const len = parts.reduce((n, p) => n + p.length, 0)
+  const buf = new Uint8Array(len)
+  let o = 0
+  for (const p of parts) { buf.set(p, o); o += p.length }
+  return hex(await crypto.subtle.digest('SHA-256', buf))
+}
+async function recomputeLeaf(payloadHash, path, version) {
   const steps = []
-  let cur = payloadHash
+  const v2 = Number(version) === 2
+  // v2：叶先做一次 sha256(0x00‖叶)，节点 sha256(0x01‖左‖右)，按字节拼接（RFC 6962）
+  let cur = v2 ? await shaBytes(new Uint8Array([0]), fromHex(payloadHash)) : payloadHash
+  if (v2) steps.push({ i: 0, leaf: true, out: cur })
   for (let i = 0; i < path.length; i++) {
     const st = path[i]
     const left = st.p === 'R' ? cur : st.h
     const right = st.p === 'R' ? st.h : cur
-    const next = await sha256(left + right)
+    const next = v2 ? await shaBytes(new Uint8Array([1]), fromHex(left), fromHex(right)) : await sha256(left + right)
     steps.push({ i: i + 1, dir: st.p, sib: st.h, dup: st.dup, out: next })
     cur = next
   }
@@ -227,7 +238,7 @@ function flowStrip(f) {
 async function renderOrder(d, flow) {
   const anchored = !!d.chainRef
   const path = d.leafPath || []
-  const { root, steps } = path.length ? await recomputeLeaf(d.payloadHash, path) : { root: null, steps: [] }
+  const { root, steps } = path.length ? await recomputeLeaf(d.payloadHash, path, d.merkleVersion) : { root: null, steps: [] }
   const pass = root && root === d.merkleRoot
   const chainRow = (W.chainRef && anchored)
     ? `<div class="row"><div class="k">${W.chainRef}</div><div class="v mono">${esc(d.chainRef)}</div></div>
@@ -269,8 +280,10 @@ async function renderOrder(d, flow) {
 
   ${steps.length ? `<div class="card">
     <h2>重算过程（浏览器本地执行）</h2>
-    <div class="note" style="margin:0 0 8px">从「${W.hash}」起，按序计算 <code>sha256(左 + 右)</code>。</div>
-    ${steps.map((s) => `<div class="step">
+    <div class="note" style="margin:0 0 8px">${Number(d.merkleVersion) === 2
+      ? '从「' + W.hash + '」起：先算 <code>sha256(0x00‖叶)</code>，再逐层 <code>sha256(0x01‖左‖右)</code>（按字节拼接，RFC 6962）。'
+      : '从「' + W.hash + '」起，按序计算 <code>sha256(左 + 右)</code>（历史批次算法）。'}</div>
+    ${steps.map((s) => s.leaf ? `<div class="step"><div class="n">0</div><div style="flex:1"><div>叶节点域隔离 sha256(0x00‖叶)</div><div class="mono" style="color:var(--sub)">→ ${esc(cut(s.out, 20))}</div></div></div>` : `<div class="step">
       <div class="n">${s.i}</div>
       <div style="flex:1">
         <div>兄弟在${s.dir === 'R' ? '右' : '左'}${s.dup ? '（末节点自身复制）' : ''} <span class="mono" style="color:var(--faint)">${esc(cut(s.sib, 16))}</span></div>

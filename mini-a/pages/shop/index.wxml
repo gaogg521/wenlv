@@ -1,7 +1,7 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
-<view class="hero" style="background:linear-gradient(140deg,#34c3a2 0%,#0e9f8a 55%,#0a6e5e 100%)">
-  <view class="hi">旅行商城</view>
-  <view class="sub2">在地好物 · 到店体验与领取</view>
+<view class="hero">
+  <view class="hi">{{site.shop_title}}</view>
+  <view class="sub2">{{site.shop_caption}}</view>
   <view class="hero-chip"><view class="dot"></view>选择日期预约，到店出示凭证领取</view>
 </view>
 <view style="height:12rpx"></view>
@@ -16,6 +16,6 @@
     </view>
   </view>
 </view>
-<view class="note">当前好物支持到店预约领取，领取地点与时间请查看商品详情。</view>
+<view class="note">{{site.shop_note}}</view>
 
 <view wx:if="{{!loading && !error && !items.length}}" class="empty">在地好物正在准备中，先去看看主题游吧。</view>
