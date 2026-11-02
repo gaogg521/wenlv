@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgArr, cfgNum } from '../config.mjs'
 import { attest } from './attest.mjs'
+import { bizDay } from '../infra/bizdate.mjs'
 
 /** 结算单锚定：version_no 默认 = 结算主状态（0生成/1商户确认/2分账/3完成/4异议），
  *  异议解除回 0 时用 40，避免与"生成"撞同一版本号被幂等吞掉 */
@@ -47,15 +48,19 @@ export async function hit(scene, userId) {
 
 /** 订单 50 后计佣（幂等） */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee, paid_at FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
   if (!a) return false
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
   if (!p) return false
   // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
-  const prod = await one('SELECT promo_rate_bp FROM tour_product WHERE id = ?', [o.product_id])
-  const rateBp = Math.min(prod && prod.promo_rate_bp != null ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
+  const prod = await one('SELECT promo_rate_bp, profile FROM tour_product WHERE id = ?', [o.product_id])
+  // 单品覆盖只在后台「逐品佣金」设置的生效期内有效（按订单支付日判断），期外回落到推广服务商档位
+  const pf = prod ? ((typeof prod.profile === 'string' ? JSON.parse(prod.profile || '{}') : prod.profile) || {}) : {}
+  const payDay = o.paid_at ? String(o.paid_at).slice(0, 10) : bizDay()
+  const inWindow = (!pf.rate_start || payDay >= pf.rate_start) && (!pf.rate_end || payDay <= pf.rate_end)
+  const rateBp = Math.min(prod && prod.promo_rate_bp != null && inWindow ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
   const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10 - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣
   const amount = Math.floor(base * rateBp / 10000)
   try {

@@ -501,23 +501,11 @@ async function budgets() {
       return `<tr><td class="td-main">${esc(b.name)}</td><td class="num">${Number(b.total).toLocaleString()}</td>
       <td><div class="num">${Number(b.granted).toLocaleString()}</div><div style="background:#eef1f5;border-radius:4px;height:5px;width:90px;margin-top:4px"><div style="background:${pct > 80 ? 'var(--red)' : 'var(--brand)'};height:5px;border-radius:4px;width:${Math.min(pct, 100)}%"></div></div></td>
       <td class="num">${Number(b.returned).toLocaleString()}</td><td class="num">${left.toLocaleString()}</td>
-      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
+      <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('budget', ${b.id}, { onSaved: () => budgets() })">编辑</button> <button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
       <td class="td-sub">${esc(String(b.period_start || '').slice(0, 10))} ~ ${esc(String(b.period_end || '').slice(0, 10))}</td></tr>` }).join('')}</tbody></table>` : emptyBox('暂无预算批次')}
   </div>`
 }
-function budgetModal() {
-  const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 3)
-  modal('新建旅豆预算批次', `
-    <div class="field"><label>批次名称 *</label><input id="b_name" maxlength="40" placeholder="如：12月·消费返豆"></div>
-    <div class="field"><label>预算总额（豆）*</label><input id="b_total" type="number" min="1" placeholder="如 6000000"><p class="muted" style="margin-top:4px">全局哨兵：年度发行总量 600 万豆，超出会被数据库 CHECK 拒绝</p></div>
-    <div class="field"><label>归属渠道 / 用途说明</label><div class="row" style="margin:0">
-      <select id="b_owner"><option value="marketing">市场投放</option><option value="product">产品激励</option><option value="operation">运营活动</option><option value="content">内容约稿</option></select>
-      <input id="b_remark" placeholder="用途备注（选填）" style="width:200px"></div></div>
-    <div class="field"><label>生效周期（选填）</label><div class="row" style="margin:0">
-      <input id="b_start" type="date" style="width:160px"><span class="muted">至</span>
-      <input id="b_end" type="date" value="${nextMonth.toISOString().slice(0, 10)}" style="width:160px"></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addBudget()">创建批次</button>`)
-}
+function budgetModal() { return entityEditor('budget', null, { onSaved: () => budgets() }) }
 async function addBudget() {
   try {
     if (!$('#b_name').value.trim() || !Number($('#b_total').value)) return toast('批次名与总额必填', true)
@@ -884,39 +872,26 @@ async function phrases() {
       <td><code style="background:#e8effd;color:#1d4ed8">${esc(x.phrase_merchant || '—')}</code></td>
       <td><span class="pill off">${esc(x.channel || 'main')}</span></td>
       <td><div class="td-actions">
-        <button class="btn ghost sm" onclick="editPhrase(${x.id},'${esc(x.phrase_user)}','${esc(x.phrase_merchant || '')}')">编辑</button>
-        <button class="btn danger sm" onclick="editPhrase(${x.id},'','')">清除</button>
+        <button class="btn ghost sm" onclick="entityEditor('phrase', ${x.id}, { onSaved: () => phrases() })">编辑</button>
+        <button class="btn danger sm" onclick="clearPhrase(${x.id})">清除</button>
       </div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('还没有产品配暗号——下方为产品配一对口令')}
-    <div class="card-head" style="margin-top:16px"><h3>为产品配置暗号</h3></div>
+    : emptyBox('还没有产品配暗号——下方选择线路开始配置')}
+    <div class="card-head" style="margin-top:16px"><h3>为线路配置暗号</h3></div>
     <div class="row">
-      <select id="phProd" class="inp" style="width:280px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="phUser" class="inp" placeholder="用户暗号（如：放生桥边等船否）" style="width:280px">
-      <input id="phMer" class="inp" placeholder="商家暗号（如：漕港河里载秋来）" style="width:280px">
-      <button class="btn primary sm" onclick="savePhrase()">保存</button>
+      <select id="phProd" class="inp" style="width:320px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('') || '<option value="">全部线路均已配置</option>'}</select>
+      <button class="btn primary sm" onclick="savePhrase()">配置暗号与剧情 →</button>
+      <span class="muted">上下半句、NPC 角色、对暗号地点、启停日期、剧情背景、可接受变体</span>
     </div></div>`
 }
-window.editPhrase = (id, u, m) => {
-  modal('配置暗号（产品 #' + id + '）', `
-    <div class="field"><label>用户暗号（游客报给商户的上半句）</label><input id="pu_user" value="${esc(u)}" maxlength="24" placeholder="如：放生桥边等船否"></div>
-    <div class="field"><label>商家暗号（核销员对答的下半句）</label><input id="pu_mer" value="${esc(m)}" maxlength="24" placeholder="如：漕港河里载秋来"></div>
-    <p class="muted">成对出现即视为「已入戏」；两项都清空保存即取消该产品的暗号玩法。</p>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="savePhraseModal(${id})">保存</button>`)
+window.clearPhrase = async (id) => {
+  if (!confirm('清除后该线路不再使用暗号核销，确定？')) return
+  try { await api('PUT', '/admin/entities/phrase/' + id, { values: { phrase_user: '', phrase_merchant: '' } }); toast('暗号已清除'); phrases() } catch (e) { toast(e.message, true) }
 }
-window.savePhraseModal = async (id) => {
-  try {
-    await api('POST', '/admin/phrases/' + id, { userPhrase: $('#pu_user').value.trim(), merchantPhrase: $('#pu_mer').value.trim() })
-    toast('暗号已保存'); closeModal(); go('phrases')
-  } catch (e) { toast(e.message, true) }
-}
-// 底部快速添加表单（选择未配置产品 → 一对口令）
-window.savePhrase = async () => {
-  try {
-    const pid = $('#phProd')?.value
-    if (!pid) return toast('请先选择产品', true)
-    await api('POST', '/admin/phrases/' + pid, { userPhrase: $('#phUser').value.trim(), merchantPhrase: $('#phMer').value.trim() })
-    toast('暗号已保存'); go('phrases')
-  } catch (e) { toast(e.message, true) }
+// 选择未配置的线路 → 打开完整编辑器
+window.savePhrase = () => {
+  const pid = $('#phProd')?.value
+  if (!pid) return toast('请先选择线路', true)
+  entityEditor('phrase', pid, { onSaved: () => phrases() })
 }
 async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
@@ -931,22 +906,18 @@ async function rateov() {
   <div class="card">
     <div class="card-head"><h2>逐品佣金覆盖</h2><span class="muted">D2 扩展 · 单品费率优先于推广商档位 5/8/12%</span></div>
     <div class="row">
-      <select id="roProd" class="inp" style="width:280px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="roBp" class="inp" placeholder="费率 %（如 9.5）" style="width:150px">
-      <button class="btn primary sm" onclick="saveRate()">设置覆盖</button>
-      <button class="btn ghost sm" onclick="saveRate(true)">清除覆盖</button>
+      <select id="roProd" class="inp" style="width:320px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
+      <button class="btn primary sm" onclick="saveRate()">设置覆盖 →</button>
+      <span class="muted">需填写费率、生效期、调整原因与审批人；原因写入审计</span>
     </div>
-    ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>对比档位</th></tr></thead><tbody>
+    ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>生效期</th><th>原因</th><th>操作</th></tr></thead><tbody>
     ${ov.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
       <td class="money num"><b>${(Number(x.promo_rate_bp) / 100).toFixed(2)}%</b></td>
-      <td><span class="pill off">档位 5/8/12% → 覆盖生效</span></td></tr>`).join('')}</tbody></table>`
+      <td class="td-sub">${esc(x.rate_start || '—')} ~ ${esc(x.rate_end || '—')}</td><td class="td-sub">${esc(x.rate_reason || '—')}</td>
+      <td><button class="btn ghost sm" onclick="entityEditor('rateov', ${x.id}, { onSaved: () => rateov() })">编辑</button></td></tr>`).join('')}</tbody></table>`
     : emptyBox('暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
 }
-window.saveRate = async (clear) => {
-  const bp = clear ? null : Math.round(parseFloat($('#roBp').value) * 100)
-  await api('POST', '/admin/rate-overrides/' + $('#roProd').value, { rateBp: bp })
-  go('rateov')
-}
+window.saveRate = () => entityEditor('rateov', $('#roProd').value, { onSaved: () => rateov() })
 async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const list = await api('GET', '/admin/kyc')
@@ -992,23 +963,16 @@ async function cocreate() {
   </div>
   <div class="card">
     <div class="card-head"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
-    <div class="row">
-      <select id="coProd" class="inp" style="width:240px">${prods.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('')}</select>
-      <input id="coName" class="inp" placeholder="姓名" style="width:120px">
-      <input id="coMobile" class="inp" placeholder="手机号" style="width:150px">
-      <select id="coRole" class="inp" style="width:120px"><option value="1">资金商</option><option value="2">商品商</option></select>
-      <input id="coInvest" class="inp" placeholder="投资额(元)" style="width:120px">
-      <input id="coPct" class="inp" placeholder="分润 %（如 8）" style="width:120px">
-      <button class="btn primary sm" onclick="saveCo()">登记共创人</button>
-    </div>
+    <div class="row"><button class="btn primary sm" onclick="entityEditor('cocreator', null, { onSaved: () => cocreate() })">＋ 登记共创人</button>
+      <span class="muted">身份 · 投资与分润 · 协议与收款账户</span></div>
     ${list.length ? `<table><thead><tr><th>编号</th><th>产品</th><th>姓名</th><th>角色</th><th>投资额</th><th>分润比例</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td class="num">${esc(x.co_no)}</td><td>${esc(x.title)}</td><td>${esc(x.name)}</td>
       <td>${Number(x.role) === 1 ? '<span class="pill s60">资金商</span>' : '<span class="pill s20">商品商</span>'}</td>
       <td class="num">¥${(Number(x.invest_amount) / 100).toLocaleString()}</td>
       <td class="num"><b>${(Number(x.share_pct) / 100).toFixed(1)}%</b></td>
       <td>${Number(x.status) === 1 ? '<span class="pill ok">生效</span>' : '<span class="pill off">停用</span>'}</td>
-      <td><div class="td-actions">${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无共创人——上方登记首位共创人')}</div>
+      <td><div class="td-actions"><button class="btn ghost sm" onclick="entityEditor('cocreator', ${x.id}, { onSaved: () => cocreate() })">资料</button>${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox('暂无共创人——点「登记共创人」')}</div>
   <div class="card">
     <div class="card-head"><h3>共创分润台账</h3><span class="muted">链上分润凭证 · 结算期自动入账</span></div>
     ${profits.length ? `<table><thead><tr><th>期</th><th>共创人</th><th>产品</th><th>基数</th><th>分润额</th><th>状态</th><th>操作</th></tr></thead><tbody>
@@ -1137,34 +1101,7 @@ async function tasks() {
     : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该状态下暂无任务')}</div>`
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
-async function taskModal(id) {
-  let t = { category: 'note', reward_beans: 200 }
-  if (id) {
-    t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
-    if (!t) return toast('任务不存在', true)
-  }
-  const prods = await api('GET', '/admin/products')
-  modal(id ? '编辑任务 · ' + esc(t.title) : '新建约稿任务', `
-    <div class="field"><label>任务标题 *</label><input id="tk_title" value="${esc(t.title || '')}" maxlength="48" placeholder="如：朱家角秋日 Vlog 约稿"></div>
-    <div class="field"><label>类型 / 目标商品</label><div class="row" style="margin:0">
-      <select id="tk_cat">${Object.entries(TASK_CAT).map(([v, n]) => `<option value="${v}" ${(t.category || 'note') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
-      <select id="tk_prod"><option value="">关联商品（选填，引导种草）</option>${prods.map((p) => `<option value="${p.id}" ${Number(t.product_id) === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}</select></div></div>
-    <div class="field"><label>封面图（选填 · 展示在任务卡片，2MB 内）</label>${imgPicker('tk_cover', t.cover_img || '', '上传封面')}</div>
-    <div class="field"><label>一句话简介 *（小程序任务卡展示）</label><input id="tk_brief" value="${esc(t.brief || '')}" maxlength="60" placeholder="如：拍一条 60 秒以内的水乡秋日短视频"></div>
-    <div class="field"><label>详细任务说明（富文本 · 拍摄脚本/评分标准，后台与小程序任务详情展示）</label>
-      ${richEdit('tk_rich', t.rich_brief || '')}</div>
-    <div class="field"><label>奖励</label><div class="row" style="margin:0">
-      <input id="tk_beans" type="number" value="${Number(t.reward_beans) || 200}" style="width:110px"><span class="muted">旅豆</span>
-      <input id="tk_cash" type="number" step="0.01" value="${(Number(t.cash_reward) / 100).toFixed(2)}" style="width:110px"><span class="muted">元现金加奖（选填）</span></div></div>
-    <div class="field"><label>交付要求（0 = 不限）</label><div class="row" style="margin:0">
-      <input id="tk_words" type="number" value="${Number(t.min_words) || ''}" placeholder="最低字数" style="width:110px">
-      <input id="tk_imgs" type="number" value="${Number(t.min_images) || ''}" placeholder="最少图片" style="width:110px">
-      <input id="tk_max" type="number" value="${Number(t.max_participants) || ''}" placeholder="人数上限" style="width:110px"></div></div>
-    <div class="field"><label>投稿截止 / 标签（逗号分隔）</label><div class="row" style="margin:0">
-      <input id="tk_deadline" type="date" value="${t.deadline ? String(t.deadline).slice(0, 10) : ''}" style="width:170px">
-      <input id="tk_tags" value="${esc(t.tags || '')}" placeholder="如：秋日,vlog,水乡" style="width:220px"></div></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveTask(${id || 0})">${id ? '保存修改' : '发布任务'}</button>`)
-}
+async function taskModal(id) { return entityEditor('task', id || null, { onSaved: () => tasks() }) }
 async function saveTask(id) {
   try {
     const body = { title: $('#tk_title').value.trim(), brief: $('#tk_brief').value.trim(), category: $('#tk_cat').value,

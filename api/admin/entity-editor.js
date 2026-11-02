@@ -15,6 +15,8 @@
         return `<input id="${id}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : f.type === 'phone' ? 'tel' : 'text'}" value="${E(v)}"${ph}${max} data-count="${f.max || ''}">`
       case 'textarea':
         return `<textarea id="${id}" rows="3"${ph}${max} data-count="${f.max || ''}">${E(v)}</textarea>`
+      case 'bp':
+        return `<div class="ee-affix"><input id="${id}" type="number" value="${v ?? ''}" step="0.01"${f.min != null ? ` min="${f.min}"` : ''}${f.max != null ? ` max="${f.max}"` : ''}${ph}><span>%</span></div>`
       case 'int': case 'number': case 'money':
         return `<div class="ee-affix">${f.type === 'money' ? '<span>¥</span>' : ''}<input id="${id}" type="number" value="${v ?? ''}" step="${f.type === 'int' ? 1 : f.type === 'money' ? '0.01' : 'any'}"${f.min != null ? ` min="${f.min}"` : ''}${f.max != null ? ` max="${f.max}"` : ''}${ph}>${f.unit && f.type !== 'money' ? `<span>${E(f.unit)}</span>` : ''}</div>`
       case 'select': case 'ref':
@@ -258,6 +260,8 @@
     drawer.addEventListener('input', (e) => { if (!e.target.closest('.ee-tags input,.ee-refm-q')) { counter(e.target); eeDirty() } })
     drawer.addEventListener('change', (e) => { if (e.target.closest('.ee-switch')) e.target.nextElementSibling.nextElementSibling.textContent = e.target.checked ? '是' : '否'; eeDirty() })
     drawer.querySelectorAll('[data-count]').forEach(counter)
+    // 只读字段（如暗号/佣金页里的线路名称）：展示用，服务端也不会写入
+    st.schema.sections.flatMap((x) => x.fields).filter((f) => f.readonly).forEach((f) => document.querySelectorAll(`[data-field="${f.k}"] input,[data-field="${f.k}"] select,[data-field="${f.k}"] textarea`).forEach((el) => { el.disabled = true }))
     document.querySelector('#eeRoot .ee-overlay').onclick = () => eeClose()
     const body = document.getElementById('eeBody')
     body.addEventListener('scroll', () => {

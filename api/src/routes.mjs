@@ -13,6 +13,7 @@ import * as attestDomain from './domain/attest.mjs'
 import * as merkleLib from './domain/merkle.mjs'
 import * as refundPolicy from './domain/refund-policy.mjs'
 import { sanitizeRich } from './infra/sanitize.mjs'
+import { bizDay } from './infra/bizdate.mjs'
 import * as entities from './domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from './domain/report.mjs'
 import * as vc from './domain/vc.mjs'
@@ -1603,8 +1604,10 @@ const adminNew = {
   // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
   'GET /admin/rate-overrides': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from FROM tour_product p
-      WHERE p.promo_rate_bp IS NOT NULL ORDER BY p.id DESC`)
+    return await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from,
+        JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_start')) rate_start, JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_end')) rate_end,
+        JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_reason')) rate_reason
+      FROM tour_product p WHERE p.promo_rate_bp IS NOT NULL ORDER BY p.id DESC`)
   },
   'POST /admin/rate-overrides/:pid': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -2405,19 +2408,35 @@ const mPhrase = {
     const { phrase, orderNo } = req.body
     const said = String(phrase || '').trim()
     if (!said) throw new BizError(1001, '请输入游客说出的暗号')
+    // 暗号配置来自后台「暗号管理」编辑器：上半句 + 可接受变体 + 启停日期
+    const norm = (x) => String(x || '').replace(/[\s，,。.！!？?、；;：:"'“”‘’]/g, '')
+    const accepts = (row) => {
+      const pf = (typeof row.profile === 'string' ? JSON.parse(row.profile || '{}') : row.profile) || {}
+      return [row.phrase_user, ...(pf.phrase_alts || [])].map(norm).filter(Boolean).includes(norm(said))
+    }
+    const windowErr = (row) => {
+      const pf = (typeof row.profile === 'string' ? JSON.parse(row.profile || '{}') : row.profile) || {}
+      const today = bizDay()
+      if (pf.phrase_start && today < pf.phrase_start) return '该线路暗号 ' + pf.phrase_start + ' 起启用'
+      if (pf.phrase_end && today > pf.phrase_end) return '该线路暗号已于 ' + pf.phrase_end + ' 停用，请改用扫码核销'
+      return null
+    }
     let o = null
     if (orderNo) {
-      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant FROM orders o
+      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
         JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ? AND o.merchant_id = ?`,
         [orderNo, u.merchantId])
     } else {
-      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant FROM orders o
+      const cands = await q(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
         JOIN tour_product p ON p.id = o.product_id
-        WHERE o.merchant_id = ? AND p.phrase_user = ? AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 1`,
-        [u.merchantId, said])
+        WHERE o.merchant_id = ? AND p.phrase_user IS NOT NULL AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 200`,
+        [u.merchantId])
+      o = cands.find(accepts) || null
     }
     if (!o || !o.phrase_user) return { ok: false, reason: '未找到对应该暗号的在途订单' }
-    if (said !== o.phrase_user) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+    if (!accepts(o)) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+    const werr = windowErr(o)
+    if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
     const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
     for (const pid of ids) {
       await pass.adminConfirmPass(pid, u.uid)
@@ -2473,9 +2492,12 @@ const cPhraseKyc = {
     const o = await order.byNo(req.params.no)
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     if (!o.paid_at) throw new BizError(2002, '支付后可见暗号')
-    const p = await one('SELECT phrase_user, phrase_merchant FROM tour_product WHERE id = ?', [o.product_id])
+    const p = await one('SELECT phrase_user, phrase_merchant, profile FROM tour_product WHERE id = ?', [o.product_id])
     if (!p || !p.phrase_user) return { enabled: false }
-    return { enabled: true, userPhrase: p.phrase_user, hint: '到达剧情点位后，向 NPC 说出你的暗号' }
+    const pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
+    // 只下发游客需要的：上半句、提示、角色与地点；下半句与剧情说明只给核销员
+    return { enabled: true, userPhrase: p.phrase_user, hint: pf.phrase_hint || '到达剧情点位后，向 NPC 说出你的暗号',
+      role: pf.phrase_role || null, location: pf.phrase_location || null }
   },
 
   // KYC 实名提交（一户一档：重复提交=更新待审资料）

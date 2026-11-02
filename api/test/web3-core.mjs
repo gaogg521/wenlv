@@ -126,6 +126,8 @@ if ((!process.env.DB_NAME || PROTECTED.includes(process.env.DB_NAME)) && process
     assert.equal(Number(s.status), 5)
     assert.match(s.chain_tx_ref, /^0x[0-9a-f]{64}$/)
   })
+  // confirmPending() 同样会处理全库 status=5 的批次；测试开始前库里不应有真实的待确认批次
+  assert.equal(Number((await one(`SELECT COUNT(*) n FROM attest_batch WHERE status = 5 AND merkle_kind <> 'test'`)).n), 0, '库里存在真实的待确认批次，拒绝在此库上运行')
   await t('确认数不足保持 5；达标后置 2 并记录确认数', async () => {
     const id = created[0]
     chainState.head += 1 // 进块，1 个确认
@@ -160,7 +162,8 @@ if ((!process.env.DB_NAME || PROTECTED.includes(process.env.DB_NAME)) && process
   })
   await t('失败批次重试后可正常锚定', async () => {
     const id = created[2]
-    await attest.reanchorPending()
+    // 只重试本测试建的批次：reanchorPending() 会把库里所有待锚批次（含真实日终根）锚到假链上，污染数据
+    await attest.anchorToChain(id)
     chainState.head += 5
     await attest.confirmPending()
     assert.equal(Number((await st(id)).status), 2)

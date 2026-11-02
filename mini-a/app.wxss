@@ -195,3 +195,5 @@ page {
 .iti-title { font-size: 28rpx; font-weight: 700; margin-top: 4rpx; }
 .iti-desc { font-size: 25rpx; color: var(--ink2); line-height: 1.7; margin-top: 6rpx; }
 .iti-img { width: 100%; height: 300rpx; border-radius: 16rpx; margin-top: 12rpx; }
+.phrase-card { background: linear-gradient(135deg, #fff7ee, #fdf0ff); border: 1rpx solid #f1d9c4; }
+.phrase-text { font-size: 38rpx; font-weight: 800; color: #6d28d9; margin: 14rpx 0 10rpx; letter-spacing: 2rpx; }

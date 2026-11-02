@@ -356,6 +356,170 @@ const S = {
     async create(c, v) { return c.ins('INSERT INTO badge (name, icon_key, rule_desc, rule_type) VALUES (?,?,?,?)', [v.name, v.icon_key, v.rule_desc || '', v.rule_type || 'manual']) },
   },
 
+  // ======================= 旅豆预算批次 =======================
+  budget: {
+    label: '旅豆预算批次', table: 'bean_budget', idCol: 'id', roles: ['super', 'finance'], auditModule: 'budget', titleKey: 'name',
+    sections: [
+      { title: '批次与额度', desc: '批次是发放双闸的第一道闸：发放时同时校验批次余额与年度总量哨兵', fields: [
+        { k: 'name', label: '批次名称', type: 'text', store: 'col', required: true, max: 40, span: 2, ph: '如：12 月 · 消费返豆' },
+        { k: 'total', label: '预算总额', type: 'int', store: 'col', required: true, min: 1, unit: '豆', help: '10 豆 = 1 元；不得超过年度总量哨兵' },
+        { k: 'biz_owner', label: '归属业务', type: 'select', store: 'col', required: true, options: [['marketing', '市场投放'], ['product', '产品激励'], ['operation', '运营活动'], ['content', '内容约稿']], dflt: 'marketing' },
+        { k: 'period_start', label: '生效开始', type: 'date', store: 'col' },
+        { k: 'period_end', label: '生效结束', type: 'date', store: 'col' },
+        { k: 'status', label: '状态', type: 'select', store: 'col', options: [['1', '生效'], ['0', '停用']], dflt: '1' },
+        { k: 'daily_cap', label: '单日发放上限', type: 'int', min: 0, unit: '豆', help: '0 或留空 = 不限；用于运营监控' },
+        { k: 'alert_pct', label: '水位预警线', type: 'int', min: 1, max: 100, unit: '%', help: '已发放达到该比例时在驾驶舱提醒' },
+      ] },
+      { title: '用途与范围', fields: [
+        { k: 'channels', label: '发放场景', type: 'multi', options: [['order', '消费返豆'], ['task', '约稿任务'], ['content', '内容奖励'], ['activity', '活动发放'], ['compensate', '客诉补偿']] },
+        { k: 'cities', label: '适用城市', type: 'multi', options: DICT.city, help: '留空 = 全部城市' },
+        { k: 'remark', label: '用途摘要', type: 'text', store: 'col', max: 255, span: 2 },
+        { k: 'purpose', label: '方案说明', type: 'rich', span: 2, help: '投放目标、人群、预期转化，供财务审批与复盘' },
+      ] },
+      { title: '审批与凭证', fields: [
+        { k: 'approve_ref', label: '审批单号', type: 'text', store: 'col', max: 32 },
+        { k: 'approver', label: '审批人', type: 'text', max: 20 },
+        { k: 'approve_date', label: '审批日期', type: 'date' },
+        { k: 'attachments', label: '审批附件', type: 'gallery', max: 6, span: 2, help: '审批截图、预算表等' },
+      ] },
+    ],
+    async validate(v, ctx) {
+      if (v.period_start && v.period_end && v.period_start > v.period_end) return { period_end: '结束日期不能早于开始日期' }
+      if (ctx.row && v.total != null && v.total + Number(ctx.row.returned) < Number(ctx.row.granted)) return { total: `已发放 ${ctx.row.granted} 豆（含回流 ${ctx.row.returned}），总额不能低于 ${Number(ctx.row.granted) - Number(ctx.row.returned)}` }
+      const cap = await one('SELECT cap_total FROM bean_global_cap WHERE id = 1')
+      if (cap && v.total != null && v.total > Number(cap.cap_total)) return { total: `单批次不能超过年度总量哨兵 ${cap.cap_total} 豆` }
+    },
+    async create(c, v) {
+      return c.ins('INSERT INTO bean_budget (name, total, biz_owner, status) VALUES (?,?,?,1)', [v.name, v.total, v.biz_owner || 'marketing'])
+    },
+  },
+
+  // ======================= 共创人 =======================
+  cocreator: {
+    label: '共创人', table: 'co_creator', idCol: 'id', roles: ['super', 'ops'], auditModule: 'cocreate', titleKey: 'name',
+    sections: [
+      { title: '身份', fields: [
+        { k: 'name', label: '姓名/机构名', type: 'text', store: 'col', required: true, max: 64 },
+        { k: 'mobile', label: '联系手机', type: 'phone', store: 'col', required: true },
+        { k: 'role', label: '共创角色', type: 'select', store: 'col', required: true, options: [['1', '资金商'], ['2', '商品商']] },
+        { k: 'org_name', label: '所属机构', type: 'text', max: 60 },
+        { k: 'email', label: '邮箱', type: 'email' },
+        { k: 'address', label: '联系地址', type: 'text', max: 120 },
+      ] },
+      { title: '投资与分润', desc: '分润按结算期自动入账，打款需在列表中登记', fields: [
+        { k: 'product_id', label: '共创线路', type: 'ref', ref: 'product', store: 'col', required: true },
+        { k: 'invest_amount', label: '投资金额', type: 'money', store: 'col', min: 0, unit: '元' },
+        { k: 'share_pct', label: '分润比例', type: 'bp', store: 'col', required: true, min: 0, max: 50, help: '0~50%，按线路结算金额计提' },
+        { k: 'invest_date', label: '投资日期', type: 'date' },
+        { k: 'status', label: '状态', type: 'select', store: 'col', options: [['1', '生效'], ['0', '停用']], dflt: '1' },
+        { k: 'goods_desc', label: '供货/投入说明', type: 'textarea', max: 500, span: 2, help: '商品商填写供货内容；资金商填写资金用途' },
+      ] },
+      { title: '协议与收款', fields: [
+        { k: 'contract_no', label: '协议编号', type: 'text', max: 40 },
+        { k: 'contract_start', label: '协议开始', type: 'date' },
+        { k: 'contract_end', label: '协议到期', type: 'date' },
+        { k: 'contract_file', label: '协议扫描件', type: 'image' },
+        { k: 'account_name', label: '收款户名', type: 'text', max: 60 },
+        { k: 'bank_name', label: '开户行', type: 'text', max: 60 },
+        { k: 'account_no', label: '收款账号', type: 'text', max: 32, pattern: '^[0-9 ]{8,32}$', patternMsg: '只能包含数字', sensitive: true },
+        { k: 'remark', label: '内部备注', type: 'textarea', max: 1000, span: 2 },
+      ] },
+    ],
+    async validate(v) {
+      if (v.contract_start && v.contract_end && v.contract_start > v.contract_end) return { contract_end: '到期日不能早于开始日' }
+    },
+    async create(c, v) {
+      const coNo = 'C' + bizDay().replaceAll('-', '') + String(Date.now() % 1000).padStart(3, '0')
+      return c.ins('INSERT INTO co_creator (product_id, co_no, name, mobile, role, share_pct) VALUES (?,?,?,?,?,?)', [v.product_id, coNo, v.name, v.mobile, v.role, v.share_pct || 0])
+    },
+  },
+
+  // ======================= 约稿任务 =======================
+  task: {
+    label: '约稿任务', table: 'content_task', idCol: 'id', roles: ['super', 'ops', 'review'], auditModule: 'content-task', titleKey: 'title',
+    sections: [
+      { title: '任务概要', fields: [
+        { k: 'title', label: '任务标题', type: 'text', store: 'col', required: true, max: 64, span: 2 },
+        { k: 'category', label: '作品类型', type: 'select', store: 'col', required: true, options: [['note', '图文笔记'], ['video', '短视频'], ['strategy', '攻略长文'], ['review', '体验点评']], dflt: 'note' },
+        { k: 'product_id', label: '种草线路', type: 'ref', ref: 'product', store: 'col' },
+        { k: 'brief', label: '一句话要求', type: 'textarea', store: 'col', required: true, max: 512, span: 2, help: '小程序任务卡片上展示' },
+        { k: 'cover_img', label: '任务封面', type: 'image', store: 'col' },
+        { k: 'tags', label: '话题标签', type: 'tags', store: 'col', csv: true, max: 8 },
+        { k: 'platforms', label: '建议发布平台', type: 'multi', options: [['xhs', '小红书'], ['douyin', '抖音'], ['channels', '视频号'], ['mp', '公众号'], ['in_app', '仅站内']] },
+      ] },
+      { title: '创作要求', fields: [
+        { k: 'rich_brief', label: '任务详细说明', type: 'rich', store: 'col', span: 2 },
+        { k: 'must_mention', label: '必须提及', type: 'lines', max: 10, help: '每行一条，审核时逐条核对' },
+        { k: 'forbidden', label: '禁止出现', type: 'lines', max: 10, help: '如：竞品名称、价格承诺' },
+        { k: 'min_words', label: '最少字数', type: 'int', store: 'col', min: 0, max: 20000, unit: '字' },
+        { k: 'min_images', label: '最少图片', type: 'int', store: 'col', min: 0, max: 30, unit: '张' },
+        { k: 'references', label: '参考范例', type: 'repeat', span: 2, max: 6, of: [
+          { k: 'title', label: '范例标题', type: 'text', required: true, max: 40 },
+          { k: 'url', label: '链接', type: 'url' },
+          { k: 'image', label: '截图', type: 'image' },
+        ] },
+        { k: 'review_rules', label: '审核标准', type: 'lines', max: 10, span: 2 },
+      ] },
+      { title: '奖励与名额', fields: [
+        { k: 'reward_beans', label: '旅豆奖励', type: 'int', store: 'col', required: true, min: 0, max: 100000, unit: '豆', dflt: 200 },
+        { k: 'cash_reward', label: '现金加奖', type: 'money', store: 'col', min: 0, unit: '元' },
+        { k: 'max_participants', label: '参与人数上限', type: 'int', store: 'col', min: 0, max: 10000, help: '0 = 不限' },
+        { k: 'deadline', label: '投稿截止', type: 'datetime', store: 'col' },
+      ] },
+    ],
+    async validate(v, ctx) {
+      if (ctx.row && Number(ctx.row.status) >= 2) return { title: '任务已进入审核，不能再编辑' }
+      if (ctx.creating && v.deadline && v.deadline < bizDay() + ' 00:00:00') return { deadline: '截止时间不能早于今天' }
+    },
+    async create(c, v) {
+      return c.ins('INSERT INTO content_task (task_no, title, brief, category, reward_beans) VALUES (?,?,?,?,?)', ['TK' + Date.now(), v.title, v.brief, v.category || 'note', v.reward_beans ?? 200])
+    },
+  },
+
+  // ======================= 线路暗号（作用于 tour_product 的暗号字段）=======================
+  phrase: {
+    label: '线路暗号', table: 'tour_product', idCol: 'id', roles: ['super', 'ops'], auditModule: 'phrase', titleKey: 'title', noCreate: true,
+    sections: [
+      { title: '对暗号', desc: '剧本游"入戏"凭证：游客说上半句，核销员对下半句，对上即核销', fields: [
+        { k: 'title', label: '线路', type: 'text', store: 'col', readonly: true, span: 2 },
+        { k: 'phrase_user', label: '用户暗号（上半句）', type: 'text', store: 'col', max: 24, ph: '放生桥边等船否' },
+        { k: 'phrase_merchant', label: '商家暗号（下半句）', type: 'text', store: 'col', max: 24, ph: '漕港河里载秋来' },
+        { k: 'phrase_hint', label: '给游客的提示', type: 'text', max: 60, span: 2, help: '游客在凭证页看到的引导语，如：找到穿长衫的掌柜，说出你的暗号' },
+      ] },
+      { title: '剧情与使用', fields: [
+        { k: 'phrase_role', label: 'NPC 角色', type: 'text', max: 20, ph: '茶馆掌柜' },
+        { k: 'phrase_location', label: '对暗号地点', type: 'text', max: 60 },
+        { k: 'phrase_start', label: '启用日期', type: 'date' },
+        { k: 'phrase_end', label: '停用日期', type: 'date', help: '到期后请更换，避免暗号外泄' },
+        { k: 'phrase_story', label: '剧情背景', type: 'rich', span: 2, help: '给核销员的剧情说明，便于入戏对答' },
+        { k: 'phrase_alts', label: '可接受的变体', type: 'lines', max: 5, span: 2, help: '游客口误时可放行的说法，每行一条' },
+      ] },
+    ],
+    async validate(v) {
+      if (!!v.phrase_user !== !!v.phrase_merchant) return v.phrase_user ? { phrase_merchant: '上下半句需成对设置（清除时两句都留空）' } : { phrase_user: '上下半句需成对设置（清除时两句都留空）' }
+      if (v.phrase_user && v.phrase_user === v.phrase_merchant) return { phrase_merchant: '上下半句不能相同' }
+      if (v.phrase_start && v.phrase_end && v.phrase_start > v.phrase_end) return { phrase_end: '停用日期不能早于启用日期' }
+    },
+  },
+
+  // ======================= 逐品佣金（作用于 tour_product.promo_rate_bp）=======================
+  rateov: {
+    label: '逐品佣金', table: 'tour_product', idCol: 'id', roles: ['super', 'ops'], auditModule: 'rate-override', titleKey: 'title', noCreate: true,
+    sections: [
+      { title: '费率覆盖', desc: '单品费率优先于推广服务商档位，平台封顶 12%', fields: [
+        { k: 'title', label: '线路', type: 'text', store: 'col', readonly: true, span: 2 },
+        { k: 'promo_rate_bp', label: '单品推广费率', type: 'bp', store: 'col', gt: 0, max: 12, help: '留空 = 恢复按推广服务商档位计佣' },
+        { k: 'rate_start', label: '生效开始', type: 'date' },
+        { k: 'rate_end', label: '生效结束', type: 'date', help: '到期需人工清除覆盖' },
+        { k: 'rate_reason', label: '调整原因', type: 'textarea', required: true, max: 300, span: 2, help: '写入审计；如：新品冷启动、清库存' },
+        { k: 'rate_approver', label: '审批人', type: 'text', max: 20 },
+      ] },
+    ],
+    async validate(v) {
+      if (v.rate_start && v.rate_end && v.rate_start > v.rate_end) return { rate_end: '结束日期不能早于开始日期' }
+    },
+  },
+
   // ======================= 推广服务商 =======================
   promoter: {
     label: '推广服务商', table: 'promoter', idCol: 'user_id', roles: ['super', 'ops'], auditModule: 'promoter', titleKey: 'real_name', noCreate: true,
@@ -443,6 +607,16 @@ function normalize(f, raw) {
     if (f.pattern && !new RegExp(f.pattern).test(v)) return [v, f.patternMsg || '格式不正确']
     return [v, null]
   }
+  if (t === 'bp') {
+    // 页面填百分比（9.5 = 9.5%），库里存万分比（950）
+    if (v === '' || v == null) return [null, f.required ? '不能为空' : null]
+    const n = Number(v)
+    if (!Number.isFinite(n)) return [v, '请输入数字']
+    if (f.min != null && n < f.min) return [v, `不能小于 ${f.min}%`]
+    if (f.max != null && n > f.max) return [v, `不能大于 ${f.max}%`]
+    if (f.gt != null && n <= f.gt) return [v, `必须大于 ${f.gt}%`]
+    return [Math.round(n * 100), null]
+  }
   if (['int', 'number', 'money'].includes(t)) {
     if (v === '' || v == null) return [null, f.required ? '不能为空' : null]
     const n = Number(v)
@@ -523,11 +697,12 @@ export function readValues(kind, row) {
     const st = storeOf(f)
     let v = st === 'col' ? row[f.k] : (st === 'profile' ? profile[f.k] : (parseJson(row[st.json], {}) || {})[st.key])
     if (f.type === 'gallery' && st === 'col') v = parseJson(v, [])
-    if (f.type === 'money' && v != null) v = Number(v) / 100
+    if ((f.type === 'money' || f.type === 'bp') && v != null) v = Number(v) / 100
+    if (f.csv && typeof v === 'string') v = v.split(/[,，]/).map((x) => x.trim()).filter(Boolean)
     if (f.type === 'datetime' && v) v = String(v).slice(0, 16)
     if (f.type === 'date' && v) v = String(v).slice(0, 10)
     if (f.type === 'select' && v != null) v = String(v)
-    if (f.type === 'repeat' && Array.isArray(v)) v = v.map((r) => Object.fromEntries(Object.entries(r).map(([k, x]) => [k, (f.of.find((s) => s.k === k)?.type === 'money' && x != null) ? Number(x) / 100 : x])))
+    if (f.type === 'repeat' && Array.isArray(v)) v = v.map((r) => Object.fromEntries(Object.entries(r).map(([k, x]) => [k, (['money', 'bp'].includes(f.of.find((s) => s.k === k)?.type) && x != null) ? Number(x) / 100 : x])))
     out[f.k] = v ?? null
   }
   return out
@@ -565,6 +740,7 @@ export async function save(kind, input, ctx, tx) {
   const vals = {}
   const errors = {}
   for (const f of allFields(sc)) {
+    if (f.readonly) continue
     let raw = input[f.k]
     if (creating && (raw === undefined || raw === '') && f.dflt !== undefined) raw = f.dflt
     if (raw === undefined && !creating) continue
@@ -590,7 +766,7 @@ export async function save(kind, input, ctx, tx) {
   for (const k of changed) {
     const f = allFields(sc).find((x) => x.k === k)
     const st = storeOf(f)
-    if (st === 'col') cols[k] = f.type === 'gallery' ? JSON.stringify(vals[k] || []) : vals[k]
+    if (st === 'col') cols[k] = f.type === 'gallery' ? JSON.stringify(vals[k] || []) : (f.csv ? (vals[k] || []).join(',') || null : vals[k])
     else if (st === 'profile') profile[k] = vals[k]
     else (jsonCols[st.json] ||= {})[st.key] = vals[k]
   }
@@ -623,9 +799,9 @@ export async function save(kind, input, ctx, tx) {
 // readValues 出来的是展示值（元），比较变化前要转回存储值
 function toStore(f, v) {
   if (v == null) return null
-  if (f.type === 'money') return Math.round(Number(v) * 100)
+  if (f.type === 'money' || f.type === 'bp') return Math.round(Number(v) * 100)
   if (f.type === 'datetime') return String(v).replace('T', ' ').slice(0, 16) + ':00'
-  if (f.type === 'repeat' && Array.isArray(v)) return v.map((r) => Object.fromEntries(Object.entries(r).map(([k, x]) => [k, f.of.find((s) => s.k === k)?.type === 'money' && x != null ? Math.round(Number(x) * 100) : x])))
+  if (f.type === 'repeat' && Array.isArray(v)) return v.map((r) => Object.fromEntries(Object.entries(r).map(([k, x]) => [k, ['money', 'bp'].includes(f.of.find((s) => s.k === k)?.type) && x != null ? Math.round(Number(x) * 100) : x])))
   return v
 }
 
