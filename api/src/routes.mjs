@@ -560,6 +560,21 @@ function scopeFilter(admin, col = 'city_code') {
   return { sql: ` AND ${col} = ?`, params: [city] }
 }
 
+// 资源池枚举：供应商类目
+const SUP_CATS = ['ticket', 'hotel', 'transport', 'ground', 'catering', 'other']
+// 创作者标签
+const CREATOR_TAGS = ['none', 'signed', 'star', 'limited']
+
+// 富文本白名单清洗（后台编辑内容入库前统一过一道：去脚本/事件/外域脚本）
+function sanitizeRich(html) {
+  let s = String(html || '')
+  s = s.replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+       .replace(/<\s*(script|style|iframe|object|embed|form|svg|math|link|meta|base)[^>]*\/?>/gi, '')
+       .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+       .replace(/(href|src)\s*=\s*(?:"|')?\s*javascript:[^"'\s>]*/gi, '$1="#"')
+  return s.slice(0, 200000)
+}
+
 async function audit(c, actor, module_, action, bizRef, before, after) {
   await c.q('INSERT INTO audit_log (actor, module, action, biz_ref, before_val, after_val) VALUES (?,?,?,?,?,?)',
     [actor, module_, action, bizRef || null, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null])
@@ -752,21 +767,28 @@ const admin = {
   'GET /admin/products': async (req) => {
     const a = await requireAdmin(req)
     const sc = scopeFilter(a, 'p.city_code')
-    return await q(`SELECT p.*, m.name merchant_name FROM tour_product p LEFT JOIN merchant m ON m.id = p.merchant_id WHERE 1=1 ${sc.sql} ORDER BY p.id DESC`, sc.params)
+    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
+      FROM tour_product p
+      LEFT JOIN merchant m ON m.id = p.merchant_id
+      LEFT JOIN supplier sup ON sup.id = p.supplier_id
+      LEFT JOIN scenic_spot sc ON sc.id = p.scenic_id
+      WHERE 1=1 ${sc.sql} ORDER BY p.id DESC`, sc.params)
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
     const { title, cat, cityCode, channelId, merchantId, priceFrom, beanGift, daysDesc, subtitle, status,
-      intro, includes, highlights, meetingPoint, safetyNote } = req.body
+      intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     if (!String(title || '').trim() || !Number.isInteger(Number(priceFrom)) || Number(priceFrom) <= 0) throw new BizError(1001, '请填写线路标题与有效价格')
     if (!(await one('SELECT id FROM merchant WHERE id=? AND status=1', [merchantId]))) throw new BizError(1001, '请选择已审核的履约商户')
+    if (supplierId && !(await one('SELECT id FROM supplier WHERE id=?', [supplierId]))) throw new BizError(1001, '关联供应商不存在')
+    if (scenicId && !(await one('SELECT id FROM scenic_spot WHERE id=?', [scenicId]))) throw new BizError(1001, '关联景区不存在')
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
-    const rich = { intro: intro || subtitle || '', includes: arr(includes), highlights: arr(highlights) }
+    const rich = { intro: sanitizeRich(intro || subtitle || ''), includes: arr(includes), highlights: arr(highlights) }
     const id = await tx(async (c) => {
-      const pid = await c.ins(`INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, status, rich_desc, meeting_point, safety_note)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      const pid = await c.ins(`INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, supplier_id, scenic_id, status, rich_desc, meeting_point, safety_note)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [channelId || 'main', cityCode || '310118', cat || 'script', title, subtitle || null, daysDesc || null,
-          Number(priceFrom) || 0, Number(beanGift) || 0, Number(merchantId), Number(status ?? 0), JSON.stringify(rich),
+          Number(priceFrom) || 0, Number(beanGift) || 0, Number(merchantId), supplierId || null, scenicId || null, Number(status ?? 0), JSON.stringify(rich),
           meetingPoint || null, safetyNote || null])
       await audit(c, 'admin:' + a.name, 'product', 'create', 'product-' + pid, null, { title })
       return pid
@@ -780,21 +802,38 @@ const admin = {
     const p = await one('SELECT rich_desc FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     const old = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
-    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, highlights, meetingPoint, safetyNote } = req.body
+    const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
-    const rich = { intro: intro ?? old.intro ?? '', includes: includes !== undefined ? arr(includes) : (old.includes || []),
+    const rich = { intro: intro !== undefined ? sanitizeRich(intro) : (old.intro || ''), includes: includes !== undefined ? arr(includes) : (old.includes || []),
       highlights: highlights !== undefined ? arr(highlights) : (old.highlights || []) }
+    if (supplierId && !(await one('SELECT id FROM supplier WHERE id=?', [supplierId]))) throw new BizError(1001, '关联供应商不存在')
+    if (scenicId && !(await one('SELECT id FROM scenic_spot WHERE id=?', [scenicId]))) throw new BizError(1001, '关联景区不存在')
     const r = await q(`UPDATE tour_product SET title = COALESCE(?, title), subtitle = COALESCE(?, subtitle),
       days_desc = COALESCE(?, days_desc), price_from = COALESCE(?, price_from), bean_gift = COALESCE(?, bean_gift),
-      status = COALESCE(?, status), rich_desc = ?, meeting_point = ?, safety_note = ? WHERE id = ?`,
+      status = COALESCE(?, status), supplier_id = COALESCE(?, supplier_id), scenic_id = COALESCE(?, scenic_id),
+      rich_desc = ?, meeting_point = ?, safety_note = ? WHERE id = ?`,
       [title ?? null, subtitle ?? null, daysDesc ?? null, priceFrom != null ? Number(priceFrom) : null,
-        beanGift != null ? Number(beanGift) : null, status ?? null,
+        beanGift != null ? Number(beanGift) : null, status ?? null, supplierId ?? null, scenicId ?? null,
         JSON.stringify(rich), meetingPoint ?? null, safetyNote ?? null, req.params.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'product', 'update', 'product-' + req.params.id, JSON.stringify(rich), null))
     return { updated: r.affectedRows > 0 }
   },
 
   // 商品图集：base64 上传（≤9 张，白名单扩展名，2MB 内）→ /uploads 静态
+  // 通用图片上传（富表单组件用）：base64 → /uploads 静态目录，返回 URL
+  'POST /admin/uploads': async (req) => {
+    await requireAdmin(req)
+    const { data, ext = 'jpg' } = req.body || {}
+    if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) throw new BizError(1001, '仅支持 jpg/png/webp')
+    const buf = Buffer.from(String(data || ''), 'base64')
+    if (buf.length === 0 || buf.length > 2 * 1024 * 1024) throw new BizError(1001, '图片需在 2MB 内')
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'static', 'uploads')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = `up_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}.${ext === 'jpeg' ? 'jpg' : ext}`
+    fs.writeFileSync(path.join(dir, name), buf)
+    return { url: '/uploads/' + name }
+  },
+
   'POST /admin/products/:id/images': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
     const p = await one('SELECT images FROM tour_product WHERE id = ?', [req.params.id])
@@ -842,24 +881,26 @@ const admin = {
   },
   'POST /admin/sessions': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    const { productId, departDate, quota, minGo, priceAdult } = req.body
+    const { productId, departDate, quota, minGo, priceAdult, earlyPrice, earlyDays } = req.body
     if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate || '') || !Number.isInteger(Number(quota)) || Number(quota) < 1 || !Number.isInteger(Number(priceAdult)) || Number(priceAdult) < 1) throw new BizError(1001, '请填写有效日期、正整数名额和价格')
     if (Number.isNaN(Date.parse(departDate)) || departDate < new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })) throw new BizError(1001, '出发日期不可早于今天')
+    if (earlyPrice && (Number(earlyPrice) >= Number(priceAdult))) throw new BizError(1001, '早鸟价须低于成人价')
     if (!(await one('SELECT id FROM tour_product WHERE id=?',[productId]))) throw new BizError(1004, '商品不存在')
     const id = await tx(async (c) => c.ins(
-      'INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult) VALUES (?,?,?,?,?)',
-      [Number(productId), departDate, Number(quota), Number(minGo || 10), Number(priceAdult)]))
+      'INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, early_price, early_days) VALUES (?,?,?,?,?,?,?)',
+      [Number(productId), departDate, Number(quota), Number(minGo || 10), Number(priceAdult),
+        Number(earlyPrice) || null, earlyPrice ? Number(earlyDays || 7) : null]))
     return { id }
   },
 
   'GET /admin/merchants': async (req) => { const a = await requireAdmin(req); const sc=scopeFilter(a); return await q('SELECT * FROM merchant WHERE 1=1 '+sc.sql+' ORDER BY id',sc.params) },
   'POST /admin/merchants': async (req) => {
     const a = await requireAdmin(req, ['super'])
-    const { name, cityCode, wxpaySubMchid, bizLicense } = req.body
+    const { name, cityCode, wxpaySubMchid, bizLicense, kind } = req.body
     const mno = 'M' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + String(Math.floor(Math.random() * 900) + 100)
     const id = await tx(async (c) => {
-      const mid = await c.ins('INSERT INTO merchant (city_code, name, merchant_no, wxpay_sub_mchid, biz_license, status) VALUES (?,?,?,?,?,0)',
-        [cityCode || '310118', name, mno, wxpaySubMchid || null, bizLicense || null])
+      const mid = await c.ins('INSERT INTO merchant (city_code, name, kind, merchant_no, wxpay_sub_mchid, biz_license, status) VALUES (?,?,?,?,?,?,0)',
+        [cityCode || '310118', name, SUP_CATS.includes(kind) ? kind : 'other', mno, wxpaySubMchid || null, bizLicense || null])
       await audit(c, 'admin:' + a.name, 'merchant', 'create', 'merchant-' + mid, null, { name })
       return mid
     })
@@ -928,10 +969,10 @@ const admin = {
   'GET /admin/budgets': async (req) => { await requireAdmin(req); return await q('SELECT * FROM bean_budget ORDER BY id DESC') },
   'POST /admin/budgets': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
-    const { name, total, periodStart, periodEnd } = req.body
+    const { name, total, periodStart, periodEnd, bizOwner, remark } = req.body
     const id = await tx(async (c) => {
-      const bid = await c.ins('INSERT INTO bean_budget (name, total, biz_owner, status, period_start, period_end) VALUES (?,?,?,1,?,?)',
-        [name, Number(total), 'marketing', periodStart || null, periodEnd || null])
+      const bid = await c.ins('INSERT INTO bean_budget (name, total, biz_owner, remark, status, period_start, period_end) VALUES (?,?,?,?,1,?,?)',
+        [name, Number(total), bizOwner || 'marketing', remark || null, periodStart || null, periodEnd || null])
       await audit(c, 'admin:' + a.name, 'budget', 'create', 'budget-' + bid, null, { name, total })
       return bid
     })
@@ -1026,7 +1067,16 @@ const admin = {
       rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained, s.status
         FROM settlement s JOIN merchant m ON m.id = s.merchant_id ORDER BY s.id DESC LIMIT 2000`)
     } else if (what === 'merchants') {
-      rows = await q(`SELECT id, name, merchant_no, city_code, status, score, apply_contact, apply_mobile, approved_at, created_at FROM merchant ORDER BY id`)
+      rows = await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, apply_mobile, approved_at, created_at FROM merchant ORDER BY id`)
+    } else if (what === 'scenics') {
+      rows = await q(`SELECT id, name, city_code, scenic_level, coop_mode, ticket_interface, contact_name, contact_phone, profit_terms, status, created_at FROM scenic_spot ORDER BY id`)
+    } else if (what === 'suppliers') {
+      rows = await q(`SELECT id, name, city_code, category, license_no, contact_name, contact_phone, settle_mode, status, note, created_at FROM supplier ORDER BY id`)
+    } else if (what === 'creators') {
+      rows = await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level,
+        (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
+        (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count
+        FROM user_account u WHERE u.creator_tag <> 'none' ORDER BY u.id`)
     } else throw new BizError(1004, '未知报表类型')
     const csv = toCsv(rows)
     return { name, filename: name + '-' + new Date().toISOString().slice(0, 10) + '.csv', csv }
@@ -1035,18 +1085,55 @@ const admin = {
   // 约稿任务管理（P2 四态机：创建/审核）
   'GET /admin/content-tasks': async (req) => {
     await requireAdmin(req)
-    return await q(`SELECT t.*, u.nickname claimer FROM content_task t
-      LEFT JOIN user_account u ON u.id = t.claimed_by ORDER BY t.id DESC LIMIT 100`)
+    return await q(`SELECT t.*, u.nickname claimer, p.title product_title,
+      (t.note_id IS NOT NULL) submitted
+      FROM content_task t
+      LEFT JOIN user_account u ON u.id = t.claimed_by
+      LEFT JOIN tour_product p ON p.id = t.product_id
+      ORDER BY t.id DESC LIMIT 100`)
   },
   'POST /admin/content-tasks': async (req) => {
     const a = await requireAdmin(req)
-    const { title, brief, rewardBeans } = req.body
+    const { title, brief, rewardBeans, category, coverImg, richBrief, cashReward, minWords, minImages,
+      maxParticipants, deadline, productId, tags } = req.body
     if (!title || !brief) throw new BizError(1001, '标题与要求必填')
+    if (Number(cashReward) < 0 || Number(rewardBeans) < 0) throw new BizError(1001, '奖励不能为负')
+    if (productId && !(await one('SELECT id FROM tour_product WHERE id = ?', [productId]))) throw new BizError(1001, '关联商品不存在')
     const taskNo = 'TK' + Date.now()
     const id = await tx(async (c) => c.ins(
-      'INSERT INTO content_task (task_no, title, brief, reward_beans, created_by) VALUES (?,?,?,?,?)',
-      [taskNo, title, brief, Number(rewardBeans) || 200, a.uid || null]))
+      `INSERT INTO content_task (task_no, title, brief, category, cover_img, rich_brief, reward_beans, cash_reward,
+        min_words, min_images, max_participants, deadline, product_id, tags, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [taskNo, title, brief, ['note', 'video', 'strategy', 'review'].includes(category) ? category : 'note',
+        coverImg || null, richBrief ? sanitizeRich(richBrief) : null, Number(rewardBeans) || 200, Number(cashReward) || 0,
+        Number(minWords) || 0, Number(minImages) || 0, Number(maxParticipants) || 0, deadline || null,
+        productId || null, tags || null, a.uid || null]))
     return { id, taskNo }
+  },
+  'PUT /admin/content-tasks/:id': async (req) => {
+    const a = await requireAdmin(req)
+    const t = await one('SELECT * FROM content_task WHERE id = ?', [req.params.id])
+    if (!t) throw new BizError(1201, '任务不存在')
+    if (Number(t.status) >= 2) throw new BizError(1001, '任务已进入审核，不能再编辑')
+    const b = req.body
+    if (b.productId && !(await one('SELECT id FROM tour_product WHERE id = ?', [b.productId]))) throw new BizError(1001, '关联商品不存在')
+    const r = await tx(async (c) => {
+      const rows = await c.q(`UPDATE content_task SET title = COALESCE(?, title), brief = COALESCE(?, brief),
+        category = COALESCE(?, category), cover_img = ?, rich_brief = COALESCE(?, rich_brief),
+        reward_beans = COALESCE(?, reward_beans), cash_reward = COALESCE(?, cash_reward),
+        min_words = COALESCE(?, min_words), min_images = COALESCE(?, min_images),
+        max_participants = COALESCE(?, max_participants), deadline = ?, product_id = ?, tags = COALESCE(?, tags)
+        WHERE id = ?`,
+        [b.title ?? null, b.brief ?? null, ['note', 'video', 'strategy', 'review'].includes(b.category) ? b.category : null,
+          b.coverImg ?? null, b.richBrief ? sanitizeRich(b.richBrief) : null,
+          b.rewardBeans != null ? Number(b.rewardBeans) : null, b.cashReward != null ? Number(b.cashReward) : null,
+          b.minWords != null ? Number(b.minWords) : null, b.minImages != null ? Number(b.minImages) : null,
+          b.maxParticipants != null ? Number(b.maxParticipants) : null, b.deadline ?? null,
+          b.productId ?? null, b.tags ?? null, req.params.id])
+      await audit(c, 'admin:' + a.name, 'content-task', 'update', 'task-' + t.id, null, { title: b.title })
+      return rows
+    })
+    return { updated: r.affectedRows > 0 }
   },
   'POST /admin/content-tasks/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super','ops','review'])
@@ -1225,7 +1312,7 @@ const adminSys = {
 const adminEco = {
   'GET /admin/content': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'review'])
-    return await q('SELECT c.*, u.nickname FROM content_note c JOIN user_account u ON u.id = c.user_id ORDER BY c.id DESC LIMIT 100')
+    return await q('SELECT c.*, u.nickname, u.creator_tag FROM content_note c JOIN user_account u ON u.id = c.user_id ORDER BY c.id DESC LIMIT 100')
   },
 
   // 评价管理（内容审核工作区）
@@ -1289,9 +1376,114 @@ const adminEdit = {
   // 商户编辑（名称/城市/收付通子商户号）
   'POST /admin/merchants/:id': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    const { name, cityCode, wxpaySubMchid } = req.body
-    await q('UPDATE merchant SET name = ?, city_code = ?, wxpay_sub_mchid = ? WHERE id = ?',
-      [name, cityCode, wxpaySubMchid || null, req.params.id])
+    const { name, cityCode, wxpaySubMchid, kind } = req.body
+    await q('UPDATE merchant SET name = ?, city_code = ?, wxpay_sub_mchid = ?, kind = ? WHERE id = ?',
+      [name, cityCode, wxpaySubMchid || null, kind || 'other', req.params.id])
+    return { updated: true }
+  },
+
+  // ===== 资源池（景区 / 供应商）：供给侧资源台账，独立于履约商户；城市合伙人行级隔离 =====
+  'GET /admin/scenics': async (req) => {
+    const a = await requireAdmin(req)
+    const sc = scopeFilter(a)
+    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id) product_count
+      FROM scenic_spot s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
+  },
+  'POST /admin/scenics': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { name, cityCode, level, coopMode, ticketInterface, contactName, contactPhone, profitTerms } = req.body
+    if (!String(name || '').trim()) throw new BizError(1001, '景区名称必填')
+    const id = await tx(async (c) => {
+      const rid = await c.ins('INSERT INTO scenic_spot (city_code, name, scenic_level, coop_mode, ticket_interface, contact_name, contact_phone, profit_terms, status) VALUES (?,?,?,?,?,?,?,?,1)',
+        [cityCode || '310118', String(name).trim(), level || '', coopMode || '', ticketInterface || null, contactName || null, contactPhone || null, profitTerms || null])
+      await audit(c, 'admin:' + a.name, 'scenic', 'create', 'scenic-' + rid, null, { name })
+      return rid
+    })
+    return { id }
+  },
+  'PUT /admin/scenics/:id': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const row = await one('SELECT * FROM scenic_spot WHERE id = ?', [req.params.id])
+    if (!row) throw new BizError(1201, '景区不存在')
+    const b = req.body
+    const next = {
+      name: b.name ?? row.name, city_code: b.cityCode ?? row.city_code, scenic_level: b.level ?? row.scenic_level,
+      coop_mode: b.coopMode ?? row.coop_mode, ticket_interface: b.ticketInterface ?? row.ticket_interface,
+      contact_name: b.contactName ?? row.contact_name, contact_phone: b.contactPhone ?? row.contact_phone,
+      profit_terms: b.profitTerms ?? row.profit_terms, status: Number(b.status ?? row.status),
+    }
+    await tx(async (c) => {
+      await c.q('UPDATE scenic_spot SET name=?, city_code=?, scenic_level=?, coop_mode=?, ticket_interface=?, contact_name=?, contact_phone=?, profit_terms=?, status=? WHERE id=?',
+        [next.name, next.city_code, next.scenic_level, next.coop_mode, next.ticket_interface, next.contact_name, next.contact_phone, next.profit_terms, next.status, req.params.id])
+      await audit(c, 'admin:' + a.name, 'scenic', 'update', 'scenic-' + row.id, { status: row.status }, { status: next.status })
+    })
+    return { updated: true }
+  },
+
+  'GET /admin/suppliers': async (req) => {
+    const a = await requireAdmin(req)
+    const sc = scopeFilter(a)
+    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
+      FROM supplier s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
+  },
+  'POST /admin/suppliers': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { name, cityCode, category, licenseNo, contactName, contactPhone, settleMode, note } = req.body
+    if (!String(name || '').trim()) throw new BizError(1001, '供应商名称必填')
+    const cat = SUP_CATS.includes(category) ? category : 'other'
+    const settle = ['monthly', 'per_order', 'prepaid'].includes(settleMode) ? settleMode : 'monthly'
+    const id = await tx(async (c) => {
+      const sid = await c.ins('INSERT INTO supplier (city_code, name, category, license_no, contact_name, contact_phone, settle_mode, status, note) VALUES (?,?,?,?,?,?,?,1,?)',
+        [cityCode || '310118', String(name).trim(), cat, licenseNo || null, contactName || null, contactPhone || null, settle, note || null])
+      await audit(c, 'admin:' + a.name, 'supplier', 'create', 'supplier-' + sid, null, { name, category: cat })
+      return sid
+    })
+    return { id }
+  },
+  'PUT /admin/suppliers/:id': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const row = await one('SELECT * FROM supplier WHERE id = ?', [req.params.id])
+    if (!row) throw new BizError(1201, '供应商不存在')
+    const b = req.body
+    const next = {
+      name: b.name ?? row.name, city_code: b.cityCode ?? row.city_code,
+      category: SUP_CATS.includes(b.category) ? b.category : row.category,
+      license_no: b.licenseNo ?? row.license_no, contact_name: b.contactName ?? row.contact_name,
+      contact_phone: b.contactPhone ?? row.contact_phone,
+      settle_mode: ['monthly', 'per_order', 'prepaid'].includes(b.settleMode) ? b.settleMode : row.settle_mode,
+      status: Number(b.status ?? row.status), note: b.note ?? row.note,
+    }
+    await tx(async (c) => {
+      await c.q('UPDATE supplier SET name=?, city_code=?, category=?, license_no=?, contact_name=?, contact_phone=?, settle_mode=?, status=?, note=? WHERE id=?',
+        [next.name, next.city_code, next.category, next.license_no, next.contact_name, next.contact_phone, next.settle_mode, next.status, next.note, req.params.id])
+      await audit(c, 'admin:' + a.name, 'supplier', 'update', 'supplier-' + row.id, { status: row.status }, { status: next.status })
+    })
+    return { updated: true }
+  },
+
+  // 创作者池（UGC 运营）：按用户聚合内容产出；标签=资源状态（none/signed/star/limited）
+  'GET /admin/creators': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'review'])
+    return await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level, u.status,
+      (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id) note_count,
+      (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
+      (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count,
+      (SELECT COUNT(*) FROM content_task t WHERE t.claimed_by = u.id AND t.status = 3) task_done,
+      (SELECT MAX(c.published_at) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) last_published
+      FROM user_account u
+      WHERE u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id)
+      ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT 200`)
+  },
+  'PUT /admin/creators/:id/tag': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const tag = String(req.body.tag || '')
+    if (!CREATOR_TAGS.includes(tag)) throw new BizError(1001, '未知创作者标签')
+    const u = await one('SELECT id, creator_tag FROM user_account WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1201, '用户不存在')
+    await tx(async (c) => {
+      await c.q('UPDATE user_account SET creator_tag = ? WHERE id = ?', [tag, req.params.id])
+      await audit(c, 'admin:' + a.name, 'creator', 'tag', 'user-' + u.id, { tag: u.creator_tag }, { tag })
+    })
     return { updated: true }
   },
 
@@ -1578,6 +1770,54 @@ const web3 = {
     return await web3._verify(String(req.query.bizType || 'order'), String(req.query.bizRef || ''))
   },
 
+  // 批次详情（链路视图点区块下钻）：批内全部事件按叶序返回
+  'GET /admin/attest/batch/:id': async (req) => {
+    await requireAdmin(req)
+    const b = await one('SELECT * FROM attest_batch WHERE id = ?', [Number(req.params.id)])
+    if (!b) throw new BizError(1201, '批次不存在')
+    const events = await q(`SELECT id, biz_type, biz_ref, version_no, leaf_index, payload_hash, status, created_at
+      FROM attest_event WHERE batch_id = ? ORDER BY leaf_index, id`, [b.id])
+    return { batch: b, events, chain: chain.chainStatus() }
+  },
+
+  // 单流程视角（一单六锚）：把一笔订单的存证事件按业务步骤串成链
+  'GET /admin/attest/flow/:orderNo': async (req) => {
+    await requireAdmin(req)
+    const orderNo = String(req.params.orderNo || '').trim()
+    const o = await one('SELECT o.*, p.title product_name FROM orders o LEFT JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ?', [orderNo])
+    if (!o) throw new BizError(1201, '订单不存在')
+    const COLS = 'e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq, b.merkle_root, b.status AS batch_status'
+    const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+    const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
+    const passes = await q('SELECT id, name, serial_no FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
+    const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
+    const [grantTx] = ledger.filter((r) => Number(r.biz_type) === 1)
+    const steps = [
+      { key: 'deduct', no: '①', label: '旅豆抵扣', hint: o.bean_deducted > 0 ? '下单锁豆' : '未使用旅豆', ev: deductTx ? await ev('bean_deduct', 'bt-' + deductTx.tx_no) : null },
+      { key: 'order', no: '②', label: '支付成功', hint: '订单事实入链', ev: await ev('order', orderNo) },
+      { key: 'issue', no: '③', label: '出票', hint: passes.length > 1 ? `权益凭证 ×${passes.length}` : '权益凭证', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
+      { key: 'verify', no: '④', label: '核销', hint: '到店扫码', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+      { key: 'grant', no: '⑤', label: '返豆', hint: '消费奖励', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
+      { key: 'settle', no: '⑥', label: '结算', hint: '五口径分账', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
+    ]
+    const refundRows = await q('SELECT refund_no, amount, settled_at FROM refunds WHERE order_id = ? ORDER BY id', [o.id])
+    const refunds = []
+    for (const r of refundRows) {
+      const e = await ev('refund', r.refund_no)
+      if (e) refunds.push({ ...e, amount: r.amount })
+    }
+    return {
+      order: { orderNo: o.order_no, status: o.status,
+        statusText: { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }[o.status] || '状态' + o.status,
+        productName: o.product_name, qty: o.qty, amountPay: o.amount_pay, beanDeducted: o.bean_deducted,
+        createdAt: o.created_at, paidAt: o.paid_at, completedAt: o.completed_at },
+      steps, refunds,
+      note: '六步=六个链上锚点：事件与业务同事务写入，小时级打包成块，日终另有账本封存块；退款为分支',
+    }
+  },
+
   // ---- WEB3 工作区（PC 后台内部；D6：小程序内不出现链上字样，此处为运营/BD 窗口）----
 
   // 链上总览：看板指标 + 可信路径
@@ -1685,17 +1925,18 @@ const web3 = {
   },
   'POST /admin/faqs': async (req) => {
     await requireAdmin(req)
-    const { question, answer, sort } = req.body
+    const { question, answer, sort, category, isHot } = req.body
     if (!question || !answer) throw new BizError(1001, '问题与答案必填')
-    const id = await tx(async (c) => c.ins('INSERT INTO faq (question, answer, sort) VALUES (?,?,?)',
-      [question, answer, Number(sort) || 0]))
+    const id = await tx(async (c) => c.ins('INSERT INTO faq (question, answer, sort, category, is_hot) VALUES (?,?,?,?,?)',
+      [question, answer, Number(sort) || 0, category || '通用', Number(isHot) || 0]))
     return { id }
   },
   'POST /admin/faqs/:id/update': async (req) => {
     await requireAdmin(req)
-    const { question, answer, sort, status } = req.body
-    await q('UPDATE faq SET question = COALESCE(?, question), answer = COALESCE(?, answer), sort = COALESCE(?, sort), status = COALESCE(?, status) WHERE id = ?',
-      [question || null, answer || null, sort != null ? Number(sort) : null, status != null ? Number(status) : null, req.params.id])
+    const { question, answer, sort, status, category, isHot } = req.body
+    await q('UPDATE faq SET question = COALESCE(?, question), answer = COALESCE(?, answer), sort = COALESCE(?, sort), status = COALESCE(?, status), category = COALESCE(?, category), is_hot = COALESCE(?, is_hot) WHERE id = ?',
+      [question || null, answer || null, sort != null ? Number(sort) : null, status != null ? Number(status) : null,
+        category || null, isHot != null ? Number(isHot) : null, req.params.id])
     return { updated: true }
   },
   'POST /admin/faqs/:id/delete': async (req) => {
@@ -1709,17 +1950,19 @@ const web3 = {
   },
   'POST /admin/banners': async (req) => {
     await requireAdmin(req)
-    const { title, image, link, sort } = req.body
+    const { title, subTitle, image, link, sort, startAt, endAt } = req.body
     if (!title || !image) throw new BizError(1001, '标题与图片必填')
-    const id = await tx(async (c) => c.ins('INSERT INTO banner (title, image, link, sort) VALUES (?,?,?,?)',
-      [title, image, link || null, Number(sort) || 0]))
+    const id = await tx(async (c) => c.ins('INSERT INTO banner (title, sub_title, image, link, sort, start_at, end_at) VALUES (?,?,?,?,?,?,?)',
+      [title, subTitle || null, image, link || null, Number(sort) || 0, startAt || null, endAt || null]))
     return { id }
   },
   'POST /admin/banners/:id/update': async (req) => {
     await requireAdmin(req)
-    const { title, image, link, sort, status } = req.body
-    await q('UPDATE banner SET title = COALESCE(?, title), image = COALESCE(?, image), link = COALESCE(?, link), sort = COALESCE(?, sort), status = COALESCE(?, status) WHERE id = ?',
-      [title || null, image || null, link !== undefined ? link : null, sort != null ? Number(sort) : null, status != null ? Number(status) : null, req.params.id])
+    const { title, subTitle, image, link, sort, status, startAt, endAt } = req.body
+    await q('UPDATE banner SET title = COALESCE(?, title), sub_title = ?, image = COALESCE(?, image), link = ?, sort = COALESCE(?, sort), status = COALESCE(?, status), start_at = ?, end_at = ? WHERE id = ?',
+      [title || null, subTitle !== undefined ? (subTitle || null) : null, image || null,
+        link !== undefined ? link : null, sort != null ? Number(sort) : null, status != null ? Number(status) : null,
+        startAt !== undefined ? (startAt || null) : null, endAt !== undefined ? (endAt || null) : null, req.params.id])
     return { updated: true }
   },
   'POST /admin/banners/:id/delete': async (req) => {
@@ -1798,6 +2041,38 @@ const open = {
       tip: '本验证不暴露任何用户与金额信息，仅返回哈希锚定证明；可离线重算复核',
     }
   },
+
+  // 单流程公开复核（一单六锚）：只回步骤/时点/指纹，**不回姓名、金额、商品与联系方式**
+  'GET /open/attest/flow/:orderNo': async (req) => {
+    const orderNo = String(req.params.orderNo || '').trim()
+    if (!/^[A-Za-z]{2,4}[A-Za-z0-9-]{6,40}$/.test(orderNo)) throw new BizError(1004, '订单号格式不正确')
+    const o = await one('SELECT id, settlement_id FROM orders WHERE order_no = ?', [orderNo])
+    if (!o) throw new BizError(1004, '未找到该订单的记录')
+    const COLS = 'e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq'
+    const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+      WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.version_no DESC LIMIT 1`, [bizType, bizRef])
+    const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
+    const passes = await q('SELECT id FROM travel_pass WHERE order_id = ? ORDER BY id', [o.id])
+    const [deductTx] = ledger.filter((r) => Number(r.biz_type) === 4)
+    const [grantTx] = ledger.filter((r) => Number(r.biz_type) === 1)
+    const steps = [
+      { no: '①', key: 'deduct', label: '旅豆抵扣', hint: '未使用旅豆', ev: deductTx ? await ev('bean_deduct', 'bt-' + deductTx.tx_no) : null },
+      { no: '②', key: 'order', label: '支付成功', hint: '待支付', ev: await ev('order', orderNo) },
+      { no: '③', key: 'issue', label: '出票', hint: passes.length > 1 ? '待出票 ×' + passes.length : '待出票', ev: passes.length ? await ev('pass_issue', 'pass-' + passes[0].id) : null },
+      { no: '④', key: 'verify', label: '核销', hint: '待到店', ev: passes.length ? await one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+          WHERE e.biz_type = 'pass_verify' AND e.biz_ref LIKE ? ORDER BY e.version_no DESC LIMIT 1`, ['pass-' + passes[0].id + '-%']) : null },
+      { no: '⑤', key: 'grant', label: '返豆', hint: '待完成', ev: grantTx ? await ev('bean_grant', 'bt-' + grantTx.tx_no) : null },
+      { no: '⑥', key: 'settle', label: '结算', hint: '待结算', ev: o.settlement_id ? await ev('settlement', 'settle-' + o.settlement_id) : null },
+    ]
+    const refundRows = await q('SELECT refund_no FROM refunds WHERE order_id = ? ORDER BY id', [o.id])
+    const refunds = []
+    for (const r of refundRows) {
+      const e = await ev('refund', r.refund_no)
+      if (e) refunds.push(e)
+    }
+    return { orderNo, steps, refunds, tip: '只包含步骤时点与指纹，不含任何个人信息与金额' }
+  },
+
   // 旅豆账本日终根：证明"账本借贷恒等、未超发"（审计/政府口径）
   'GET /open/verify/bean-day/:date': async (req) => {
     const r = await web3._verifyBeanDay(req.params.date)
@@ -2030,7 +2305,9 @@ const cNotes = {
   // 首页轮播
   'GET /c/banners': async (req) => {
     requireUser(req)
-    const rows = await q('SELECT id, title, image, link FROM banner WHERE status = 1 ORDER BY sort, id LIMIT 6')
+    const rows = await q(`SELECT id, title, sub_title, image, link FROM banner WHERE status = 1
+      AND (start_at IS NULL OR start_at <= NOW(3)) AND (end_at IS NULL OR end_at >= NOW(3))
+      ORDER BY sort, id LIMIT 6`)
     return rows.map((b) => ({ ...b, image: apiImg(b.image) }))
   },
   // 目的地城市聚合（P2）

@@ -50,6 +50,19 @@
   .step:last-child{border-bottom:0}
   .step .n{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;flex:none;
     display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700}
+  /* 一单六锚 · 流程条 */
+  .flow{display:flex;align-items:flex-start;overflow-x:auto;padding:8px 2px 4px}
+  .fstep{flex:1;min-width:96px;text-align:center;position:relative;padding-top:2px}
+  .fstep .fdot{width:38px;height:38px;border-radius:10px;margin:0 auto;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:15px;background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;
+    box-shadow:0 0 0 4px var(--brand-soft),0 0 14px rgba(15,118,110,.25)}
+  .fstep.miss .fdot{background:#fff;color:var(--faint);border:1.5px dashed #c4ccd6;box-shadow:none}
+  .fstep.rf .fdot{background:linear-gradient(135deg,#f59e0b,#b45309);box-shadow:0 0 0 4px #fdf3e0,0 0 14px rgba(180,83,9,.22)}
+  .fstep .fl{font-size:12.5px;font-weight:600;margin-top:7px}
+  .fstep .ft{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .fstep .fs{font-size:10.5px;margin-top:2px}
+  .fstep .fs .badge{padding:2px 8px;font-size:10.5px}
+  .fstep:not(:last-child)::after{content:'';position:absolute;top:21px;left:calc(50% + 26px);right:calc(-50% + 26px);border-top:2px dashed #cfd8e2}
   .bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
   .btn{display:inline-flex;align-items:center;gap:7px;padding:11px 18px;border-radius:10px;font-size:14px;
     font-weight:600;text-decoration:none;border:1px solid transparent;cursor:pointer}
@@ -171,7 +184,10 @@ async function go() {
   try {
     const r = await fetch(url).then((x) => x.json())
     if (!r.data) throw new Error(r.msg || '未找到记录')
-    isDate ? renderBean(r.data) : renderOrder(r.data)
+    if (isDate) return renderBean(r.data)
+    let flow = null
+    try { flow = (await fetch('/open/attest/flow/' + encodeURIComponent(raw)).then((x) => x.json())).data } catch (_) {}
+    renderOrder(r.data, flow)
   } catch (e) {
     shell(`<div class="card err"><h2>未能复核</h2><div class="note" style="color:#8a1f11">${esc(e.message)}<br>请确认单号是否正确；未打包的记录也会查不到。</div></div>`)
   }
@@ -181,7 +197,34 @@ function badge(anchored) {
   return `<span class="badge ${anchored ? 'ok' : 'warn'}">${anchored ? W.anchored : W.pending}</span>`
 }
 
-async function renderOrder(d) {
+// 一单六锚 · 流程条（只含时点与指纹，无个人信息/金额）
+const FLOW_ST_TXT = T1 ? ['待封存', W.pending, W.anchored] : ['待打包', W.pending, W.anchored]
+function flowStrip(f) {
+  if (!f || !f.steps) return ''
+  const cell = (s) => {
+    const e = s.ev
+    const st = e ? Number(e.status) : -1
+    return `<div class="fstep ${e ? '' : 'miss'}">
+      <div class="fdot">${e ? s.no : '·'}</div>
+      <div class="fl">${esc(s.label)}</div>
+      <div class="ft">${e ? esc(String(e.created_at).slice(5, 16)) : esc(s.hint)}</div>
+      ${e ? `<div class="fs"><span class="badge ${st === 2 ? 'ok' : (st === 0 ? 'idle' : 'warn')}">${FLOW_ST_TXT[st] || '—'}</span></div>` : ''}
+    </div>`
+  }
+  const rf = (e) => `<div class="fstep rf">
+      <div class="fdot">↩</div>
+      <div class="fl">退款冲正</div>
+      <div class="ft">${esc(String(e.created_at).slice(5, 16))}</div>
+      <div class="fs"><span class="badge ${Number(e.status) === 2 ? 'ok' : 'warn'}">${FLOW_ST_TXT[Number(e.status)] || '—'}</span></div>
+    </div>`
+  return `<div class="card">
+    <h2>${T1 ? '这单旅程的六条记录' : '这单旅程的六个链上锚点'}</h2>
+    <div class="flow">${f.steps.map(cell).join('')}${(f.refunds || []).map(rf).join('')}</div>
+    <div class="note" style="margin:6px 0 0">每一步发生时即写入一条记录并与业务同事务封存；未发生的步骤会随旅程推进逐步生成。${T1 ? '' : '退款记录以分支形式接在主流程之后。'}</div>
+  </div>`
+}
+
+async function renderOrder(d, flow) {
   const anchored = !!d.chainRef
   const path = d.leafPath || []
   const { root, steps } = path.length ? await recomputeLeaf(d.payloadHash, path) : { root: null, steps: [] }
@@ -204,6 +247,8 @@ async function renderOrder(d) {
     </div>
     <div style="margin-top:14px">${badge(anchored)}${pass ? '<span class="badge ok" style="margin-left:8px">校验自洽</span>' : ''}</div>
   </div>
+
+  ${flow ? flowStrip(flow) : ''}
 
   <div class="card">
     <h2>记录</h2>

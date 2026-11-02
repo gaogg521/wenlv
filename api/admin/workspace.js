@@ -5,13 +5,16 @@
     dash: '看清经营变化，照顾好每一段旅程。', orders: '查询订单、追踪履约，核对每一笔交易。',
     products: '从线路草稿到出发团期，让每次出行有据可依。', settlements: '商户确认、财务复核、支付回单，逐步完成结算。',
     merchants: '连接在地伙伴，管理商户资料与入驻申请。', content: '审核旅行故事，让值得分享的体验被看见。',
+    scenics: '维护景区合作台账，把线路关联到资源。', suppliers: '管理门票、住宿、交通等资源供给方。',
+    creators: '沉淀内容创作者，管理签约与合作状态。',
     tasks: '发布创作邀约，跟进投稿与奖励发放。', config: '调整运营参数，保留变更与复核记录。',
     integrations: '管理外部服务与凭据，核对通道是否就绪。', attest: '核对业务记录、证明路径与锚定状态。',
     security: '管理账号验证与访问安全。', audit: '追踪操作记录，核对关键业务变更。',
   }
-  const renderers = { dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }
-  // 兼容工作区中新增的数字身份页面，不将其后台业务改动纳入本轮提交。
+  const renderers = { dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
+  if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
   let current = '', generation = 0, rendering = Promise.resolve(), previousFocus = null
   let orderRows = [], orderQuery = '', orderPage = 1, orderStatus = 0
   const pageSize = 15

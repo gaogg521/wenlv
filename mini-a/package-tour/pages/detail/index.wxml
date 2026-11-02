@@ -35,7 +35,7 @@
   <view class="sec-title" wx:if="{{rich.intro || rich.highlights.length}}">玩法介绍</view>
   <view class="card" wx:if="{{rich.intro || rich.highlights.length}}">
     <view class="hl-item" wx:for="{{rich.highlights}}" wx:key="*this"><text class="hl-dot">◆</text>{{item}}</view>
-    <view class="rich-p" wx:if="{{rich.intro}}">{{rich.intro}}</view>
+    <rich-text class="rich-p" wx:if="{{rich.intro}}" nodes="{{rich.intro}}"></rich-text>
   </view>
 
   <view class="sec-title" wx:if="{{rich.includes.length}}">费用包含</view>

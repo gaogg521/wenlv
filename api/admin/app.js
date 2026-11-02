@@ -29,6 +29,7 @@ const NAV = [
   ['经营', [['dash', '驾驶舱', 'dash']]],
   ['交易', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['settlements', '结算', 'settlements']]],
   ['生态', [['merchants', '商户与进件', 'merchants'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['faqs', '常见问题', 'audit'], ['banners', '轮播管理', 'flag'], ['promoters', '推广服务商', 'promoters'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets']]],
+  ['资源池', [['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants'], ['creators', '创作者池', 'content']]],
   ['治理', [['config', '参数中心', 'config'], ['attest', '存证中心', 'eco'], ['risk', '风控', 'risk'], ['conflicts', '离线冲突', 'risk'], ['audit', '审计日志', 'audit'], ['phrases', '暗号管理', 'flag'], ['rateov', '逐品佣金', 'promoters'], ['kyc', '实名认证', 'audit'], ['cocreate', '共创分润', 'eco']]],
   ['系统', [['system', '运维控制台', 'sys'], ['features', '功能开关', 'flag'], ['security', '安全中心', 'risk'], ['integrations', '集成中心', 'withdraw']]],
   ['WEB3', [['web3dash', '链上总览', 'eco'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['chainassets', '链与资产', 'sys'], ['contract', '合约调用账户', 'sys'], ['terms', '术语映射', 'flag']]],
@@ -131,9 +132,9 @@ function go(page) {
   const name = { dash: '驾驶舱', orders: '订单', products: '商品与团期', merchants: '商户与进件', settlements: '结算',
     budgets: '旅豆预算', promoters: '推广服务商', config: '参数中心', risk: '风控', audit: '审计日志',
     system: '运维控制台', features: '功能开关', content: '内容审核', withdrawals: '提现审批', agreements: '协议变更', attest: '存证中心', security: '安全中心', integrations: '集成中心',
-    web3dash: '链上总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突' }[page]
+    web3dash: '链上总览', pointassets: '积分发行台账', badges: '勋章发行', wallets: '权益账户', vc: '数字身份', chainassets: '链与资产', contract: '合约调用账户', faqs: '常见问题', banners: '轮播管理', phrases: '暗号管理', rateov: '逐品佣金', kyc: '实名认证', cocreate: '共创分润', terms: '术语映射', tasks: '约稿任务', conflicts: '离线冲突', scenics: '景区资源', suppliers: '供应商', creators: '创作者池' }[page]
   $('#crumb').textContent = name
-  const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts }[page] || dash)
+  const render = ({ dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, vc: vcPage, chainassets: chainAssetsPage, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }[page] || dash)
   Promise.resolve().then(render).catch((e) => { $('#app').innerHTML = `<div class="card error-state"><h2>暂时无法加载${esc(name || '')}</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">重新加载</button></div>` })
 }
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
@@ -296,7 +297,12 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const [rows, merchantRows] = await Promise.all([api('GET', '/admin/products'),api('GET', '/admin/merchants')])
+  const [rows, merchantRows, supRows, scenRows] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
+    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
+  const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
+  const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
+  const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
+  const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="productModal()">＋ 新增线路</button></div>
     <p class="muted" style="margin-bottom:16px">先保存草稿 → 完善行程与集合信息 → 添加团期 → 检查后上架。价格单位为元。</p><div class="row" style="margin-top:0">
@@ -306,25 +312,36 @@ async function products() {
         <option value="red">红色文旅</option><option value="shop">商城 SKU</option></select>
       <input id="p_price" placeholder="价格（元），如 298" type="number" min="0.01" step="0.01" style="width:150px">
       <select id="p_merchant">${merchantRows.filter(m => m.status === 1).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('') || '<option value="">请先审核商户</option>'}</select>
+      <select id="p_supplier"><option value="">供应商（选填）</option>${supOpts}</select>
+      <select id="p_scenic"><option value="">关联景区（选填）</option>${scenOpts}</select>
       <button class="btn primary sm" onclick="addProduct()">保存草稿</button>
     </div>
-    ${rows.length ? `<table><thead><tr><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>商户</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${rows.map((p) => `<tr>
+    <div class="row" style="margin:10px 0 0">
+      <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
+        <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+      <select id="f_scenic" onchange="window.__fprod={sup:document.getElementById('f_supplier').value,scn:this.value};products()">
+        <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+      <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
+    </div>
+    ${frs.length ? `<table><thead><tr><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${frs.map((p) => `<tr>
       <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div></td>
       <td><span class="pill off">${esc(p.cat)}</span></td><td class="num">${esc(p.city_code)}</td>
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
+      <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionModal(${p.id}, ${p.price_from})">＋团期</button>
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑·素材</button></td>
-    </tr>`).join('')}</tbody></table>` : emptyBox('还没有商品——用上方表单录入第一条线路')}
+    </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——用上方表单录入第一条线路')}
   </div>`
 }
 
 /* 商品编辑 + 素材（P0 宣传力：实拍图集/行程/费用包含/集合点/安全告知） */
 let EDIT_P = null
 async function editProduct(id) {
-  const p = await api('GET', '/admin/products').then((rs) => rs.find((x) => x.id === id))
+  const [p, supRows, scenRows] = await Promise.all([api('GET', '/admin/products').then((rs) => rs.find((x) => x.id === id)),
+    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => [])])
   if (!p) return toast('商品不存在', true)
   EDIT_P = p
   const rich = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
@@ -337,10 +354,14 @@ async function editProduct(id) {
       <label style="width:72px;height:54px;border:1.5px dashed var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--sub)">
         ＋<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadProductImage(${id},this)"></label>
     </div>
+    <div class="row" style="margin-top:0">
+      <select id="e_supplier"><option value="">供应商（选填）</option>${supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.supplier_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+      <select id="e_scenic"><option value="">关联景区（选填）</option>${scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}" ${p.scenic_id === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
+    </div>
     <label class="muted" style="display:block">玩法亮点（每行一条）</label>
     <textarea id="e_highlights" class="ta-full" rows="3">${esc((rich.highlights || []).join('\n'))}</textarea>
-    <label class="muted" style="display:block">行程介绍</label>
-    <textarea id="e_intro" class="ta-full" rows="4">${esc(rich.intro || '')}</textarea>
+    <label class="muted" style="display:block">行程介绍（富文本 · 小程序详情页图文混排展示）</label>
+    ${richEdit('e_intro', rich.intro || '')}
     <label class="muted" style="display:block">费用包含（每行一条）</label>
     <textarea id="e_includes" class="ta-full" rows="3">${esc((rich.includes || []).join('\n'))}</textarea>
     <label class="muted" style="display:block">集合地点 / 交通</label>
@@ -372,8 +393,9 @@ async function delProductImage(id, idx) {
 async function saveProduct(id) {
   try {
     await api('PUT', '/admin/products/' + id, {
-      intro: $('#e_intro').value, highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value),
+      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value),
       meetingPoint: $('#e_meeting').value || null, safetyNote: $('#e_safety').value || null,
+      supplierId: Number($('#e_supplier')?.value) || null, scenicId: Number($('#e_scenic')?.value) || null,
     })
     toast('已保存'); closeModal(); products()
   } catch (e) { toast(e.message, true) }
@@ -383,20 +405,38 @@ async function addProduct() {
   try {
     if (!$('#p_title').value.trim()) return toast('请填写标题', true)
     await api('POST', '/admin/products', { title: $('#p_title').value.trim(), cat: $('#p_cat').value,
-      priceFrom: Math.round(Number($('#p_price').value) * 100), merchantId: Number($('#p_merchant').value), status: 0 })
+      priceFrom: Math.round(Number($('#p_price').value) * 100), merchantId: Number($('#p_merchant').value), status: 0,
+      supplierId: Number($('#p_supplier').value) || null, scenicId: Number($('#p_scenic').value) || null })
     toast('草稿已保存，请完善素材并添加团期后上架'); products()
   } catch (e) { toast(e.message, true) }
 }
 async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
 function sessionModal(pid, price) {
-  modal('新增团期', `<div class="row"><input id="s_date" type="date" style="width:170px"><input id="s_quota" placeholder="名额" value="24" style="width:100px"><input id="s_price" placeholder="价格（元）" value="${(Number(price)/100).toFixed(2)}" style="width:130px"></div>
-    <p class="muted">出发日建议选周五/周六；名额售完自动拦截（数据库 CHECK 防超卖）</p>`,
+  const yuan = (Number(price) / 100).toFixed(2)
+  const d7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const d10 = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
+  modal('新增团期', `
+    <div class="field"><label>出发日期 * / 最低成团人数</label><div class="row" style="margin:0">
+      <input id="s_date" type="date" value="${d7}" style="width:170px">
+      <input id="s_mingo" type="number" value="10" style="width:100px" title="不足则不成团"></div></div>
+    <div class="field"><label>名额 * / 成人价（元）*</label><div class="row" style="margin:0">
+      <input id="s_quota" type="number" value="24" style="width:100px">
+      <input id="s_price" type="number" step="0.01" value="${yuan}" style="width:130px"></div></div>
+    <div class="field"><label>早鸟价（元，选填）/ 早鸟天数</label><div class="row" style="margin:0">
+      <input id="s_early" type="number" step="0.01" placeholder="如 ${Math.max(1, Math.round(Number(yuan) * 0.85))}" style="width:130px">
+      <input id="s_earlydays" type="number" value="7" style="width:100px" title="出发前 N 天前预订享受早鸟价">
+      <span class="muted">留空 = 不开早鸟</span></div></div>
+    <p class="muted">出发日建议选周五/周六；名额售完自动拦截（数据库 CHECK 防超卖）；早鸟价须低于成人价</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSession(${pid})">保存团期</button>`)
 }
 async function addSession(pid) {
   try {
-    await api('POST', '/admin/sessions', { productId: pid, departDate: $('#s_date').value, quota: Number($('#s_quota').value), priceAdult: Math.round(Number($('#s_price').value) * 100) })
-    closeModal(); toast('团期已添加')
+    if (!$('#s_date').value || !Number($('#s_quota').value) || !Number($('#s_price').value)) return toast('日期、名额、价格必填', true)
+    await api('POST', '/admin/sessions', { productId: pid, departDate: $('#s_date').value, quota: Number($('#s_quota').value),
+      minGo: Number($('#s_mingo').value) || 10, priceAdult: Math.round(Number($('#s_price').value) * 100),
+      earlyPrice: Number($('#s_early').value) ? Math.round(Number($('#s_early').value) * 100) : null,
+      earlyDays: Number($('#s_early').value) ? Number($('#s_earlydays').value) || 7 : null })
+    closeModal(); toast('团期已添加'); products()
   } catch (e) { toast(e.message, true) }
 }
 
@@ -406,16 +446,17 @@ async function merchants() {
   const rows = await api('GET', '/admin/merchants')
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0"><input id="m_name" placeholder="商户名称"><input id="m_city" placeholder="城市码（310118 青浦 / 320508 姑苏）" style="width:250px">
+    <div class="row" style="margin-top:0"><input id="m_name" placeholder="商户名称"><select id="m_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+      <input id="m_city" placeholder="城市码（310118 青浦 / 320508 姑苏）" style="width:250px">
       <input id="m_wx" placeholder="收付通子商户号（选填）" style="width:200px"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button></div>
-    ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
-    ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td class="num">${esc(m.city_code)}</td>
+    ${rows.length ? `<table><thead><tr><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>状态</th></tr></thead><tbody>
+    ${rows.map((m) => `<tr><td class="num">${esc(m.merchant_no)}</td><td class="td-main">${esc(m.name)}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td class="num">${esc(m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() {
-  try { await api('POST', '/admin/merchants', { name: $('#m_name').value.trim(), cityCode: $('#m_city').value.trim(), wxpaySubMchid: $('#m_wx').value.trim() }); toast('商户已创建'); merchants() }
+  try { await api('POST', '/admin/merchants', { name: $('#m_name').value.trim(), cityCode: $('#m_city').value.trim(), wxpaySubMchid: $('#m_wx').value.trim(), kind: $('#m_kind').value }); toast('商户已创建'); merchants() }
   catch (e) { toast(e.message, true) }
 }
 
@@ -478,8 +519,7 @@ async function budgets() {
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🫘</div><div><div class="l">累计预算</div><div class="v num">${totalSum.toLocaleString()}</div><div class="s">豆</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">累计发放</div><div class="v num">${grantedSum.toLocaleString()}</div><div class="s">豆 · ${(grantedSum / Math.max(totalSum, 1) * 100).toFixed(1)}%</div></div></div>
     </div>
-    <div class="row"><input id="b_name" placeholder="批次名，如：12月·消费返豆"><input id="b_total" placeholder="总额（豆）" style="width:150px">
-      <button class="btn primary sm" onclick="addBudget()">＋ 新建批次</button></div>
+    <div class="row"><button class="btn primary sm" onclick="budgetModal()">＋ 新建批次</button><span class="muted">批次 = 发放双闸的第一道闸：批次余额与全局哨兵双重校验</span></div>
     ${rows.length ? `<table><thead><tr><th>批次</th><th>总额</th><th>已发放</th><th>回流</th><th>余量</th><th>状态</th><th>周期</th></tr></thead><tbody>
     ${rows.map((b) => { const left = Number(b.total) + Number(b.returned) - Number(b.granted); const pct = Number(b.granted) / Math.max(Number(b.total), 1) * 100
       return `<tr><td class="td-main">${esc(b.name)}</td><td class="num">${Number(b.total).toLocaleString()}</td>
@@ -489,8 +529,27 @@ async function budgets() {
       <td class="td-sub">${esc(String(b.period_start || '').slice(0, 10))} ~ ${esc(String(b.period_end || '').slice(0, 10))}</td></tr>` }).join('')}</tbody></table>` : emptyBox('暂无预算批次')}
   </div>`
 }
+function budgetModal() {
+  const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 3)
+  modal('新建旅豆预算批次', `
+    <div class="field"><label>批次名称 *</label><input id="b_name" maxlength="40" placeholder="如：12月·消费返豆"></div>
+    <div class="field"><label>预算总额（豆）*</label><input id="b_total" type="number" min="1" placeholder="如 6000000"><p class="muted" style="margin-top:4px">全局哨兵：年度发行总量 600 万豆，超出会被数据库 CHECK 拒绝</p></div>
+    <div class="field"><label>归属渠道 / 用途说明</label><div class="row" style="margin:0">
+      <select id="b_owner"><option value="marketing">市场投放</option><option value="product">产品激励</option><option value="operation">运营活动</option><option value="content">内容约稿</option></select>
+      <input id="b_remark" placeholder="用途备注（选填）" style="width:200px"></div></div>
+    <div class="field"><label>生效周期（选填）</label><div class="row" style="margin:0">
+      <input id="b_start" type="date" style="width:160px"><span class="muted">至</span>
+      <input id="b_end" type="date" value="${nextMonth.toISOString().slice(0, 10)}" style="width:160px"></div></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addBudget()">创建批次</button>`)
+}
 async function addBudget() {
-  try { await api('POST', '/admin/budgets', { name: $('#b_name').value.trim(), total: Number($('#b_total').value) }); toast('批次已创建并生效'); budgets() } catch (e) { toast(e.message, true) }
+  try {
+    if (!$('#b_name').value.trim() || !Number($('#b_total').value)) return toast('批次名与总额必填', true)
+    await api('POST', '/admin/budgets', { name: $('#b_name').value.trim(), total: Number($('#b_total').value),
+      bizOwner: $('#b_owner').value, remark: $('#b_remark').value.trim() || null,
+      periodStart: $('#b_start').value || null, periodEnd: $('#b_end').value || null })
+    toast('批次已创建并生效'); closeModal(); budgets()
+  } catch (e) { toast(e.message, true) }
 }
 
 /* ============ 推广服务商 ============ */
@@ -499,9 +558,8 @@ async function promoters() {
   const rows = await api('GET', '/admin/promoters')
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务商</h2><span class="muted">一级 CPS · 三档 5% / 8% / 12% 封顶（数据库 CHECK 焊死，无层级字段）</span></div>
-    <div class="row"><input id="pr_uid" placeholder="用户 ID" style="width:120px">
-      <select id="pr_tier" style="width:170px"><option value="1">基础档 5%</option><option value="2">优选档 8%</option><option value="3">金牌档 12%</option></select>
-      <button class="btn primary sm" onclick="addPromoter()">开通推广资格</button></div>
+    <div class="row"><button class="btn primary sm" onclick="promoterModal()">＋ 开通推广资格</button>
+      <span class="muted">开通后推广员在小程序 A「推广中心」生成专属海报码 · 一级 CPS 无层级</span></div>
     ${rows.length ? `<table><thead><tr><th>用户</th><th>档位</th><th>费率</th><th>90 天有效成交</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
@@ -509,8 +567,22 @@ async function promoters() {
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
   </div>`
 }
+function promoterModal() {
+  modal('开通推广服务商', `
+    <div class="field"><label>用户 ID *</label><input id="pr_uid" type="number" placeholder="在「权益账户」按昵称搜索用户后取其 ID"></div>
+    <div class="field"><label>合作档位 *</label><select id="pr_tier">
+      <option value="1">基础档 · 5%（按 90 天有效成交口径计佣）</option>
+      <option value="2">优选档 · 8%</option>
+      <option value="3">金牌档 · 12%（平台封顶，数据库 CHECK 焊死）</option></select></div>
+    <p class="muted">规则：一级 CPS、无层级裂变；费率写入后由订单结算自动分账；后续可在列表「调档/冻结」。</p>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addPromoter()">确认开通</button>`)
+}
 async function addPromoter() {
-  try { const r = await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) }); toast('已开通，费率 ' + r.rateBp / 100 + '%'); promoters() } catch (e) { toast(e.message, true) }
+  try {
+    if (!Number($('#pr_uid').value)) return toast('请填写用户 ID', true)
+    const r = await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })
+    toast('已开通，费率 ' + r.rateBp / 100 + '%'); closeModal(); promoters()
+  } catch (e) { toast(e.message, true) }
 }
 
 /* ============ 参数中心 ============ */
@@ -687,7 +759,7 @@ async function content() {
   <div class="card">
     <div class="card-head"><h2>笔记审核</h2><span class="muted">P0 笔记只读 · P1 开放发布后进入此队列（机审+人工）</span></div>
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
-    ${rows.map((n) => `<tr><td>${esc(n.nickname)}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
+    ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
       <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(n.body).slice(0, 50))}</td>
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
@@ -845,17 +917,26 @@ async function phrases() {
     </div></div>`
 }
 window.editPhrase = (id, u, m) => {
-  editPhrase._id = id
-  $('#app').querySelectorAll('input.inp')[0].value = u
-  $('#app').querySelectorAll('input.inp')[1].value = m
-  editPhrase._editing = true
+  modal('配置暗号（产品 #' + id + '）', `
+    <div class="field"><label>用户暗号（游客报给商户的上半句）</label><input id="pu_user" value="${esc(u)}" maxlength="24" placeholder="如：放生桥边等船否"></div>
+    <div class="field"><label>商家暗号（核销员对答的下半句）</label><input id="pu_mer" value="${esc(m)}" maxlength="24" placeholder="如：漕港河里载秋来"></div>
+    <p class="muted">成对出现即视为「已入戏」；两项都清空保存即取消该产品的暗号玩法。</p>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="savePhraseModal(${id})">保存</button>`)
 }
+window.savePhraseModal = async (id) => {
+  try {
+    await api('POST', '/admin/phrases/' + id, { userPhrase: $('#pu_user').value.trim(), merchantPhrase: $('#pu_mer').value.trim() })
+    toast('暗号已保存'); closeModal(); go('phrases')
+  } catch (e) { toast(e.message, true) }
+}
+// 底部快速添加表单（选择未配置产品 → 一对口令）
 window.savePhrase = async () => {
-  const inputs = $('#app').querySelectorAll('input.inp')
-  const pid = editPhrase._editing ? editPhrase._id : $('#phProd').value
-  await api('POST', '/admin/phrases/' + pid, { userPhrase: inputs[0].value, merchantPhrase: inputs[1].value })
-  editPhrase._editing = false
-  go('phrases')
+  try {
+    const pid = $('#phProd')?.value
+    if (!pid) return toast('请先选择产品', true)
+    await api('POST', '/admin/phrases/' + pid, { userPhrase: $('#phUser').value.trim(), merchantPhrase: $('#phMer').value.trim() })
+    toast('暗号已保存'); go('phrases')
+  } catch (e) { toast(e.message, true) }
 }
 async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
@@ -989,29 +1070,143 @@ async function terms() {
 }
 
 /* ============ 约稿任务管理 ============ */
+// ---- 富表单共享组件：富文本编辑器 / 单图上传（各页复用）----
+window.rtExec = (cmd, val, e) => {
+  e.preventDefault()
+  document.execCommand(cmd, false, val || null)
+  const w = e.target.closest('.rt-wrap')
+  if (w) w.querySelector('.rt-edit').focus()
+}
+function rtBtn(cmd, val, label, title) {
+  return `<button type="button" title="${title}" onmousedown="rtExec('${cmd}','${val || ''}',event)">${label}</button>`
+}
+function richEdit(id, html) {
+  return `<div class="rt-wrap"><div class="rt-toolbar">
+    ${rtBtn('bold', '', '<b>B</b>', '加粗')}${rtBtn('italic', '', '<i>I</i>', '斜体')}${rtBtn('underline', '', '<u>U</u>', '下划线')}
+    ${rtBtn('strikeThrough', '', '<s>S</s>', '删除线')}${rtBtn('formatBlock', 'H2', '<b>H2</b>', '大标题')}${rtBtn('formatBlock', 'H3', 'H3', '小标题')}
+    ${rtBtn('formatBlock', 'BLOCKQUOTE', '❝', '引用块')}${rtBtn('insertUnorderedList', '', '•—', '无序列表')}${rtBtn('insertOrderedList', '', '1.', '有序列表')}
+    ${rtBtn('removeFormat', '', '✕清除', '清除格式')}</div>
+    <div id="${id}" class="rt-edit" contenteditable="true">${html || ''}</div></div>`
+}
+window.uploadTo = (id, input) => {
+  const f = input.files && input.files[0]
+  if (!f) return
+  if (f.size > 2 * 1024 * 1024) return toast('图片需在 2MB 内', true)
+  const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
+  const rd = new FileReader()
+  rd.onload = async () => {
+    try {
+      const r = await api('POST', '/admin/uploads', { data: String(rd.result).split(',')[1], ext })
+      const box = document.getElementById(id + '_wrap')
+      document.getElementById(id).value = r.url
+      const img = box.querySelector('img')
+      img.src = r.url; img.style.display = 'block'
+      const empty = box.querySelector('.imgpick-empty')
+      if (empty) empty.style.display = 'none'
+      toast('图片已上传')
+    } catch (e) { toast(e.message, true) }
+  }
+  rd.readAsDataURL(f)
+}
+function imgPicker(id, url, hint) {
+  return `<div class="imgpick" id="${id}_wrap" onclick="document.getElementById('${id}_file').click()" title="点击上传（2MB 内）">
+    <img src="${url || ''}" style="${url ? '' : 'display:none'}">
+    <div class="imgpick-empty" style="${url ? 'display:none' : ''}">＋<small>${hint || '上传图片'}</small></div>
+    <input type="hidden" id="${id}" value="${url || ''}">
+    <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" id="${id}_file" onchange="uploadTo('${id}',this)">
+  </div>`
+}
+
 async function tasks() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/content-tasks')
+  const [list, prods] = await Promise.all([api('GET', '/admin/content-tasks'), api('GET', '/admin/products')])
   const ST = { 0: '<span class="pill warn">待领取</span>', 1: '<span class="pill s20">进行中</span>', 2: '<span class="pill s30">审核中</span>', 3: '<span class="pill ok">已完成</span>' }
-  $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>约稿任务</h2><span class="muted">四态状态机 · 待领取→进行中→审核中→已完成</span></div>
-    <div class="row"><input id="tkTitle" placeholder="任务标题"><input id="tkBrief" placeholder="任务简述" style="width:280px">
-      <input id="tkReward" placeholder="报酬(豆)" style="width:120px"><button class="btn primary sm" onclick="addTask()">新建任务</button></div>
-    ${list.length ? `<table><thead><tr><th>任务</th><th>简述</th><th>报酬</th><th>领取</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${list.map((t) => `<tr><td class="td-main">${esc(t.title)}</td><td class="td-sub">${esc(t.brief || '')}</td>
-      <td class="num">${Number(t.reward_beans)} 豆</td><td class="num">${t.claimed_by ? '用户 #' + Number(t.claimed_by) : '未领取'}</td>
-      <td>${ST[t.status] || t.status}</td>
-      <td><div style="display:flex;gap:4px">${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
-      <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无约稿任务')}</div>`
+  const cnt = (s) => list.filter((t) => t.status === s).length
+  const beans = list.reduce((s, t) => s + Number(t.reward_beans) || 0, 0)
+  const cash = list.reduce((s, t) => s + Number(t.cash_reward) || 0, 0)
+  window.__taskSt = window.__taskSt === undefined ? '' : window.__taskSt
+  const frs = window.__taskSt === '' ? list : list.filter((t) => String(t.status) === window.__taskSt)
+  const TABS = [['', '全部'], ['0', '待领取'], ['1', '进行中'], ['2', '审核中'], ['3', '已完成']]
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">📢</div><div><div class="l">待领取</div><div class="v" style="font-size:20px">${cnt(0)}</div><div class="s">游客可在小程序领取</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">✍️</div><div><div class="l">进行中</div><div class="v" style="font-size:20px">${cnt(1)}</div><div class="s">创作进行中</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#f1e9fd">🔎</div><div><div class="l">审核中</div><div class="v" style="font-size:20px">${cnt(2)}</div><div class="s">等待人工判定</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">已完成</div><div class="v" style="font-size:20px">${cnt(3)}</div><div class="s">奖励已发放</div></div></div>
+    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">💰</div><div><div class="l">悬赏总额</div><div class="v" style="font-size:20px">${beans.toLocaleString()} 豆</div><div class="s">${cash ? '含现金 ' + fen(cash) : '纯旅豆激励'}</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>约稿任务</h2>
+      <div class="cfg-tabs" style="margin:0">${TABS.map(([v, n]) => `<div class="cfg-tab ${String(window.__taskSt) === v ? 'on' : ''}" onclick="window.__taskSt='${v}';tasks()">${n} ${v !== '' ? cnt(Number(v)) : ''}</div>`).join('')}</div>
+      <button class="btn primary sm" onclick="taskModal()">＋ 新建任务</button></div>
+    ${frs.length ? `<table><thead><tr><th>任务</th><th>类型</th><th>报酬</th><th>交付要求</th><th>领取</th><th>截止</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${list.map((t) => `<tr>
+      <td><div style="display:flex;gap:8px;align-items:center">${t.cover_img ? `<img src="${esc(t.cover_img)}" style="width:56px;height:38px;object-fit:cover;border-radius:6px;flex:none">` : ''}
+        <div><div class="td-main">${esc(t.title)}</div><div class="td-sub">${esc((t.tags || '').split(',').filter(Boolean).map((x) => '#' + x.trim()).join(' ') || (t.product_title ? '目标：' + t.product_title : String(t.brief || '').slice(0, 26)))}</div></div></div></td>
+      <td><span class="pill off">${TASK_CAT[t.category] || esc(t.category)}</span></td>
+      <td class="num"><b>${Number(t.reward_beans)}</b> 豆${Number(t.cash_reward) ? '<br>+' + fen(t.cash_reward) : ''}</td>
+      <td class="td-sub">${[t.min_words ? Number(t.min_words) + ' 字' : '', t.min_images ? Number(t.min_images) + ' 图' : '', t.max_participants ? '限 ' + t.max_participants + ' 人' : ''].filter(Boolean).join(' · ') || '不限'}</td>
+      <td class="num">${t.claimed_by ? esc(t.claimer || '用户#' + t.claimed_by) : '待领取'}</td>
+      <td class="td-sub">${t.deadline ? esc(String(t.deadline).slice(0, 10)) : '长期'}</td>
+      <td>${ST[t.status] || ''}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${t.status === 2 ? `<button class="btn primary sm" onclick="taskVerdict(${t.id},true)">通过</button><button class="btn danger sm" onclick="taskVerdict(${t.id},false)">驳回</button>` : ''}
+        ${t.status <= 1 ? `<button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>` : ''}
+        ${t.rich_brief ? `<button class="btn ghost sm" onclick="taskDetail(${t.id})">说明</button>` : ''}
+        <button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button></div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该状态下暂无任务')}</div>`
 }
-async function addTask() {
-  const title = document.getElementById('tkTitle').value.trim()
-  if (!title) return toast('任务标题必填', true)
+const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
+async function taskModal(id) {
+  let t = { category: 'note', reward_beans: 200 }
+  if (id) {
+    t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
+    if (!t) return toast('任务不存在', true)
+  }
+  const prods = await api('GET', '/admin/products')
+  modal(id ? '编辑任务 · ' + esc(t.title) : '新建约稿任务', `
+    <div class="field"><label>任务标题 *</label><input id="tk_title" value="${esc(t.title || '')}" maxlength="48" placeholder="如：朱家角秋日 Vlog 约稿"></div>
+    <div class="field"><label>类型 / 目标商品</label><div class="row" style="margin:0">
+      <select id="tk_cat">${Object.entries(TASK_CAT).map(([v, n]) => `<option value="${v}" ${(t.category || 'note') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <select id="tk_prod"><option value="">关联商品（选填，引导种草）</option>${prods.map((p) => `<option value="${p.id}" ${Number(t.product_id) === p.id ? 'selected' : ''}>${esc(p.title)}</option>`).join('')}</select></div></div>
+    <div class="field"><label>封面图（选填 · 展示在任务卡片，2MB 内）</label>${imgPicker('tk_cover', t.cover_img || '', '上传封面')}</div>
+    <div class="field"><label>一句话简介 *（小程序任务卡展示）</label><input id="tk_brief" value="${esc(t.brief || '')}" maxlength="60" placeholder="如：拍一条 60 秒以内的水乡秋日短视频"></div>
+    <div class="field"><label>详细任务说明（富文本 · 拍摄脚本/评分标准，后台与小程序任务详情展示）</label>
+      ${richEdit('tk_rich', t.rich_brief || '')}</div>
+    <div class="field"><label>奖励</label><div class="row" style="margin:0">
+      <input id="tk_beans" type="number" value="${Number(t.reward_beans) || 200}" style="width:110px"><span class="muted">旅豆</span>
+      <input id="tk_cash" type="number" step="0.01" value="${(Number(t.cash_reward) / 100).toFixed(2)}" style="width:110px"><span class="muted">元现金加奖（选填）</span></div></div>
+    <div class="field"><label>交付要求（0 = 不限）</label><div class="row" style="margin:0">
+      <input id="tk_words" type="number" value="${Number(t.min_words) || ''}" placeholder="最低字数" style="width:110px">
+      <input id="tk_imgs" type="number" value="${Number(t.min_images) || ''}" placeholder="最少图片" style="width:110px">
+      <input id="tk_max" type="number" value="${Number(t.max_participants) || ''}" placeholder="人数上限" style="width:110px"></div></div>
+    <div class="field"><label>投稿截止 / 标签（逗号分隔）</label><div class="row" style="margin:0">
+      <input id="tk_deadline" type="date" value="${t.deadline ? String(t.deadline).slice(0, 10) : ''}" style="width:170px">
+      <input id="tk_tags" value="${esc(t.tags || '')}" placeholder="如：秋日,vlog,水乡" style="width:220px"></div></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveTask(${id || 0})">${id ? '保存修改' : '发布任务'}</button>`)
+}
+async function saveTask(id) {
   try {
-    await api('POST', '/admin/content-tasks', { title, brief: document.getElementById('tkBrief').value.trim(), rewardBeans: Number(document.getElementById('tkReward').value) || 100 })
-    toast('任务已创建'); tasks()
+    const body = { title: $('#tk_title').value.trim(), brief: $('#tk_brief').value.trim(), category: $('#tk_cat').value,
+      coverImg: $('#tk_cover').value || null, richBrief: $('#tk_rich').innerHTML || null,
+      rewardBeans: Number($('#tk_beans').value) || 200, cashReward: Math.round(Number($('#tk_cash').value) * 100) || 0,
+      minWords: Number($('#tk_words').value) || 0, minImages: Number($('#tk_imgs').value) || 0,
+      maxParticipants: Number($('#tk_max').value) || 0, deadline: $('#tk_deadline').value || null,
+      productId: Number($('#tk_prod').value) || null, tags: $('#tk_tags').value.trim() || null }
+    if (!body.title || !body.brief) return toast('标题与一句话简介必填', true)
+    if (id) { await api('PUT', '/admin/content-tasks/' + id, body); toast('任务已更新') } else { await api('POST', '/admin/content-tasks', body); toast('任务已发布') }
+    closeModal(); tasks()
   } catch (e) { toast(e.message, true) }
+}
+async function taskDetail(id) {
+  const t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
+  if (!t) return
+  modal('任务说明 · ' + esc(t.title), `
+    <div class="rt-preview">${t.rich_brief || ''}</div>
+    <div class="row" style="margin-top:12px"><span class="muted">报酬 ${Number(t.reward_beans)} 豆${Number(t.cash_reward) ? ' + ' + fen(t.cash_reward) : ''} ·
+      要求 ${Number(t.min_words) ? Number(t.min_words) + ' 字' : '字数不限'}${Number(t.min_images) ? ' / ' + Number(t.min_images) + ' 图' : ''} ·
+      截止 ${t.deadline ? String(t.deadline).slice(0, 10) : '长期'}${t.product_title ? ' · 目标商品：' + esc(t.product_title) : ''}</span></div>`,
+    `<button class="btn primary" onclick="closeModal()">关闭</button>`)
 }
 async function taskVerdict(id, pass) {
   try { await api('POST', '/admin/content-tasks/' + id + '/verdict', { pass }); toast(pass ? '任务已通过' : '任务已驳回'); tasks() } catch (e) { toast(e.message, true) }
@@ -1227,12 +1422,321 @@ async function retryAsset(id) {
   catch (e) { toast(e.message, true) }
 }
 
-async function web3dash() {
+// ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
+const RESOURCE_ST = { 1: '<span class="pill ok">合作中</span>', 0: '<span class="pill warn">暂缓</span>', 2: '<span class="pill s70">清退</span>' }
+const SUP_KIND = { ticket: '门票', hotel: '住宿', transport: '交通', ground: '地接', catering: '餐饮', other: '其他' }
+const MERCHANT_KIND = { catering: '餐饮', hotel: '住宿', ticket: '门票', transport: '交通', experience: '体验', other: '其他' }
+const SETTLE_MODE = { monthly: '月结', per_order: '单结', prepaid: '预付' }
+
+async function scenics() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const d = await api('GET', '/admin/web3/overview')
+  window.__kw = window.__kw || {}
+  const all = await api('GET', '/admin/scenics')
+  const K = (window.__kw.scenics || '').trim()
+  const rows = K ? all.filter((s) => (s.name + (s.contact_name || '') + (s.city_code || '')).includes(K)) : all
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>链上总览 · 向往自由链</h2><span class="muted">${esc(d.chainMode)} · 双层口径：小程序内=旅豆积分，对外=链上权益凭证</span></div>
+    <div class="card-head"><h2>景区资源</h2>
+      <input id="sc_kw" placeholder="搜名称 / 联系人 / 城市码" style="width:200px" value="${esc(window.__kw.scenics || '')}" onchange="window.__kw.scenics=this.value;scenics()">
+      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 家' : '共 ' + all.length + ' 家'}</span>
+      <span class="muted">G端合作台账 · 可在「商品与团期」把线路关联到景区</span>
+      <button class="btn primary sm" onclick="scenicModal()">＋ 新增景区</button></div>
+    ${rows.length ? `<table style="margin-top:10px"><thead><tr><th>景区</th><th>城市</th><th>等级</th><th>合作模式</th><th>票务对接</th><th>联系人</th><th>条款摘要</th><th>关联商品</th><th>状态</th><th></th></tr></thead><tbody>
+    ${rows.map((s) => `<tr><td class="td-main">${esc(s.name)}</td><td class="num">${esc(s.city_code)}</td><td class="num">${esc(s.scenic_level || '—')}</td>
+      <td>${esc(s.coop_mode || '—')}</td><td class="td-sub">${esc(s.ticket_interface || '—')}</td>
+      <td class="td-sub">${esc(s.contact_name || '—')}${s.contact_phone ? '<br>' + esc(s.contact_phone) : ''}</td>
+      <td class="td-sub">${esc(s.profit_terms || '—')}</td>
+      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${esc(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
+      <td>${RESOURCE_ST[s.status] || ''}</td>
+      <td><button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
+  </div>`
+}
+function scenicModal() {
+  modal('新增景区（G端合作台账）', `
+    <div class="field"><label>景区名称 *</label><input id="sc_name" maxlength="40" placeholder="如 朱家角古镇"></div>
+    <div class="field"><label>城市码 / 等级</label><div class="row" style="margin:0">
+      <input id="sc_city" value="310118" style="width:130px" title="310118 青浦 / 320508 姑苏">
+      <select id="sc_level"><option value="">等级</option><option>5A</option><option>4A</option><option>3A</option><option>非A</option></select></div></div>
+    <div class="field"><label>合作模式 / 票务对接方式</label><div class="row" style="margin:0">
+      <select id="sc_coop"><option value="">合作模式</option><option>票务分成</option><option>联合运营</option><option>引流合作</option></select>
+      <input id="sc_ticket" placeholder="如：二维码核销直连" style="width:200px"></div></div>
+    <div class="field"><label>联系人 / 联系电话</label><div class="row" style="margin:0">
+      <input id="sc_contact" style="width:130px"><input id="sc_phone" style="width:170px"></div></div>
+    <div class="field"><label>分成/合作条款摘要</label><input id="sc_terms" placeholder="如：门票 8 折结算，月结"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addScenic()">入库</button>`)
+}
+async function addScenic() {
+  try {
+    if (!$('#sc_name').value.trim()) return toast('请填写景区名称', true)
+    await api('POST', '/admin/scenics', { name: $('#sc_name').value.trim(), cityCode: $('#sc_city').value.trim() || '310118',
+      level: $('#sc_level').value, coopMode: $('#sc_coop').value, ticketInterface: $('#sc_ticket').value.trim() || null,
+      contactName: $('#sc_contact').value.trim() || null, contactPhone: $('#sc_phone').value.trim() || null,
+      profitTerms: $('#sc_terms').value.trim() || null })
+    toast('景区已入库'); closeModal(); scenics()
+  } catch (e) { toast(e.message, true) }
+}
+async function editScenic(id) {
+  const s = await api('GET', '/admin/scenics').then((rs) => rs.find((x) => x.id === id))
+  if (!s) return toast('景区不存在', true)
+  modal('编辑景区 · ' + esc(s.name), `
+    <div class="field"><label>景区名称</label><input id="es_name" value="${esc(s.name)}"></div>
+    <div class="field"><label>等级 / 合作模式</label><div class="row" style="margin:0">
+      <select id="es_level"><option value="">等级</option>${['5A', '4A', '3A', '非A'].map((l) => `<option ${s.scenic_level === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="es_coop"><option value="">合作模式</option>${['票务分成', '联合运营', '引流合作'].map((l) => `<option ${s.coop_mode === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <div class="field"><label>票务对接方式</label><input id="es_ticket" value="${esc(s.ticket_interface || '')}" placeholder="如：二维码核销直连"></div>
+    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
+      <input id="es_contact" value="${esc(s.contact_name || '')}"><input id="es_phone" value="${esc(s.contact_phone || '')}"></div></div>
+    <div class="field"><label>分成/合作条款摘要</label><input id="es_terms" value="${esc(s.profit_terms || '')}" placeholder="如：门票 8 折结算，月结"></div>
+    <div class="field"><label>合作状态</label><select id="es_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveScenicEdit(${id})">保存</button>`)
+}
+async function saveScenicEdit(id) {
+  try {
+    await api('PUT', '/admin/scenics/' + id, { name: $('#es_name').value.trim(), level: $('#es_level').value,
+      coopMode: $('#es_coop').value, ticketInterface: $('#es_ticket').value.trim() || null,
+      contactName: $('#es_contact').value.trim() || null, contactPhone: $('#es_phone').value.trim() || null,
+      profitTerms: $('#es_terms').value.trim() || null, status: Number($('#es_status').value) })
+    toast('已保存'); closeModal(); scenics()
+  } catch (e) { toast(e.message, true) }
+}
+
+async function suppliers() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  window.__kw = window.__kw || {}
+  const all = await api('GET', '/admin/suppliers')
+  const K = (window.__kw.suppliers || '').trim()
+  const rows = K ? all.filter((s) => (s.name + (s.contact_name || '') + (s.city_code || '') + (s.category || '')).includes(K)) : all
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>供应商</h2>
+      <input id="sp_kw" placeholder="搜名称 / 联系人 / 类目" style="width:200px" value="${esc(window.__kw.suppliers || '')}" onchange="window.__kw.suppliers=this.value;suppliers()">
+      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 家' : '共 ' + all.length + ' 家'}</span>
+      <span class="muted">资源供给方（门票/住宿/交通/地接/餐饮）· 与履约商户分账本管理</span>
+      <button class="btn primary sm" onclick="supplierModal()">＋ 新增供应商</button></div>
+    ${rows.length ? `<table style="margin-top:10px"><thead><tr><th>供应商</th><th>城市</th><th>类目</th><th>资质证照号</th><th>联系人</th><th>结算方式</th><th>备注</th><th>关联商品</th><th>状态</th><th></th></tr></thead><tbody>
+    ${rows.map((s) => `<tr><td class="td-main">${esc(s.name)}</td><td class="num">${esc(s.city_code)}</td>
+      <td><span class="pill off">${esc(SUP_KIND[s.category] || s.category)}</span></td>
+      <td class="td-sub">${esc(s.license_no || '—')}</td>
+      <td class="td-sub">${esc(s.contact_name || '—')}${s.contact_phone ? '<br>' + esc(s.contact_phone) : ''}</td>
+      <td>${esc(SETTLE_MODE[s.settle_mode] || s.settle_mode)}</td>
+      <td class="td-sub">${esc(s.note || '—')}</td>
+      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('supplier',${s.id},'${esc(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
+      <td>${RESOURCE_ST[s.status] || ''}</td>
+      <td><button class="btn ghost sm" onclick="editSupplier(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无供应商：门票/大巴/酒店等资源方在这里入库，商品可关联')}
+  </div>`
+}
+function supplierModal() {
+  modal('新增供应商（资源供给方）', `
+    <div class="field"><label>供应商名称 *</label><input id="sp_name" maxlength="40" placeholder="如 青浦旅游车队"></div>
+    <div class="field"><label>城市码 / 类目</label><div class="row" style="margin:0">
+      <input id="sp_city" value="310118" style="width:130px">
+      <select id="sp_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div></div>
+    <div class="field"><label>资质证照号</label><input id="sp_license" placeholder="如 沪B2K198（道路运输许可）"></div>
+    <div class="field"><label>结算方式 / 联系人 / 电话</label><div class="row" style="margin:0">
+      <select id="sp_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+      <input id="sp_contact" style="width:110px"><input id="sp_phone" style="width:150px"></div></div>
+    <div class="field"><label>备注（车队规模 / 房量 / 供应能力）</label><input id="sp_note" placeholder="如：33 座大巴 4 台，周末需提前锁车"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addSupplier()">入库</button>`)
+}
+async function addSupplier() {
+  try {
+    if (!$('#sp_name').value.trim()) return toast('请填写供应商名称', true)
+    await api('POST', '/admin/suppliers', { name: $('#sp_name').value.trim(), cityCode: $('#sp_city').value.trim() || '310118',
+      category: $('#sp_cat').value, settleMode: $('#sp_settle').value, licenseNo: $('#sp_license').value.trim() || null,
+      contactName: $('#sp_contact').value.trim() || null, contactPhone: $('#sp_phone').value.trim() || null,
+      note: $('#sp_note').value.trim() || null })
+    toast('供应商已入库'); closeModal(); suppliers()
+  } catch (e) { toast(e.message, true) }
+}
+async function editSupplier(id) {
+  const s = await api('GET', '/admin/suppliers').then((rs) => rs.find((x) => x.id === id))
+  if (!s) return toast('供应商不存在', true)
+  modal('编辑供应商 · ' + esc(s.name), `
+    <div class="field"><label>供应商名称</label><input id="ep_name" value="${esc(s.name)}"></div>
+    <div class="field"><label>类目 / 结算方式</label><div class="row" style="margin:0">
+      <select id="ep_cat">${Object.entries(SUP_KIND).map(([v, t]) => `<option value="${v}" ${s.category === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <select id="ep_settle">${Object.entries(SETTLE_MODE).map(([v, t]) => `<option value="${v}" ${s.settle_mode === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>
+    <div class="field"><label>资质证照号</label><input id="ep_license" value="${esc(s.license_no || '')}"></div>
+    <div class="field"><label>联系人 / 电话</label><div class="row" style="margin:0">
+      <input id="ep_contact" value="${esc(s.contact_name || '')}"><input id="ep_phone" value="${esc(s.contact_phone || '')}"></div></div>
+    <div class="field"><label>备注</label><input id="ep_note" value="${esc(s.note || '')}"></div>
+    <div class="field"><label>合作状态</label><select id="ep_status">${[[1, '合作中'], [0, '暂缓'], [2, '清退']].map(([v, t]) => `<option value="${v}" ${Number(s.status) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveSupplierEdit(${id})">保存</button>`)
+}
+async function saveSupplierEdit(id) {
+  try {
+    await api('PUT', '/admin/suppliers/' + id, { name: $('#ep_name').value.trim(), category: $('#ep_cat').value,
+      settleMode: $('#ep_settle').value, licenseNo: $('#ep_license').value.trim() || null,
+      contactName: $('#ep_contact').value.trim() || null, contactPhone: $('#ep_phone').value.trim() || null,
+      note: $('#ep_note').value.trim() || null, status: Number($('#ep_status').value) })
+    toast('已保存'); closeModal(); suppliers()
+  } catch (e) { toast(e.message, true) }
+}
+
+// 资源关联商品明细（景区/供应商 → 商品）
+async function resourceProducts(kind, id, name) {
+  const rows = (await api('GET', '/admin/products')).filter((p) => Number(kind === 'scenic' ? p.scenic_id : p.supplier_id) === Number(id))
+  modal((kind === 'scenic' ? '景区' : '供应商') + '「' + esc(name) + '」关联商品（' + rows.length + '）', rows.length ? `
+    <table><thead><tr><th>商品</th><th>城市</th><th>价格</th><th>状态</th></tr></thead><tbody>
+    ${rows.map((p) => `<tr><td class="td-main">${esc(p.title)}</td><td class="num">${esc(p.city_code)}</td>
+      <td class="money num">${fen(p.price_from)}</td>
+      <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">还没有商品关联此资源；到「商品与团期」的创建/编辑表单里选择即可。</p>',
+    `<button class="btn primary" onclick="closeModal()">知道了</button>`)
+}
+
+// ---- 创作者池（UGC 运营）：内容产出聚合 + 合作标签 ----
+const CREATOR_TAG = { none: '普通', signed: '签约', star: '优质', limited: '限流' }
+async function creators() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  window.__kw = window.__kw || {}
+  const all = await api('GET', '/admin/creators')
+  const K = (window.__kw.creators || '').trim()
+  const rows = K ? all.filter((c) => (c.nickname || '').includes(K) || (c.creator_tag || '').includes(K)) : all
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>创作者池</h2>
+      <input id="cr_kw" placeholder="搜昵称 / 标签" style="width:170px" value="${esc(window.__kw.creators || '')}" onchange="window.__kw.creators=this.value;creators()">
+      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 人' : '共 ' + all.length + ' 人'}</span>
+      ${EXPBTN('creators', '创作者 CSV')}<span class="muted">有内容产出的用户自动入池 · 标签 = 资源合作状态（签约/优质享受激励加权）</span></div>
+    ${rows.length ? `<table><thead><tr><th>用户</th><th>标签</th><th>笔记</th><th>已发布</th><th>点评</th><th>约稿完成</th><th>最近发布</th><th></th></tr></thead><tbody>
+    ${rows.map((c) => `<tr><td class="td-main">${esc(c.nickname || '用户' + c.id)}<div class="td-sub">Lv${c.member_level}${Number(c.status) === 0 ? ' · <span class="pill s70">封禁</span>' : ''}</div></td>
+      <td><span class="pill ${c.creator_tag === 'star' ? 'ok' : (c.creator_tag === 'signed' ? 's40' : (c.creator_tag === 'limited' ? 's70' : 'off'))}">${CREATOR_TAG[c.creator_tag] || esc(c.creator_tag)}</span></td>
+      <td class="num">${c.note_count}</td><td class="num"><b>${c.published_count}</b></td><td class="num">${c.review_count}</td>
+      <td class="num">${c.task_done}</td><td class="td-sub">${c.last_published ? esc(String(c.last_published).slice(0, 10)) : '—'}</td>
+      <td><button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${esc(c.creator_tag || 'none')}')">设标签</button></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(window.__kw.creators ? '没有匹配的创作者' : '池子还空：用户发布笔记或点评后自动入池')}
+  </div>`
+}
+async function setCreatorTag(id, cur) {
+  modal('设置创作者标签 · 用户#' + id, `
+    <div class="field"><label>标签</label><select id="ct_tag">${Object.entries(CREATOR_TAG).map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <p class="muted">签约/优质创作者在约稿任务与内容激励中享受加权（运营口径）；限流用于配合风控。</p>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveCreatorTag(${id})">保存</button>`)
+}
+async function saveCreatorTag(id) {
+  try { await api('PUT', '/admin/creators/' + id + '/tag', { tag: $('#ct_tag').value }); toast('标签已更新'); closeModal(); creators() }
+  catch (e) { toast(e.message, true) }
+}
+
+// ---- 链上总览：链路视图（3D 区块链）+ KPI + 事件动态 ----
+const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>',
+  '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>']
+// 演示模式：纯前端模拟一条 8 节点的链（含分支/待打包/已锚定），不动真库，仅供形态预览
+function mockChain() {
+  const HEX = ['3f9a1c7e5d24b806', '8d02e4b1a97c33f5', '5c77aa190e6db248', 'e21b6d40fa93c715',
+    '9b48f0c26d1eab73', '17d5a93e04fb8c62', '4e6c88d2b17a05f3', 'b0f3126a7de948c1']
+  const root = (i) => HEX[i % 8] + '9f4c1a2b7de50863'
+  const mk = (seq, kind, status, date, leaves) => ({ id: 900 + seq, seq, biz_date: date,
+    merkle_root: root(seq - 1), prev_root: seq === 1 ? null : root(seq - 2), leaf_count: leaves,
+    is_day_close: kind === 'day' ? 1 : 0, status, attempt: 0,
+    chain_tx_ref: status === 2 ? 'DEMO-TX-' + String(seq).padStart(4, '0') : null,
+    anchored_at: status === 2 ? date + ' 09:12:00' : null })
+  return [
+    mk(1, 'mix', 2, '2026-10-27', 9), mk(2, 'day', 2, '2026-10-27', 6), mk(3, 'mix', 2, '2026-10-28', 14),
+    mk(4, 'mix', 1, '2026-10-29', 11), mk(5, 'day', 1, '2026-10-30', 7), mk(6, 'mix', 1, '2026-10-30', 12),
+    mk(7, 'mix', 0, '2026-10-31', 16), mk(8, 'day', 0, '2026-10-31', 8),
+  ]
+}
+function mockBlockEvents(b) {
+  const TYPES = ['order', 'pass_issue', 'bean_grant', 'pass_verify', 'refund', 'settlement', 'bean_deduct']
+  const REF = { order: 'WL2026', pass_issue: 'pass-', pass_verify: 'pass-1-', bean_grant: 'bt-BT', bean_deduct: 'bt-BT', refund: 'RF', settlement: 'settle-' }
+  return Array.from({ length: Math.min(Number(b.leaf_count), 10) }, (_, i) => {
+    const t = TYPES[(b.seq + i) % TYPES.length]
+    return { id: i, leaf_index: i, biz_type: t, biz_ref: REF[t] + String(20261020 + b.seq * 7 + i) + (t === 'order' ? '' : ''), version_no: 1,
+      payload_hash: String(b.merkle_root).slice(0, 12) + (i * 7 % 100).toString().padStart(2, '0') + 'a1b2c3d4e5f60718', status: Number(b.status), created_at: b.biz_date + ' 1' + (i % 10) + ':1' + (i % 6) + ':00' }
+  })
+}
+function toggleDemoChain() {
+  window.__demoChain = !window.__demoChain
+  web3dash()
+}
+function blockNodeHTML(b) {
+  const dayClose = Number(b.is_day_close) === 1
+  const st = Number(b.status)
+  const root8 = String(b.merkle_root).slice(0, 8)
+  const cubeCls = st === 0 ? 'gray' : (dayClose ? 'gold' : (st === 2 ? 'green' : ''))
+  const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
+  return `<div class="${cls}" id="bnode-${b.id}" onclick="openBlock(${b.id})">
+    <div class="cube-zone"><div class="cube ${cubeCls}">
+      <div class="face f1"><b>#${b.seq}</b><i>${root8}</i></div><div class="face f2"></div><div class="face f3"></div>
+      <div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
+    </div></div>
+    <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
+    <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
+    <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
+    <div class="blk-line">根 <code class="dk">${root8}…</code></div>
+    <div class="blk-line">${BLOCK_ST[st] || ''}</div>
+  </div>`
+}
+function blockLinkHTML(prevBranch, curBranch) {
+  const y = (p) => p ? 133 : 59
+  const y1 = y(prevBranch), y2 = y(curBranch)
+  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><u style="top:${y1 - 11}px">»</u></div>`
+  const down = y1 < y2
+  const top = Math.min(y1, y2) - 1
+  const edge = down ? 'border-top:2px dashed var(--cl);border-top-right-radius:12px' : 'border-bottom:2px dashed var(--cl);border-bottom-right-radius:12px'
+  return `<div class="chain-link elbow"><i style="top:${top}px;height:${Math.abs(y2 - y1)}px;${edge};border-right:2px dashed var(--cl)"></i>
+    <b style="top:${y2 - 1}px"></b><u style="top:${y2 - 11}px">▸</u></div>`
+}
+async function web3dash() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
+  const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center')])
+  const demo = !!window.__demoChain
+  const batches = demo ? mockChain() : (c.batches || []).slice().sort((a, b) => a.seq - b.seq)
+  const pendingN = demo ? batches.filter((b) => Number(b.status) === 0).reduce((s, b) => s + Number(b.leaf_count), 0) : Number(d.pendingEvents)
+  const anchorN = demo ? batches.filter((b) => Number(b.status) === 2).reduce((s, b) => s + Number(b.leaf_count), 0) : d.anchoredEvents
+  const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
+  const lastSeq = batches.length ? batches[batches.length - 1].seq : 0
+  const nodes = []
+  batches.forEach((b, i) => {
+    if (i) nodes.push(blockLinkHTML(Number(batches[i - 1].is_day_close) === 1, Number(b.is_day_close) === 1))
+    nodes.push(blockNodeHTML(b))
+  })
+  if (Number(pendingN) > 0) {
+    nodes.push(blockLinkHTML(batches.length ? Number(batches[batches.length - 1].is_day_close) === 1 : false, false))
+    nodes.push(`<div class="chain-node ghost"><div class="cube-zone"><div class="ghost-cube">待打包<br><b>${pendingN}</b> 条</div></div>
+      <div class="blk-title" style="opacity:.75">下一区块</div>
+      <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div></div>`)
+  }
+  const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
+  $('#app').innerHTML = `
+  <div class="chain-panel" id="chainViz">
+    <div class="chain-glow"></div>
+    <div class="chain-head">
+      <span class="chain-name">⛓ 向往自由链 · 链路视图</span>
+      ${demo ? '<span class="chip demo">演示数据</span>' : ''}
+      <span class="chip">适配器 ${esc((d.chain && d.chain.label) || '—')}</span>
+      <span class="chip">区块高度 <b>#${lastSeq}</b></span>
+      <span class="chip">链上事件 <b>${anchorN}/${totalN}</b></span>
+      <span class="chip">待打包 <b>${pendingN}</b></span>
+      <span style="flex:1"></span>
+      <label class="chain-auto"><input type="checkbox" id="chainAuto" ${auto ? 'checked' : ''} onchange="window.__chainAuto=this.checked;chainTimerSetup()"> 30s 自动刷新</label>
+      <button class="chain-btn ${demo ? 'demo-on' : ''}" onclick="toggleDemoChain()">${demo ? '退出演示' : '演示 · 多节点形态'}</button>
+      <button class="chain-btn" onclick="web3dash()">刷新 ↻</button>
+    </div>
+    ${demo ? '<div class="chain-demo-note">演示模式：以下为模拟数据，仅预览多节点链路形态，不代表真实链上状态</div>' : ''}
+    <div class="chain-track">${nodes.join('') || '<div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div>'}</div>
+    <div class="chain-divider"></div>
+    <div class="flow-head">
+      <span class="chain-name" style="font-size:13px">🧭 单流程视角 · 一单六锚</span>
+      <input id="flowNo" class="flow-input" placeholder="输入订单号（如 WL202610311650904810）" onkeydown="if(event.key==='Enter')loadFlow()">
+      <button class="chain-btn" onclick="loadFlow()">追踪此单 ↗</button>
+      <button class="chain-btn" onclick="loadFlowDemo()">演示完整流程</button>
+      <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
+    </div>
+    <div id="flowTrack"></div>
+    <div class="chain-legend">
+      <span><i class="lg blue"></i>业务存证块</span><span><i class="lg gold"></i>账本日终封存块（分支）</span>
+      <span><i class="lg green"></i>已锚定</span><span><i class="lg dash"></i>待打包队列</span>
+      <span class="muted" style="margin-left:auto;color:#7f92bd">prev_root 指向上批根 · 点击区块查看批内事件</span>
+    </div>
+  </div>
+  <div id="blockDetail"></div>
+  <div class="card">
+    <div class="card-head"><h2>链上总览 · 双层口径</h2><span class="muted">${esc(d.chainMode)} · 小程序内=旅豆积分，对外=链上权益凭证</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">锚定批次</div><div class="v" style="font-size:18px">${d.anchoredBatches}/${d.batches}</div><div class="s">Merkle 小时级打包</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">🔗</div><div><div class="l">链上事件</div><div class="v" style="font-size:18px">${d.anchoredEvents}/${d.events}</div><div class="s">待打包 ${d.pendingEvents}</div></div></div>
@@ -1249,7 +1753,167 @@ async function web3dash() {
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
   </div>`
+  if (window.__flowShown && window.__flowData) renderFlow(window.__flowData)
+  chainTimerSetup()
 }
+function chainTimerSetup() {
+  if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
+  if (!window.__chainAuto) return
+  window.__chainTimer = setInterval(() => {
+    if (!document.getElementById('chainViz')) { clearInterval(window.__chainTimer); window.__chainTimer = null; return }
+    web3dash()
+  }, 30000)
+}
+async function openBlock(id) {
+  document.querySelectorAll('.chain-node.active').forEach((n) => n.classList.remove('active'))
+  const el = document.getElementById('bnode-' + id)
+  if (el) el.classList.add('active')
+  const box = document.getElementById('blockDetail')
+  box.innerHTML = `<div class="card">${skel(3)}</div>`
+  const demo = !!window.__demoChain && id >= 900
+  let b, evs = []
+  if (demo) {
+    b = mockChain().find((x) => x.id === id)
+    if (!b) { box.innerHTML = ''; return }
+    evs = mockBlockEvents(b)
+  } else {
+    const r = await api('GET', '/admin/attest/batch/' + id)
+    b = r.batch; evs = r.events || []
+  }
+  const BST = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>', '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定重试</span>', '<span class="pill s70">人工处理</span>']
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-head"><h3>区块 #${b.seq} · 批内事件（${Number(b.leaf_count)}${demo ? '，演示取前 10' : ''}）</h3>
+      <span class="muted">${Number(b.is_day_close) ? '旅豆账本日终封存批 · ' : ''}打包于 ${esc(String(b.biz_date).slice(0, 10))}${demo ? ' · 演示数据' : ''}</span></div>
+    <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
+      <span>Merkle 根 <code>${esc(b.merkle_root)}</code></span>
+      <span>前根 <code>${b.prev_root ? esc(b.prev_root) : '—（链起点）'}</code></span>
+      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code></span>` : ''}
+      ${b.anchored_at ? `<span>锚定时间 ${esc(String(b.anchored_at).slice(0, 19))}</span>` : ''}
+      <span>尝试 ${Number(b.attempt) || 0} 次</span>
+      ${!demo && Number(b.is_day_close) ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/bean-day/${esc(String(b.biz_date).slice(0, 10))}">封存证明 PDF</a>
+        <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${esc(String(b.biz_date).slice(0, 10))}">公开复核</a>` : ''}
+    </div>
+    <table style="margin-top:10px"><thead><tr><th>叶序</th><th>类型</th><th>业务单号</th><th>版本</th><th>payload 指纹</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>
+    ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td><span class="pill off">${esc(e.biz_type)}</span></td>
+      <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no || 1)}</td>
+      <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 16))}…</code></td>
+      <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
+      <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
+        : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline('${esc(e.biz_type)}','${esc(e.biz_ref)}',${e.id})">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
+    </tbody></table>
+  </div>`
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+async function verifyEventInline(bizType, bizRef, id) {
+  const r = await api('GET', '/admin/attest/verify?bizType=' + encodeURIComponent(bizType) + '&bizRef=' + encodeURIComponent(bizRef))
+  const ok = r.found && r.proofValid !== false
+  toast(r.found ? (ok ? '验证通过 · ' + (r.note || '') : '验证失败：证明路径对不上根') : '未找到该单号', !ok)
+}
+// ---- 单流程视角：一单六锚（一笔订单的 6 步链上锚点） ----
+const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>', '<span class="dpill ok">已锚定</span>']
+function flowStepHTML(s, i) {
+  const e = s.ev
+  if (!e) return `<div class="chain-node ghost" style="width:150px">
+    <div class="cube-zone"><div class="ghost-cube" style="width:54px;height:54px;font-size:10px">待产生</div></div>
+    <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div></div>`
+  const st = Number(e.status)
+  const cubeCls = st === 2 ? 'green' : (st === 0 ? 'gray' : '')
+  return `<div class="chain-node" style="width:150px" id="fnode-${i}" onclick="openFlowStep(${i})">
+    <div class="cube-zone"><div class="cube sm ${cubeCls}">
+      <div class="face f1"><b>${s.no}</b><i>${esc(String(e.payload_hash).slice(0, 6))}</i></div>
+      <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
+    </div></div>
+    <div class="blk-title">${s.no} ${esc(s.label)}</div>
+    <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>
+    <div class="blk-line">批 #${e.seq != null ? e.seq : '—'} · ${FLOW_ST[st] || ''}</div>
+  </div>`
+}
+function renderFlow(d) {
+  const o = d.order || {}
+  const yuan = (n) => '¥' + (Number(n) / 100).toFixed(2).replace(/\.00$/, '')
+  const doneN = (d.steps || []).filter((s) => s.ev).length
+  window.__flowData = d; window.__flowShown = true
+  const meta = document.getElementById('flowMeta')
+  if (meta) meta.innerHTML = `${d.demo ? '<span class="chip demo">演示数据</span> ' : ''}${esc(o.orderNo || '')} · ${esc(o.productName || '—')} · ${yuan(o.amountPay || 0)}${o.beanDeducted ? '（豆抵' + o.beanDeducted + '）' : ''} · ${esc(o.statusText || '')} · <b style="color:#eaf1ff">${doneN}/6 锚点</b>`
+  const parts = []
+  ;(d.steps || []).forEach((s, i) => {
+    if (i) parts.push('<div class="chain-link flow-link"><i style="top:59px"></i><u style="top:49px">»</u></div>')
+    parts.push(flowStepHTML(s, i))
+  })
+  ;(d.refunds || []).forEach((e, j) => {
+    parts.push('<div class="chain-link elbow"><i style="top:59px;height:74px;border-top:2px dashed rgba(252,211,77,.5);border-right:2px dashed rgba(252,211,77,.5);border-top-right-radius:12px"></i><b style="top:132px;border-top-color:rgba(252,211,77,.5)"></b><u style="top:122px;color:#fcd34d">▸</u></div>')
+    parts.push(`<div class="chain-node branch" id="fnode-r${j}" onclick="openFlowStep('r${j}')">
+      <div class="cube-zone"><div class="cube sm gold">
+        <div class="face f1"><b>↩</b><i>refund</i></div>
+        <div class="face f2"></div><div class="face f3"></div><div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
+      </div></div>
+      <div class="blk-title">退款冲正</div>
+      <div class="blk-line">${esc(e.biz_ref)} · ${yuan(e.amount || 0)}</div>
+      <div class="blk-line">${FLOW_ST[Number(e.status)] || ''}</div></div>`)
+  })
+  const track = document.getElementById('flowTrack')
+  if (track) track.innerHTML = `<div class="chain-track flow">${parts.join('')}</div>`
+}
+async function loadFlow() {
+  const no = (document.getElementById('flowNo')?.value || '').trim()
+  if (!no) return toast('请输入订单号', true)
+  try {
+    renderFlow(await api('GET', '/admin/attest/flow/' + encodeURIComponent(no)))
+  } catch (e) { toast(e.message, true) }
+}
+function loadFlowDemo() {
+  const mk = (no, label, hint, seq, t, st) => ({ no, label, hint, ev: { biz_type: label, biz_ref: no, version_no: 1, status: st, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: '17d5a93e04fb8c629f4c1a2b7de50863' } })
+  renderFlow({
+    demo: true,
+    order: { orderNo: 'WL20261101DEMO01', status: 50, statusText: '已完成', productName: '朱家角水乡沉浸一日（演示）', qty: 2, amountPay: 39800, beanDeducted: 200, createdAt: '2026-10-31 10:02:11', paidAt: '2026-10-31 10:03:05', completedAt: '2026-10-31 15:40:22' },
+    steps: [
+      mk('bt-DEMO1001', '旅豆抵扣', '下单锁豆', 12, '2026-10-31 10:02:30', 1),
+      mk('WL20261101DEMO01', '支付成功', '订单事实入链', 12, '2026-10-31 10:03:05', 2),
+      mk('pass-901', '出票', '权益凭证 ×2', 13, '2026-10-31 10:03:40', 2),
+      mk('pass-901-1', '核销', '到店扫码', 13, '2026-10-31 11:25:02', 1),
+      mk('bt-DEMO1002', '返豆', '消费奖励', 14, '2026-10-31 15:40:22', 1),
+      mk('settle-31', '结算', '五口径分账', 20, '2026-11-03 01:00:10', 0),
+    ],
+    refunds: [],
+  })
+}
+function openFlowStep(i) {
+  const d = window.__flowData
+  if (!d) return
+  document.querySelectorAll('.chain-node.active').forEach((n) => n.classList.remove('active'))
+  const el = document.getElementById('fnode-' + i)
+  if (el) el.classList.add('active')
+  const isRefund = String(i).startsWith('r')
+  const s = isRefund ? null : (d.steps || [])[i]
+  const e = isRefund ? (d.refunds || [])[Number(String(i).slice(1))] : s.ev
+  if (!e) return
+  const box = document.getElementById('blockDetail')
+  const o = d.order || {}
+  const BST = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>', '<span class="pill ok">已锚定</span>']
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-head"><h3>${isRefund ? '退款冲正' : (s.no + ' ' + esc(s.label))} · 链上锚点${d.demo ? '（演示数据）' : ''}</h3>
+      <span class="muted">${esc(o.orderNo || '')} · ${esc(o.statusText || '')}</span></div>
+    <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
+      <span>类型 <code>${esc(e.biz_type)}</code></span>
+      <span>业务单号 <code>${esc(e.biz_ref)}</code></span>
+      <span>版本 v${Number(e.version_no || 1)}</span>
+      <span>${BST[Number(e.status)] || ''}</span>
+      <span>所在批次 ${e.seq != null ? '#' + e.seq : '待打包'}</span>
+      <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code></span>
+      <span>payload 指纹 <code>${esc(String(e.payload_hash).slice(0, 16))}…</code></span>
+      <span>时间 ${esc(String(e.created_at).slice(0, 19))}</span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      ${!d.demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核页 ↗</a>
+        <a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/order/${encodeURIComponent(e.biz_ref)}">存证报告 PDF ↗</a>` : ''}
+      <span class="muted">六步与业务同事务写入 · 小时级打包 · 上链只有哈希指纹+时间戳</span>
+    </div>
+  </div>`
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
 async function pointassets() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/web3/point-assets')
@@ -1374,31 +2038,48 @@ async function downloadExport(what) {
 const EXPBTN = (what, label) => `<button class="btn ghost sm" style="margin-left:auto" onclick="downloadExport('${what}')">⬇ 导出${label || ''}</button>`
 
 /* ============ 常见问题 / 轮播管理（低垂果实 #5）============ */
+const FAQ_CAT = ['预订', '出行', '旅豆', '退款', '会员', '其他']
 async function faqs() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   const d = await api('GET', '/admin/faqs')
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>常见问题管理</h2><span class="muted">小程序「我的-常见问题」展示位 · 按序号排序</span></div>
-    <div class="row">
-      <input id="fq" placeholder="问题" style="width:260px">
-      <input id="fa" placeholder="答案" style="width:340px">
-      <input id="fs" type="number" placeholder="序号" style="width:70px">
-      <button class="btn primary sm" onclick="addFaq()">新增</button>
-    </div>
-    <table style="margin-top:10px"><thead><tr><th>序号</th><th>问题</th><th>答案</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${d.map((f) => `<tr><td class="num">${f.sort}</td><td>${esc(f.question)}</td><td class="td-sub">${esc(String(f.answer).slice(0, 60))}…</td>
+    <div class="card-head"><h2>常见问题管理</h2><span class="muted">小程序「我的-常见问题」展示位 · 分类 + 热门标记 + 排序</span>
+      <button class="btn primary sm" onclick="faqModal()">＋ 新增问题</button></div>
+    <table><thead><tr><th>分类</th><th>问题</th><th>答案摘要</th><th>热门</th><th>序号</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.map((f) => `<tr><td><span class="pill off">${esc(f.category || '通用')}</span></td>
+      <td class="td-main">${esc(f.question)}</td><td class="td-sub">${esc(String(f.answer).slice(0, 46))}…</td>
+      <td>${Number(f.is_hot) ? '<span class="pill s10">🔥 热门</span>' : '<span class="pill off">—</span>'}</td>
+      <td class="num">${f.sort}</td>
       <td>${f.status === 1 ? '<span class="pill ok">上架</span>' : '<span class="pill s70">下架</span>'}</td>
-      <td><button class="btn ghost sm" onclick="toggleFaq(${f.id}, ${f.status === 1 ? 0 : 1})">${f.status === 1 ? '下架' : '上架'}</button>
-      <button class="btn ghost sm" onclick="delFaq(${f.id})">删除</button></td></tr>`).join('')}
+      <td><button class="btn ghost sm" onclick="faqModal(${f.id})">编辑</button>
+      <button class="btn ghost sm" onclick="toggleFaq(${f.id}, ${f.status === 1 ? 0 : 1})">${f.status === 1 ? '下架' : '上架'}</button>
+      <button class="btn ghost sm" onclick="delFaq(${f.id})">删除</button></td></tr>`).join('') || `<tr><td colspan="7" class="td-sub">暂无问题</td></tr>`}
     </tbody></table>
   </div>`
 }
-async function addFaq() {
-  const question = document.getElementById('fq').value.trim(), answer = document.getElementById('fa').value.trim()
+async function faqModal(id) {
+  let f = { category: '通用', sort: (await api('GET', '/admin/faqs')).length + 1 }
+  if (id) {
+    f = (await api('GET', '/admin/faqs')).find((x) => x.id === id)
+    if (!f) return toast('问题不存在', true)
+  }
+  modal(id ? '编辑问题 · ' + esc(f.question) : '新增常见问题', `
+    <div class="field"><label>问题 *</label><input id="fq_q" value="${esc(f.question || '')}" maxlength="60" placeholder="如：旅豆怎么获得？"></div>
+    <div class="field"><label>分类 / 排序</label><div class="row" style="margin:0">
+      <select id="fq_cat">${FAQ_CAT.map((c) => `<option ${f.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+      <input id="fq_sort" type="number" value="${Number(f.sort) || 0}" style="width:90px" title="数字越小越靠前"></div></div>
+    <div class="field"><label>答案 *（支持多段，小程序按行展示）</label><textarea id="fq_a" rows="5" placeholder="第一行：直接结论&#10;第二行起：具体规则/步骤">${esc(f.answer || '')}</textarea></div>
+    <div class="field"><label><input type="checkbox" id="fq_hot" ${Number(f.is_hot) ? 'checked' : ''} style="width:auto"> 标记为热门问题（列表置顶标识）</label></div>
+    <div class="field"><label>状态</label><select id="fq_st"><option value="1" ${Number(f.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(f.status) === 0 ? 'selected' : ''}>下架</option></select></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveFaq(${id || 0})">保存</button>`)
+}
+async function saveFaq(id) {
+  const question = $('#fq_q').value.trim(), answer = $('#fq_a').value.trim()
   if (!question || !answer) return toast('问题与答案必填', true)
-  await api('POST', '/admin/faqs', { question, answer, sort: Number(document.getElementById('fs').value) || 0 })
-  toast('已新增'); faqs()
+  const body = { question, answer, sort: Number($('#fq_sort').value) || 0, category: $('#fq_cat').value, isHot: $('#fq_hot').checked ? 1 : 0, status: Number($('#fq_st').value) }
+  if (id) { await api('POST', '/admin/faqs/' + id + '/update', body); toast('已保存') } else { await api('POST', '/admin/faqs', body); toast('已新增') }
+  closeModal(); faqs()
 }
 async function toggleFaq(id, status) { await api('POST', '/admin/faqs/' + id + '/update', { status }); faqs() }
 async function delFaq(id) {
@@ -1408,30 +2089,53 @@ async function delFaq(id) {
 async function banners() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   const d = await api('GET', '/admin/banners')
+  const live = (b) => Number(b.status) === 1 && (!b.start_at || new Date(b.start_at) <= new Date()) && (!b.end_at || new Date(b.end_at) >= new Date())
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>轮播媒体管理</h2><span class="muted">小程序首页轮播位 · 图片支持外链或 /uploads 路径</span></div>
-    <div class="row">
-      <input id="bt" placeholder="标题" style="width:160px">
-      <input id="bi" placeholder="图片 URL" style="width:260px">
-      <input id="bl" placeholder="跳转路径（选填）" style="width:220px">
-      <input id="bs" type="number" placeholder="序号" style="width:70px">
-      <button class="btn primary sm" onclick="addBanner()">新增</button>
-    </div>
-    <table style="margin-top:10px"><thead><tr><th>预览</th><th>标题</th><th>跳转</th><th>序号</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${d.map((b) => `<tr><td><img src="${esc(b.image)}" style="width:72px;height:40px;object-fit:cover;border-radius:6px"></td>
-      <td>${esc(b.title)}</td><td class="td-sub">${esc(b.link || '—')}</td><td class="num">${b.sort}</td>
-      <td>${b.status === 1 ? '<span class="pill ok">上架</span>' : '<span class="pill s70">下架</span>'}</td>
-      <td><button class="btn ghost sm" onclick="toggleBanner(${b.id}, ${b.status === 1 ? 0 : 1})">${b.status === 1 ? '下架' : '上架'}</button>
-      <button class="btn ghost sm" onclick="delBanner(${b.id})">删除</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无轮播（首页将隐藏轮播位）</td></tr>'}
+    <div class="card-head"><h2>轮播媒体管理</h2><span class="muted">小程序首页轮播位 · 图片上传 + 投放窗口 + 排序</span>
+      <button class="btn primary sm" onclick="bannerModal()">＋ 新增轮播</button></div>
+    <table><thead><tr><th>预览</th><th>标题</th><th>跳转</th><th>投放窗口</th><th>序号</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.map((b) => `<tr><td><img src="${esc(b.image)}" style="width:88px;height:48px;object-fit:cover;border-radius:6px"></td>
+      <td><div class="td-main">${esc(b.title)}</div>${b.sub_title ? `<div class="td-sub">${esc(b.sub_title)}</div>` : ''}</td>
+      <td class="td-sub">${esc(b.link || '不跳转')}</td>
+      <td class="td-sub">${b.start_at || b.end_at ? esc(String(b.start_at || '').slice(0, 10)) + ' ~ ' + esc(String(b.end_at || '').slice(0, 10)) : '长期'}</td>
+      <td class="num">${b.sort}</td>
+      <td>${live(b) ? '<span class="pill ok">投放中</span>' : (Number(b.status) === 1 ? '<span class="pill warn">未在窗口</span>' : '<span class="pill s70">已下架</span>')}</td>
+      <td><button class="btn ghost sm" onclick="bannerModal(${b.id})">编辑</button>
+      <button class="btn ghost sm" onclick="toggleBanner(${b.id}, ${b.status === 1 ? 0 : 1})">${b.status === 1 ? '下架' : '上架'}</button>
+      <button class="btn ghost sm" onclick="delBanner(${b.id})">删除</button></td></tr>`).join('') || '<tr><td colspan="7" class="td-sub">暂无轮播（首页将隐藏轮播位）</td></tr>'}
     </tbody></table>
   </div>`
 }
-async function addBanner() {
-  const title = document.getElementById('bt').value.trim(), image = document.getElementById('bi').value.trim()
-  if (!title || !image) return toast('标题与图片必填', true)
-  await api('POST', '/admin/banners', { title, image, link: document.getElementById('bl').value.trim(), sort: Number(document.getElementById('bs').value) || 0 })
-  toast('已新增'); banners()
+async function bannerModal(id) {
+  let b = { sort: (await api('GET', '/admin/banners')).length + 1 }
+  if (id) {
+    b = (await api('GET', '/admin/banners')).find((x) => x.id === id)
+    if (!b) return toast('轮播不存在', true)
+  }
+  modal(id ? '编辑轮播 · ' + esc(b.title) : '新增轮播', `
+    <div class="field"><label>主标题 * / 副标题（角标）</label><div class="row" style="margin:0">
+      <input id="bn_t" value="${esc(b.title || '')}" maxlength="30" placeholder="如：秋日水乡特惠季" style="width:180px">
+      <input id="bn_st" value="${esc(b.sub_title || '')}" maxlength="24" placeholder="如：立减 ¥50" style="width:120px"></div></div>
+    <div class="field"><label>轮播图 *（建议 750×360，2MB 内）</label>${imgPicker('bn_img', b.image || '', '上传轮播图')}</div>
+    <div class="field"><label>跳转路径（选填：/c/tours/商品ID 或活动页路径）</label><input id="bn_link" value="${esc(b.link || '')}" placeholder="留空 = 纯展示"></div>
+    <div class="field"><label>投放窗口（选填，留空 = 长期）</label><div class="row" style="margin:0">
+      <input id="bn_start" type="date" value="${b.start_at ? String(b.start_at).slice(0, 10) : ''}" style="width:160px">
+      <span class="muted">至</span>
+      <input id="bn_end" type="date" value="${b.end_at ? String(b.end_at).slice(0, 10) : ''}" style="width:160px"></div></div>
+    <div class="field"><label>排序 / 状态</label><div class="row" style="margin:0">
+      <input id="bn_sort" type="number" value="${Number(b.sort) || 0}" style="width:90px" title="数字越小越靠前">
+      <select id="bn_status"><option value="1" ${Number(b.status) === 1 ? 'selected' : ''}>上架</option><option value="0" ${Number(b.status) === 0 ? 'selected' : ''}>下架</option></select></div></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveBanner(${id || 0})">保存</button>`)
+}
+async function saveBanner(id) {
+  const title = $('#bn_t').value.trim(), image = $('#bn_img').value
+  if (!title || !image) return toast('标题与轮播图必填', true)
+  const body = { title, subTitle: $('#bn_st').value.trim() || null, image, link: $('#bn_link').value.trim() || null,
+    sort: Number($('#bn_sort').value) || 0, status: Number($('#bn_status').value),
+    startAt: $('#bn_start').value || null, endAt: $('#bn_end').value || null }
+  if (id) { await api('POST', '/admin/banners/' + id + '/update', body); toast('已保存') } else { await api('POST', '/admin/banners', body); toast('已新增') }
+  closeModal(); banners()
 }
 async function toggleBanner(id, status) { await api('POST', '/admin/banners/' + id + '/update', { status }); banners() }
 async function delBanner(id) {
@@ -1564,9 +2268,10 @@ document.addEventListener('DOMContentLoaded', () => boot(), { once: true })
 async function handleRisk(id) {
   try { await api('POST', '/admin/risk/' + id + '/handle', {}); toast('风控事件已标记处理'); risk() } catch (e) { toast(e.message, true) }
 }
-async function editMerchant(id, name, cityCode, wxpaySubMchid) {
+async function editMerchant(id, name, cityCode, wxpaySubMchid, kind) {
   modal('编辑商户', `
     <div class="field"><label>商户名称</label><input id="em_name" value="${esc(name)}"></div>
+    <div class="field"><label>类目</label><select id="em_kind">${Object.entries(MERCHANT_KIND).map(([v, t]) => `<option value="${v}" ${(kind || 'other') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <div class="field"><label>城市码</label><input id="em_city" value="${esc(cityCode)}"></div>
     <div class="field"><label>收付通子商户号（选填）</label><input id="em_wx" value="${esc(wxpaySubMchid)}"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button>
@@ -1580,7 +2285,8 @@ async function saveMerchantEdit(id) {
     await api('POST', '/admin/merchants/' + id, {
       name: document.getElementById('em_name').value.trim(),
       cityCode: document.getElementById('em_city').value.trim(),
-      wxpaySubMchid: document.getElementById('em_wx').value.trim()
+      wxpaySubMchid: document.getElementById('em_wx').value.trim(),
+      kind: document.getElementById('em_kind').value
     })
     closeModal(); toast('商户已更新'); merchants()
   } catch (e) { toast(e.message, true) }
