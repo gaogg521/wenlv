@@ -17,7 +17,12 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 async function bootstrap() {
   // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
-  await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
+  const secrets = await import('./infra/secrets.mjs') // SECRETS_KEY 格式错误会在这里直接报错退出
+  if (secrets.keySource === 'derived' && process.env.NODE_ENV === 'production') {
+    console.warn('[secrets] 生产环境未设置 SECRETS_KEY：凭据主密钥正由 JWT_SECRET 派生，更换 JWT_SECRET 会导致已保存凭据无法解密。\n' +
+      '          运行 node scripts/secrets-key.mjs current 取得当前主密钥，原样设为 SECRETS_KEY 即可（已存凭据无需重新加密）。')
+  }
+  await secrets.warmSecrets().catch(() => {})
   // 后台超管种子（首次启动；密码 ADMIN_INIT_PASSWORD，默认 admin123，登录后必须修改）
   const c = await one('SELECT COUNT(*) c FROM admin_user')
   if (Number(c.c) === 0) {

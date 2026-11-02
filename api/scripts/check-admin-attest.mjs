@@ -1,5 +1,5 @@
 // 后台页面离线渲染检查（不开浏览器、不登录）：
-// 用桩接管 DOM/fetch，把 admin/app.js 里的页面函数真跑一遍，断言关键字段都渲染出来、没有 undefined / NaN 泄漏。
+// 用桩接管 DOM/fetch，把后台页面脚本（index.html 里 core.js + pages/*.js）里的页面函数真跑一遍，断言关键字段都渲染出来、没有 undefined / NaN 泄漏。
 // 这比"语法通过"强：模板里少一个字段、数组没判空、字段名写错，都会在这里炸出来。
 // 用法：node scripts/check-admin-attest.mjs
 import fs from 'node:fs'
@@ -36,11 +36,18 @@ const localStorageStub = {
 const locationStub = { hash: '', reload() {}, replace() {}, href: '', search: '' }
 const fetchStub = (url, opt) => fetch(String(url).startsWith('http') ? url : API + url, opt)
 
-// ── 3. 在沙箱里执行 admin/app.js，取出页面函数 ──
-const src = fs.readFileSync(path.join(ROOT, 'admin', 'app.js'), 'utf8')
+// ── 3. 在沙箱里按 index.html 的顺序执行 core.js + pages/*.js，取出页面函数 ──
+// api() 在 workspace.js（外壳，依赖真实 DOM）里定义，这里用等价的最小实现代替
+const html = fs.readFileSync(path.join(ROOT, 'admin', 'index.html'), 'utf8')
+const files = [...html.matchAll(/<script src="\/admin-ui\/((?:core|pages\/[\w-]+)\.js)"><\/script>/g)].map((m) => m[1])
+const apiShim = `async function api(method, p, body) {
+  const r = await fetch(p, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN }, body: body ? JSON.stringify(body) : undefined })
+  const j = await r.json(); if (j.code !== 0) throw new Error(j.msg || '请求失败'); return j.data
+}\n`
+const src = apiShim + files.map((f) => fs.readFileSync(path.join(ROOT, 'admin', f), 'utf8')).join('\n')
 const sandbox = new Function(
   'document', 'localStorage', 'location', 'fetch', 'window', 'navigator', 'alert', 'prompt', 'confirm', 'setTimeout',
-  `${src}\n;return { attest, web3dash, pointassets, badges, wallets, vcPage, chainAssetsPage, contract, go }`)
+  `${src}\n;return { attest, web3dash, pointassets, badges, wallets, vcPage, chainAssetsPage, contract }`)
 
 let ctx
 try {
@@ -48,7 +55,7 @@ try {
     { addEventListener() {}, matchMedia: () => ({ matches: false }) }, { userAgent: 'node' },
     () => {}, () => null, () => true, (fn) => fn())
 } catch (e) {
-  console.error('执行 admin/app.js 失败：', e.message)
+  console.error('执行后台页面脚本失败：', e.message)
   process.exit(1)
 }
 
@@ -89,12 +96,17 @@ check(h.includes('/open/report/bean-day/'), '日终表带「证明 PDF」下载�
 check(h.includes('/verify?date='), '日终表带「公开复核」入口')
 
 console.log('== 单号验证面板（接口侧证据）==')
-const sample = await fetch(`${API}/admin/attest/center`, { headers: { authorization: 'Bearer ' + token } })
-  .then((r) => r.json()).then((j) => (j.data.recent || []).find((x) => x.biz_type === 'order')?.biz_ref)
+const H = { headers: { authorization: 'Bearer ' + token } }
+const verifyOrder = (ref) => fetch(`${API}/admin/attest/verify?bizType=order&bizRef=${encodeURIComponent(ref)}`, H).then((r) => r.json())
+// 先看最近事件；最近事件可能被大量勋章/凭证事件挤满，再从已完成订单里找一笔已打包的
+let sample = await fetch(`${API}/admin/attest/center`, H).then((r) => r.json()).then((j) => (j.data.recent || []).find((x) => x.biz_type === 'order')?.biz_ref)
+let v = sample ? await verifyOrder(sample) : null
+if (!v?.data?.leafPath) {
+  sample = null
+  const orders = await fetch(`${API}/admin/orders`, H).then((r) => r.json()).then((j) => (j.data || []).filter((o) => Number(o.status) === 50).slice(0, 40))
+  for (const o of orders) { const r = await verifyOrder(o.order_no); if (r.data?.leafPath?.length) { sample = o.order_no; v = r; break } }
+}
 if (sample) {
-  const v = await fetch(`${API}/admin/attest/verify?bizType=order&bizRef=${encodeURIComponent(sample)}`, {
-    headers: { authorization: 'Bearer ' + token },
-  }).then((r) => r.json())
   check(v.data?.proofValid === true, `单号 ${sample} 的 proof 自检通过`, v.data?.note)
   check(Array.isArray(v.data?.leafPath) && v.data.leafPath.length > 0, '返回含 leafPath（页面据此显示"本地重算通过"）')
   check(!!v.data?.prevRoot || v.data?.batchSeq === 1, '前根有值，或本批就是链起点')

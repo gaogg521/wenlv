@@ -1,4 +1,5 @@
-// 工作台公共交互层。与业务页面分离，保留原接口和角色授权。
+// 工作台外壳：请求封装 api、页面路由 go、订单列表、导出、表格与弹窗无障碍增强。
+// 这些全局函数只在这里定义（app.js 不再有同名旧实现）；页面渲染函数在 app.js 等文件中。
 (() => {
   const app = document.getElementById('app')
   const descriptions = {
@@ -23,7 +24,7 @@
     wallets: '用户积分、等级、勋章与存证事件的汇总视图。', vc: '可携出的旅行凭证：签发、验签与吊销。',
     terms: '后台术语与小程序合规用语的对照表。',
   }
-  const renderers = { dash, orders, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { dash, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
@@ -34,7 +35,7 @@
   const pageSize = 15
   const allowedItems = () => [...document.querySelectorAll('#nav [data-p]')]
   const titleFor = key => key === 'dash' ? '经营概览' : allowedItems().find(el => el.dataset.p === key)?.textContent.trim() || '工作台'
-  downloadExport = async function (what) {
+  window.downloadExport = async function (what) {
     try {
       const result = await api('GET', '/admin/export/' + encodeURIComponent(what))
       if (typeof result.csv !== 'string' || !result.filename) throw new Error('导出文件内容不完整，请重试')
@@ -46,7 +47,7 @@
   }
 
   // 所有请求都给出超时与 HTTP 错误反馈；提交期间锁定触发按钮。
-  api = async function (method, path, body) {
+  window.api = async function (method, path, body) {
     const button = method !== 'GET' && document.activeElement?.matches('button') ? document.activeElement : null
     const wasDisabled = button?.disabled
     if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true') }
@@ -75,7 +76,7 @@
     }
   }
 
-  go = function (key, options = {}) {
+  window.go = function (key, options = {}) {
     if (!TOKEN) return Promise.resolve()
     const item = allowedItems().find(el => el.dataset.p === key)
     if (!item) {
@@ -120,12 +121,12 @@
   }
 
   // 订单：完整状态、本次加载数据的搜索与分页，筛选不会反复请求。
-  orders = async function () {
+  window.orders = async function () {
     app.innerHTML = `<div class="card">${skel(5)}</div>`
     orderRows = await api('GET', '/admin/orders')
     renderOrders()
   }
-  renderers.orders = orders
+  renderers.orders = window.orders
   function renderOrders() {
     const needle = orderQuery.toLowerCase()
     const filtered = orderRows.filter(o => (!orderStatus || Number(o.status) === orderStatus) && [o.order_no, o.title, o.nickname, o.city_code, o.contact_name].some(value => String(value || '').toLowerCase().includes(needle)))
@@ -169,15 +170,16 @@
   })
   new MutationObserver(() => enhanceTables(app)).observe(app, { childList: true, subtree: true })
 
-  const originalClose = closeModal
-  closeModal = function () {
-    originalClose(); document.body.classList.remove('dialog-open')
-    if (previousFocus?.isConnected) previousFocus.focus()
-    previousFocus = null
-  }
+  // 弹窗打开时补齐 dialog 语义并移入焦点；关闭（#modalRoot 清空）后把焦点还给打开前的元素。
   new MutationObserver(() => {
     const dialog = document.querySelector('#modalRoot .modal, #modalRoot .drawer')
-    if (!dialog || dialog.hasAttribute('role')) return
+    if (!dialog) {
+      if (!document.getElementById('eeRoot')) document.body.classList.remove('dialog-open') // 资料编辑器抽屉自管
+      if (previousFocus?.isConnected) previousFocus.focus()
+      previousFocus = null
+      return
+    }
+    if (dialog.hasAttribute('role')) return
     previousFocus = document.activeElement
     dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.tabIndex = -1
     const heading = dialog.querySelector('h3'); if (heading) { heading.id = 'workspaceDialogTitle'; dialog.setAttribute('aria-labelledby', heading.id) }
@@ -222,15 +224,4 @@
   })
   document.getElementById('refreshPage').onclick = event => { event.currentTarget.disabled = true; go(current, { history: false }) }
   window.addEventListener('popstate', () => go(location.hash.slice(1), { history: false }))
-  // 账号登录后 boot() 生成角色菜单；接管其首个页面并恢复合法地址。
-  const originalBoot = boot
-  boot = function () {
-    const requested = location.hash.slice(1)
-    originalBoot()
-    if (TOKEN) {
-      const destination = allowedItems().some(item => item.dataset.p === requested) ? requested : allowedItems()[0]?.dataset.p
-      history.replaceState(null, '', '#' + destination)
-      go(destination, { history: false })
-    }
-  }
 })()

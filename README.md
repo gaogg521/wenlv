@@ -6,8 +6,8 @@
 
 | 目录 | 是什么 |
 |---|---|
-| `api/` | Node 服务：游客端 `/c`、商户端 `/m`、后台 `/admin`、支付回调、公开复核页 `/verify` |
-| `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`） |
+| `api/` | Node 服务：游客端 `/c`、商户端 `/m`、后台 `/admin`、支付回调、公开复核页 `/verify`（路由按领域在 `api/src/routes/`） |
+| `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`）：`core.js` 公共层、`pages/` 各栏目、`workspace.js` 外壳 |
 | `mini-a/` | 游客微信小程序 |
 | `mini-b/` | 商户微信小程序 |
 | `api/db/migration/` | 表结构迁移（V1–V32；V15/V16 编号空缺是历史原因，不是漏文件） |
@@ -36,7 +36,7 @@ JWT_SECRET=dev PASS_SECRET=dev npm start
 | `DB_HOST` `DB_PORT` `DB_USER` `DB_PASS` `DB_NAME` | 数据库 | `127.0.0.1` / `3306` / `root` / `root` / `wanderlust` |
 | `PUBLIC_BASE` | 对外访问基址（图片、复核链接、PDF 二维码）。真机/外网**必须**设置为 HTTPS 域名 | 按请求头推断 |
 | `BIZ_TZ` | 业务时区：旅豆日终根、批次业务日按此切日 | `Asia/Shanghai` |
-| `SECRETS_KEY` | 凭据加密主密钥（64 位十六进制）；未设置时由 `JWT_SECRET` 派生，**换 JWT_SECRET 会导致已保存凭据无法解密** | — |
+| `SECRETS_KEY` | 凭据加密主密钥（64 位十六进制）；未设置时由 `JWT_SECRET` 派生，**换 JWT_SECRET 会导致已保存凭据无法解密**。生产设置方法：`node scripts/secrets-key.mjs current` 取当前密钥原样设置；轮换用 `rotate` | — |
 
 支付、小程序凭据在后台「集成中心」保存；**链凭据在后台「可信存证 → 链接入中心」保存**（均为 AES-256-GCM 加密落库，保存即生效，无需重启）。环境变量仍可用作兜底。
 
@@ -44,7 +44,7 @@ JWT_SECRET=dev PASS_SECRET=dev npm start
 
 ```bash
 cd api
-npm test                                  # 语法检查 + Web3/退改单元测试 + 小程序用语合规 + 小程序↔后台映射完整性（不碰数据库）
+npm test                                  # 语法 + import 路径 + Web3/退改/凭据密钥单元测试 + 小程序用语合规 + 小程序↔后台映射完整性（不碰数据库）
 DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心、业务规则（需服务在跑，且与服务同一 JWT_SECRET）
 DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作灌演示数据
 ```
