@@ -3,14 +3,27 @@ const api = require('../../../utils/api')
 
 Page({
   data: {
-    notes: [], tasks: { open: [], mine: [] },
+    notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
     title: '', bodyHtml: '', bodyText: '',
     pubMsg: '', showPreview: false, formats: {},
   },
   async onShow() { await this.fetch(); this.fetchTasks() },
 
   async fetch() {
-    try { await api.ensureLogin(); this.setData({ notes: (await api.request('/c/notes')).map(n => ({ ...n, statusText: ({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核'})[n.status] || '处理中' })) }) } catch (e) {}
+    try {
+      await api.ensureLogin()
+      const [notes,reports]=await Promise.all([api.request('/c/notes'),api.request('/c/content-reports')])
+      this.setData({loadError:'',notes:notes.map(n=>({...n,statusText:({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核',4:'已下架'})[n.status]||'处理中',appealText:n.appeal_status==null?'':({0:'申诉复核中',1:'申诉通过，恢复展示',2:'申诉未通过，维持下架'})[n.appeal_status]})),reports:reports.map(r=>({...r,statusText:r.status===2&&r.note_status===2?'处理后经复核恢复展示':({0:'待处理',1:'举报不成立',2:'已处理下架'})[r.status]}))})
+    } catch (e) {this.setData({loadError:e.msg||'加载失败，请重试'})}
+  },
+  openAppeal(e) {this.setData({appealNoteId:e.currentTarget.dataset.id,appealReason:'',appealMsg:''})},
+  onAppealReason(e) {this.setData({appealReason:e.detail.value})},
+  async submitAppeal() {
+    if(this.data.appealBusy)return
+    this.setData({appealBusy:true,appealMsg:''})
+    try{const r=await api.request('/c/notes/'+this.data.appealNoteId+'/appeal','POST',{reason:this.data.appealReason});this.setData({appealNoteId:null,appealMsg:r.duplicate?'该次下架已有申诉记录':'申诉已提交，请等待复核'});await this.fetch()}
+    catch(e){this.setData({appealMsg:e.msg||'提交失败，请重试'})}
+    finally{this.setData({appealBusy:false})}
   },
   async fetchTasks() {
     try {

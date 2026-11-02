@@ -13,7 +13,7 @@ async function content() {
       <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(noteExcerpt(n.body))}</td>
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
-      <td>${[0, 1].includes(n.status) ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}</td></tr>`).join('')}
+      <td>${[0, 1].includes(n.status) ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('暂无待审内容（P1 开放笔记发布后进入此队列）')}
   </div>
   <div class="card">

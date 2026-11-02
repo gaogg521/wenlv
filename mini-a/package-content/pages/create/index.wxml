@@ -50,10 +50,26 @@
 <view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
 
 <view class="sec-title">我的作品（{{notes.length}}）</view>
+<view class="note" wx:if="{{loadError}}">{{loadError}}<button bindtap="fetch">重新加载</button></view>
 <view class="card" wx:if="{{notes.length}}">
   <block wx:for="{{notes}}" wx:key="id">
     <view class="kv" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">{{item.statusText}} ›</text></view>
     <view class="reject-tip" wx:if="{{item.status === 3 && item.reject_reason}}"><view class="reject-h">未通过原因</view>{{item.reject_reason}}</view>
+    <view class="reject-tip" wx:if="{{item.status === 4}}"><view class="reject-h">下架原因</view>{{item.offline_reason || '请联系平台了解详情'}}</view>
+    <view class="note" wx:if="{{item.appealText}}">{{item.appealText}} {{item.appeal_resolution}}</view>
+    <button class="appeal-open" wx:if="{{item.can_appeal}}" bindtap="openAppeal" data-id="{{item.id}}">申请复核</button>
+    <view wx:if="{{appealNoteId === item.id}}">
+      <textarea class="appeal-reason" value="{{appealReason}}" bindinput="onAppealReason" maxlength="300" placeholder="请说明申诉理由与事实依据（4—300 字）"></textarea>
+      <button class="appeal-submit" bindtap="submitAppeal" loading="{{appealBusy}}" disabled="{{appealBusy}}">提交申诉</button>
+    </view>
   </block>
 </view>
+<view class="note" wx:if="{{appealMsg}}">{{appealMsg}}</view>
+<view class="sec-title">我的举报（最近 30 条）</view>
+<view class="card" wx:for="{{reports}}" wx:key="id">
+  <view>{{item.title || '旅行笔记'}} · {{item.statusText}}</view>
+  <view class="note">举报原因：{{item.reason}}</view>
+  <view class="note" wx:if="{{item.resolution}}">处理反馈：{{item.resolution}}</view>
+</view>
+<view class="note" wx:if="{{!reports.length}}">暂无举报记录</view>
 <view class="note">领取任务后，选择一篇已发布的作品提交审核。审核通过后发放任务奖励。</view>

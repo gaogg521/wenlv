@@ -5,6 +5,7 @@ import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/web3-integrity.mjs') // 会写库：只能对隔离库运行
 import mysql from 'mysql2/promise'
 import { packBatch, closeBeanDay, reconcile, verifyProof } from '../src/domain/attest.mjs'
+import { bizDay } from '../src/infra/bizdate.mjs'
 
 const API = process.env.API_BASE || 'http://127.0.0.1:8080'
 const db = await mysql.createConnection({
@@ -28,7 +29,7 @@ const ok = (cond, msg, extra) => {
 console.log('== 0. 准备：把待打包事件打包（生成 proof）==')
 const packed = await packBatch()
 console.log('  packed batch#' + packed.batchId, 'seq', packed.seq, 'leaves', packed.leaves)
-const today = new Date().toISOString().slice(0, 10)
+const today = bizDay()
 // 当日封存允许重封（force）：测试要反复运行，历史日一旦封存即不可变
 const dayClose = await closeBeanDay(today, { force: true })
 console.log('  bean-day', dayClose.bizDate, dayClose.skipped ? '已封存' : (dayClose.ok ? 'root ' + String(dayClose.root).slice(0, 10) : '拒绝:' + dayClose.reason))

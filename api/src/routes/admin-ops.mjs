@@ -127,8 +127,8 @@ const adminSys = {
 
 const adminEco = {
   'GET /admin/content': async (req) => {
-    await requireAdmin(req, ['super', 'ops', 'review'])
-    return await q('SELECT c.*, u.nickname, u.creator_tag FROM content_note c JOIN user_account u ON u.id = c.user_id ORDER BY c.id DESC LIMIT 100')
+    const a=await requireAdmin(req, ['super', 'ops', 'review']),sc=scopeFilter(a,'p.city_code')
+    return await q(`SELECT c.*,u.nickname,u.creator_tag FROM content_note c JOIN user_account u ON u.id=c.user_id LEFT JOIN tour_product p ON p.id=c.related_product_id WHERE 1=1${sc.sql} ORDER BY c.id DESC LIMIT 100`,sc.params)
   },
 
   // 评价管理（内容审核工作区）
@@ -148,15 +148,20 @@ const adminEco = {
 
   // 笔记审核材料：全文（清洗后）、图片、字数、机审结果、作者、被哪些约稿任务引用
   'GET /admin/content/:id': async (req) => {
-    await requireAdmin(req, ['super', 'ops', 'review'])
-    const n = await one('SELECT * FROM content_note WHERE id = ?', [req.params.id])
+    const a=await requireAdmin(req, ['super', 'ops', 'review'])
+    const n = await one('SELECT n.*,p.city_code FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=?', [req.params.id])
     if (!n) throw new BizError(1004, '笔记不存在')
+    if(a.scopeCity&&a.scopeCity!==n.city_code)throw new BizError(1003,'仅可查看本城内容')
     const author = await one(`SELECT u.id, u.nickname, u.creator_tag,
         (SELECT COUNT(*) FROM content_note x WHERE x.user_id = u.id AND x.status = 2) published,
         (SELECT COUNT(*) FROM content_note x WHERE x.user_id = u.id AND x.status = 3) rejected
       FROM user_account u WHERE u.id = ?`, [n.user_id])
+    if(a.scopeCity) {
+      const counts=await one('SELECT SUM(x.status=2) published,SUM(x.status=3) rejected FROM content_note x JOIN tour_product p ON p.id=x.related_product_id WHERE x.user_id=? AND p.city_code=?',[n.user_id,a.scopeCity])
+      author.published=Number(counts.published||0);author.rejected=Number(counts.rejected||0)
+    }
     const product = n.related_product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [n.related_product_id]) : null
-    const tasks = await q('SELECT t.id, t.title, e.status FROM content_task_entry e JOIN content_task t ON t.id = e.task_id WHERE e.note_id = ?', [n.id])
+    const tasks = await q(`SELECT t.id,t.title,e.status FROM content_task_entry e JOIN content_task t ON t.id=e.task_id LEFT JOIN tour_product p ON p.id=t.product_id WHERE e.note_id=?${a.scopeCity?' AND p.city_code=?':''}`,a.scopeCity?[n.id,a.scopeCity]:[n.id])
     return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
   },
   'POST /admin/content/:id/verdict': async (req) => {
@@ -169,6 +174,8 @@ const adminEco = {
     if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
     const st = passed ? 2 : 3
     return tx(async (c) => {
+      const row=await c.one('SELECT n.id,p.city_code FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? FOR UPDATE',[req.params.id])
+      if(a.scopeCity&&a.scopeCity!==row?.city_code)throw new BizError(1003,'仅可处理本城内容')
       const n = await c.upd(`UPDATE content_note SET status = ?, reject_reason = ?, published_at = IF(? = 2, NOW(3), published_at)
         WHERE id = ? AND status IN (0,1)`, [st, passed ? null : reason, st, req.params.id])
       if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')

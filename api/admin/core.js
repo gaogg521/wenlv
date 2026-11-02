@@ -28,7 +28,7 @@ const ICONS = {
 // 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
 const NAV = [
   ['工作台', [['dash', '驾驶舱', 'dash']]],
-  ['内容数据', [['contentdash', '内容看板', 'content']]],
+  ['内容数据', [['contentdash', '内容看板', 'content'], ['contentcases', '举报与申诉', 'audit']]],
   ['合伙人', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements']]],
   ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
@@ -130,8 +130,10 @@ function boot() {
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
   for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentdash')
+  for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentcases')
   const allowed = access[ME?.role]
   $('#nav').innerHTML = NAV.map(([g, items]) => {
+    items = items.filter(([k]) => k !== 'contentcases' || ['super', 'ops', 'review', 'city_partner'].includes(ME?.role))
     items = items.filter(([k]) => k !== 'partnerperf' || ['super', 'ops', 'finance', 'city_partner'].includes(ME?.role))
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
