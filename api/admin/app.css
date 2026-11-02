@@ -206,6 +206,7 @@ tbody tr:last-child td { border-bottom: none; }
   --s: 64px; height: 124px; position: relative; display: flex; align-items: center; justify-content: center; perspective: 520px; }
 .cube-zone.t-green { --edge: #7ef0ac; --fill: rgba(34,197,94,.10); --core: rgba(110,240,160,.55); --glow: rgba(34,197,94,.5); }
 .cube-zone.t-gold  { --edge: #fde68a; --fill: rgba(251,191,36,.10); --core: rgba(253,224,120,.6);  --glow: rgba(251,191,36,.5); }
+.cube-zone.t-red   { --edge: #fca5a5; --fill: rgba(239,68,68,.10); --core: rgba(252,165,165,.55); --glow: rgba(239,68,68,.5); }
 .cube-zone.t-gray  { --edge: #aab8dc; --fill: rgba(120,140,190,.07); --core: rgba(170,185,220,.35); --glow: rgba(120,140,190,.3); }
 .cube-zone.sm { --s: 50px; height: 108px; }
 .cube-zone::before { content: ''; position: absolute; left: 50%; top: 50%; width: calc(var(--s) * 2.3); height: calc(var(--s) * 2.3);
@@ -220,12 +221,12 @@ tbody tr:last-child td { border-bottom: none; }
   background:
     linear-gradient(var(--fill), var(--fill)),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cg fill='%23dbeaff' fill-opacity='.42' font-family='monospace' font-size='6'%3E%3Ctext x='1' y='6'%3E0110%3C/text%3E%3Ctext x='17' y='6'%3E1001%3C/text%3E%3Ctext x='1' y='14'%3E1010%3C/text%3E%3Ctext x='17' y='14'%3E0101%3C/text%3E%3Ctext x='1' y='22'%3E0011%3C/text%3E%3Ctext x='17' y='22'%3E1100%3C/text%3E%3Ctext x='1' y='30'%3E1001%3C/text%3E%3Ctext x='17' y='30'%3E0110%3C/text%3E%3C/g%3E%3C/svg%3E") 0 0/16px 16px; }
-.cube3d .fc:nth-child(1) { transform: translateZ(calc(var(--s) / 2)); }
-.cube3d .fc:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
-.cube3d .fc:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
-.cube3d .fc:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2)); }
-.cube3d .fc:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); }
-.cube3d .fc:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
+.cube3d .fc:nth-child(1) { transform: translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 0.00s; }
+.cube3d .fc:nth-child(2) { transform: rotateY(180deg) translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 0.35s; }
+.cube3d .fc:nth-child(3) { transform: rotateY(90deg) translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 0.70s; }
+.cube3d .fc:nth-child(4) { transform: rotateY(-90deg) translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 1.05s; }
+.cube3d .fc:nth-child(5) { transform: rotateX(90deg) translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 1.40s; }
+.cube3d .fc:nth-child(6) { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2 + var(--gap))); animation-delay: 1.75s; }
 /* 内核：小一号的实心发光立方体，与外框反向缓转，形成"盒中盒"的层次 */
 .cube3d .core { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; transform-style: preserve-3d;
   animation: coreTurn 9s linear infinite; }
@@ -334,20 +335,6 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
   border-style: dashed; opacity: .28; transform: rotateX(72deg) rotateY(-24deg); animation: orbitSpin2 9s linear infinite reverse; }
 @keyframes orbitSpin { from { transform: rotateX(72deg) rotateZ(0); } to { transform: rotateX(72deg) rotateZ(360deg); } }
 @keyframes orbitSpin2 { from { transform: rotateX(72deg) rotateY(-24deg) rotateZ(0); } to { transform: rotateX(72deg) rotateY(-24deg) rotateZ(360deg); } }
-/* 数据光束：自立方体顶部向上的细光柱，有脉冲上行 */
-.fx-beam { position: absolute; left: 50%; bottom: 50%; width: 2px; height: calc(var(--s) * 1.05); margin-left: -1px; pointer-events: none;
-  background: linear-gradient(0deg, var(--edge), transparent); opacity: .5;
-  -webkit-mask: linear-gradient(0deg, #000 0 30%, transparent 30% 45%, #000 45% 60%, transparent 60%) 0 0/100% 200%;
-          mask: linear-gradient(0deg, #000 0 30%, transparent 30% 45%, #000 45% 60%, transparent 60%) 0 0/100% 200%;
-  animation: beamUp 1.8s linear infinite; }
-@keyframes beamUp { from { -webkit-mask-position: 0 0; mask-position: 0 0; } to { -webkit-mask-position: 0 -200%; mask-position: 0 -200%; } }
-/* 上浮粒子 */
-.fx-spark { position: absolute; left: 50%; top: 58%; width: 3px; height: 3px; border-radius: 50%; background: #fff; pointer-events: none;
-  box-shadow: 0 0 6px var(--edge); opacity: 0; animation: sparkUp 3.6s ease-out infinite; }
-.fx-spark.s1 { margin-left: -22px; animation-delay: .3s; }
-.fx-spark.s2 { margin-left: 16px; animation-delay: 1.5s; }
-.fx-spark.s3 { margin-left: -4px; animation-delay: 2.6s; }
-@keyframes sparkUp { 0% { opacity: 0; transform: translateY(0) scale(.6); } 15% { opacity: .95; } 100% { opacity: 0; transform: translateY(calc(var(--s) * -1.3)) scale(1.1); } }
 /* 底座涟漪 */
 .fx-ripple { position: absolute; left: 50%; bottom: 4px; width: calc(var(--s) * 1.6); height: 16px; margin-left: calc(var(--s) * -.8);
   border-radius: 50%; border: 1px solid var(--edge); pointer-events: none; opacity: 0; animation: ripple 2.8s ease-out infinite; }
@@ -374,19 +361,14 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .chain-link s.tail { left: auto; right: 26px; animation: packetTail 2.4s cubic-bezier(.5,0,.5,1) infinite .6s; }
 @keyframes packetRun { 0% { left: 0; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: calc(100% - 30px); opacity: 0; } }
 @keyframes packetTail { 0% { right: 26px; opacity: 0; } 15% { opacity: 1; } 100% { right: 0; opacity: 0; } }
-/* 面板扫描光幕 + LIVE 指示 */
-.chain-scan-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 12px; z-index: 1; }
-.chain-scan { position: absolute; top: 0; bottom: 0; left: 0; width: 140px; pointer-events: none; z-index: 1;
-  background: linear-gradient(90deg, transparent, rgba(127,176,255,.08) 45%, rgba(190,225,255,.16) 50%, rgba(127,176,255,.08) 55%, transparent);
-  animation: panelScan 7s linear infinite; }
-@keyframes panelScan { from { left: -160px; } to { left: 100%; } }
 .chain-live { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: 2px; color: #7ef0ac;
   border: 1px solid rgba(126,240,172,.4); border-radius: 999px; padding: 2px 9px; background: rgba(34,197,94,.1); }
 .chain-live i { width: 6px; height: 6px; border-radius: 50%; background: #7ef0ac; box-shadow: 0 0 8px #7ef0ac; animation: livePulse 1.4s ease-in-out infinite; }
 @keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
 @media (prefers-reduced-motion: reduce) {
-  .cube3d .fc::after, .fx-orbit, .fx-beam, .fx-spark, .fx-ripple, .chain-link s, .chain-scan, .chain-live i { animation: none; }
-  .fx-spark, .fx-ripple, .chain-link s, .chain-scan { display: none; }
+  .cube3d .fc::after, .cube3d .fc, .cube3d .core i, .fx-orbit, .fx-ripple, .chain-link s, .chain-live i { animation: none; }
+  .fx-ripple, .chain-link s { display: none; }
+  .cube3d { transition: none; }
 }
 
 /* ---- 投稿审核抽屉（约稿任务 / 笔记共用）---- */
@@ -416,3 +398,53 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .rv-foot textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical; }
 .rv-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .rv-actions .btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* ===== 区块本体特效（参考：发光棱线 + 细密网格面 + 实心内核）=====
+   悬停/聚焦/选中：六个面沿法线外推（展开态），内核增亮，瞄准角标收紧 */
+@property --gap { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.cube3d { --gap: 0px; transition: --gap .45s cubic-bezier(.2,.8,.2,1); }
+.chain-node:hover .cube3d, .chain-node:focus-visible .cube3d, .chain-node.active .cube3d { --gap: calc(var(--s) * .16); }
+.chain-node:focus-visible { outline: none; }
+/* 面网格：细密方格，像图纸一样覆盖每个面 */
+.cube3d .fc::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .38;
+  background:
+    repeating-linear-gradient(0deg, var(--edge) 0 1px, transparent 1px calc(var(--s) / 9)),
+    repeating-linear-gradient(90deg, var(--edge) 0 1px, transparent 1px calc(var(--s) / 9)); }
+.chain-node:hover .cube3d .fc::before, .chain-node.active .cube3d .fc::before { opacity: .6; }
+/* 棱线流光：六个面依次点亮，像能量沿棱线绕行 */
+.cube3d .fc { animation: edgeFlow 2.1s ease-in-out infinite; }
+@keyframes edgeFlow { 0%, 70%, 100% { border-color: var(--edge); box-shadow: 0 0 8px var(--glow), inset 0 0 14px var(--glow); }
+  35% { border-color: #fff; box-shadow: 0 0 14px var(--edge), 0 0 26px var(--glow), inset 0 0 22px var(--glow); } }
+.cube-zone.t-gray .cube3d .fc { animation-duration: 4.2s; }
+/* 呼吸内核：亮度随呼吸起伏；悬停时更亮 */
+.cube3d .core i { animation: coreBreath 2.6s ease-in-out infinite; }
+@keyframes coreBreath { 0%, 100% { box-shadow: 0 0 8px var(--glow); filter: brightness(1); } 50% { box-shadow: 0 0 18px var(--edge), 0 0 30px var(--glow); filter: brightness(1.35); } }
+.chain-node:hover .cube3d .core i, .chain-node.active .cube3d .core i { background: var(--edge); box-shadow: 0 0 18px #fff, 0 0 32px var(--glow); }
+/* 失败区块：红色告警，棱线闪烁更急 */
+.cube-zone.t-red .cube3d .fc { animation-duration: 1.1s; }
+
+/* ===== 区块悬停信息卡 ===== */
+.chain-tip { position: fixed; z-index: 120; width: 340px; max-width: calc(100vw - 16px); pointer-events: none;
+  background: linear-gradient(160deg, rgba(14,28,78,.97), rgba(9,18,52,.97)); color: #dbe6ff; font-size: 12px; line-height: 1.6;
+  border: 1px solid rgba(127,176,255,.45); border-radius: 12px; padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(3,10,40,.55), 0 0 0 1px rgba(127,176,255,.12) inset, 0 0 24px rgba(72,140,255,.25); }
+.chain-tip[hidden] { display: none; }
+.chain-tip::before { content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, #9cc3ff, transparent); }
+.tip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; color: #fff; }
+.tip-kind { font-size: 10.5px; letter-spacing: 1px; color: #9cc3ff; border: 1px solid rgba(127,176,255,.4); border-radius: 4px; padding: 0 6px; }
+.tip-kind.gold { color: #fde68a; border-color: rgba(252,211,77,.5); }
+.tip-head .dpill { margin-left: auto; }
+.tip-head .dpill + .dpill { margin-left: 4px; }
+.tip-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; border-bottom: 1px dashed rgba(127,176,255,.12); }
+.tip-row span { color: #8ea6dc; flex: none; }
+.tip-row b { color: #eef4ff; font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.chain-tip code { background: rgba(80,130,255,.16); color: #8fd0ff; border-radius: 4px; padding: 0 4px; font-size: 11px; }
+.tip-hash { padding: 4px 0; border-bottom: 1px dashed rgba(127,176,255,.12); }
+.tip-hash span { display: block; color: #8ea6dc; font-size: 11px; }
+.tip-hash code { display: block; margin-top: 2px; word-break: break-all; line-height: 1.5; }
+.tip-err { margin-top: 6px; color: #fca5a5; font-size: 11.5px; }
+.tip-mix { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tip-mix span { background: rgba(80,130,255,.14); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: #b9cdf5; }
+.tip-mix b { color: #fff; }
+.tip-foot { margin-top: 8px; font-size: 11px; color: #6f86c4; }

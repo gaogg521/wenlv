@@ -85,6 +85,7 @@
       if (!key) return Promise.resolve()
     }
     const ticket = ++generation
+    if (typeof chainTipHide === 'function') chainTipHide() // 切页时收起链路悬停卡
     current = key
     app.classList.toggle('dashboard', key === 'dash')
     closeModal()
