@@ -41,6 +41,7 @@ const m = {
       u = await one('SELECT * FROM user_account WHERE mini_b_openid = ?', [ses.openid])
     }
     if (!ses.openid) throw new BizError(1002, '微信登录失败，请重试')
+    if (Number(u.status) === 0) throw new BizError(1003, '账号已被停用，请联系平台')
     const staff = await one(`SELECT s.merchant_id, s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
       WHERE s.user_id = ? AND s.status = 1 AND m.status = 1 AND (? IS NULL OR s.merchant_id = ?) ORDER BY s.id LIMIT 1`, [u.id, merchantId || null, merchantId || null])
     if (!staff) {

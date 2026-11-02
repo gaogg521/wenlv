@@ -11,11 +11,25 @@ import { integrations } from './routes/integrations.mjs'
 import { web3 } from './routes/web3.mjs'
 import { open } from './routes/open.mjs'
 import { callback } from './routes/callback.mjs'
+import { people } from './routes/people.mjs'
 
-export const routes = { ...c, ...m, ...admin, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...c, ...m, ...admin, ...people, ...adminSys, ...adminEco, ...adminFin, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
+    return handler(req, res)
+  }
+}
+// 游客账号被后台冻结后立即失效：每个 /c 请求复核账号状态（已登录的会话也会被拒）
+for (const [key, handler] of Object.entries(routes)) {
+  if (!key.split(' ')[1]?.startsWith('/c/') || key === 'POST /c/auth/login') continue
+  routes[key] = async (req, res) => {
+    let u = null
+    try { u = requireUser(req) } catch { /* 未登录的由原 handler 自行处理 */ }
+    if (u && u.end === 'c') {
+      const r = await one('SELECT status FROM user_account WHERE id = ?', [u.uid])
+      if (r && Number(r.status) === 0) throw new BizError(1003, '账号已被停用，请联系客服')
+    }
     return handler(req, res)
   }
 }

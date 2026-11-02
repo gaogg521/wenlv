@@ -44,6 +44,7 @@ const c = {
       })
       u = await one('SELECT * FROM user_account WHERE id = ?', [uid])
     }
+    if (Number(u.status) === 0) throw new BizError(1003, '账号已被停用，请联系客服')
     return { token: jwtSign({ uid: u.id, end: 'c' }, 7 * 24 * 3600), user: { id: u.id, nickname: u.nickname, memberLevel: u.member_level, growth: u.growth_value } }
   },
 
