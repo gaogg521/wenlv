@@ -178,7 +178,7 @@ async function main() {
 
   // 周结算 + 后台总览
   step('财务-周颖', '周一出账：生成本周结算单')
-  const gen = await api('POST', '/admin/settlements/generate', { period: '2026-10-W43' }, finance)
+  const gen = await api('POST', '/admin/settlements/generate', { period: '2026-W43' }, finance)
   step('商户-安麓大夫第', '小程序 B 查看周账单 → 确认结算')
   for (const id of gen.settlementIds) {
     try { await api('POST', '/m/settlements/' + id + '/confirm', { note: '账单无误' }, merch) } catch (e) { /* 无该商户结算单则跳过 */ }

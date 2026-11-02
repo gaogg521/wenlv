@@ -35,6 +35,9 @@ export async function completeOrder(orderNo) {
     orderNo, amountPay: amt, status: 50, merchantId: Number(o.merchant_id),
     qty: Number(o.qty), cityCode: o.city_code,
   }, null, 50)
+  // 勋章自动规则（完成订单数 / 打卡城市数）：附加奖励，失败不影响订单完成
+  const { evaluateSafe } = await import('./domain/badge.mjs')
+  await evaluateSafe(Number(o.user_id))
   return true
 }
 
@@ -58,7 +61,8 @@ async function tickCommission() {
 
 async function tickSettlement() {
   if (new Date().getDay() !== 1) return // 周一
-  const period = new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7)
+  const { settlementPeriod } = await import('./infra/bizdate.mjs')
+  const period = settlementPeriod() // ISO 周，如 2026-W45（周一出账即上一周）
   const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
       UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
       WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账

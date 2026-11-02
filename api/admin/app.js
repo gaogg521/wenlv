@@ -382,36 +382,6 @@ async function products() {
 let EDIT_P = null
 async function editProduct(id) { return entityEditor('product', id, { onSaved: () => products() }) }
 function lines(v) { return v.split('\n').map((s) => s.trim()).filter(Boolean) }
-async function uploadProductImage(id, input) {
-  const f = input.files[0]
-  if (!f) return
-  if (f.size > 2 * 1024 * 1024) return toast('图片需在 2MB 内', true)
-  const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
-  const rd = new FileReader()
-  rd.onload = async () => {
-    try {
-      const data = String(rd.result).split(',')[1]
-      await api('POST', `/admin/products/${id}/images`, { data, ext })
-      toast('图片已上传'); closeModal(); editProduct(id)
-    } catch (e) { toast(e.message, true) }
-  }
-  rd.readAsDataURL(f)
-}
-async function delProductImage(id, idx) {
-  try { await api('DELETE', `/admin/products/${id}/images?idx=${idx}`); closeModal(); editProduct(id) } catch (e) { toast(e.message, true) }
-}
-async function saveProduct(id) {
-  try {
-    await api('PUT', '/admin/products/' + id, {
-      intro: $('#e_intro').innerHTML || '', highlights: lines($('#e_highlights').value), includes: lines($('#e_includes').value), excludes: lines($('#e_excludes').value),
-      meetingPoint: $('#e_meeting').value || null, safetyNote: $('#e_safety').value || null,
-      supplierId: Number($('#e_supplier')?.value) || null, scenicId: Number($('#e_scenic')?.value) || null,
-    })
-    toast('已保存'); closeModal(); products()
-  } catch (e) { toast(e.message, true) }
-}
-function productModal() { return entityEditor('product', null, { onSaved: () => products() }) }
-async function addProduct() { return entityEditor('product', null, { onSaved: () => products() }) }
 async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
 function sessionModal(pid, priceFen) { return entityEditor('session', null, { parentId: pid, defaults: priceFen ? { price_adult: priceFen / 100 } : {}, onSaved: () => sessionsDrawer(pid) }) }
 /** 团期管理：列出某线路全部团期，逐个用完整编辑器维护 */
@@ -425,17 +395,6 @@ async function sessionsDrawer(pid) {
       <td class="num">${x.booked}/${x.quota}<div class="td-sub">${x.min_go} 人成团</div></td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
       <td><button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期：点「新增团期」')}`)
 }
-async function addSession(pid) {
-  try {
-    if (!$('#s_date').value || !Number($('#s_quota').value) || !Number($('#s_price').value)) return toast('日期、名额、价格必填', true)
-    await api('POST', '/admin/sessions', { productId: pid, departDate: $('#s_date').value, quota: Number($('#s_quota').value),
-      minGo: Number($('#s_mingo').value) || 10, priceAdult: Math.round(Number($('#s_price').value) * 100),
-      earlyPrice: Number($('#s_early').value) ? Math.round(Number($('#s_early').value) * 100) : null,
-      earlyDays: Number($('#s_early').value) ? Number($('#s_earlydays').value) || 7 : null })
-    closeModal(); toast('团期已添加'); products()
-  } catch (e) { toast(e.message, true) }
-}
-
 /* ============ 商户 ============ */
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -476,6 +435,7 @@ async function settlements() {
       <div class="split-legend" ${Number(s.total_amount) > 0 ? '' : 'hidden'}>${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
       ${Number(s.fee_total) ? `<div class="fee-line"><span>退改手续费 <b>${fen(s.fee_total)}</b>（${s.fee_count} 笔）</span>
         <span>商户分成 ${s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—'} · <b>${fen(s.fee_merchant)}</b></span><span>平台 <b>${fen(s.fee_platform)}</b></span></div>` : ''}
+      ${s.split_snapshot ? (() => { const sp = typeof s.split_snapshot === 'string' ? JSON.parse(s.split_snapshot) : s.split_snapshot; return `<p class="muted" style="margin:6px 0 0">本单比例快照：履约 ${sp.fulfill / 100}% · 服务费 ${sp.service / 100}% · 权益 ${sp.beanbudget / 100}%（参数中心 settlement.split_*）</p>` })() : ''}
       <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}</span></div>
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
   </div>`
@@ -524,16 +484,6 @@ async function budgets() {
   </div>`
 }
 function budgetModal() { return entityEditor('budget', null, { onSaved: () => budgets() }) }
-async function addBudget() {
-  try {
-    if (!$('#b_name').value.trim() || !Number($('#b_total').value)) return toast('批次名与总额必填', true)
-    await api('POST', '/admin/budgets', { name: $('#b_name').value.trim(), total: Number($('#b_total').value),
-      bizOwner: $('#b_owner').value, remark: $('#b_remark').value.trim() || null,
-      periodStart: $('#b_start').value || null, periodEnd: $('#b_end').value || null })
-    toast('批次已创建并生效'); closeModal(); budgets()
-  } catch (e) { toast(e.message, true) }
-}
-
 /* ============ 推广服务商 ============ */
 async function promoters() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
@@ -1000,11 +950,6 @@ async function cocreate() {
       <td>${Number(x.status) === 0 ? `<button class="btn primary sm" onclick="payCo(${x.id})">标记打款</button>` : '<span class="td-sub">✓</span>'}</td></tr>`).join('')}</tbody></table>`
     : '<div class="empty"><div class="e-ico">📊</div>暂无分润记录——生成结算单后自动入账</div>'}</div>`
 }
-window.saveCo = async () => {
-  await api('POST', '/admin/co-creators', { productId: $('#coProd').value, name: $('#coName').value, mobile: $('#coMobile').value,
-    role: Number($('#coRole').value), investAmount: Math.round(parseFloat($('#coInvest').value || '0') * 100), sharePct: Math.round(parseFloat($('#coPct').value || '0') * 100) })
-  go('cocreate')
-}
 window.toggleCo = async (id, st) => { await api('POST', '/admin/co-creators/' + id + '/status', { status: st === 1 ? 0 : 1 }); go('cocreate') }
 window.payCo = async (id) => { await api('POST', '/admin/co-profits/' + id + '/pay'); go('cocreate') }
 
@@ -1033,52 +978,6 @@ async function terms() {
 
 /* ============ 约稿任务管理 ============ */
 // ---- 富表单共享组件：富文本编辑器 / 单图上传（各页复用）----
-window.rtExec = (cmd, val, e) => {
-  e.preventDefault()
-  document.execCommand(cmd, false, val || null)
-  const w = e.target.closest('.rt-wrap')
-  if (w) w.querySelector('.rt-edit').focus()
-}
-function rtBtn(cmd, val, label, title) {
-  return `<button type="button" title="${title}" onmousedown="rtExec('${cmd}','${val || ''}',event)">${label}</button>`
-}
-function richEdit(id, html) {
-  return `<div class="rt-wrap"><div class="rt-toolbar">
-    ${rtBtn('bold', '', '<b>B</b>', '加粗')}${rtBtn('italic', '', '<i>I</i>', '斜体')}${rtBtn('underline', '', '<u>U</u>', '下划线')}
-    ${rtBtn('strikeThrough', '', '<s>S</s>', '删除线')}${rtBtn('formatBlock', 'H2', '<b>H2</b>', '大标题')}${rtBtn('formatBlock', 'H3', 'H3', '小标题')}
-    ${rtBtn('formatBlock', 'BLOCKQUOTE', '❝', '引用块')}${rtBtn('insertUnorderedList', '', '•—', '无序列表')}${rtBtn('insertOrderedList', '', '1.', '有序列表')}
-    ${rtBtn('removeFormat', '', '✕清除', '清除格式')}</div>
-    <div id="${id}" class="rt-edit" contenteditable="true">${html || ''}</div></div>`
-}
-window.uploadTo = (id, input) => {
-  const f = input.files && input.files[0]
-  if (!f) return
-  if (f.size > 2 * 1024 * 1024) return toast('图片需在 2MB 内', true)
-  const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
-  const rd = new FileReader()
-  rd.onload = async () => {
-    try {
-      const r = await api('POST', '/admin/uploads', { data: String(rd.result).split(',')[1], ext })
-      const box = document.getElementById(id + '_wrap')
-      document.getElementById(id).value = r.url
-      const img = box.querySelector('img')
-      img.src = r.url; img.style.display = 'block'
-      const empty = box.querySelector('.imgpick-empty')
-      if (empty) empty.style.display = 'none'
-      toast('图片已上传')
-    } catch (e) { toast(e.message, true) }
-  }
-  rd.readAsDataURL(f)
-}
-function imgPicker(id, url, hint) {
-  return `<div class="imgpick" id="${id}_wrap" onclick="document.getElementById('${id}_file').click()" title="点击上传（2MB 内）">
-    <img src="${url || ''}" style="${url ? '' : 'display:none'}">
-    <div class="imgpick-empty" style="${url ? 'display:none' : ''}">＋<small>${hint || '上传图片'}</small></div>
-    <input type="hidden" id="${id}" value="${url || ''}">
-    <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" id="${id}_file" onchange="uploadTo('${id}',this)">
-  </div>`
-}
-
 async function tasks() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const [list, prods] = await Promise.all([api('GET', '/admin/content-tasks'), api('GET', '/admin/products')])
@@ -1120,19 +1019,6 @@ async function tasks() {
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
 async function taskModal(id) { return entityEditor('task', id || null, { onSaved: () => tasks() }) }
-async function saveTask(id) {
-  try {
-    const body = { title: $('#tk_title').value.trim(), brief: $('#tk_brief').value.trim(), category: $('#tk_cat').value,
-      coverImg: $('#tk_cover').value || null, richBrief: $('#tk_rich').innerHTML || null,
-      rewardBeans: Number($('#tk_beans').value) || 200, cashReward: Math.round(Number($('#tk_cash').value) * 100) || 0,
-      minWords: Number($('#tk_words').value) || 0, minImages: Number($('#tk_imgs').value) || 0,
-      maxParticipants: Number($('#tk_max').value) || 0, deadline: $('#tk_deadline').value || null,
-      productId: Number($('#tk_prod').value) || null, tags: $('#tk_tags').value.trim() || null }
-    if (!body.title || !body.brief) return toast('标题与一句话简介必填', true)
-    if (id) { await api('PUT', '/admin/content-tasks/' + id, body); toast('任务已更新') } else { await api('POST', '/admin/content-tasks', body); toast('任务已发布') }
-    closeModal(); tasks()
-  } catch (e) { toast(e.message, true) }
-}
 async function taskDetail(id) {
   const t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
   if (!t) return
@@ -1390,27 +1276,7 @@ async function scenics() {
   </div>`
 }
 function scenicModal() { return entityEditor('scenic', null, { onSaved: () => scenics() }) }
-async function addScenic() {
-  try {
-    if (!$('#sc_name').value.trim()) return toast('请填写景区名称', true)
-    await api('POST', '/admin/scenics', { name: $('#sc_name').value.trim(), cityCode: $('#sc_city').value.trim() || '310118',
-      level: $('#sc_level').value, coopMode: $('#sc_coop').value, ticketInterface: $('#sc_ticket').value.trim() || null,
-      contactName: $('#sc_contact').value.trim() || null, contactPhone: $('#sc_phone').value.trim() || null,
-      profitTerms: $('#sc_terms').value.trim() || null })
-    toast('景区已入库'); closeModal(); scenics()
-  } catch (e) { toast(e.message, true) }
-}
 async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
-async function saveScenicEdit(id) {
-  try {
-    await api('PUT', '/admin/scenics/' + id, { name: $('#es_name').value.trim(), level: $('#es_level').value,
-      coopMode: $('#es_coop').value, ticketInterface: $('#es_ticket').value.trim() || null,
-      contactName: $('#es_contact').value.trim() || null, contactPhone: $('#es_phone').value.trim() || null,
-      profitTerms: $('#es_terms').value.trim() || null, status: Number($('#es_status').value) })
-    toast('已保存'); closeModal(); scenics()
-  } catch (e) { toast(e.message, true) }
-}
-
 async function suppliers() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   window.__kw = window.__kw || {}
@@ -1437,27 +1303,7 @@ async function suppliers() {
   </div>`
 }
 function supplierModal() { return entityEditor('supplier', null, { onSaved: () => suppliers() }) }
-async function addSupplier() {
-  try {
-    if (!$('#sp_name').value.trim()) return toast('请填写供应商名称', true)
-    await api('POST', '/admin/suppliers', { name: $('#sp_name').value.trim(), cityCode: $('#sp_city').value.trim() || '310118',
-      category: $('#sp_cat').value, settleMode: $('#sp_settle').value, licenseNo: $('#sp_license').value.trim() || null,
-      contactName: $('#sp_contact').value.trim() || null, contactPhone: $('#sp_phone').value.trim() || null,
-      note: $('#sp_note').value.trim() || null })
-    toast('供应商已入库'); closeModal(); suppliers()
-  } catch (e) { toast(e.message, true) }
-}
 async function editSupplier(id) { return entityEditor('supplier', id, { onSaved: () => suppliers() }) }
-async function saveSupplierEdit(id) {
-  try {
-    await api('PUT', '/admin/suppliers/' + id, { name: $('#ep_name').value.trim(), category: $('#ep_cat').value,
-      settleMode: $('#ep_settle').value, licenseNo: $('#ep_license').value.trim() || null,
-      contactName: $('#ep_contact').value.trim() || null, contactPhone: $('#ep_phone').value.trim() || null,
-      note: $('#ep_note').value.trim() || null, status: Number($('#ep_status').value) })
-    toast('已保存'); closeModal(); suppliers()
-  } catch (e) { toast(e.message, true) }
-}
-
 // 资源关联商品明细（景区/供应商 → 商品）
 async function resourceProducts(kind, id, name) {
   const rows = (await api('GET', '/admin/products')).filter((p) => Number(kind === 'scenic' ? p.scenic_id : p.supplier_id) === Number(id))
@@ -1842,7 +1688,7 @@ async function badges() {
     <table style="margin-top:10px"><thead><tr><th>ID</th><th>名称</th><th>图标键</th><th>授予规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
     ${(d.defs || []).map((b) => `<tr><td>#${b.id}</td><td>${esc(b.name)}</td><td class="td-sub">${esc(b.icon_key)}</td>
       <td class="td-sub">${esc(b.rule_desc || '—')}</td><td class="num">${Number(b.granted)}</td>
-      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button></td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
+      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button>${b.rule_type && b.rule_type !== 'manual' ? ` <button class="btn ghost sm" onclick="backfillBadge(${b.id})">按规则补发</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
     </tbody></table>
   </div>
   <div class="card">
@@ -1853,6 +1699,11 @@ async function badges() {
   </div>`
 }
 async function createBadge() { return entityEditor('badge', null, { onSaved: () => badges() }) }
+async function backfillBadge(id) {
+  if (!confirm('按当前规则与阈值，对所有已达标但尚未获得的用户补发此勋章？')) return
+  try { const r = await api('POST', '/admin/web3/badges/' + id + '/backfill', {}); toast(`达标 ${r.eligible} 人，本次发放 ${r.granted} 枚${r.capped ? '（已达发行上限，部分未发）' : ''}`); badges() }
+  catch (e) { toast(e.message, true) }
+}
 async function grantBadge(id) {
   const userId = prompt('发放给用户 ID：')
   if (!userId) return
@@ -1936,13 +1787,6 @@ async function faqs() {
   </div>`
 }
 async function faqModal(id) { return entityEditor('faq', id || null, { onSaved: () => faqs() }) }
-async function saveFaq(id) {
-  const question = $('#fq_q').value.trim(), answer = $('#fq_a').value.trim()
-  if (!question || !answer) return toast('问题与答案必填', true)
-  const body = { question, answer, sort: Number($('#fq_sort').value) || 0, category: $('#fq_cat').value, isHot: $('#fq_hot').checked ? 1 : 0, status: Number($('#fq_st').value) }
-  if (id) { await api('POST', '/admin/faqs/' + id + '/update', body); toast('已保存') } else { await api('POST', '/admin/faqs', body); toast('已新增') }
-  closeModal(); faqs()
-}
 async function toggleFaq(id, status) { await api('POST', '/admin/faqs/' + id + '/update', { status }); faqs() }
 async function delFaq(id) {
   if (!confirm('确认删除该问题？')) return
@@ -1970,15 +1814,6 @@ async function banners() {
   </div>`
 }
 async function bannerModal(id) { return entityEditor('banner', id || null, { onSaved: () => banners() }) }
-async function saveBanner(id) {
-  const title = $('#bn_t').value.trim(), image = $('#bn_img').value
-  if (!title || !image) return toast('标题与轮播图必填', true)
-  const body = { title, subTitle: $('#bn_st').value.trim() || null, image, link: $('#bn_link').value.trim() || null,
-    sort: Number($('#bn_sort').value) || 0, status: Number($('#bn_status').value),
-    startAt: $('#bn_start').value || null, endAt: $('#bn_end').value || null }
-  if (id) { await api('POST', '/admin/banners/' + id + '/update', body); toast('已保存') } else { await api('POST', '/admin/banners', body); toast('已新增') }
-  closeModal(); banners()
-}
 async function toggleBanner(id, status) { await api('POST', '/admin/banners/' + id + '/update', { status }); banners() }
 async function delBanner(id) {
   if (!confirm('确认删除该轮播？')) return
@@ -2113,17 +1948,6 @@ async function handleRisk(id) {
 async function editMerchant(id) { return entityEditor('merchant', id, { onSaved: () => merchants() }) }
 async function approveMerchant(id) {
   try { await api('POST', '/admin/merchants/' + id + '/approve', {}); toast('商户进件已通过'); merchants() } catch (e) { toast(e.message, true) }
-}
-async function saveMerchantEdit(id) {
-  try {
-    await api('POST', '/admin/merchants/' + id, {
-      name: document.getElementById('em_name').value.trim(),
-      cityCode: document.getElementById('em_city').value.trim(),
-      wxpaySubMchid: document.getElementById('em_wx').value.trim(),
-      kind: document.getElementById('em_kind').value
-    })
-    closeModal(); toast('商户已更新'); merchants()
-  } catch (e) { toast(e.message, true) }
 }
 async function toggleBudget(id, status) {
   try { await api('POST', '/admin/budgets/' + id + '/status', { status: status === 1 ? 0 : 1 }); toast(status === 1 ? '批次已停用' : '批次已启用'); budgets() } catch (e) { toast(e.message, true) }

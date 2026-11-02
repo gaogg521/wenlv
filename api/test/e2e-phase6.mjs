@@ -1,5 +1,7 @@
 // 六期 E2E：暗号玩法 / 逐品佣金覆盖 / KYC 实名审核 / 共创投资分润（V14，旧后台评估吸收四项）
 // 前置：服务运行中 + V14 迁移已应用。运行：node test/e2e-phase6.mjs（自建隔离夹具）
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/e2e-phase6.mjs') // 会写库：只能对隔离库运行
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }

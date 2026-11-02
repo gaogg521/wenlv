@@ -1,6 +1,8 @@
 // Web3 存证完整性断言（可重复运行）
 // 覆盖方案文档 §11 的 A1–A6 与公开验证的离线重算（A3 的对外形态）
 // 运行：node test/web3-integrity.mjs
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/web3-integrity.mjs') // 会写库：只能对隔离库运行
 import mysql from 'mysql2/promise'
 import { packBatch, closeBeanDay, reconcile, verifyProof } from '../src/domain/attest.mjs'
 

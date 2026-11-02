@@ -1,5 +1,7 @@
 // 二期 E2E：存证打包链路 / 笔记发布机审 / 提现自动打款通道 / 手动任务 / 城市隔离 / 公开验证 / 数字身份
 // 前置：服务运行中。运行：node test/e2e-phase2.mjs（不破坏一期数据，仅追加）
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/e2e-phase2.mjs') // 会写库：只能对隔离库运行
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }

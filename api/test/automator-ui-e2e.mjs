@@ -1,5 +1,7 @@
 // 真实 UI 端到端（全模拟器身份，跨端闭环）：
 // mini-a 下单支付 → 凭证码页读取展示码 → mini-b 商户绑店+手输核销(30→40) → 系统完成(→50) → mini-a 写评价
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/automator-ui-e2e.mjs') // 会写库：只能对隔离库运行
 import automator from 'miniprogram-automator'
 import path from 'node:path'
 const log = (...a) => console.log('[ui2]', ...a)

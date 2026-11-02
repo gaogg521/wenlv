@@ -83,6 +83,12 @@ export async function settleDue() {
   return r.affectedRows
 }
 
+/** 结算五口径比例（万分比）：参数中心 settlement.split_fulfill / split_service / split_beanbudget */
+export async function splitBp() {
+  const g = async (k, d) => Math.round((Number(await cfg(k).catch(() => d)) || 0) * 10000)
+  return { fulfill: await g('settlement.split_fulfill', 0.58), service: await g('settlement.split_service', 0.12), beanbudget: await g('settlement.split_beanbudget', 0.05) }
+}
+
 /** 退改手续费商户分成（万分比）：商户资料「退改手续费分成」优先，否则参数中心 settlement.refund_fee_merchant_pct */
 export async function feeShareBp(c, merchantId) {
   const m = await c.one('SELECT profile FROM merchant WHERE id = ?', [merchantId])
@@ -108,9 +114,11 @@ export async function generateSettlement(merchantId, period) {
   if (!orders.length && !fees.length) return -1
   let total = 0, promo = 0
   for (const o of orders) { total += Number(o.amount_pay); promo += Number(o.promo_amt) }
-  const fulfill = Math.round(total * 0.58)
-  const service = Math.round(total * 0.12)
-  const beanBudget = Math.round(total * 0.05)
+  // 五口径比例来自参数中心（settlement.split_*），生成时快照进 split_snapshot
+  const split = await splitBp()
+  const fulfill = Math.round(total * split.fulfill / 10000)
+  const service = Math.round(total * split.service / 10000)
+  const beanBudget = Math.round(total * split.beanbudget / 10000)
   const retained = total - fulfill - service - beanBudget - promo
   // 分成比例：商户资料单独约定优先，否则取参数中心；生成时快照进结算单，事后改参数不影响已出账单
   const shareBp = await feeShareBp(c, merchantId)
@@ -119,9 +127,9 @@ export async function generateSettlement(merchantId, period) {
   const feePlatform = feeTotal - feeMerchant
     const sid = await c.ins(`INSERT INTO settlement (merchant_id, period, order_count, total_amount,
       amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status,
-      fee_count, fee_total, fee_merchant, fee_platform, fee_share_bp)
-      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained,
-      fees.length, feeTotal, feeMerchant, feePlatform, fees.length ? shareBp : null])
+      fee_count, fee_total, fee_merchant, fee_platform, fee_share_bp, split_snapshot)
+      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained,
+      fees.length, feeTotal, feeMerchant, feePlatform, fees.length ? shareBp : null, JSON.stringify(split)])
     if (orders.length) await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
     if (fees.length) await c.q(`UPDATE refunds SET settlement_id = ? WHERE id IN (${fees.map((f) => f.id).join(',')}) AND settlement_id IS NULL`, [sid])
     // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）；只有订单收入时才计

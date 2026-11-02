@@ -1,3 +1,5 @@
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/remediation-pages.mjs') // 会写库：只能对隔离库运行
 import automator from 'miniprogram-automator'
 import fs from 'node:fs'
 import path from 'node:path'

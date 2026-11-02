@@ -9,3 +9,19 @@ const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: BIZ_TZ, year: 'numeric'
 export function bizDay(offsetDays = 0, now = new Date()) {
   return fmt.format(new Date(now.getTime() + offsetDays * 86400_000))
 }
+
+/**
+ * ISO 8601 周（业务时区）：'2026-W45'。结算周期统一用它命名。
+ * 周一凌晨出账时取"昨天"所在周，即刚结束的那一周。
+ */
+export function isoWeek(dateStr = bizDay()) {
+  const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d))
+  const day = t.getUTCDay() || 7
+  t.setUTCDate(t.getUTCDate() + 4 - day) // 移到本周周四，周四所在年份即 ISO 年
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1))
+  const week = Math.ceil(((t - yearStart) / 86400_000 + 1) / 7)
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+}
+/** 结算默认周期：昨天所在 ISO 周（周一出账即上周；周中手动出账即本周） */
+export const settlementPeriod = (now = new Date()) => isoWeek(bizDay(-1, now))

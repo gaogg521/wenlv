@@ -184,7 +184,8 @@ async function main() {
   ok(html.includes('向往的自由') && html.includes('欢迎回来'), '后台 SPA 可访问（/admin-ui，新版设计系统）')
 
   console.log(`\nHTTP E2E RESULT: ${pass} PASS / ${fail} FAIL`)
-  if (fail > 0) process.exit(1)
+  // 显式退出：数据库连接池不会自行关闭，此前跑完会一直挂住
+  process.exit(fail > 0 ? 1 : 0)
 }
 
 main().catch((e) => { console.error('E2E ERROR:', e.message); process.exit(1) })

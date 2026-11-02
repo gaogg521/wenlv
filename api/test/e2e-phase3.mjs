@@ -1,5 +1,7 @@
 // 三期 E2E：微信官方能力对照（手机号快速验证 / 推广小程序码 / 订阅消息模板 / 集成中心模板键）
 // 前置：服务运行中。运行：node test/e2e-phase3.mjs（不破坏既有数据，仅追加）
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/e2e-phase3.mjs') // 会写库：只能对隔离库运行
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }

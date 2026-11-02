@@ -1,3 +1,5 @@
+import { assertIsolatedDb } from './_guard.mjs'
+assertIsolatedDb('test/remediation-content.mjs') // 会写库：只能对隔离库运行
 import a from 'miniprogram-automator';import assert from 'node:assert/strict';import fs from 'node:fs';import {one,q} from '../src/db.mjs';import {jwtSign} from '../src/auth.mjs';
 if(!/^wanderlust_qa_/.test(process.env.DB_NAME))throw new Error('QA only');
 const m=await a.connect({wsEndpoint:'ws://127.0.0.1:9421'});try{

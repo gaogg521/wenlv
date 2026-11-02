@@ -3,7 +3,7 @@
   <view class="home-title">{{site.hero_title}}<text>{{site.hero_title_em}}</text></view>
   <view class="home-caption">{{site.hero_caption}}</view>
   <view class="home-search" bindtap="goTours">⌕ {{site.search_ph}} <text>探索 →</text></view>
-  <view class="home-destination" bindtap="goDestinations">{{site.destination_line}}<text>发现目的地 ↗</text></view>
+  <view class="home-destination" bindtap="goDestinations">{{homeCity && homeCity.name ? '当前城市：' + homeCity.name : site.destination_line}}<text>{{homeCity && homeCity.name ? '切换 ↗' : '发现目的地 ↗'}}</text></view>
 </view>
 <view class="theme-grid"><view wx:for="{{site.themes}}" wx:key="cat" class="theme-tile" data-cat="{{item.cat}}" bindtap="goTours"><text class="theme-symbol">{{item.icon}}</text><view class="theme-name">{{item.name}}</view><view class="theme-sub">{{item.sub}}</view></view></view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">

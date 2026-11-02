@@ -68,8 +68,10 @@ Page({
     const { rating, rvText } = this.data
     if (!rvText || rvText.trim().length < 4) return wx.showToast({ title: '至少 4 个字', icon: 'none' })
     try {
-      await api.postReview(this.no, rating || 5, rvText.trim())
-      wx.showToast({ title: '评价成功，感谢分享' })
+      const r = await api.postReview(this.no, rating || 5, rvText.trim())
+      const got = (r && r.badges) || []
+      if (got.length) wx.showModal({ title: '获得新勋章', content: '恭喜点亮「' + got.join('」「') + '」，可在「我的身份」查看。', showCancel: false, confirmText: '好的' })
+      else wx.showToast({ title: '评价成功，感谢分享' })
       this.setData({ reviewDone: true })
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }

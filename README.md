@@ -10,7 +10,7 @@
 | `api/admin/` | PC 运营后台（零依赖 SPA，入口 `/admin-ui`） |
 | `mini-a/` | 游客微信小程序 |
 | `mini-b/` | 商户微信小程序 |
-| `api/db/migration/` | 表结构迁移（V1–V30；V15/V16 编号空缺是历史原因，不是漏文件） |
+| `api/db/migration/` | 表结构迁移（V1–V32；V15/V16 编号空缺是历史原因，不是漏文件） |
 
 不在运行链路上的内容：
 
@@ -45,7 +45,7 @@ JWT_SECRET=dev PASS_SECRET=dev npm start
 ```bash
 cd api
 npm test                                  # 语法检查 + Web3/退改单元测试 + 小程序用语合规 + 小程序↔后台映射完整性（不碰数据库）
-DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心（需服务在跑，且与服务同一 JWT_SECRET）
+DB_NAME=wanderlust_qa npm run test:db     # 锚定终局、存证完整性、退改梯度、表单引擎、链接入中心、业务规则（需服务在跑，且与服务同一 JWT_SECRET）
 DB_NAME=wanderlust_qa npm run seed:scenario   # 清库后按 28 步真实操作灌演示数据
 ```
 
