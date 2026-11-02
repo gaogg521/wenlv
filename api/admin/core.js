@@ -28,6 +28,7 @@ const ICONS = {
 // 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
 const NAV = [
   ['工作台', [['dash', '驾驶舱', 'dash']]],
+  ['合伙人', [['partners', '合伙人中心', 'promoters']]],
   ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
@@ -124,6 +125,7 @@ function boot() {
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
   const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
+  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   const allowed = access[ME?.role]
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items

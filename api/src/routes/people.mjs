@@ -27,6 +27,46 @@ const ORDER_AGG = `LEFT JOIN (SELECT user_id, COUNT(*) cnt, SUM(CASE WHEN status
   FROM orders WHERE status IN ${VALID} GROUP BY user_id) o ON o.user_id = u.id`
 
 export const people = {
+  // 统一主体键为 kind + id；共创人按产品合同登记，不按姓名合并。
+  'GET /admin/partners': async (req) => {
+    const a = await partnerAccess(req)
+    const kind = String(req.query.kind || '')
+    if (kind && !['city', 'promoter', 'cocreator'].includes(kind)) throw new BizError(1001, '身份类型无效')
+    const kw = String(req.query.kw || '').trim()
+    const page = Math.max(1, Math.floor(N(req.query.page) || 1)), size = 30
+    const scope = scopeFilter(a, 'x.city_code')
+    const where = `WHERE 1=1${scope.sql}${a.role === 'city_partner' ? " AND x.kind = 'city'" : ''}${kind ? ' AND x.kind = ?' : ''}${kw ? ' AND (x.name LIKE ? OR x.ref LIKE ?)' : ''}`
+    const args = [...scope.params, ...(kind ? [kind] : []), ...(kw ? ['%' + kw + '%', '%' + kw + '%'] : [])]
+    const counts = await q(`SELECT kind, COUNT(*) n FROM (${PARTNER_ROWS}) x ${where} GROUP BY kind`, args)
+    const rows = await q(`SELECT * FROM (${PARTNER_ROWS}) x ${where} ORDER BY kind, id DESC LIMIT ? OFFSET ?`, [...args, size, (page - 1) * size])
+    return { rows, counts, total: counts.reduce((s, x) => s + N(x.n), 0), page, size }
+  },
+  'GET /admin/partners/:kind/:id': async (req) => {
+    const a = await partnerAccess(req), { kind, id } = req.params
+    const scope = scopeFilter(a, 'x.city_code')
+    if (a.role === 'city_partner' && kind !== 'city') throw new BizError(1003, '权限不足')
+    const partner = await one(`SELECT * FROM (${PARTNER_ROWS}) x WHERE x.kind = ? AND x.id = ?${scope.sql}`, [kind, id, ...scope.params])
+    if (!partner) throw new BizError(1004, '合伙人不存在或不在权限范围')
+    if (kind === 'city') {
+      const city = partner.city_code
+      const kpi = await one(`SELECT COUNT(*) orders, COALESCE(SUM(amount_pay),0) gmv FROM orders WHERE city_code = ? AND status IN ${PAID}`, [city])
+      const merchants = await one('SELECT COUNT(*) total, SUM(created_at >= NOW() - INTERVAL 30 DAY) new30 FROM merchant WHERE city_code = ?', [city])
+      const daily = await q(`SELECT DATE_FORMAT(created_at,'%Y-%m-%d') d, SUM(amount_pay) gmv FROM orders WHERE city_code = ? AND status IN ${PAID} AND created_at >= CURDATE() - INTERVAL 13 DAY GROUP BY d ORDER BY d`, [city])
+      return { partner, kpi, merchants, daily }
+    }
+    if (kind === 'promoter') {
+      const p = await one('SELECT tier, rate_bp, status, valid_gmv_90d, service_score FROM promoter WHERE user_id = ?', [id])
+      const hits = await one('SELECT COUNT(DISTINCT h.user_id) users FROM attribution_hit h JOIN attribution a ON a.scene = h.scene WHERE a.promoter_id = ?', [id])
+      const trade = await one(`SELECT COUNT(DISTINCT o.id) orders, COUNT(DISTINCT o.user_id) buyers, COALESCE(SUM(o.amount_pay),0) gmv FROM orders o JOIN commission c ON c.order_id = o.id WHERE c.promoter_id = ? AND o.status IN ${PAID}`, [id])
+      const commissions = await q('SELECT status, COUNT(*) n, SUM(amount) amount FROM commission WHERE promoter_id = ? GROUP BY status ORDER BY status', [id])
+      return { partner, promoter: p, hits, trade, commissions }
+    }
+    const co = await one('SELECT c.role, c.invest_amount, c.share_pct, c.mobile, p.title FROM co_creator c JOIN tour_product p ON p.id = c.product_id WHERE c.id = ?', [id])
+    co.mobile = maskMobile(co.mobile)
+    const profits = await q('SELECT period, status, SUM(amount) amount FROM co_profit WHERE co_creator_id = ? GROUP BY period, status ORDER BY period DESC', [id])
+    const paid = profits.filter(x => N(x.status) === 1).reduce((s, x) => s + N(x.amount), 0)
+    return { partner, co, profits, paid, returnRate: N(co.invest_amount) > 0 ? paid / N(co.invest_amount) : null }
+  },
   // ---------------- 用户中心 ----------------
   'GET /admin/users/stats': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'risk'])
@@ -201,3 +241,13 @@ export const people = {
       rating: rating.avg != null ? Number(rating.avg) : null, reviews: N(rating.n), notes }, sessions, dist, daily }
   },
 }
+
+async function partnerAccess(req) {
+  const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner'])
+  // 无城市绑定的城市账号不能退化成全量权限。
+  if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+  return a
+}
+const PARTNER_ROWS = `SELECT 'city' kind, id, COALESCE(display_name, username) name, username ref, scope_city city_code, status FROM admin_user WHERE role = 'city_partner'
+  UNION ALL SELECT 'promoter', p.user_id, u.nickname, CAST(p.user_id AS CHAR), NULL, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id
+  UNION ALL SELECT 'cocreator', c.id, c.name, c.co_no, p.city_code, c.status FROM co_creator c JOIN tour_product p ON p.id = c.product_id`
