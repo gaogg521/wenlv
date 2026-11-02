@@ -1665,7 +1665,12 @@ const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpi
 /** 3D 区块：tone = blue | green | gold | gray；sm = 小号；pulse = 等待链上确认中 */
 function cube3d(tone, opt = {}) {
   const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : ''].filter(Boolean).join(' ')
-  return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}><div class="cube3d">`
+  // 特效层全部是 .cube3d 的兄弟节点：不参与 preserve-3d，加光晕/滤镜不会把立方体压平
+  const fx = opt.ghost ? '' : '<span class="fx-ripple"></span><span class="fx-ripple r2"></span>'
+    + '<span class="fx-orbit"><i></i></span>' + (opt.sm ? '' : '<span class="fx-orbit o2"><i></i></span>')
+    + '<span class="fx-beam"></span><span class="fx-spark s1"></span><span class="fx-spark s2"></span><span class="fx-spark s3"></span>'
+    + '<span class="fx-hud"></span>'
+  return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}>${fx}<div class="cube3d">`
     + '<div class="fc"></div>'.repeat(6) + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
     + (opt.label ? `<div class="ghost-label">${opt.label}</div>` : '') + '</div>'
 }
@@ -1716,12 +1721,13 @@ function blockNodeHTML(b) {
 function blockLinkHTML(prevBranch, curBranch) {
   const y = (p) => p ? 133 : 59
   const y1 = y(prevBranch), y2 = y(curBranch)
-  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><u style="top:${y1 - 11}px">»</u></div>`
+  // <s> 是沿连线流动的数据包，表示"前一块的根被写进后一块的 prev_root"
+  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><s style="top:${y1 - 2}px"></s><s class="p2" style="top:${y1 - 2}px"></s><u style="top:${y1 - 11}px">»</u></div>`
   const down = y1 < y2
   const top = Math.min(y1, y2) - 1
   const edge = down ? 'border-top:2px dashed var(--cl);border-top-right-radius:12px' : 'border-bottom:2px dashed var(--cl);border-bottom-right-radius:12px'
   return `<div class="chain-link elbow"><i style="top:${top}px;height:${Math.abs(y2 - y1)}px;${edge};border-right:2px dashed var(--cl)"></i>
-    <b style="top:${y2 - 1}px"></b><u style="top:${y2 - 11}px">▸</u></div>`
+    <b style="top:${y2 - 1}px"></b><s class="tail" style="top:${y2 - 2}px"></s><u style="top:${y2 - 11}px">▸</u></div>`
 }
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
@@ -1746,10 +1752,10 @@ async function web3dash() {
   }
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
   $('#app').innerHTML = `
-  <div class="chain-panel" id="chainViz">
+  <div class="chain-panel" id="chainViz"><div class="chain-scan-clip" aria-hidden="true"><div class="chain-scan"></div></div>
     <div class="chain-glow"></div>
     <div class="chain-head">
-      <span class="chain-name">⛓ 向往自由链 · 链路视图</span>
+      <span class="chain-name">⛓ 向往自由链 · 链路视图</span><span class="chain-live"><i></i>LIVE</span>
       ${demo ? '<span class="chip demo">演示数据</span>' : ''}
       <span class="chip">适配器 ${esc((d.chain && d.chain.label) || '—')}</span>
       <span class="chip">区块高度 <b>#${lastSeq}</b></span>
@@ -1878,7 +1884,7 @@ function renderFlow(d) {
   if (meta) meta.innerHTML = `${d.demo ? '<span class="chip demo">演示数据</span> ' : ''}${esc(o.orderNo || '')} · ${esc(o.productName || '—')} · ${yuan(o.amountPay || 0)}${o.beanDeducted ? '（豆抵' + o.beanDeducted + '）' : ''} · ${esc(o.statusText || '')} · <b style="color:#eaf1ff">${doneN}/6 锚点</b>`
   const parts = []
   ;(d.steps || []).forEach((s, i) => {
-    if (i) parts.push('<div class="chain-link flow-link"><i style="top:59px"></i><u style="top:49px">»</u></div>')
+    if (i) parts.push('<div class="chain-link flow-link"><i style="top:59px"></i><s style="top:58px"></s><u style="top:49px">»</u></div>')
     parts.push(flowStepHTML(s, i))
   })
   ;(d.refunds || []).forEach((e, j) => {

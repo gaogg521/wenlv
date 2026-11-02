@@ -314,3 +314,76 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .chain-track.flow { padding: 10px 18px 8px; }
 .chain-link.flow-link { flex: 0 1 56px; min-width: 36px; }
 
+
+/* ===== 区块科技特效层（全部为 .cube3d 的兄弟节点，不参与 3D，不会压平立方体） ===== */
+/* 面扫描：一条亮带自上而下扫过每个面 */
+.cube3d .fc::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%, transparent 100%) 0 0/100% 300%;
+  mix-blend-mode: screen; opacity: .55; animation: faceScan 3.2s linear infinite; }
+.cube-zone.t-gray .cube3d .fc::after { opacity: .2; }
+@keyframes faceScan { from { background-position: 0 100%; } to { background-position: 0 -200%; } }
+/* 轨道环：倾斜的椭圆光环，光点沿环运行 */
+.fx-orbit { position: absolute; left: 50%; top: 50%; width: calc(var(--s) * 1.9); height: calc(var(--s) * 1.9);
+  margin: calc(var(--s) * -.95) 0 0 calc(var(--s) * -.95); border-radius: 50%; pointer-events: none;
+  border: 1px solid var(--edge); opacity: .35; box-shadow: 0 0 10px var(--glow), inset 0 0 10px var(--glow);
+  transform: rotateX(72deg) rotateZ(0); animation: orbitSpin 6s linear infinite; }
+.fx-orbit i { position: absolute; left: 50%; top: -4px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 6px #fff, 0 0 14px var(--edge), 0 0 22px var(--glow); }
+.fx-orbit.o2 { width: calc(var(--s) * 1.55); height: calc(var(--s) * 1.55); margin: calc(var(--s) * -.775) 0 0 calc(var(--s) * -.775);
+  border-style: dashed; opacity: .28; transform: rotateX(72deg) rotateY(-24deg); animation: orbitSpin2 9s linear infinite reverse; }
+@keyframes orbitSpin { from { transform: rotateX(72deg) rotateZ(0); } to { transform: rotateX(72deg) rotateZ(360deg); } }
+@keyframes orbitSpin2 { from { transform: rotateX(72deg) rotateY(-24deg) rotateZ(0); } to { transform: rotateX(72deg) rotateY(-24deg) rotateZ(360deg); } }
+/* 数据光束：自立方体顶部向上的细光柱，有脉冲上行 */
+.fx-beam { position: absolute; left: 50%; bottom: 50%; width: 2px; height: calc(var(--s) * 1.05); margin-left: -1px; pointer-events: none;
+  background: linear-gradient(0deg, var(--edge), transparent); opacity: .5;
+  -webkit-mask: linear-gradient(0deg, #000 0 30%, transparent 30% 45%, #000 45% 60%, transparent 60%) 0 0/100% 200%;
+          mask: linear-gradient(0deg, #000 0 30%, transparent 30% 45%, #000 45% 60%, transparent 60%) 0 0/100% 200%;
+  animation: beamUp 1.8s linear infinite; }
+@keyframes beamUp { from { -webkit-mask-position: 0 0; mask-position: 0 0; } to { -webkit-mask-position: 0 -200%; mask-position: 0 -200%; } }
+/* 上浮粒子 */
+.fx-spark { position: absolute; left: 50%; top: 58%; width: 3px; height: 3px; border-radius: 50%; background: #fff; pointer-events: none;
+  box-shadow: 0 0 6px var(--edge); opacity: 0; animation: sparkUp 3.6s ease-out infinite; }
+.fx-spark.s1 { margin-left: -22px; animation-delay: .3s; }
+.fx-spark.s2 { margin-left: 16px; animation-delay: 1.5s; }
+.fx-spark.s3 { margin-left: -4px; animation-delay: 2.6s; }
+@keyframes sparkUp { 0% { opacity: 0; transform: translateY(0) scale(.6); } 15% { opacity: .95; } 100% { opacity: 0; transform: translateY(calc(var(--s) * -1.3)) scale(1.1); } }
+/* 底座涟漪 */
+.fx-ripple { position: absolute; left: 50%; bottom: 4px; width: calc(var(--s) * 1.6); height: 16px; margin-left: calc(var(--s) * -.8);
+  border-radius: 50%; border: 1px solid var(--edge); pointer-events: none; opacity: 0; animation: ripple 2.8s ease-out infinite; }
+.fx-ripple.r2 { animation-delay: 1.4s; }
+@keyframes ripple { 0% { opacity: .7; transform: scale(.35); } 100% { opacity: 0; transform: scale(1.25); } }
+/* HUD 角标：四角瞄准框，悬停/选中时收紧变亮 */
+.fx-hud { position: absolute; left: 50%; top: 50%; width: calc(var(--s) * 1.7); height: calc(var(--s) * 1.7);
+  margin: calc(var(--s) * -.85) 0 0 calc(var(--s) * -.85); pointer-events: none; opacity: .38; transition: .35s;
+  --c: var(--edge);
+  background:
+    linear-gradient(var(--c), var(--c)) 0 0/12px 1.5px, linear-gradient(var(--c), var(--c)) 0 0/1.5px 12px,
+    linear-gradient(var(--c), var(--c)) 100% 0/12px 1.5px, linear-gradient(var(--c), var(--c)) 100% 0/1.5px 12px,
+    linear-gradient(var(--c), var(--c)) 0 100%/12px 1.5px, linear-gradient(var(--c), var(--c)) 0 100%/1.5px 12px,
+    linear-gradient(var(--c), var(--c)) 100% 100%/12px 1.5px, linear-gradient(var(--c), var(--c)) 100% 100%/1.5px 12px;
+  background-repeat: no-repeat; }
+.chain-node:hover .fx-hud, .chain-node.active .fx-hud { opacity: 1; transform: scale(.86); filter: drop-shadow(0 0 4px var(--glow)); }
+.chain-node:hover .cube-zone::before, .chain-node.active .cube-zone::before { opacity: .9; }
+.chain-node:hover .fx-orbit { opacity: .6; }
+/* 连线上流动的数据包 */
+.chain-link s { position: absolute; left: 0; width: 14px; height: 4px; border-radius: 4px; pointer-events: none; text-decoration: none;
+  background: linear-gradient(90deg, transparent, #bfe0ff 60%, #fff); box-shadow: 0 0 8px #7fb0ff, 0 0 14px rgba(127,176,255,.7);
+  animation: packetRun 2.4s cubic-bezier(.5,0,.5,1) infinite; }
+.chain-link s.p2 { animation-delay: 1.2s; opacity: .7; }
+.chain-link s.tail { left: auto; right: 26px; animation: packetTail 2.4s cubic-bezier(.5,0,.5,1) infinite .6s; }
+@keyframes packetRun { 0% { left: 0; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: calc(100% - 30px); opacity: 0; } }
+@keyframes packetTail { 0% { right: 26px; opacity: 0; } 15% { opacity: 1; } 100% { right: 0; opacity: 0; } }
+/* 面板扫描光幕 + LIVE 指示 */
+.chain-scan-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 12px; z-index: 1; }
+.chain-scan { position: absolute; top: 0; bottom: 0; left: 0; width: 140px; pointer-events: none; z-index: 1;
+  background: linear-gradient(90deg, transparent, rgba(127,176,255,.08) 45%, rgba(190,225,255,.16) 50%, rgba(127,176,255,.08) 55%, transparent);
+  animation: panelScan 7s linear infinite; }
+@keyframes panelScan { from { left: -160px; } to { left: 100%; } }
+.chain-live { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: 2px; color: #7ef0ac;
+  border: 1px solid rgba(126,240,172,.4); border-radius: 999px; padding: 2px 9px; background: rgba(34,197,94,.1); }
+.chain-live i { width: 6px; height: 6px; border-radius: 50%; background: #7ef0ac; box-shadow: 0 0 8px #7ef0ac; animation: livePulse 1.4s ease-in-out infinite; }
+@keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) {
+  .cube3d .fc::after, .fx-orbit, .fx-beam, .fx-spark, .fx-ripple, .chain-link s, .chain-scan, .chain-live i { animation: none; }
+  .fx-spark, .fx-ripple, .chain-link s, .chain-scan { display: none; }
+}
