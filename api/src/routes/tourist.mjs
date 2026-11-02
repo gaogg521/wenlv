@@ -12,6 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
+import { bindMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -52,7 +53,7 @@ const c = {
     const u = requireUser(req)
     // 微信官方「手机号快速验证组件」：前端 button open-type=getPhoneNumber → code → 服务端换号
     const { phoneNumber, mock } = await wxapi.getPhoneNumber(req.body.code || '')
-    await tx(async (cc) => cc.upd('UPDATE user_account SET mobile_enc = ? WHERE id = ?', [Buffer.from(phoneNumber, 'utf8'), u.uid]))
+    await tx(async (cc) => bindMobile(cc, u.uid, phoneNumber, BizError))
     return { phone: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), mock }
   },
 
@@ -380,6 +381,7 @@ const cWithdraw = {
     const u = requireUser(req)
     const p = await one('SELECT status FROM promoter WHERE user_id = ? AND status = 1', [u.uid])
     if (!p) throw new BizError(6001, '非生效推广服务商')
+    if (await promo.isUserFrozen(u.uid)) throw new BizError(1003, '账号已被停用，提现暂停')
     const cfgs = await cfgAll()
     if (String(cfgs['feature.withdraw'] || '"on"').includes('off')) throw new BizError(1003, '提现入口维护中')
     const ov = await cWithdraw['GET /c/promote/overview'](req)

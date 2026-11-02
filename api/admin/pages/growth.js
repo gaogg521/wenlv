@@ -69,11 +69,11 @@ async function withdrawals() {
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务费提现审批</h2><span class="muted">资金出口 · 财务角色审批 · 打款流水必填留痕</span></div>
     ${rows.length ? `<table><thead><tr><th>申请号</th><th>推广员</th><th>金额</th><th>备注</th><th>状态</th><th>审批</th><th>操作</th></tr></thead><tbody>
-    ${rows.map((w) => `<tr><td class="num">#${w.id}</td><td>${esc(w.nickname)}<div class="td-sub">ID ${w.promoter_id}</div></td>
+    ${rows.map((w) => `<tr><td class="num">#${w.id}</td><td>${esc(w.nickname)}${Number(w.user_status) === 0 ? ' <span class="pill s70">已冻结</span>' : ''}<div class="td-sub">ID ${w.promoter_id}</div></td>
       <td class="money num">${fen(w.amount)}</td><td class="td-sub">${esc(w.proposer_note || '')}</td>
       <td>${['<span class="pill warn">待审</span>', '<span class="pill ok">已打款</span>', '<span class="pill s70">已驳回</span>'][w.status]}</td>
       <td class="td-sub">${esc(w.reviewed_by || '—')}${w.pay_ref ? '<div>' + esc(w.pay_ref) + '</div>' : ''}</td>
-      <td>${w.status === 0 ? `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>
+      <td>${w.status === 0 ? `${Number(w.user_status) === 0 ? '<span class="td-sub">账号冻结，暂停打款</span>' : `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>`}
         <button class="btn danger sm" onclick="approveWithdraw(${w.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('暂无提现申请（推广员在小程序 A「推广中心」发起）')}
   </div>`

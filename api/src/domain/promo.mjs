@@ -78,9 +78,17 @@ export async function invalidateCommission(orderNo) {
   if (o) await q('UPDATE commission SET status = CASE WHEN status = 2 THEN 3 ELSE 4 END WHERE order_id = ?', [o.id])
 }
 
+/** 到期放行：推广员账号被冻结（user_account.status = 0）期间佣金照常累计但不放行，解冻后下一次放行再一并转为可提现 */
 export async function settleDue() {
-  const r = await q('UPDATE commission SET status = 1 WHERE status = 0 AND payable_at <= NOW(3)')
+  const r = await q(`UPDATE commission c JOIN user_account u ON u.id = c.promoter_id
+    SET c.status = 1 WHERE c.status = 0 AND c.payable_at <= NOW(3) AND u.status = 1`)
   return r.affectedRows
+}
+
+/** 账号是否处于冻结（用户不存在也按冻结处理：资金动作宁可拦下） */
+export async function isUserFrozen(userId) {
+  const u = await one('SELECT status FROM user_account WHERE id = ?', [userId])
+  return !u || Number(u.status) !== 1
 }
 
 /** 结算五口径比例（万分比）：参数中心 settlement.split_fulfill / split_service / split_beanbudget */

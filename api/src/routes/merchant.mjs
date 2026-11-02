@@ -12,6 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
+import { whereMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -121,8 +122,8 @@ const m = {
   'POST /m/auth/phone-login': async (req) => {
     const { phoneCode } = req.body
     const { phoneNumber } = await wxapi.getPhoneNumber(phoneCode || '')
-    const buf = Buffer.from(phoneNumber, 'utf8')
-    const u = await one('SELECT * FROM user_account WHERE mobile_enc = ?', [buf])
+    const w = whereMobile(phoneNumber)
+    const u = await one(`SELECT * FROM user_account u WHERE ${w.sql}`, w.args)
     if (!u) throw new BizError(1004, '该手机号未注册，请先用微信登录')
     const staff = await one('SELECT merchant_id, role FROM merchant_staff WHERE user_id = ? AND status = 1', [u.id])
     return { linked: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),

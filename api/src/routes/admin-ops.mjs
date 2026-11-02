@@ -443,13 +443,15 @@ const adminNew = {
 const adminFin = {
   'GET /admin/withdrawals': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
-    return await q('SELECT w.*, u.nickname FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id ORDER BY w.id DESC LIMIT 100')
+    return await q('SELECT w.*, u.nickname, u.status AS user_status FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id ORDER BY w.id DESC LIMIT 100')
   },
   'POST /admin/withdrawals/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
     const { pass: passed, payRef } = req.body
     const w = await one('SELECT * FROM promoter_withdraw WHERE id = ? AND status = 0', [req.params.id])
     if (!w) throw new BizError(1004, '申请不存在或已处理')
+    // 账号冻结期间暂停打款：可以驳回，不能通过；解冻后再审批
+    if (passed && await promo.isUserFrozen(w.promoter_id)) throw new BizError(6001, '该推广员账号已冻结，暂停打款。请先解冻，或驳回本次申请')
     const st = passed ? 1 : 2
     const finalRef = passed ? String(payRef || '').trim() : null
     if (passed && (!finalRef || finalRef.length < 6 || finalRef.length > 64)) throw new BizError(1001, '请先完成实际支付，再填写真实打款流水号')
