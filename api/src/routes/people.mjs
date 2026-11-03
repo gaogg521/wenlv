@@ -3,7 +3,7 @@
 // 隐私：手机号、证件号、实名只下发脱敏值；城市合伙人只能看本城商户。
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
-import { maskMobile, whereMobile } from '../infra/mobile.mjs'
+import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
 import { partnerPerformance } from './partner-performance.mjs'
 
 const N = (v) => Number(v || 0)
@@ -269,7 +269,7 @@ export const people = {
     return {
       merchant: { id, name: m.name, kind: m.kind, city_code: m.city_code, merchant_no: m.merchant_no, status: N(m.status), score: m.score,
         biz_license: m.biz_license, sub_mchid: m.wxpay_sub_mchid ? String(m.wxpay_sub_mchid).slice(0, 4) + '****' : null, invite_code: m.invite_code,
-        apply_contact: m.apply_contact ? maskName(m.apply_contact) : null, apply_mobile: maskMobile(m.apply_mobile), apply_note: m.apply_note,
+        apply_contact: m.apply_contact ? maskName(m.apply_contact) : null, apply_mobile: maskApplyMobile(m), apply_note: m.apply_note,
         approved_at: m.approved_at, created_at: m.created_at, applicant },
       kpi: { ...kpi, repeat_buyers: repeat, aov: N(kpi.orders) - N(kpi.refunded) > 0 ? Math.round(N(kpi.gmv) / (N(kpi.orders) - N(kpi.refunded))) : 0,
         refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, rating: rating.avg != null ? Number(rating.avg) : null, reviews: N(rating.n) },

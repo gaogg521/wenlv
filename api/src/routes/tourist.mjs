@@ -12,7 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
-import { bindMobile } from '../infra/mobile.mjs'
+import { bindMobile, sealMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -182,8 +182,9 @@ const c = {
       beanHook: { deduct: (uid, beans, orderNo) => bean.deduct(uid, beans, bean.BIZ.DEDUCT, orderNo) },
     })
     await tx(async (cc) => {
-      await cc.upd('UPDATE orders SET contact_name = ?, contact_phone_enc = ? WHERE order_no = ?',
-        [contactName || null, contactPhone || null, r.orderNo])
+      // 联系电话加密落库（V38）；旧列 contact_phone_enc 只留历史明文，新单不再写
+      await cc.upd('UPDATE orders SET contact_name = ?, contact_phone_sealed = ?, contact_phone_enc = NULL WHERE order_no = ?',
+        [contactName || null, contactPhone ? sealMobile(String(contactPhone)).enc : null, r.orderNo])
     })
     // 归因命中（首触）
     if (promoScene) await promo.hit(promoScene, u.uid)

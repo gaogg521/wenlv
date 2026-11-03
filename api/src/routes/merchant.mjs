@@ -12,7 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
-import { whereMobile } from '../infra/mobile.mjs'
+import { whereMobile, sealMobile, openMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -171,12 +171,13 @@ const m = {
 
   'GET /m/orders/:no': async (req) => {
     const u = requireUser(req)
-    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.created_at,o.paid_at,p.title,s.depart_date
+    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,o.created_at,o.paid_at,p.title,s.depart_date
       FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
     if (!o) throw new BizError(2003, '本店无此订单')
-    const phone = o.contact_phone_enc ? String(o.contact_phone_enc) : ''
+    // 密文优先（V38）；历史明文在旧列，加密脚本跑完后清空
+    const phone = o.contact_phone_sealed ? (openMobile(o.contact_phone_sealed) || '') : (o.contact_phone_enc ? String(o.contact_phone_enc) : '')
     const passes = await q('SELECT id,status FROM travel_pass WHERE order_id=?', [o.id])
-    const { contact_phone_enc, ...safe } = o
+    const { contact_phone_enc, contact_phone_sealed, ...safe } = o
     return { ...safe, contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
   },
   'GET /m/supply': async (req) => {
@@ -377,8 +378,8 @@ const mApply = {
     const pending = await one('SELECT id FROM merchant WHERE applicant_user_id = ? AND status = 0', [u.uid])
     if (pending) throw new BizError(2002, '已有待审核申请，请勿重复提交')
     const mno = 'MAPPLY' + String(Date.now()).slice(-10)
-    const id = await tx(async cc => cc.ins(`INSERT INTO merchant (city_code,name,merchant_no,status,apply_contact,apply_mobile,apply_note,applicant_user_id)
-      VALUES (?,?,?,0,?,?,?,?)`, [cityCode,name,mno,contact,mobile,note || null,u.uid]))
+    const id = await tx(async cc => cc.ins(`INSERT INTO merchant (city_code,name,merchant_no,status,apply_contact,apply_mobile_enc,apply_note,applicant_user_id)
+      VALUES (?,?,?,0,?,?,?,?)`, [cityCode,name,mno,contact,sealMobile(mobile).enc,note || null,u.uid]))
     return { id, merchantNo: mno, msg: '已提交，审核通过后重新登录即可进入门店' }
   },
 }

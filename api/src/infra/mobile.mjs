@@ -35,6 +35,9 @@ export function maskMobile(buf) {
 }
 export const maskPhone = (s) => String(s).replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
 
+/** 商户申请电话的脱敏值：apply_mobile_enc 密文优先，历史明文 apply_mobile 兜底（V38） */
+export const maskApplyMobile = (m) => maskMobile(m.apply_mobile_enc || m.apply_mobile)
+
 /** 按完整手机号查找的 SQL 片段（别名 alias 默认 user_account 的别名）：优先走盲索引，未迁移的历史明文行兜底 */
 export function whereMobile(phone, alias = 'u') {
   return {
