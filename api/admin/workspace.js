@@ -19,7 +19,7 @@
     budgets: '旅豆发放双闸：批次额度与年度总量，严禁超发。', promoters: '一级推广服务商的开通、档位与成交。',
     withdrawals: '推广服务费提现复核，打款流水必须留痕。', agreements: '商户分账协议变更的审批与生效。',
     phrases: '为剧本游配置入戏暗号，店员凭口令核销。', conflicts: '断网核销恢复后校验失败的凭证，人工确认或驳回。',
-    rateov: '单品佣金覆盖推广档位，上限 12%。', cocreate: '共创人投资与分润入账。', kyc: '实名资料人工审核，证件号仅显示脱敏值。',
+    rateov: '单品佣金覆盖推广档位，上限 12%。', cocreate: '共创人投资与分润台账：财务或超管按真实回单登记打款，运营核对进度；错单作废、误付冲正全留痕。', kyc: '实名资料人工审核，证件号仅显示脱敏值。',
     banners: '小程序首页轮播位与投放窗口。', faqs: '小程序常见问题的分类与排序。', risk: '核销重放、退款滥用、锚定失败等风险告警。',
     features: '按角色、端与城市灰度开放能力。', system: '服务健康、后台任务与手动干预。',
     web3dash: '每个区块是一批 Merkle 根：本地打包 → 提交上链 → 确认后锚定。',
@@ -42,6 +42,8 @@
   const allowedItems = () => [...document.querySelectorAll('#nav [data-p]')]
   const titleFor = key => key === 'dash' ? '经营概览' : allowedItems().find(el => el.dataset.p === key)?.textContent.trim() || '工作台'
   window.downloadExport = async function (what) {
+    // T00：导出与后端 export.* 能力共用规则；城市账号等无权角色不发起请求
+    if (ADMIN_CAPABILITIES?.actions && !adminCan('export.' + what)) return toast('当前账号无导出权限：导出仅限超级管理员、运营或财务（按报表类型）', true)
     try {
       const result = await api('GET', '/admin/export/' + encodeURIComponent(what))
       if (typeof result.csv !== 'string' || !result.filename) throw new Error('导出文件内容不完整，请重试')
