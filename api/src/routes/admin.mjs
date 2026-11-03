@@ -5,6 +5,7 @@ import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
+import { maskApplyMobile } from '../infra/mobile.mjs'
 import * as refund from '../domain/refund.mjs'
 import * as group from '../domain/group.mjs'
 import * as wxpay from '../domain/wxpay.mjs'
@@ -360,7 +361,12 @@ const admin = {
     return { id }
   },
 
-  'GET /admin/merchants': async (req) => { const a = await requireAdmin(req); const sc=scopeFilter(a); return await q('SELECT * FROM merchant WHERE 1=1 '+sc.sql+' ORDER BY id',sc.params) },
+  'GET /admin/merchants': async (req) => {
+    const a = await requireAdmin(req); const sc = scopeFilter(a)
+    // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
+    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + ' ORDER BY id', sc.params))
+      .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
+  },
   // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====
   'GET /admin/entity-schemas/:kind': async (req) => {
     const a = await requireAdmin(req)
@@ -589,7 +595,8 @@ const admin = {
           s.fee_count, s.fee_total, s.fee_merchant, s.fee_platform, s.amt_fulfill + s.fee_merchant AS payable_to_merchant, s.status
         FROM settlement s JOIN merchant m ON m.id = s.merchant_id ORDER BY s.id DESC LIMIT 2000`)
     } else if (what === 'merchants') {
-      rows = await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, apply_mobile, approved_at, created_at FROM merchant ORDER BY id`)
+      rows = (await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, apply_mobile, apply_mobile_enc, approved_at, created_at FROM merchant ORDER BY id`))
+        .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
     } else if (what === 'scenics') {
       rows = await q(`SELECT id, name, city_code, scenic_level, coop_mode, ticket_interface, contact_name, contact_phone, profit_terms, status, created_at FROM scenic_spot ORDER BY id`)
     } else if (what === 'suppliers') {
@@ -740,6 +747,8 @@ const admin = {
     return tx(async (c) => {
       const e = await c.one('SELECT * FROM content_task_entry WHERE id = ? FOR UPDATE', [req.params.id])
       if (!e || Number(e.cash_status) !== 1) throw new BizError(2002, '该笔现金加奖不是待打款状态')
+      // 红线 12：打款前看账号状态。冻结期间保持"待打款"，解冻后可继续登记
+      if (await promo.isUserFrozen(e.user_id)) throw new BizError(6001, '该用户账号已冻结，暂停打款。请先解冻后再登记打款流水')
       if (await c.one('SELECT id FROM content_task_entry WHERE cash_ref = ?', [ref])) throw new BizError(2002, '该流水号已登记过')
       await c.upd('UPDATE content_task_entry SET cash_status = 2, cash_ref = ?, cash_paid_at = NOW(3), cash_by = ? WHERE id = ?', [ref, 'admin:' + a.name, e.id])
       await audit(c, 'admin:' + a.name, 'content-task', 'cash-paid', 'entry-' + e.id, { cash_status: 1 }, { cash_status: 2, ref, amount: Number(e.cash_reward) })

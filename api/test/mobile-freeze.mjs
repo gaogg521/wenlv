@@ -27,7 +27,7 @@ const uids = [U1.id, U2.id, U3.id]
 const rnd = () => String(Math.floor(Math.random() * 1e8)).padStart(8, '0')
 const phone1 = '139' + rnd(), phone3 = '137' + rnd()
 const fakeOrder = 900_000_000 + Math.floor(Math.random() * 1e7)
-const created = { commission: [], withdraw: [] }
+const created = { commission: [], withdraw: [], merchant: [] }
 
 try {
   console.log('== 手机号加密 ==')
@@ -63,6 +63,54 @@ try {
     list = ok(await call('GET', '/admin/users?kw=' + phone3, null, A))
     assert.ok(list.rows.some((r) => r.id === U3.id), '加密后仍可按号码查找')
     assert.match(run(), /已加密 0 行/)
+  })
+
+  console.log('== 商户申请电话与订单联系电话（V38）==')
+  const mask = (p) => p.slice(0, 3) + '****' + p.slice(7)
+  const runEncrypt = () => { try { return execFileSync(process.execPath, ['scripts/encrypt-mobiles.mjs'], { encoding: 'utf8', env: process.env }) } catch (e) { return String(e.stdout || '') } }
+  const mPlain = '136' + rnd(), mSealed = '135' + rnd(), mApplied = '137' + rnd()
+  await t('商户提交入驻申请：电话落库是密文，旧明文列为空', async () => {
+    const tok = ok(await call('POST', '/m/auth/login', { code: `mock-m-mf-${stamp}` })).token
+    ok(await call('POST', '/m/apply', { name: 'MF申请' + stamp, contact: '测试', mobile: mApplied }, tok))
+    const row = await one('SELECT id, apply_mobile, apply_mobile_enc FROM merchant WHERE name = ?', ['MF申请' + stamp])
+    created.merchant.push(row.id)
+    assert.equal(row.apply_mobile, null, '新申请不再写明文列')
+    assert.ok(row.apply_mobile_enc && !Buffer.from(row.apply_mobile_enc).toString('utf8').includes(mApplied), '库里不是明文')
+    assert.equal(openMobile(row.apply_mobile_enc), mApplied)
+  })
+  await t('后台商户列表与导出：历史明文和密文都只给脱敏值，不下发完整号码与密文列', async () => {
+    created.merchant.push((await q(`INSERT INTO merchant (city_code, name, merchant_no, status, apply_contact, apply_mobile) VALUES ('310118', ?, ?, 0, '测试', ?)`, ['MF旧' + stamp, 'MFA' + stamp, mPlain])).insertId,
+      (await q(`INSERT INTO merchant (city_code, name, merchant_no, status, apply_contact, apply_mobile_enc) VALUES ('310118', ?, ?, 0, '测试', ?)`, ['MF新' + stamp, 'MFB' + stamp, sealMobile(mSealed).enc])).insertId)
+    const rows = ok(await call('GET', '/admin/merchants', null, A))
+    const raw = JSON.stringify(rows)
+    for (const p of [mPlain, mSealed, mApplied]) assert.ok(!raw.includes(p), '列表响应不应出现完整号码')
+    assert.equal(rows.find((r) => r.name === 'MF旧' + stamp).apply_mobile, mask(mPlain))
+    const sealedRow = rows.find((r) => r.name === 'MF新' + stamp)
+    assert.equal(sealedRow.apply_mobile, mask(mSealed)); assert.equal(sealedRow.apply_mobile_enc, undefined, '密文列不下发')
+  })
+  await t('加密脚本：历史明文搬进密文列并清空旧列，脱敏值不变，重跑为 0', async () => {
+    runEncrypt()
+    const row = await one('SELECT apply_mobile, apply_mobile_enc FROM merchant WHERE name = ?', ['MF旧' + stamp])
+    assert.equal(row.apply_mobile, null); assert.equal(openMobile(row.apply_mobile_enc), mPlain)
+    assert.equal(ok(await call('GET', '/admin/merchants', null, A)).find((r) => r.name === 'MF旧' + stamp).apply_mobile, mask(mPlain))
+    assert.match(runEncrypt(), /商户申请电话：已加密 0 行；订单联系电话：已加密 0 行/)
+  })
+  await t('订单联系电话：历史明文（不要求 11 位）被加密迁移，旧列清空，可还原', async () => {
+    const ord = await one('SELECT id, contact_phone_enc, contact_phone_sealed FROM orders ORDER BY id LIMIT 1')
+    assert.ok(ord, '隔离库需先 seed:scenario，库里应有订单')
+    try {
+      await q('UPDATE orders SET contact_phone_enc = ?, contact_phone_sealed = NULL WHERE id = ?', [Buffer.from('021-66668888', 'utf8'), ord.id])
+      assert.match(runEncrypt(), /订单联系电话：已加密 [1-9]\d* 行/)
+      const row = await one('SELECT contact_phone_enc, contact_phone_sealed FROM orders WHERE id = ?', [ord.id])
+      assert.equal(row.contact_phone_enc, null); assert.equal(openMobile(row.contact_phone_sealed), '021-66668888')
+      assert.ok(!Buffer.from(row.contact_phone_sealed).toString('utf8').includes('66668888'), '库里是密文')
+    } finally {
+      await q('UPDATE orders SET contact_phone_enc = ?, contact_phone_sealed = ? WHERE id = ?', [ord.contact_phone_enc, ord.contact_phone_sealed, ord.id])
+    }
+  })
+  await t('secrets-key check 覆盖联系电话新列，且全部可解密', async () => {
+    const out = execFileSync(process.execPath, ['scripts/secrets-key.mjs', 'check'], { encoding: 'utf8', env: process.env })
+    assert.match(out, /已加密联系电话（商户申请 \/ 订单）\d+ 条；可解密 \d+ 条/); assert.ok(!/无法解密/.test(out), out)
   })
 
   console.log('== 冻结后暂停佣金与提现 ==')
@@ -117,6 +165,7 @@ try {
 } finally {
   if (created.commission.length) await q('DELETE FROM commission WHERE id IN (?)', [created.commission])
   if (created.withdraw.length) await q('DELETE FROM promoter_withdraw WHERE id IN (?)', [created.withdraw])
+  if (created.merchant.length) await q('DELETE FROM merchant WHERE id IN (?)', [created.merchant])
   await q('DELETE FROM promoter WHERE user_id = ?', [U1.id])
   await q('UPDATE user_account SET status = 1, mobile_enc = NULL, mobile_hmac = NULL WHERE id IN (?)', [uids])
 }

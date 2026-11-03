@@ -39,18 +39,28 @@ if (cmd === 'check' || cmd === 'rotate') {
     if (p == null) badMobile.push(r.id); else mobiles.push([r.id, p])
   }
   console.log(`已加密手机号 ${mobiles.length + badMobile.length} 条；可解密 ${mobiles.length} 条${badMobile.length ? `；无法解密 ${badMobile.length} 条：账号 ${badMobile.join(', ')}` : ''}`)
+  // 商户申请电话、订单联系电话（V38）：新列非空即密文；同样由主密钥派生的子密钥加密，轮换时必须一并重写
+  const sealed = [], badSealed = []
+  for (const [table, col] of [['merchant', 'apply_mobile_enc'], ['orders', 'contact_phone_sealed']]) {
+    for (const r of await q(`SELECT id, ${col} v FROM ${table} WHERE ${col} IS NOT NULL`)) {
+      const p = openMobileWith(curKeys, r.v)
+      if (p == null) badSealed.push(`${table}#${r.id}`); else sealed.push([table, col, r.id, p])
+    }
+  }
+  console.log(`已加密联系电话（商户申请 / 订单）${sealed.length + badSealed.length} 条；可解密 ${sealed.length} 条${badSealed.length ? `；无法解密 ${badSealed.length} 条：${badSealed.slice(0, 20).join(', ')}` : ''}`)
   if (cmd === 'rotate') {
-    if (bad.length || badMobile.length) { console.error('有凭据或手机号无法用当前主密钥解密，已放弃轮换（先确认 SECRETS_KEY / JWT_SECRET 与服务一致）'); process.exitCode = 1 }
+    if (bad.length || badMobile.length || badSealed.length) { console.error('有凭据或手机号无法用当前主密钥解密，已放弃轮换（先确认 SECRETS_KEY / JWT_SECRET 与服务一致）'); process.exitCode = 1 }
     else {
       const next = Buffer.from(arg, 'hex')
       const nextKeys = mobileKeys(next)
       await tx(async (c) => {
         for (const [k, v] of plain) await c.q('UPDATE app_secret SET enc_value = ? WHERE k = ?', [encWith(next, v), k])
         for (const [id, p] of mobiles) { const s = sealMobileWith(nextKeys, p); await c.q('UPDATE user_account SET mobile_enc = ?, mobile_hmac = ? WHERE id = ?', [s.enc, s.hmac, id]) }
+        for (const [table, col, id, p] of sealed) await c.q(`UPDATE ${table} SET ${col} = ? WHERE id = ?`, [sealMobileWith(nextKeys, p).enc, id])
       })
-      console.log(`已用新密钥重新加密凭据 ${plain.length} 条、手机号 ${mobiles.length} 条。现在把服务的 SECRETS_KEY 设为新密钥并重启。`)
+      console.log(`已用新密钥重新加密凭据 ${plain.length} 条、手机号 ${mobiles.length} 条、联系电话 ${sealed.length} 条。现在把服务的 SECRETS_KEY 设为新密钥并重启。`)
     }
-  } else if (bad.length || badMobile.length) process.exitCode = 1
+  } else if (bad.length || badMobile.length || badSealed.length) process.exitCode = 1
   await pool?.end?.()
   process.exit(process.exitCode || 0)
 }

@@ -114,6 +114,19 @@ try {
     const paid = await one('SELECT cash_status, cash_ref FROM content_task_entry WHERE id = ?', [pending[0].id])
     assert.equal(Number(paid.cash_status), 2); assert.equal(paid.cash_ref, ref)
   })
+  await t('冻结用户的现金加奖不能登记打款（保持待打款）；解冻后可登记', async () => {
+    const left = (await one('SELECT id, user_id FROM content_task_entry WHERE task_id = ? AND cash_status = 1', [task.id]))
+    assert.ok(left, '应还剩一笔待打款')
+    ok(await call('POST', `/admin/users/${left.user_id}/status`, { status: 0, reason: '测试冻结暂停现金加奖打款' }, A))
+    try {
+      const r = await call('POST', `/admin/task-entries/${left.id}/cash-paid`, { ref: 'FRZ' + stamp }, A)
+      assert.equal(r.code, 6001); assert.match(r.msg, /冻结/)
+      assert.equal(Number((await one('SELECT cash_status FROM content_task_entry WHERE id = ?', [left.id])).cash_status), 1, '仍是待打款')
+    } finally {
+      ok(await call('POST', `/admin/users/${left.user_id}/status`, { status: 1 }, A))
+    }
+    ok(await call('POST', `/admin/task-entries/${left.id}/cash-paid`, { ref: 'FRZ' + stamp }, A))
+  })
   await t('有参与记录的任务不能删除；下线后非参与者看不到，参与者仍可查看', async () => {
     let r = await call('POST', `/admin/content-tasks/${task.id}/delete`, {}, A)
     assert.equal(r.code, 1001); assert.match(r.msg, /不能删除/)
