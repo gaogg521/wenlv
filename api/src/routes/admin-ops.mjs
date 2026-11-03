@@ -251,10 +251,14 @@ const adminEco = {
 
 // ---------- 后台编辑能力（V14 补齐：风控处理/商户编辑/预算停用/推广商调档） ----------
 const adminEdit = {
-  // 风控事件处理
+  // 风控事件处理（T12：必须有处理结论，不再以 handled=1 作为完整结案；复杂处置请升级为风险案件）
   'POST /admin/risk/:id/handle': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'risk'])
-    await q('UPDATE risk_event SET handled = 1, handled_by = ?, handled_at = NOW(3) WHERE id = ?', [a.uid || 0, req.params.id])
+    const a = await requireAdmin(req, ['super', 'risk'])
+    const reason = String(req.body?.reason || '').trim()
+    if (reason.length < 4 || reason.length > 200) throw new BizError(1001, '请填写 4–200 字处理结论（进入审计）；复杂处置请升级为风险案件')
+    const n = await q('UPDATE risk_event SET handled = 1 WHERE id = ? AND handled = 0', [req.params.id])
+    if (!n.affectedRows) throw new BizError(2002, '事件已处理，请刷新')
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'risk', 'handle', 'risk-event-' + req.params.id, { handled: 0 }, { handled: 1, reason }))
     return { handled: true }
   },
 

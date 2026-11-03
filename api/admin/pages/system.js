@@ -79,7 +79,7 @@ async function risk() {
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
       <td><code>${esc(String(r.detail).slice(0, 60))}</code></td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
-      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">标记已处理</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(window.__riskQ.handled !== '' ? '没有符合条件的风控事件。' : '暂无风控事件 🎉')}
+      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(window.__riskQ.handled !== '' ? '没有符合条件的风控事件。' : '暂无风控事件 🎉')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${rkPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__riskQ.page--;risk()">上一页</button> <button class="btn ghost sm" ${data.page >= rkPages ? 'disabled' : ''} onclick="window.__riskQ.page++;risk()">下一页</button></div></div>
   </div>`
 }
