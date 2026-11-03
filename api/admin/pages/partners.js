@@ -23,7 +23,8 @@ async function partners() {
 }
 
 function partnerEditButton(kind, id) {
-  if (kind === 'city') return '<span class="td-sub">城市账号资料维护尚未开放</span>'
+  // T02：城市行直达后台账号的角色/城市授权（不混进合作资料编辑器）
+  if (kind === 'city') return adminCan('account.manage') ? `<button class="btn primary sm" onclick="closeModal();accountFromPartner(${Number(id)})">账号授权</button>` : '<span class="td-sub">城市账号授权由超级管理员维护</span>'
   const entity = kind === 'promoter' ? 'promoter' : 'cocreator'
   return adminCan(`entity.${entity}.edit`) ? `<button class="btn primary sm" onclick="closeModal();entityEditor('${entity}',${Number(id)},{onSaved:()=>partners()})">编辑合作资料</button>` : '<span class="td-sub">当前角色仅查看业绩</span>'
 }

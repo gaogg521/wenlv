@@ -15,7 +15,7 @@
     creators: '沉淀内容创作者，管理签约与合作状态。',
     tasks: '发布创作邀约，跟进投稿与奖励发放。', config: '调整运营参数，保留变更与复核记录。',
     integrations: '管理外部服务与凭据，核对通道是否就绪。', attest: '核对业务记录、证明路径与锚定状态。',
-    security: '管理账号验证与访问安全。', audit: '追踪操作记录，核对关键业务变更。',
+    security: '管理账号验证与访问安全。', accounts: '后台账号生命周期：创建、角色/城市授权、停用恢复、重置密码与 MFA；变更后旧会话立即失效。', audit: '追踪操作记录，核对关键业务变更。',
     budgets: '旅豆发放双闸：批次额度与年度总量，严禁超发。', promoters: '一级推广服务商的开通、档位与成交。',
     withdrawals: '推广服务费提现复核，打款流水必须留痕。', agreements: '商户分账协议变更的审批与生效。',
     phrases: '为剧本游配置入戏暗号，店员凭口令核销。', conflicts: '断网核销恢复后校验失败的凭证，人工确认或驳回。',
@@ -30,7 +30,7 @@
     terms: '后台术语与小程序合规用语的对照表。',
     users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
   }
-  const renderers = { taskcash: taskCash, contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { taskcash: taskCash, contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, accounts, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage

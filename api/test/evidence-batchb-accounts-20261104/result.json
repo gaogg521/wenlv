@@ -1,0 +1,32 @@
+{
+  "task": "批次B：T02 后台账号与城市授权生命周期",
+  "date": "2026-11-04",
+  "branch": "feat/batch-b-account-lifecycle",
+  "environment": {
+    "service": "http://127.0.0.1:18088/admin-ui",
+    "db": "wanderlust_qa_batchb_20261104 (隔离库，V1–V44，seed:scenario)",
+    "jwt": "devsecret",
+    "payMode": "MOCK"
+  },
+  "apiTests": {
+    "npmTest": "198 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0）",
+    "newSuite": "api/test/admin-accounts.mjs 8 项：能力矩阵/创建校验(城市必填·唯一·密码强度·哈希密钥不下发)/城市账号本城视角与改城即时失效/停用恢复会话死亡/角色变更原因必填/不能操作自己+最后超管保护/临时密码一次性与强制改密闭环/MFA 重置留痕"
+  },
+  "uiChecks": [
+    { "step": "超管 → 系统治理 → 后台账号：列表含登录名/显示名/角色/城市/状态/MFA/最近登录/备注，本人行不显示角色/停用按钮", "result": "通过", "evidence": "01-create-city-account.png（新建弹窗，含城市范围必选与随机初始密码）" },
+    { "step": "新建城市合伙人 uicity1104（青浦）→ 退出 → 新账号登录 → 商户与进件只见本城商户（朱家角属青浦 310118），无外城行，导航不含系统治理/可信存证", "result": "通过", "evidence": "02-city-account-view.png" },
+    { "step": "城市视角商户行不显示 编辑/审批通过 按钮（能力门控），保留 全景 只读入口", "result": "通过（补修 trade.js/people.js 门控）", "evidence": "02-city-account-view.png" },
+    { "step": "超管停用 uicity1104（模态框填原因；初次尝试发现原生 prompt 在受限环境不可用，已改模态框并留存发现截图 03-disabled-and-session-dead.png）→ 行变『停用』+ KPI 4/5 → 用停用前保存的旧令牌请求 /admin/dash/kpi → 1002 登录已失效（账号被停用或权限已变更）", "result": "通过（AC-07 UI 级证据）", "evidence": "03-disabled-session-dead.png" },
+    { "step": "审计日志：account·create（username/role/scopeCity/note）与 account·disable（status 1→0 + 原因 + sessionsRevoked:true）均有操作人留痕", "result": "通过", "evidence": "04-audit-trail.png" }
+  ],
+  "fixesDuringVerification": [
+    "prompt()/confirm() 在受限浏览器环境不可用：accounts.js 停用/重置密码/重置MFA 与 play.js 作废/驳回改为模态框输入（顺带覆盖批次A的作废/驳回流程）",
+    "商户列表『编辑/审批通过』未按能力隐藏（审计 C-01 同类问题）：trade.js / people.js 按 adminCan 门控"
+  ],
+  "boundaries": [
+    "must_change_pwd 为软强制：登录后弹改密模态框，未在服务端拦截其他接口",
+    "不携带 ver 的旧式令牌（仅测试夹具可用 JWT_SECRET 签出）不参与会话失效校验",
+    "重置密码临时口令仅本次响应返回一次，审计不含明文；未接入短信/邮件投递"
+  ]
+}

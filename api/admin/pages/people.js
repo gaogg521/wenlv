@@ -143,7 +143,7 @@ async function merchantProfile(id) {
   reviewDrawer(`商户全景 · ${esc(m.name)}`, `
   <div class="pprofile-head"><i>${esc(String(m.name).slice(0, 1))}</i>
     <div><h2>${esc(m.name)} ${MERCHANT_ST[m.status] || ''}</h2><div class="td-sub">${esc(MERCHANT_KIND[m.kind] || m.kind || '')} · ${esc(CITY_CN[m.city_code] || m.city_code || '')} · 商户号 ${esc(m.merchant_no || '—')}</div></div>
-    <div class="pprofile-act"><button class="btn ghost sm" onclick="editMerchant(${m.id})">编辑资料</button></div></div>
+    <div class="pprofile-act">${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id})">编辑资料</button>` : '<span class="td-sub">商户资料由运营/超管维护</span>'}</div></div>
   <div class="pstats">${stat('累计 GMV', fen(k.gmv), `近 30 日 ${fen(k.gmv30)}`)}${stat('订单', PN(k.orders), `核销 ${PN(k.verified)} · 客单价 ${fen(k.aov)}`)}
     ${stat('退款率', pct(k.refund_rate), `退款 ${PN(k.refunded)} 单`)}${stat('评分', k.rating != null ? k.rating.toFixed(1) + ' ★' : '—', `${k.reviews} 条评价 · 复购用户 ${k.repeat_buyers}`)}</div>
   ${p.level ? `<div class="card" style="margin:0 0 12px"><div class="card-head"><h2>经营等级</h2><span class="muted">按订单、评价、退款率评定；门槛在参数中心 merchant.levels</span></div>
