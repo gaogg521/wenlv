@@ -573,8 +573,8 @@ await t('共创分润：后台出结算单 → 分润 = 留存 × 产品占比 �
   const prof = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A))
   assert.equal(prof.profits.reduce((s, x) => s + Number(x.amount), 0), profit); assert.equal(prof.paid, 0)
   assert.ok(!JSON.stringify(prof.co).includes(PHONE), '画像里的电话必须脱敏')
-  // 发放
-  for (const cp of cps) ok(await call('POST', `/admin/co-profits/${cp.id}/pay`, {}, A))
+  // 发放（T01 新契约：登记唯一真实流水号后才结清）
+  for (const cp of cps) ok(await call('POST', `/admin/co-profits/${cp.id}/pay`, { payRef: 'XEND-CO-' + stamp + '-' + cp.id, channel: 'bank', amount: Number(cp.amount), note: '跨端回归夹具登记' }, A))
   const rec2 = ok(await call('GET', `/admin/partner-reconciliation/cocreator/${co.id}`, null, A))
   assert.deepEqual([Number(rec2.summary.paid), Number(rec2.summary.pending)], [profit, 0], '发放后对账页已发 = 应分')
   const prof2 = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A)); assert.equal(prof2.paid, profit); assert.equal(Number(prof2.returnRate), profit / 1000000)

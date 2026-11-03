@@ -894,10 +894,14 @@ function toStore(f, v) {
 
 /** ref 字段的候选项 */
 export async function refOptions(ref, admin) {
-  if (ref === 'merchant') return (await q('SELECT id, name, status FROM merchant ORDER BY status DESC, id')).map((r) => [String(r.id), r.name + (Number(r.status) === 1 ? '' : '（未审核）')])
-  if (ref === 'supplier') return (await q('SELECT id, name FROM supplier WHERE status = 1 ORDER BY id')).map((r) => [String(r.id), r.name])
-  if (ref === 'scenic') return (await q('SELECT id, name FROM scenic_spot WHERE status = 1 ORDER BY id')).map((r) => [String(r.id), r.name])
-  if (ref === 'product') return (await q('SELECT id, title FROM tour_product ORDER BY id DESC LIMIT 500')).map((r) => [String(r.id), r.title])
+  // T00：城市账号的下拉选项只出本城主体（merchant/supplier/scenic/product 都有 city_code 列）
+  const scoped = admin && admin.scopeCity
+  const city = scoped ? ' AND city_code = ?' : ''
+  const args = scoped ? [admin.scopeCity] : []
+  if (ref === 'merchant') return (await q(`SELECT id, name, status FROM merchant${scoped ? ' WHERE city_code = ?' : ''} ORDER BY status DESC, id`, args)).map((r) => [String(r.id), r.name + (Number(r.status) === 1 ? '' : '（未审核）')])
+  if (ref === 'supplier') return (await q(`SELECT id, name FROM supplier WHERE status = 1${city} ORDER BY id`, args)).map((r) => [String(r.id), r.name])
+  if (ref === 'scenic') return (await q(`SELECT id, name FROM scenic_spot WHERE status = 1${city} ORDER BY id`, args)).map((r) => [String(r.id), r.name])
+  if (ref === 'product') return (await q(`SELECT id, title FROM tour_product${scoped ? ' WHERE city_code = ?' : ''} ORDER BY id DESC LIMIT 500`, args)).map((r) => [String(r.id), r.title])
   return []
 }
 

@@ -1,0 +1,30 @@
+{
+  "task": "批次A：T01 共创分润打款闭环 + T00 能力/城市边界补漏",
+  "date": "2026-11-04",
+  "branch": "feat/batch-a-permissions-and-coprofit",
+  "environment": {
+    "service": "http://127.0.0.1:18087/admin-ui",
+    "db": "wanderlust_qa_batcha_20261104 (隔离库，V1–V43，seed:scenario 演示数据)",
+    "jwt": "devsecret (与测试一致)",
+    "payMode": "MOCK",
+    "accounts": "admin / finance / ops（隔离库种入，密码见仓库启动文档，不入库）"
+  },
+  "apiTests": {
+    "npmTest": "196 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0，18 套件，含新增 admin-coprofit 12 项与 admin-operations 5 项）",
+    "newSuite": "api/test/admin-coprofit.mjs：能力矩阵/正常登记/缺流水/超付/重复流水/合作停用/部分打款/越权/作废/审批阈值(提案→他人复核→通过驳回撤回)/冲正/并发/回单附件受控下载/导出与城市边界"
+  },
+  "uiChecks": [
+    { "step": "财务登录 → 资金结算 → 共创分润：KPI(应付/已付/待打款)与两行台账(待打款/部分已付)", "result": "通过", "evidence": "01-finance-cocreate-page.png" },
+    { "step": "财务在 #162 登记打款(¥80/银行转账/UIQA-BANK-20261104-000162/备注)：提交后原地刷新，状态=已结清、最近打款=流水号+渠道+登记人，KPI 已付¥100/待打款¥30", "result": "通过", "evidence": "02-pay-modal-filled.png" },
+    { "step": "刷新页面重读：#162 仍为已结清且流水号可见；打款流水抽屉显示 有效 打款记录", "result": "通过", "evidence": "03-pay-history-drawer.png" },
+    { "step": "退出 → 运营登录：台账提示『由财务或超级管理员登记打款，当前账号可核对进度』；#163 操作列=『待财务登记』，无登记/作废按钮；可看打款流水", "result": "通过", "evidence": "04-ops-readonly-view.png" },
+    { "step": "退出 → 超管登录：#163 显示 登记打款+作废；#162 打款流水 → 冲正(填写冲正流水号+原因) → 台账 #162 回到 待打款/已付¥0，KPI 回到 已付¥20；负向流水与审计留痕", "result": "通过", "evidence": "05-reverse-modal.png" }
+  ],
+  "boundaries": [
+    "登记打款不触发任何真实转账（人工回单登记模式，无外部支付通道）",
+    "回单附件上传未在浏览器自动化中覆盖（IAB 不支持文件选择），上传/受控下载由 API 测试覆盖（含 /receipts 不公开）",
+    "审批阈值链路由 API 测试覆盖（参数中心提案→财务复核→生效），UI 未单独走一遍",
+    "夹具：co_creator 338 + co_profit #162/#163（UI验收·共创资金方）留在隔离库供复查"
+  ]
+}

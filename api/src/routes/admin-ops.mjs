@@ -30,6 +30,25 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
+// 以 co_profit_pay 有效流水（status=1）为唯一事实源，重算分润单的已付额与结清状态。
+// 冲正流水是负向金额，SUM 天然抵扣；调用方必须已持有 co_profit 行锁并在事务内。
+// 最近打款展示取最近一笔有效正向流水；结清后清空由冲正导致的部分状态自动回待打款。
+async function recalcCoProfitPay(c, cpId, operatorName) {
+  const cp = await c.one('SELECT * FROM co_profit WHERE id = ? FOR UPDATE', [cpId])
+  const paid = Number((await c.one('SELECT COALESCE(SUM(amount),0) s FROM co_profit_pay WHERE co_profit_id = ? AND status = 1', [cpId])).s)
+  const last = await c.one("SELECT pay_ref, channel, note FROM co_profit_pay WHERE co_profit_id = ? AND status = 1 AND direction = 1 ORDER BY id DESC LIMIT 1", [cpId])
+  const wasSettled = Number(cp.status) === 1
+  const settled = Number(cp.status) !== 2 && paid >= Number(cp.amount)
+  await c.upd(`UPDATE co_profit SET paid_amount = ?, status = ?, pay_ref = ?, pay_channel = ?, pay_note = ?,
+    paid_at = ?, paid_by = ? WHERE id = ?`,
+    [paid, Number(cp.status) === 2 ? 2 : (settled ? 1 : 0),
+      last ? last.pay_ref : null, last ? last.channel : null, last ? last.note : null,
+      settled && !wasSettled ? new Date() : (settled ? cp.paid_at : null),
+      settled && !wasSettled ? (operatorName ? 'admin:' + operatorName : cp.paid_by) : (settled ? cp.paid_by : null),
+      cpId])
+  return { paid, settled }
+}
+
 // ---------- /admin 系统工作区（SRE）与生态/财务审批 ----------
 const adminSys = {
   // 小程序数据分析（官方 getDailyVisitTrend；未配置凭据=MOCK 曲线）
@@ -196,7 +215,7 @@ const adminEco = {
     })
   },
   'GET /admin/agreements': async (req) => {
-    await requireAdmin(req)
+    await requireAdmin(req, ['super', 'ops', 'finance'])
     return await q('SELECT ac.*, m.name merchant_name FROM agreement_change ac JOIN merchant m ON m.id = ac.merchant_id ORDER BY ac.id DESC')
   },
   'POST /admin/agreements/:id/verdict': async (req) => {
@@ -413,7 +432,7 @@ const adminNew = {
 
   // 共创人登记（资金商/商品商）
   'GET /admin/co-creators': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
+    await requireAdmin(req, ['super', 'ops', 'finance'])
     return await q(`SELECT cc.*, p.title FROM co_creator cc JOIN tour_product p ON p.id = cc.product_id
       ORDER BY cc.id DESC LIMIT 200`)
   },
@@ -435,17 +454,163 @@ const adminNew = {
     return { status: Number(status) ? 1 : 0 }
   },
 
-  // 共创分润台账（结算期生成）
+  // ===== 共创分润打款闭环（T01）：运营/财务核对台账，财务或超管登记真实打款 =====
+  // 唯一事实源是 co_profit_pay（每笔真实支付一行，流水号全局唯一）；co_profit.paid_amount/status 由有效流水重算。
   'GET /admin/co-profits': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT cp.*, cc.co_no, cc.name, p.title FROM co_profit cp
-      JOIN co_creator cc ON cc.id = cp.co_creator_id JOIN tour_product p ON p.id = cp.product_id
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    return await q(`SELECT cp.*, cc.co_no, cc.name, cc.status co_status, p.title, p.city_code,
+        s.period settle_period,
+        (SELECT COUNT(*) FROM co_profit_pay y WHERE y.co_profit_id = cp.id AND y.status = 0) pending_approvals
+      FROM co_profit cp
+      JOIN co_creator cc ON cc.id = cp.co_creator_id
+      JOIN tour_product p ON p.id = cp.product_id
+      LEFT JOIN settlement s ON s.id = cp.settlement_id
       ORDER BY cp.id DESC LIMIT 200`)
   },
+  // 分润打款回单附件：存 static/receipts（/uploads 静态服务不覆盖该目录，URL 不对外）
+  'POST /admin/co-profits/receipt-upload': async (req) => {
+    await requireAdmin(req, 'coProfit.pay')
+    const { data, ext = 'jpg' } = req.body || {}
+    if (!['png', 'jpg', 'jpeg', 'webp', 'pdf'].includes(ext)) throw new BizError(1001, '回单仅支持 jpg/png/webp/pdf')
+    const buf = Buffer.from(String(data || ''), 'base64')
+    if (buf.length === 0 || buf.length > 5 * 1024 * 1024) throw new BizError(1001, '回单附件需在 5MB 内')
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = `receipt_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}.${ext === 'jpeg' ? 'jpg' : ext}`
+    fs.writeFileSync(path.join(dir, name), buf)
+    return { url: '/receipts/' + name }
+  },
   'POST /admin/co-profits/:id/pay': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
-    await q('UPDATE co_profit SET status = 1 WHERE id = ? AND status = 0', [req.params.id])
-    return { paid: true }
+    const a = await requireAdmin(req, 'coProfit.pay')
+    const payRef = String(req.body.payRef || '').trim()
+    const channel = ['bank', 'alipay', 'wechat', 'cash', 'other'].includes(req.body.channel) ? req.body.channel : 'bank'
+    const payDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.payDate || '')) ? String(req.body.payDate) : bizDay()
+    const receiptUrl = String(req.body.receiptUrl || '').trim() || null
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    const amount = Number(req.body.amount)
+    if (!/^[\w-]{6,64}$/.test(payRef)) throw new BizError(1001, '请填写真实支付流水号（6–64 位字母、数字、- 或 _），以银行/渠道回单为准')
+    if (!Number.isInteger(amount) || amount <= 0) throw new BizError(1001, '实付金额需为大于 0 的整数（分）')
+    if (receiptUrl && !/^\/receipts\/[\w.-]+$/.test(receiptUrl)) throw new BizError(1001, '回单附件需先上传（登记表单内选择文件）')
+    return tx(async (c) => {
+      const cp = await c.one(`SELECT cp.*, cc.status co_status, cc.name co_name FROM co_profit cp
+        JOIN co_creator cc ON cc.id = cp.co_creator_id WHERE cp.id = ? FOR UPDATE`, [req.params.id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) === 2) throw new BizError(2002, '该分润单已作废，不能登记打款')
+      if (Number(cp.status) === 1) throw new BizError(2002, '该分润单已结清，请刷新后核对')
+      // 合作方停用即暂停打款（对应"用户/合作方冻结"检查；停用恢复或走冲正/作废流程后才能继续）
+      if (Number(cp.co_status) !== 1) throw new BizError(6001, `共创人「${cp.co_name}」合作已停用，暂停打款。请先恢复合作生效，或走冲正/作废流程`)
+      const remaining = Number(cp.amount) - Number(cp.paid_amount)
+      if (amount > remaining) throw new BizError(1001, `实付金额超过未付余额：应付 ${(Number(cp.amount) / 100).toFixed(2)} 元，已付 ${(Number(cp.paid_amount) / 100).toFixed(2)} 元，本次最多 ${(remaining / 100).toFixed(2)} 元，不可超付`)
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ?', [payRef])) throw new BizError(2002, '该支付流水号已登记过，请核对银行回单，不能重复登记')
+      const threshold = await cfgNum('coprofit.pay_approve_min')
+      const needsApprove = threshold > 0 && amount >= threshold
+      const payId = await c.ins(`INSERT INTO co_profit_pay (co_profit_id, direction, pay_ref, channel, pay_date, amount, receipt_url, note, status, operator)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [cp.id, 1, payRef, channel, payDate, amount, receiptUrl, note, needsApprove ? 0 : 1, 'admin:' + a.name])
+      if (needsApprove) {
+        await audit(c, 'admin:' + a.name, 'co-profit', 'pay-submit', 'coprofit-' + cp.id, null, { payId, payRef, amount, channel, threshold })
+        return { pending: true, payId, message: '已提交登记：达到审批阈值，等待超级管理员复核后生效' }
+      }
+      const { paid, settled } = await recalcCoProfitPay(c, cp.id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay', 'coprofit-' + cp.id,
+        { status: Number(cp.status), paidAmount: Number(cp.paid_amount) }, { payId, payRef, amount, channel, paid, settled })
+      return { paid: true, payId, settled }
+    })
+  },
+  // 超阈值登记的复核：提案人与审批人不能相同；通过前重验状态/冻结/余额/流水唯一
+  'POST /admin/co-profits/pays/:payId/approve': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const pass = req.body.pass === true
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y) throw new BizError(1004, '打款登记不存在')
+      if (Number(y.status) !== 0) throw new BizError(2002, '该笔登记已处理，请刷新')
+      if (y.operator === 'admin:' + a.name) throw new BizError(1003, '双人复核：复核人不能与登记人相同')
+      if (!pass) {
+        await c.upd('UPDATE co_profit_pay SET status = 2, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, note, y.id])
+        await audit(c, 'admin:' + a.name, 'co-profit', 'pay-reject', 'coprofit-' + y.co_profit_id, { payId: y.id, payRef: y.pay_ref }, { note })
+        return { rejected: true }
+      }
+      const cp = await c.one(`SELECT cp.*, cc.status co_status FROM co_profit cp JOIN co_creator cc ON cc.id = cp.co_creator_id WHERE cp.id = ? FOR UPDATE`, [y.co_profit_id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) !== 0) throw new BizError(2002, '分润单状态已变化（已结清或已作废），该登记不能生效，请驳回')
+      if (Number(cp.co_status) !== 1) throw new BizError(6001, '共创人合作已停用，不能通过该打款登记')
+      if (Number(cp.paid_amount) + Number(y.amount) > Number(cp.amount)) throw new BizError(2002, '分润单剩余额度不足以让该登记生效，请驳回后重新登记')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ? AND id <> ?', [y.pay_ref, y.id])) throw new BizError(2002, '该支付流水号已被其他登记使用')
+      await c.upd('UPDATE co_profit_pay SET status = 1, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, note, y.id])
+      const { paid, settled } = await recalcCoProfitPay(c, cp.id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-approve', 'coprofit-' + cp.id, { status: Number(cp.status), paidAmount: Number(cp.paid_amount) },
+        { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount), paid, settled, note })
+      return { approved: true, settled }
+    })
+  },
+  // 撤回：登记人可在复核前撤回自己的待复核登记（登记人不能自批/自驳，撤回是唯一出口）
+  'POST /admin/co-profits/pays/:payId/withdraw': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.pay')
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y) throw new BizError(1004, '打款登记不存在')
+      if (y.operator !== 'admin:' + a.name) throw new BizError(1003, '只能撤回本人登记的记录')
+      if (Number(y.status) !== 0) throw new BizError(2002, '仅待复核的登记可撤回')
+      await c.upd('UPDATE co_profit_pay SET status = 4, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, '登记人撤回', y.id])
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-withdraw', 'coprofit-' + y.co_profit_id, { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount) }, { status: 4 })
+      return { withdrawn: true }
+    })
+  },
+  // 冲正：已生效打款登记错误时登记一笔负向流水，历史实付不改写；冲正后分润单回到待打款
+  'POST /admin/co-profits/pays/:payId/reverse': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.pay')
+    const payRef = String(req.body.payRef || '').trim()
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    if (!/^[\w-]{6,64}$/.test(payRef)) throw new BizError(1001, '请填写冲正流水的真实支付流水号（6–64 位），以银行/渠道冲正回单为准')
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y || Number(y.direction) !== 1 || Number(y.status) !== 1) throw new BizError(2002, '仅有效的打款登记可冲正')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ?', [payRef])) throw new BizError(2002, '该冲正流水号已登记过')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE reversed_pay_id = ? AND status = 1', [y.id])) throw new BizError(2002, '该笔打款已被冲正，不能重复冲正')
+      await c.ins(`INSERT INTO co_profit_pay (co_profit_id, direction, pay_ref, channel, amount, note, status, operator, reversed_pay_id)
+        VALUES (?,?,?,?,-?,?,?,?,?)`,
+        [y.co_profit_id, 2, payRef, y.channel, y.amount, note, 1, 'admin:' + a.name, y.id])
+      const { paid, settled } = await recalcCoProfitPay(c, y.co_profit_id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-reverse', 'coprofit-' + y.co_profit_id,
+        { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount) }, { reverseRef: payRef, paid, settled, note })
+      return { reversed: true, paid, settled }
+    })
+  },
+  // 作废：未付的分润单整单作废（错单/重复生成）；已打款走冲正
+  'POST /admin/co-profits/:id/void': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.void')
+    const reason = String(req.body.reason || '').trim()
+    if (reason.length < 4 || reason.length > 200) throw new BizError(1001, '请填写作废原因（4–200 字）')
+    return tx(async (c) => {
+      const cp = await c.one('SELECT * FROM co_profit WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) !== 0) throw new BizError(2002, '仅待打款的分润单可作废；已打款请走冲正')
+      if (Number(cp.paid_amount) > 0) throw new BizError(2002, '该分润单已有部分打款，不能作废，请走冲正')
+      await c.upd('UPDATE co_profit SET status = 2 WHERE id = ?', [cp.id])
+      await audit(c, 'admin:' + a.name, 'co-profit', 'void', 'coprofit-' + cp.id, { status: 0 }, { status: 2, reason })
+      return { voided: true }
+    })
+  },
+  // 打款历史（含待审批/驳回/冲正全轨迹）
+  'GET /admin/co-profits/:id/pays': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    return await q(`SELECT id, direction, pay_ref, channel, pay_date, amount, receipt_url, note, status, operator, approver, approve_note, reversed_pay_id, created_at
+      FROM co_profit_pay WHERE co_profit_id = ? ORDER BY id DESC`, [req.params.id])
+  },
+  // 回单附件受控下载（super/ops/finance；文件在 static/receipts，不进公开静态目录）
+  'GET /admin/co-profits/pays/:payId/receipt': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    const y = await one('SELECT receipt_url FROM co_profit_pay WHERE id = ?', [req.params.payId])
+    if (!y || !y.receipt_url) throw new BizError(1004, '该笔登记没有回单附件')
+    const name = String(y.receipt_url).replace('/receipts/', '')
+    if (!/^[\w.-]+$/.test(name)) throw new BizError(1001, '回单地址无效')
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts', name)
+    if (!file.startsWith(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts')) || !fs.existsSync(file)) throw new BizError(1004, '回单文件不存在')
+    const ext = name.split('.').pop()
+    const data = fs.readFileSync(file).toString('base64')
+    return { name, contentType: ext === 'pdf' ? 'application/pdf' : 'image/' + (ext === 'jpg' ? 'jpeg' : ext), data }
   },
 }
 

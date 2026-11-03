@@ -134,7 +134,7 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
+  const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit','cocreate'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
