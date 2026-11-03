@@ -215,7 +215,7 @@ export const people = {
   },
   // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计
   'POST /admin/users/:id/status': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'risk'])
+    const a = await requireAdmin(req, 'user.manage')
     const st = Number(req.body.status)
     const reason = String(req.body.reason || '').trim()
     if (![0, 1].includes(st)) throw new BizError(1001, '状态只能是正常或冻结')
@@ -233,7 +233,7 @@ export const people = {
     catch (e) { return { status: st, beanRebatesReleased: 0, beanRebateError: e.message } }
   },
   'POST /admin/users/:id/risk': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'risk'])
+    const a = await requireAdmin(req, 'user.manage')
     const flag = req.body.flag ? 1 : 0
     const reason = String(req.body.reason || '').trim()
     if (flag && reason.length < 4) throw new BizError(1001, '标记风险需要填写原因（至少 4 个字）')
@@ -319,5 +319,5 @@ async function partnerAccess(req) {
   return a
 }
 const PARTNER_ROWS = `SELECT 'city' kind, id, COALESCE(display_name, username) name, username ref, scope_city city_code, status FROM admin_user WHERE role = 'city_partner'
-  UNION ALL SELECT 'promoter', p.user_id, u.nickname, CAST(p.user_id AS CHAR), NULL, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id
+  UNION ALL SELECT 'promoter', p.user_id, COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p.profile,'$.real_name')),''),u.nickname), CAST(p.user_id AS CHAR), NULL, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id
   UNION ALL SELECT 'cocreator', c.id, c.name, c.co_no, p.city_code, c.status FROM co_creator c JOIN tour_product p ON p.id = c.product_id`

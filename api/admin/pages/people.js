@@ -59,7 +59,7 @@ async function users() {
       <button class="btn primary" type="submit">查询</button>
       ${Q.kw || Q.seg ? `<button class="btn ghost" type="button" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()">重置</button>` : ''}</form>
     <div class="cfg-tabs">${USER_SEGS.map(([v, n]) => `<button type="button" class="cfg-tab ${Q.seg === v ? 'on' : ''}" onclick="window.__userQ.seg='${v}';window.__userQ.page=1;users()">${n}${v ? ' ' + (sg[v] ?? '') : ''}</button>`).join('')}</div>
-    ${list.rows.length ? `<table><thead><tr><th>用户</th><th>注册时间</th><th>等级 / 成长值</th><th>订单</th><th>消费金额</th><th>最近下单</th><th>旅豆</th><th>身份</th><th>状态</th></tr></thead><tbody>
+    ${list.rows.length ? `<table><thead><tr><th>用户</th><th>注册时间</th><th>等级 / 成长值</th><th>订单</th><th>消费金额</th><th>最近下单</th><th>旅豆</th><th>身份</th><th>状态 / 管理</th></tr></thead><tbody>
     ${list.rows.map((u) => `<tr class="click-row" onclick="userProfile(${u.id})">
       <td><div class="puser">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}<div><div class="td-main">${esc(u.nickname || '未命名')}</div><div class="td-sub">ID ${u.id}${PN(u.has_mobile) ? ' · 已绑手机' : ''}</div></div></div></td>
       <td class="td-sub">${dt(u.created_at, 10)}</td>
@@ -68,7 +68,7 @@ async function users() {
       <td class="td-sub">${dt(u.last_at, 10)}</td><td class="num">${PN(u.beans)}</td>
       <td>${[u.creator_tag && u.creator_tag !== 'none' ? `<span class="pill s40">${esc(CREATOR_TAG[u.creator_tag] || '创作者')}</span>` : (PN(u.note_cnt) ? '<span class="pill off">写过笔记</span>' : ''),
         PN(u.is_promoter) ? '<span class="pill s20">推广</span>' : '', PN(u.is_staff) ? '<span class="pill s30">商户员工</span>' : '', PN(u.kyc_status) === 1 ? '<span class="pill ok">实名</span>' : ''].join(' ') || '<span class="td-sub">游客</span>'}</td>
-      <td>${PN(u.status) === 0 ? '<span class="pill s70">已冻结</span>' : PN(u.risk_flag) ? '<span class="pill warn">风险</span>' : '<span class="pill ok">正常</span>'}</td></tr>`).join('')}</tbody></table>
+      <td>${PN(u.status) === 0 ? '<span class="pill s70">已冻结</span>' : PN(u.risk_flag) ? '<span class="pill warn">风险</span>' : '<span class="pill ok">正常</span>'}<button class="btn ghost sm" onclick="event.stopPropagation();userProfile(${u.id})">查看与管理</button></td></tr>`).join('')}</tbody></table>
     <div class="pagination"><span>第 ${list.page} / ${pages} 页</span><div class="pagination-actions">
       <button class="btn ghost sm" ${list.page <= 1 ? 'disabled' : ''} onclick="window.__userQ.page--;users()">上一页</button>
       <button class="btn ghost sm" ${list.page >= pages ? 'disabled' : ''} onclick="window.__userQ.page++;users()">下一页</button></div></div>`
@@ -87,9 +87,9 @@ async function userProfile(id) {
     ${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}
     <div><h2>${esc(u.nickname || '未命名')} ${frozen ? '<span class="pill s70">已冻结</span>' : ''}${u.risk_flag ? ' <span class="pill warn">风险标记</span>' : ''}</h2>
       <div class="td-sub">ID ${u.id} · ${LEVEL_CN[u.member_level] || 'Lv' + u.member_level} · 成长值 ${PN(u.growth_value)} · 注册于 ${dt(u.created_at)}</div></div>
-    <div class="pprofile-act">
+    <div class="pprofile-act">${adminCan('user.manage') ? `
       <button class="btn ${frozen ? 'primary' : 'danger'} sm" onclick="userSetStatus(${u.id}, ${frozen ? 1 : 0})">${frozen ? '解除冻结' : '冻结账号'}</button>
-      <button class="btn ghost sm" onclick="userSetRisk(${u.id}, ${u.risk_flag ? 0 : 1})">${u.risk_flag ? '取消风险标记' : '标记风险'}</button></div>
+      <button class="btn ghost sm" onclick="userSetRisk(${u.id}, ${u.risk_flag ? 0 : 1})">${u.risk_flag ? '取消风险标记' : '标记风险'}</button>` : '<span class="muted">账号状态与风险管理需运营或风控权限</span>'}</div>
   </div>
   <div class="pstats">${stat('订单', PN(t.orders), `已完成 ${PN(t.completed)} · 退款 ${PN(t.refunded)}`)}${stat('消费金额', fen(t.gmv), `客单价 ${fen(t.aov)}`)}
     ${stat('旅豆余额', PN(p.beans.balance), `累计获得 ${PN(p.beans.lifetime)} · 已抵扣 ${PN(t.beans_used)}`)}${stat('内容', PN(c.notes.total) + ' 篇', `发布 ${PN(c.notes.published)} · 获赞 ${PN(c.notes.likes)}`)}</div>

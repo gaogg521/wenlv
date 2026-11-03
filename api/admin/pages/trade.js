@@ -5,6 +5,10 @@
 async function orderDrawer(no) {
   const o = await api('GET', '/admin/orders/' + no)
   drawer(`订单 ${esc(o.order_no)}`, `
+    <div class="order-service-actions">
+      ${adminCan('order.service') ? `<button class="btn primary sm" onclick="editOrderContact('${esc(o.order_no)}')" ${[10,20,30].includes(Number(o.status)) ? '' : 'disabled title="已核销或已终结订单保留原联系人"'}>修正联系人</button><button class="btn ghost sm" onclick="orderServiceNote('${esc(o.order_no)}')">添加客服备注</button>` : '<span class="muted">当前角色可查看订单；联系人修正与备注需运营权限</span>'}
+      ${adminCan('order.refund') && [20,30,40].includes(Number(o.status)) ? `<button class="btn danger sm" onclick="refundOrder('${esc(o.order_no)}')">处理退款</button>` : ''}
+    </div>
     <div class="row" style="gap:8px"><span class="pill s${o.status}">${ST[o.status]}</span>
       <span class="money" style="font-size:18px">${fen(o.amount_pay)}</span>
       ${o.bean_deducted ? `<span class="pill warn">抵扣 ${o.bean_deducted} 豆</span>` : ''}</div>
@@ -12,6 +16,7 @@ async function orderDrawer(no) {
       <tr><td class="td-sub" style="width:90px">商品</td><td class="td-main">${esc(o.title)}</td></tr>
       <tr><td class="td-sub">用户</td><td>${esc(o.nickname)}（ID ${o.user_id}）</td></tr>
       <tr><td class="td-sub">联系人</td><td>${esc(o.contact_name || '—')}</td></tr>
+      <tr><td class="td-sub">联系电话</td><td>${esc(o.contactPhone || '—')}</td></tr>
       <tr><td class="td-sub">支付流水</td><td class="num">${esc(o.pay?.wx_trans_no || '—')} ${o.pay ? `<span class="pill ${o.pay.status === 1 ? 'ok' : 'off'}">${['待支付', '成功', '关闭', '退款中', '已退款'][o.pay.status]}</span>` : ''}</td></tr>
     </table>
     ${o.passes?.length ? `<h3 style="margin:16px 0 8px">入园凭证</h3><table>
@@ -20,10 +25,31 @@ async function orderDrawer(no) {
       ${o.refunds.map((r) => `<tr><td class="num">${esc(r.refund_no)}<div class="td-sub">${esc(r.operator || '')} · ${esc(r.reason || '')}</div></td>
         <td>实退 <b>${fen(r.amount)}</b>${Number(r.fee_amount) ? `<div class="td-sub">手续费 ${fen(r.fee_amount)}（${Math.round(Number(r.fee_rate) * 1000) / 10}% · 距出发 ${r.days_to_depart} 天）</div>` : '<div class="td-sub">全额</div>'}</td>
         <td><span class="pill ${Number(r.status) === 2 ? 's50' : 's60'}">${['申请', '处理中', '已退款', '已拒绝'][r.status] || r.status}</span></td></tr>`).join('')}</table>` : ''}
+    <h3 style="margin:16px 0 10px">客服处理记录</h3>
+    ${(o.serviceRecords || []).map(r => { let v = r.after_val; if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } } return `<div class="rv-box"><b>${r.action === 'contact-update' ? '联系人修正' : '客服备注'}</b><p>${esc(v?.note || [v?.name,v?.phone,v?.reason].filter(Boolean).join(' · '))}</p><span class="td-sub">${esc(r.actor)} · ${esc(String(r.created_at).slice(0,19))}</span></div>` }).join('') || '<p class="muted">暂无客服处理记录</p>'}
     <h3 style="margin:16px 0 10px">状态机时间线（order_event 审计）</h3>
     <ul class="tl">${(o.events || []).map((e) => `<li>
       <div class="t">${ST[e.from_st] || e.from_st} → ${ST[e.to_st] || e.to_st}</div>
       <div class="d">${esc(String(e.detail || '').replace(/"/g, ''))} · ${esc(e.actor)} · ${esc(String(e.created_at).slice(5, 19))}</div></li>`).join('')}</ul>`)
+}
+async function editOrderContact(no) {
+  if (!adminCan('order.service')) return toast(adminWhy('order.service'), true)
+  const o = await api('GET', '/admin/orders/' + no)
+  modal('修正订单联系人', `<p class="muted">只修正履约联系方式，不改变订单买家、出行人、价格或团期。当前号码 ${esc(o.contactPhone || '未填写')}。</p><div class="field"><label>联系人</label><input id="serviceName" maxlength="64" value="${esc(o.contact_name || '')}"></div><div class="field"><label>新手机号（不修改留空）</label><input id="servicePhone" type="tel" maxlength="11" autocomplete="off"></div><div class="field"><label>修改原因（必填）</label><textarea id="serviceReason" maxlength="300"></textarea></div>`, `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderContact('${esc(no)}')">保存修正</button>`)
+}
+async function saveOrderContact(no) {
+  try {
+    await api('POST', '/admin/orders/' + no + '/contact', { name: $('#serviceName').value, phone: $('#servicePhone').value, reason: $('#serviceReason').value })
+    toast('联系人已修正，记录已保存'); closeModal(); await orderDrawer(no)
+  } catch (e) { toast(e.message, true) }
+}
+function orderServiceNote(no) {
+  if (!adminCan('order.service')) return toast(adminWhy('order.service'), true)
+  modal('添加客服备注', '<p class="muted">仅后台可见，保存后保留操作人和时间。请勿录入完整手机号、证件号等敏感信息。</p><textarea id="serviceNote" maxlength="500" placeholder="4–500 字，记录诉求、核实情况与处理结论"></textarea>', `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderServiceNote('${esc(no)}')">保存备注</button>`)
+}
+async function saveOrderServiceNote(no) {
+  try { await api('POST', '/admin/orders/' + no + '/service-notes', { note: $('#serviceNote').value }); toast('客服备注已保存'); closeModal(); await orderDrawer(no) }
+  catch (e) { toast(e.message, true) }
 }
 async function refundOrder(no) {
   let qt = null
@@ -64,7 +90,7 @@ async function products() {
   const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button></div>
+    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}${adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : '<span class="muted">当前角色仅查看，商品维护需运营权限</span>'}</div>
     <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
     <div class="row" style="margin:10px 0 0">
       <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
@@ -81,9 +107,9 @@ async function products() {
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
-      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">数据</button> <button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>
+      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">数据</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button></td>
+          ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}</td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>`
 }
@@ -99,11 +125,11 @@ async function sessionsDrawer(pid) {
   const d = await api('GET', '/admin/products/' + pid + '/sessions')
   const STS = { 1: '报名中', 2: '已成团', 3: '已截止', 4: '已取消', 5: '未成团' }
   drawer('团期管理 · ' + esc(d.title), `
-    <div class="row" style="margin:0 0 12px"><button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button><span class="muted">${d.sessions.length} 个团期</span></div>
+    <div class="row" style="margin:0 0 12px">${adminCan('entity.session.create') ? `<button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button>` : '<span class="muted">团期维护需运营权限</span>'}<span class="muted">${d.sessions.length} 个团期</span></div>
     ${d.sessions.length ? `<table><thead><tr><th>出发日</th><th>价格</th><th>报名/名额</th><th>状态</th><th></th></tr></thead><tbody>
     ${d.sessions.map((x) => `<tr><td class="num">${esc(String(x.depart_date).slice(0, 10))}</td><td class="money num">${fen(x.price_adult)}${x.early_price ? `<div class="td-sub">早鸟 ${fen(x.early_price)}</div>` : ''}</td>
       <td class="num">${x.booked}/${x.quota}<div class="td-sub">${x.min_go} 人成团</div></td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
-      <td><button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期：点「新增团期」')}`)
+      <td>${adminCan('entity.session.edit') ? `<button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button>` : '<span class="muted">仅查看</span>'}</td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期')}`)
 }
 
 /* ============ 商户 ============ */
@@ -113,7 +139,7 @@ async function merchants() {
   const lvName = (n) => ((mlv.find((l) => l.lv === Number(n)) || {}).name) || ('Lv' + n)
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0"><button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button><span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
+    <div class="row" style="margin-top:0">${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}<span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>

@@ -16,6 +16,13 @@ body { font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsof
 .nav-section { margin-bottom: 3px; }
 .nav-section[open] { padding-bottom: 5px; }
 #crumb:before { content: none; }
+.page-operations { margin: 0 32px 20px; padding: 14px 18px; border: 1px solid #e9dfd1; border-radius: 10px; background: #fffcf6; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.page-operations b { display: block; color: #795435; font-size: 12px; margin-bottom: 5px; }
+.page-operations span { color: #736d64; font-size: 12px; line-height: 1.7; }
+.operation-links, .order-service-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.operation-links { flex-shrink: 0; }
+.order-service-actions { margin-bottom: 16px; }
+@media(max-width:700px) { .page-operations { margin: 0 14px 16px; flex-direction: column; align-items: stretch; } .operation-links { flex-shrink: 1; } }
 .nav-item { border-radius: 10px; transition: background .15s, color .15s; }
 .nav-item.on { background: linear-gradient(90deg, #ffe9d6, #fff3e8); color: #a8441f; box-shadow: inset 0 0 0 1px #f3d4b6; }
 .nav-item.on:before { background: var(--brand-grad); width: 3px; height: 18px; }

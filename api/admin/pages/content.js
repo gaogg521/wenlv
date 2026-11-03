@@ -7,14 +7,15 @@ async function content() {
   const [rows, rvs] = await Promise.all([api('GET', '/admin/content'), api('GET', '/admin/reviews')])
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>笔记审核</h2><span class="muted">P0 笔记只读 · P1 开放发布后进入此队列（机审+人工）</span></div>
+    <div class="card-head"><h2>笔记审核</h2><span class="muted">查看全文与图片，处理待审笔记；已发布内容可下架并告知作者原因。</span></div>
+    ${adminCan('note.review') ? '' : '<p class="muted">当前账号可查看审核材料；通过、驳回由审核员或超级管理员处理。</p>'}
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
       <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(noteExcerpt(n.body))}</td>
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
-      <td>${[0, 1].includes(n.status) ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
-    </tbody></table>` : emptyBox('暂无待审内容（P1 开放笔记发布后进入此队列）')}
+      <td>${[0, 1].includes(Number(n.status)) && adminCan('note.review') ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
+    </tbody></table>` : emptyBox('暂无笔记；游客提交笔记后会显示在这里，待审内容可查看材料后处理。')}
   </div>
   <div class="card">
     <div class="card-head"><h2>线路评价管理</h2><span class="muted">游客核销后一单一评 · 文本已过机审 · 可隐藏违规/刷评</span></div>
@@ -23,11 +24,12 @@ async function content() {
       <td class="num" style="color:var(--brand);font-weight:700">${r.rating} ★</td>
       <td class="td-sub" style="max-width:320px">${esc(r.content)}</td>
       <td><span class="pill ${r.status === 1 ? 'ok' : 'off'}">${r.status === 1 ? '展示中' : '已隐藏'}</span></td>
-      <td><button class="btn ${r.status === 1 ? 'danger' : 'primary'} sm" onclick="toggleReview(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '隐藏' : '恢复展示'}</button></td></tr>`).join('')}
+      <td>${adminCan('review.moderate') ? `<button class="btn ${r.status === 1 ? 'danger' : 'primary'} sm" onclick="toggleReview(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '隐藏' : '恢复展示'}</button>` : '<span class="muted">由审核员管理展示</span>'}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('还没有评价——游客核销完成后可评价')}
   </div>`
 }
 async function toggleReview(id, show) {
+  if (!adminCan('review.moderate')) return toast('评价展示由审核员或超级管理员处理', true)
   try { await api('POST', `/admin/reviews/${id}/hide`, { show }); content() } catch (e) { toast(e.message, true) }
 }
 
@@ -58,7 +60,7 @@ async function tasks() {
   <div class="card">
     <div class="card-head"><h2>约稿任务</h2>
       <div class="cfg-tabs" style="margin:0">${TABS.map(([v, n, c]) => `<div class="cfg-tab ${String(window.__taskSt) === v ? 'on' : ''}" onclick="window.__taskSt='${v}';tasks()">${n} ${c}</div>`).join('')}</div>
-      <button class="btn primary sm" onclick="taskModal()">＋ 新建任务</button></div>
+      ${adminCan('entity.task.create') ? '<button class="btn primary sm" onclick="taskModal()">＋ 新建任务</button>' : '<span class="muted">当前账号可查看任务与参与进度</span>'}</div>
     ${frs.length ? `<table><thead><tr><th>任务</th><th>类型</th><th>报酬</th><th>交付要求</th><th>名额</th><th>进度</th><th>截止</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((t) => `<tr>
       <td><div style="display:flex;gap:8px;align-items:center">${t.cover_img ? `<img src="${esc(t.cover_img)}" style="width:56px;height:38px;object-fit:cover;border-radius:6px;flex:none">` : ''}
@@ -72,27 +74,43 @@ async function tasks() {
       <td>${ST[stateOf(t)]}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
         ${N(t.taken) ? `<button class="btn ${N(t.reviewing) ? 'primary' : 'ghost'} sm" onclick="taskEntries(${t.id})">${N(t.reviewing) ? '审核投稿 ' + N(t.reviewing) : '参与者 ' + N(t.taken)}</button>` : ''}
-        <button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>
+        ${adminCan('entity.task.edit') ? `<button class="btn ghost sm" onclick="taskModal(${t.id})">编辑</button>` : ''}
         ${t.rich_brief ? `<button class="btn ghost sm" onclick="taskDetail(${t.id})">说明</button>` : ''}
-        <button class="btn ghost sm" onclick="taskStatus(${t.id}, ${t.status === 4 ? 0 : 4})">${t.status === 4 ? '重新上线' : '下线'}</button>
-        ${N(t.taken) ? '' : `<button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button>`}</div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox(window.__taskSt === '' ? '暂无约稿任务：点右上「新建任务」发布第一单' : '该筛选下暂无任务')}</div>
-  ${cashRows.length ? `<div class="card"><div class="card-head"><h2>现金加奖打款</h2><span class="muted">投稿通过后进入待打款；财务线下打款后登记流水号（唯一，防重复）</span></div>
-    <table><thead><tr><th>任务</th><th>作者</th><th>金额</th><th>通过时间</th><th>状态</th><th>打款流水</th><th>操作</th></tr></thead><tbody>
-    ${cashRows.map((r) => `<tr><td class="td-main">${esc(r.title)}<div class="td-sub">${esc(r.task_no)} · 参与#${r.id}</div></td><td>${esc(r.nickname || '用户#' + r.user_id)}</td>
-      <td class="money num">${fen(r.cash_reward)}</td><td class="td-sub">${esc(String(r.finished_at || '').slice(0, 16).replace('T', ' '))}</td>
-      <td>${Number(r.cash_status) === 2 ? '<span class="pill ok">已打款</span>' : '<span class="pill warn">待打款</span>'}</td>
-      <td class="td-sub">${r.cash_ref ? esc(r.cash_ref) + '<br>' + esc(String(r.cash_paid_at || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(r.cash_by || '') : '—'}</td>
-      <td>${Number(r.cash_status) === 1 ? `<button class="btn primary sm" onclick="taskCashPaid(${r.id}, '${fen(r.cash_reward)}')">登记打款</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`
+        ${adminCan('task.status') ? `<button class="btn ghost sm" onclick="taskStatus(${t.id}, ${t.status === 4 ? 0 : 4})">${t.status === 4 ? '重新上线' : '下线'}</button>` : '<span class="muted">上下线由运营处理</span>'}
+        ${adminCan('task.delete') && !N(t.taken) ? `<button class="btn ghost sm" onclick="deleteTask(${t.id})">删除</button>` : ''}${N(t.taken) ? '<span class="muted">已有参与记录，保留任务</span>' : ''}</div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(window.__taskSt === '' ? (adminCan('entity.task.create') ? '暂无约稿任务：点右上「新建任务」发布第一单' : '暂无约稿任务；有权限的运营或审核人员新建后可在这里查看') : '该筛选下暂无任务')}</div>
+  ${cashRows.length ? taskCashTable(cashRows) : ''}`
 }
 async function taskStatus(id, status) {
+  if (!adminCan('task.status')) return toast('任务上下线由运营或超级管理员处理', true)
   if (status === 4 && !confirm('下线后游客不能再领取；已领取的人仍可投稿，审核照常。确定下线？')) return
   try { await api('POST', `/admin/content-tasks/${id}/status`, { status }); toast(status ? '已下线' : '已重新上线'); tasks() } catch (e) { toast(e.message, true) }
 }
 async function taskCashPaid(entryId, amount) {
+  if (!adminCan('task.cashPaid')) return toast('请由财务或超级管理员在「资金结算 → 现金加奖打款」登记实际打款', true)
+  const source = location.hash
   const ref = prompt(`登记现金加奖打款 ${amount}\n请输入打款流水号（银行/支付平台流水，唯一）：`)
   if (!ref) return
-  try { await api('POST', `/admin/task-entries/${entryId}/cash-paid`, { ref: ref.trim() }); toast('已登记打款'); tasks() } catch (e) { toast(e.message, true) }
+  try {
+    await api('POST', `/admin/task-entries/${entryId}/cash-paid`, { ref: ref.trim() })
+    toast('已登记打款')
+    if (location.hash === source) await (source === '#taskcash' ? taskCash() : tasks())
+  } catch (e) { toast(e.message, true) }
+}
+function taskCashTable(rows) {
+  return `<div class="card"><div class="card-head"><h2>现金加奖打款</h2><span class="muted">投稿通过后进入待打款；财务实际打款后登记唯一流水号，记录可追溯。</span></div>
+    ${adminCan('task.cashPaid') ? '' : '<p class="muted">当前账号可核对奖励与打款进度；登记实际打款请由财务或超级管理员在「资金结算 → 现金加奖打款」处理。</p>'}
+    ${rows.length ? `<table><thead><tr><th>任务</th><th>作者</th><th>金额</th><th>通过时间</th><th>状态</th><th>打款流水</th><th>操作</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td class="td-main">${esc(r.title)}<div class="td-sub">${esc(r.task_no)} · 参与#${r.id}</div></td><td>${esc(r.nickname || '用户#' + r.user_id)}</td>
+      <td class="money num">${fen(r.cash_reward)}</td><td class="td-sub">${esc(String(r.finished_at || '').slice(0, 16).replace('T', ' '))}</td>
+      <td>${Number(r.cash_status) === 2 ? '<span class="pill ok">已打款</span>' : '<span class="pill warn">待打款</span>'}</td>
+      <td class="td-sub">${r.cash_ref ? esc(r.cash_ref) + '<br>' + esc(String(r.cash_paid_at || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(r.cash_by || '') : '—'}</td>
+      <td>${Number(r.cash_status) === 1 ? (adminCan('task.cashPaid') ? `<button class="btn primary sm" onclick="taskCashPaid(${Number(r.id)}, '${fen(r.cash_reward)}')">登记打款</button>` : '<span class="muted">待财务处理</span>') : '<span class="muted">已登记，保留流水记录</span>'}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无现金加奖；约稿投稿审核通过且设有现金奖励后进入待打款。')}</div>`
+}
+async function taskCash() {
+  $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
+  const rows = await api('GET', '/admin/task-cash')
+  $('#app').innerHTML = taskCashTable(rows)
 }
 const ENTRY_ST = { 1: '<span class="pill s20">创作中</span>', 2: '<span class="pill warn">待审核</span>', 3: '<span class="pill ok">已通过</span>' }
 async function taskEntries(taskId) {
@@ -108,7 +126,10 @@ async function taskEntries(taskId) {
     : emptyBox('还没有人领取'), '')
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
-async function taskModal(id) { return entityEditor('task', id || null, { onSaved: () => tasks() }) }
+async function taskModal(id) {
+  if (!adminCan(id ? 'entity.task.edit' : 'entity.task.create')) return toast('当前账号没有任务维护权限', true)
+  return entityEditor('task', id || null, { onSaved: () => tasks() })
+}
 async function taskDetail(id) {
   const t = (await api('GET', '/admin/content-tasks')).find((x) => x.id === id)
   if (!t) return
@@ -198,21 +219,23 @@ async function entryVerdict(id, pass, fails = 0, taskId) {
 async function reviewNote(id) {
   let p
   try { p = await api('GET', `/admin/content/${id}`) } catch (e) { return toast(e.message, true) }
-  const n = p.note, live = [0, 1].includes(n.status)
+  const n = p.note, pending = [0, 1].includes(Number(n.status)), live = pending && adminCan('note.review')
   const right = `${authorHtml(p.author, ` · 被驳回 ${Number(p.author?.rejected || 0)} 篇`)}
     ${p.product ? `<div class="rv-box"><div class="rv-h">关联线路</div>${esc(p.product.title)}</div>` : ''}
     ${p.tasks.length ? `<div class="rv-box"><div class="rv-h">作为约稿投稿</div>${p.tasks.map((t) => esc(t.title)).join('<br>')}</div>` : ''}
     <div class="rv-box"><div class="rv-h">审核要点</div><div class="td-sub">是否原创、图文是否相符、有无广告导流/联系方式、有无不实承诺或违规内容。驳回原因会展示给作者。</div></div>`
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）"></textarea>
-    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false)">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true)">通过并发布</button></div>` : ''
+    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false)">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true)">通过并发布</button></div>` : (pending ? '<p class="muted">当前账号仅可查看审核材料；请由审核员或超级管理员完成通过或驳回。</p>' : '')
   reviewDrawer(`${live ? '审核笔记' : '查看笔记'} · ${esc(n.title || '（无题）')}`, `<div class="rv-grid"><div>${submissionHtml(n)}</div><div>${right}</div></div>`, foot)
 }
 async function noteVerdict(id, pass) {
+  if (!adminCan('note.review')) return toast('请由审核员或超级管理员处理笔记审核', true)
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
   try { await api('POST', `/admin/content/${id}/verdict`, { pass, reason }); toast(pass ? '已通过并发布' : '已驳回，作者可看到原因'); closeModal(); content() } catch (e) { toast(e.message, true) }
 }
 async function deleteTask(id) {
+  if (!adminCan('task.delete')) return toast('任务删除由运营或超级管理员处理', true)
   if (!confirm('删除该任务？')) return
   try { await api('POST', '/admin/content-tasks/' + id + '/delete', {}); toast('任务已删除'); tasks() } catch (e) { toast(e.message, true) }
 }
@@ -237,17 +260,19 @@ async function creators() {
       <td><span class="pill ${c.creator_tag === 'star' ? 'ok' : (c.creator_tag === 'signed' ? 's40' : (c.creator_tag === 'limited' ? 's70' : 'off'))}">${CREATOR_TAG[c.creator_tag] || esc(c.creator_tag)}</span></td>
       <td class="num">${c.note_count}</td><td class="num"><b>${c.published_count}</b></td><td class="num">${c.review_count}</td>
       <td class="num">${c.task_done}</td><td class="td-sub">${c.last_published ? esc(String(c.last_published).slice(0, 10)) : '—'}</td>
-      <td><button class="btn primary sm" onclick="userProfile(${c.id})">画像</button> <button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${esc(c.creator_tag || 'none')}')">设标签</button></td></tr>`).join('')}</tbody></table>`
+      <td><button class="btn primary sm" onclick="userProfile(${c.id})">画像</button> ${adminCan('creator.manage') ? `<button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${esc(c.creator_tag || 'none')}')">设标签</button>` : '<span class="muted">标签由运营维护</span>'}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(window.__kw.creators ? '没有匹配的创作者' : '池子还空：用户发布笔记或点评后自动入池')}
   </div>`
 }
 async function setCreatorTag(id, cur) {
+  if (!adminCan('creator.manage')) return toast('创作者标签由运营或超级管理员维护', true)
   modal('设置创作者标签 · 用户#' + id, `
     <div class="field"><label>标签</label><select id="ct_tag">${Object.entries(CREATOR_TAG).map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
     <p class="muted">签约/优质创作者在约稿任务与内容激励中享受加权（运营口径）；限流用于配合风控。</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveCreatorTag(${id})">保存</button>`)
 }
 async function saveCreatorTag(id) {
+  if (!adminCan('creator.manage')) return toast('创作者标签由运营或超级管理员维护', true)
   try { await api('PUT', '/admin/creators/' + id + '/tag', { tag: $('#ct_tag').value }); toast('标签已更新'); closeModal(); creators() }
   catch (e) { toast(e.message, true) }
 }
