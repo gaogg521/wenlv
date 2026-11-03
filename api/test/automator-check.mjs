@@ -46,7 +46,7 @@ for (const pg of pages) {
     const page = await mini.reLaunch(pg)
     await new Promise((r) => setTimeout(r, 1800))
     const cur = page.path
-    const name = pg.replace(/\//g, '_').replace(/^_/, '') || 'home'
+    const name = pg.replace(/[\/?=&]/g, '_').replace(/^_/, '') || 'home' // 带参数的路径在 Windows 上不能直接当文件名
     await shot(mini, name)
     results.push({ pg, ok: true, cur })
     log('OK', pg, '->', cur)
