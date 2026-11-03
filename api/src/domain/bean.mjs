@@ -32,7 +32,8 @@ export const clampDeduct = async (wanted, orderFen) =>
 
 /** 发放（1/2/3）：双闸校验 + 双分录，同事务 */
 export async function grant(userId, amount, bizType, bizRef, budgetId, connection) {
-  if (![1, 2, 3].includes(bizType)) throw new BizError(5001, '非法发放类型（无购买通道）')
+  // 7=RISK：人工权益调整（T06）补发；与 1/2/3 同走预算批次与全局哨兵双闸
+  if (![1, 2, 3, 7].includes(bizType)) throw new BizError(5001, '非法发放类型（无购买通道）')
   const run = async (c) => {
     const aid = await acctId(c, userId)
     const acc = await c.one('SELECT balance FROM bean_account WHERE id = ? FOR UPDATE', [aid])
@@ -157,10 +158,16 @@ export async function releaseDeferredRebates(userId) {
  * 注意不能数 direction=2 的全部行：每笔发放在预算哨兵户上还有一条借方，数进去会让"使用率"虚高、甚至超过 100%。
  */
 export async function flow() {
+  // 口径按真实用户户（user_id < 哨兵段）：发放=1/2/3/7 入账；消耗=4/6/7 出账 − 5 退回。
+  // 7=RISK 人工调整（T06）双向都记账：补发入用户户+预算哨兵出账；扣回出用户户+平台哨兵入账——
+  // 哨兵对手方不参与统计，否则扣回的对手方会被误计为"发放"。
   const r = await one(`SELECT
-    COALESCE(SUM(CASE WHEN direction = 1 AND biz_type IN (1,2,3) THEN amount END), 0) granted,
-    COALESCE(SUM(CASE WHEN direction = 2 AND biz_type IN (4,6,7) THEN amount END), 0) debited,
-    COALESCE(SUM(CASE WHEN direction = 1 AND biz_type = 5 THEN amount END), 0) reversed FROM bean_ledger`)
+    (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE l.direction = 1 AND l.biz_type IN (1,2,3,7) AND a.user_id < 999999000000) granted,
+    (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE l.direction = 2 AND l.biz_type IN (4,6,7) AND a.user_id < 999999000000) debited,
+    (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE l.direction = 1 AND l.biz_type = 5 AND a.user_id < 999999000000) reversed`)
   return { granted: Number(r.granted), consumed: Number(r.debited) - Number(r.reversed) }
 }
 

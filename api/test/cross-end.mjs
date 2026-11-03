@@ -130,8 +130,8 @@ await t('旅豆使用率：后台洞察 = 累计净消耗 ÷ 累计发放（按�
   assert.ok(f.consumed <= f.granted && f.consumed >= 0, `净消耗 ${f.consumed} 不应超过发放 ${f.granted}`)
   const ov = ok(await call('GET', '/admin/web3/overview', null, A))
   assert.equal(ov.beanGranted, f.granted); assert.equal(ov.beanConsumed, f.consumed)
-  const sum = await one(`SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE l.direction = 1 AND l.biz_type IN (1,2,3) AND a.user_id < 999999000000`)
-  assert.equal(Number(sum.s), f.granted, '发放量 = 真实用户户的入账合计')
+  const sum = await one(`SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE l.direction = 1 AND l.biz_type IN (1,2,3,7) AND a.user_id < 999999000000`)
+  assert.equal(Number(sum.s), f.granted, '发放量 = 真实用户户的入账合计（含 T06 人工补发 biz_type 7）')
 })
 let settle
 await t('结算：后台出单 → B 看到同一张单，金额逐字段一致；五口径之和 = 总额；该订单被纳入', async () => {

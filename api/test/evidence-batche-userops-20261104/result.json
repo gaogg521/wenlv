@@ -1,0 +1,33 @@
+{
+  "task": "批次E：T05 用户运营标签/内部备注 + T06 人工权益调整申请",
+  "date": "2026-11-04",
+  "branch": "feat/batch-e-user-ops",
+  "environment": {
+    "service": "http://127.0.0.1:18091/admin-ui",
+    "db": "wanderlust_qa_batche_20261104 (隔离库，V1–V47，seed:scenario)",
+    "jwt": "devsecret",
+    "payMode": "MOCK",
+    "accounts": "ops / admin（隔离库种入，密码见仓库启动文档，不入库）"
+  },
+  "apiTests": {
+    "npmTest": "204 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2，cross-end 45 项含旅豆使用率口径更新后通过）",
+    "newSuite": "api/test/admin-userops.mjs 4 项：标签词表/重复/移除审计与备注追加式；旅豆补发审批与账本幂等；扣回与成长值更正（含负更正与等级联动）；徽章补发/撤回与并发审批只执行一次"
+  },
+  "uiChecks": [
+    { "step": "运营 → 用户中心 → 画像：运营标签（词表下拉+打标）、内部备注（追加式）、发起权益调整申请 三区块齐全", "result": "通过（AC-01/AC-02）", "evidence": "01-profile-ops-section.png" },
+    { "step": "打标『高价值用户』→ 追加内部备注 → 发起旅豆补发 +88（模态显示当前余额/成长值与复核规则）", "result": "通过", "evidence": "02-entitlement-request-modal.png" },
+    { "step": "运营视角队列：自己的申请只有『撤回』，无审批按钮（自己不能审批自己）", "result": "通过（AC-02）", "evidence": "03-approved-executed.png（同一截图序列的前置状态）" },
+    { "step": "超管 → 权益调整 → 通过执行 → toast『已执行: 旅豆 +88（账本业务号 EQ2026110353016cf）』，行显示 已执行 + exec_result + 申请人/复核人", "result": "通过", "evidence": "03-approved-executed.png" }
+  ],
+  "fixesDuringVerification": [
+    "bean.grant 白名单扩展 biz_type 7(RISK) 用于人工补发；bean.flow() 统计口径改为按真实用户户（user_id < 哨兵段）计算发放/消耗——扣回的平台哨兵对手方行不再被误计为发放",
+    "user_badge 为复合主键（无 id 列）：徽章撤回改为按 (user_id, badge_id) 删除",
+    "测试清理改为按 req_no 删除账本/成长记录（biz_ref=业务号而非 stamp）"
+  ],
+  "boundaries": [
+    "权益执行与账本/成长/徽章+审计同事务；旅豆补发仍受预算批次与全局哨兵双闸约束",
+    "批量打标签（先预览后逐笔）未在本批实现（T05 后续项）",
+    "实名/绑定手机更正流程（T05 中的身份归属更正）未在本批实现，仍走原实名认证审核"
+  ]
+}
