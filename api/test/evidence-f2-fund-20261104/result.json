@@ -1,0 +1,19 @@
+{
+  "task": "批次F-2：T11 统一资金工作台",
+  "date": "2026-11-04",
+  "branch": "feat/f2-fund-workbench",
+  "environment": { "service": "http://127.0.0.1:18092/admin-ui", "db": "wanderlust_qa_batchf_20261104 (隔离库，V1–V48，seed:scenario)", "jwt": "devsecret", "payMode": "MOCK" },
+  "apiTests": {
+    "npmTest": "209 文件语法 + 全部离线套件通过",
+    "test:db": "全新隔离库 seed:scenario 后连续两遍全绿（NPM_EXIT=0×2）",
+    "newSuite": "api/test/admin-fundworkbench.mjs 3 项：四条线聚合=库内复算/异常标记（冻结挂起提现与加奖、重复打款流水、分润待复核、结算重复回单由库层唯一约束拒绝）/角色矩阵（finance/super/ops 可读，review/risk/city 拒绝）"
+  },
+  "uiChecks": [
+    { "step": "财务 → 资金结算 → 资金工作台：四条线待办金额 KPI + 异常标记 + 去办理下钻 + 对账口径说明（含外部确认未接入）", "result": "通过", "evidence": "01-fund-workbench.png" }
+  ],
+  "boundaries": [
+    "工作台只读聚合，不改变任何账；无迁移（纯 SELECT 聚合）",
+    "结算重复回单由 uk_settlement_payment_ref 库层唯一约束拒绝——工作台的重复检测查询保留作防御性读出",
+    "口径：登记已付≠外部渠道确认到账（外部通道未接入，页面明确标注）"
+  ]
+}

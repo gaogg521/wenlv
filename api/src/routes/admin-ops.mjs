@@ -685,4 +685,48 @@ const adminFin = {
   },
 }
 
-export { adminSys, adminEco, adminEdit, adminNew, adminFin }
+
+export { adminSys, adminEco, adminEdit, adminNew, adminFin, fundWorkbenchAgg }
+
+// ===== T11（批次 F-2）：统一资金工作台（只读聚合）=====
+// 把商户结算、推广提现、创作奖励、共创分润汇成待办入口；保留各自账本语义，不做可改金额总表。
+// 口径声明：登记已付 ≠ 外部确认到账（外部支付通道未接入，均为人工回单登记）。
+const fundWorkbenchAgg = {
+  'GET /admin/fund-workbench': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance', 'ops'])
+    const N = (v) => Number(v || 0)
+    // 商户结算：status 2=财务复核通过待支付；3=已登记回单；缺回单不可能（登记强制 ref），查重复流水
+    const settlePending = await one(`SELECT COUNT(*) n, COALESCE(SUM(amt_fulfill + COALESCE(fee_merchant,0)),0) amt FROM settlement WHERE status = 2`)
+    const settlePaid = await one(`SELECT COUNT(*) n FROM settlement WHERE status = 3`)
+    const settleDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT payment_ref FROM settlement WHERE status = 3 AND payment_ref IS NOT NULL GROUP BY payment_ref HAVING COUNT(*) > 1) x`)).n)
+    // 推广提现：0=待审；1=已打款；冻结账号挂起的待审单
+    const wdPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(w.amount),0) amt FROM promoter_withdraw w WHERE w.status = 0`)
+    const wdFrozen = N((await one(`SELECT COUNT(*) n FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id WHERE w.status = 0 AND u.status = 0`)).n)
+    const wdDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT pay_ref FROM promoter_withdraw WHERE status = 1 AND pay_ref IS NOT NULL GROUP BY pay_ref HAVING COUNT(*) > 1) x`)).n)
+    // 现金加奖（约稿投稿通过后的待打款）
+    const cashPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(cash_reward),0) amt FROM content_task_entry WHERE cash_status = 1`)
+    const cashFrozen = N((await one(`SELECT COUNT(*) n FROM content_task_entry e JOIN user_account u ON u.id = e.user_id WHERE e.cash_status = 1 AND u.status = 0`)).n)
+    // 共创分润：待付 = status 0 的未付余额；已结清 status 1
+    const coPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(amount - paid_amount),0) amt FROM co_profit WHERE status = 0`)
+    const coSettled = N((await one(`SELECT COUNT(*) n FROM co_profit WHERE status = 1`)).n)
+    const coPendingApprovals = N((await one(`SELECT COUNT(*) n FROM co_profit_pay WHERE status = 0`)).n)
+    return {
+      scopeCity: a.scopeCity || null,
+      lines: [
+        { key: 'settlements', label: '商户结算', goto: 'settlements', unit: '分',
+          pending: { count: N(settlePending.n), amount: N(settlePending.amt) }, paidCount: N(settlePaid.n),
+          issues: [settleDupRef ? `重复回单流水 ${settleDupRef} 组` : ''] },
+        { key: 'withdrawals', label: '推广提现', goto: 'withdrawals', unit: '分',
+          pending: { count: N(wdPending.n), amount: N(wdPending.amt) },
+          issues: [wdFrozen ? `冻结账号挂起待审 ${wdFrozen} 笔（可驳回）` : '', wdDupRef ? `重复打款流水 ${wdDupRef} 组` : ''] },
+        { key: 'taskcash', label: '现金加奖', goto: 'taskcash', unit: '分',
+          pending: { count: N(cashPending.n), amount: N(cashPending.amt) },
+          issues: [cashFrozen ? `冻结账号待打款 ${cashFrozen} 笔（暂停发放）` : ''] },
+        { key: 'cocreate', label: '共创分润', goto: 'cocreate', unit: '分',
+          pending: { count: N(coPending.n), amount: N(coPending.amt) }, paidCount: N(coSettled.n),
+          issues: [coPendingApprovals ? `超阈值待复核登记 ${coPendingApprovals} 笔` : ''] },
+      ].map((l) => ({ ...l, issues: l.issues.filter(Boolean) })),
+      metricNote: '金额为"登记已付/待付"口径：均为人工回单登记，不等于外部渠道确认到账（外部支付/代付通道未接入）',
+    }
+  },
+}
