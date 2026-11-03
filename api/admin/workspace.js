@@ -99,10 +99,10 @@
     allowedItems().forEach(el => { el.classList.toggle('on', el.dataset.p === key); el.setAttribute('aria-current', el.dataset.p === key ? 'page' : 'false') })
     const active = allowedItems().find(el => el.dataset.p === key)
     if (active) active.closest('details').open = true
-    document.getElementById('crumb').textContent = titleFor(key)
+    document.getElementById('crumb').textContent = (NAV.find(([, items]) => items.some(([k]) => k === key))?.[0] || '工作台') + ' / ' + titleFor(key)
     document.getElementById('pageTitle').textContent = titleFor(key)
     document.getElementById('pageDescription').textContent = descriptions[key] || '集中处理运营事项，让每一步操作清晰可追溯。'
-    document.getElementById('pageEyebrow').textContent = 'WANDERLUST / ' + (key === 'dash' ? '经营' : active?.closest('details')?.querySelector('summary')?.textContent || '运营')
+    document.getElementById('pageEyebrow').textContent = 'WANDERLUST / ' + (NAV.find(([, items]) => items.some(([k]) => k === key))?.[0] || '运营')
     document.title = titleFor(key) + ' · 向往的自由'
     if (options.history !== false && location.hash !== '#' + key) history.pushState(null, '', '#' + key)
     app.setAttribute('aria-busy', 'true')
@@ -210,13 +210,18 @@
     }
   })
   const search = document.getElementById('navSearch')
+  let navBeforeSearch = null
   search.oninput = () => {
     const needle = search.value.trim().toLowerCase(); let count = 0
+    if (needle && !navBeforeSearch) navBeforeSearch = new Map([...document.querySelectorAll('#nav details')].map(section => [section, section.open]))
     document.querySelectorAll('#nav details').forEach(section => {
       let visible = 0
-      section.querySelectorAll('[data-p]').forEach(button => { button.hidden = !button.textContent.toLowerCase().includes(needle); if (!button.hidden) visible++ })
+      const group = NAV.find(([g]) => section.querySelector('summary').textContent.startsWith(g))?.[0] || ''
+      section.querySelectorAll('[data-p]').forEach(button => { button.hidden = !(group + ' ' + button.textContent).toLowerCase().includes(needle); if (!button.hidden) visible++ })
       section.hidden = !visible; if (needle && visible) section.open = true; count += visible
+      if (!needle && navBeforeSearch) section.open = navBeforeSearch.get(section) || !!section.querySelector('[aria-current="page"]')
     })
+    if (!needle) navBeforeSearch = null
     document.getElementById('navEmpty').hidden = count > 0
   }
   document.getElementById('menuToggle').onclick = () => {

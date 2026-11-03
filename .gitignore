@@ -17,3 +17,7 @@ Thumbs.db
 # 运行时上传与本地证据（不入库）
 api/static/uploads/
 api/.env
+
+# 上传私钥与证书（绝不入库）
+api/certs/
+*.key

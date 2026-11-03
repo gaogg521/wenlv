@@ -27,17 +27,16 @@ const ICONS = {
 }
 // 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
 const NAV = [
-  ['工作台', [['dash', '驾驶舱', 'dash']]],
-  ['内容数据', [['contentdash', '内容看板', 'content'], ['contentcases', '举报与申诉', 'audit']]],
-  ['合伙人', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements']]],
-  ['交易履约', [['orders', '订单', 'orders'], ['products', '商品与团期', 'products'], ['phrases', '暗号管理', 'flag'], ['conflicts', '离线冲突', 'risk']]],
+  ['经营总览', [['dash', '经营概览', 'dash']]],
+  ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
+  ['订单履约', [['orders', '订单管理', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
+  ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag']]],
+  ['内容运营', [['contentdash', '内容看板', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
+  ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
-  ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
-  ['小程序', [['miniapp', '装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
-  ['用户与内容', [['users', '用户中心', 'promoters'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit']]],
-  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
-  ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
-  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['badges', '徽章管理', 'flag'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
+  ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
+  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
 ]
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
@@ -137,7 +136,7 @@ function boot() {
     items = items.filter(([k]) => k !== 'partnerperf' || ['super', 'ops', 'finance', 'city_partner'].includes(ME?.role))
     items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
     if (!items.length) return ''
-    return `<details class="nav-section" ${['工作台','交易履约','小程序'].includes(g) ? 'open' : ''}><summary class="nav-group">${g}</summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+    return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.length}</small></summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）
