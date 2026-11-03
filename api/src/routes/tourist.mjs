@@ -177,6 +177,8 @@ const c = {
     const id = await tx(async (c) => c.ins('INSERT INTO review (order_id, user_id, product_id, rating, content) VALUES (?,?,?,?,?)',
       [o.id, u.uid, o.product_id, rate, text.slice(0, 500)]))
     const badges = await badgeDomain.evaluateSafe(u.uid)
+    const prod = await one('SELECT merchant_id FROM tour_product WHERE id = ?', [o.product_id])
+    if (prod && prod.merchant_id) await badgeDomain.evaluateMerchantSafe(Number(prod.merchant_id)) // 新评价影响商户评分与口碑徽章
     return { id, rating: rate, secMock: sec.mock, badges }
   },
 
@@ -680,7 +682,7 @@ const cIdentity = {
     // 先按自动规则补一次评估：笔记发布、等级变化等没有单独触发点的规则，在打开勋章墙时也能及时点亮
     const fresh = await badgeDomain.evaluateSafe(u.uid)
     const mtr = await badgeDomain.metrics(u.uid)
-    const defs = await q('SELECT * FROM badge')
+    const defs = (await q('SELECT * FROM badge')).filter((b) => !badgeDomain.isMerchantBadge(b)) // 商户徽章不出现在游客勋章墙
     const owned = await q('SELECT badge_id, MAX(granted_at) granted_at FROM user_badge WHERE user_id = ? GROUP BY badge_id', [u.uid])
     // 城市 / 国家徽章只显示"开放中"的：城市有在售线路、国家下有已映射的城市（未开放的不在勋章墙露出，除非已获得）
     const openCities = new Set((await q('SELECT DISTINCT city_code FROM tour_product')).map((r) => String(r.city_code)))

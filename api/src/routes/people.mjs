@@ -2,6 +2,7 @@
 // 设计见仓库根目录《后台管理体系设计-20261102.md》：每类主体 = 列表（搜索、分群、统计）+ 360 画像（注册信息、关系、行为数据、治理操作、操作留痕）。
 // 隐私：手机号、证件号、实名只下发脱敏值；城市合伙人只能看本城商户。
 import * as member from '../domain/member.mjs'
+import * as merchantLevel from '../domain/merchant-level.mjs'
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
@@ -128,6 +129,8 @@ export const people = {
   // ---------------- 用户中心 ----------------
   // 会员等级配置（后台各页把等级数字显示成等级名；与小程序同源）
   'GET /admin/member/levels': async (req) => { await requireAdmin(req); return await member.levels() },
+  // 商户经营等级配置（后台各页把等级数字显示成等级名；与 B 端同源）
+  'GET /admin/merchant/levels': async (req) => { await requireAdmin(req); return await merchantLevel.levels() },
   'GET /admin/users/stats': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'risk'])
     const seg = {}
@@ -283,6 +286,8 @@ export const people = {
       kpi: { ...kpi, repeat_buyers: repeat, aov: N(kpi.orders) - N(kpi.refunded) > 0 ? Math.round(N(kpi.gmv) / (N(kpi.orders) - N(kpi.refunded))) : 0,
         refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, rating: rating.avg != null ? Number(rating.avg) : null, reviews: N(rating.n) },
       daily, products, staff, settle, settlements, reviews, ops,
+      level: await merchantLevel.progress(id),
+      badges: await q('SELECT b.name, b.icon_key, mb.granted_at FROM merchant_badge mb JOIN badge b ON b.id = mb.badge_id WHERE mb.merchant_id = ? ORDER BY mb.granted_at DESC', [id]),
     }
   },
 

@@ -32,6 +32,7 @@ export async function completeOrder(orderNo) {
   // 勋章自动规则（完成订单数 / 打卡城市数）：附加奖励，失败不影响订单完成
   const { evaluateSafe } = await import('./domain/badge.mjs')
   await evaluateSafe(Number(o.user_id))
+  await (await import('./domain/badge.mjs')).evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章
   return true
 }
 
@@ -46,6 +47,12 @@ async function tickComplete() {
     try { if (await completeOrder(r.order_no)) console.log('[job:complete]', r.order_no) }
     catch (e) { console.error('[job:complete:err]', r.order_no, e.message) }
   }
+}
+
+/** 每日重评所有商户：退款率、评分会随时间变化，等级与徽章不能只在订单完成时才更新 */
+async function tickMerchantLevel() {
+  const { evaluateMerchantSafe } = await import('./domain/badge.mjs')
+  for (const m of await q('SELECT id FROM merchant WHERE status = 1')) await evaluateMerchantSafe(Number(m.id))
 }
 
 async function tickCommission() {
@@ -137,7 +144,7 @@ async function main() {
       // 心跳：运维控制台据此判断任务进程存活
       await q(`INSERT INTO sys_job (name, last_run_at, last_status, run_count) VALUES ('main-loop', NOW(3), 'ok', 1)
                ON DUPLICATE KEY UPDATE last_run_at = NOW(3), last_status = 'ok', run_count = run_count + 1`, [])
-      if (hhmm >= '02:00' && lastCommission !== now.toDateString()) { lastCommission = now.toDateString(); await tickCommission() }
+      if (hhmm >= '02:00' && lastCommission !== now.toDateString()) { lastCommission = now.toDateString(); await tickCommission(); await tickMerchantLevel() }
       if (hhmm >= '03:10' && lastBeanDay !== now.toDateString()) { lastBeanDay = now.toDateString(); await tickBeanDayClose() }
       if (hhmm >= '04:00' && lastReconcile !== now.toDateString()) { lastReconcile = now.toDateString(); await tickAttestReconcile() }
       if (hhmm >= '01:00' && now.getDay() === 1 && lastSettlement !== now.toDateString()) { lastSettlement = now.toDateString(); await tickSettlement() }

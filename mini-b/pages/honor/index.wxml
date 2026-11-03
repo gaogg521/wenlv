@@ -1,0 +1,51 @@
+<view wx:if="{{!d}}" class="empty" style="padding:120rpx 40rpx;text-align:center;color:#8a919c">{{loadTxt}}</view>
+<block wx:else>
+  <view class="hero hn-hero">
+    <image class="hn-crest" src="{{d.level.art}}" mode="aspectFit" />
+    <view class="hn-info">
+      <view class="sub2">当前经营等级</view>
+      <view class="hi" style="font-size:44rpx">{{d.level.name}}</view>
+      <view class="sub2">订单 {{d.level.metrics.orders}} · 评价 {{d.level.metrics.reviews}}{{d.level.ratingText}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{d.level.next}}">
+    <view class="sec-title">升级「{{d.level.next.name}}」还差 <text class="tiny" style="margin-left:auto">已达标 {{d.level.next.pct}}%</text></view>
+    <view class="hn-crit" wx:for="{{crit}}" wx:key="key">
+      <view class="hn-crit-t"><text>{{item.text}}</text><text class="hn-ok" wx:if="{{item.ok}}">✓</text></view>
+      <view class="hn-bar"><view class="hn-fill {{item.ok ? 'ok' : ''}}" style="width:{{item.pct}}%"></view></view>
+    </view>
+    <view class="tiny" style="margin-top:8rpx">以上全部达标即自动升级；表现下滑也会相应调整。</view>
+  </view>
+  <view class="card" wx:else><view class="sec-title">已是最高等级</view><view class="tiny">感谢你对平台的长期支持，请继续保持品质。</view></view>
+
+  <view class="sec-title" style="margin:24rpx 28rpx 0">等级与权益</view>
+  <view class="card">
+    <view class="hn-lv {{d.level.lv >= item.lv ? 'on' : ''}}" wx:for="{{d.level.levels}}" wx:key="lv">
+      <image class="hn-lv-ico" src="{{item.art}}" mode="aspectFit" />
+      <view class="hn-lv-txt">
+        <view><text class="hn-lv-n">{{item.name}}</text></view>
+        <view class="tiny">{{item.needText}}</view>
+        <view class="tiny">{{item.perkText}}</view>
+      </view>
+      <text class="hn-now" wx:if="{{d.level.lv === item.lv}}">当前</text>
+    </view>
+  </view>
+
+  <view class="sec-title" style="margin:24rpx 28rpx 0">经营徽章 <text class="tiny" style="margin-left:auto">已点亮 {{ownedCount}}/{{total}}</text></view>
+  <block wx:for="{{groups}}" wx:key="key" wx:for-item="g">
+    <view class="hn-group">{{g.label}}<text class="tiny" style="margin-left:12rpx">{{g.got}}/{{g.items.length}}</text></view>
+    <view class="hn-wall">
+      <view class="hn-b {{item.owned ? 'on' : ''}}" wx:for="{{g.items}}" wx:key="id" bindtap="showBadge" data-id="{{item.id}}">
+        <view class="hn-seal" wx:if="{{item.proof && item.proof.sealed}}">✓</view>
+        <image class="hn-b-img" src="{{item.iconImg || item.art}}" mode="aspectFit" />
+        <view class="hn-b-n">{{item.name}}</view>
+        <view class="hn-b-prog" wx:if="{{!item.owned && item.progress}}"><view class="hn-b-fill" style="width:{{item.progress.pct}}%"></view></view>
+        <view class="hn-b-r" wx:if="{{!item.owned && item.progress}}">{{item.progress.cur}}/{{item.progress.need}}</view>
+        <view class="hn-b-r" wx:if="{{item.owned}}">{{item.rarityLabel}}</view>
+        <view class="hn-b-r" wx:if="{{!item.owned && !item.progress}}">未获得</view>
+      </view>
+    </view>
+  </block>
+  <view class="note">经营数据来自平台订单、核销与游客评价；等级与徽章每日重评，订单完成与新评价时也会即时更新。</view>
+</block>

@@ -19,6 +19,8 @@ import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportD
 import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
+import * as merchantLevel from '../domain/merchant-level.mjs'
+import * as badgeArt from '../domain/badge-art.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -30,6 +32,13 @@ import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 // ---------- /m 商户端 ----------
+// 工作台 / 我的页顶部用的等级简讯（只读库里已评定的等级，不在每次打开工作台时重算）
+async function levelBrief(mid, req) {
+  const mr = await one("SELECT level FROM merchant WHERE id = ?", [mid]), lvs = await merchantLevel.levels()
+  const cur = lvs.find((l) => l.lv === Number(mr && mr.level)) || lvs[0]
+  return { lv: cur.lv, name: cur.name, art: apiImg('/badge-art/mlevel/' + cur.lv + '.png', req) }
+}
+
 const m = {
   'POST /m/auth/login': async (req) => {
     const { code, merchantId } = req.body
@@ -61,7 +70,35 @@ const m = {
       WHERE merchant_id = ? AND status IN (20,30,40,50) AND DATE(paid_at) = CURDATE()`, [mid])
     const pending = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
       WHERE o.merchant_id = ? AND tp.status = 1`, [mid])
-    return { todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND DATE(created_at)=CURDATE()',[mid,u.uid]) }
+    return { todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND DATE(created_at)=CURDATE()',[mid,u.uid]),
+      level: await levelBrief(mid, req) }
+  },
+
+  // 经营等级与荣誉：当前等级 + 距下一级的逐项差距 + 全部等级权益 + 商户徽章墙（已获得点亮、未获得带进度）
+  'GET /m/honor': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm' || !u.merchantId) throw new BizError(1003, '商户端凭证')
+    const mid = u.merchantId
+    const fresh = await badgeDomain.evaluateMerchantSafe(mid)
+    const lvl = await merchantLevel.progress(mid)
+    const art = (n, on) => apiImg('/badge-art/mlevel/' + n + '.png' + (on ? '' : '?state=off'), req)
+    lvl.art = art(lvl.lv, true)
+    lvl.levels = lvl.levels.map((l) => ({ ...l, art: art(l.lv, l.lv <= lvl.lv) }))
+    const defs = (await q('SELECT * FROM badge')).filter(badgeDomain.isMerchantBadge)
+    const owned = await q('SELECT badge_id, granted_at FROM merchant_badge WHERE merchant_id = ?', [mid])
+    const refs = owned.map((o) => 'mbadge-' + mid + '-' + o.badge_id)
+    const evs = refs.length ? await q(`SELECT biz_ref, payload_hash, status FROM attest_event WHERE biz_type = 'badge' AND biz_ref IN (${refs.map(() => '?').join(',')})`, refs) : []
+    const badges = defs.map((b) => {
+      const pp = entities.publicProfile('badge', b, (x) => apiImg(x, req))
+      const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
+      const cat = badgeArt.CATEGORIES[pp.category] ? pp.category : 'mhonor'
+      const ev = got ? evs.find((e) => e.biz_ref === 'mbadge-' + mid + '-' + b.id) : null
+      return { id: b.id, name: b.name, iconImg: pp.icon_img || null, art: apiImg('/badge-art/' + b.id + '.png?state=' + (got ? 'on' : 'off'), req), category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label,
+        series: pp.series || '', tier: Number(pp.tier) || 0, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通', color: pp.color || null,
+        description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0, owned: !!got, granted_at: got ? got.granted_at : null,
+        progress: got ? null : badgeDomain.merchantProgressOf(b, lvl.metrics, lvl.lv), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1 } : null }
+    }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
+    return { level: lvl, badges, fresh, groups: badgeArt.MERCHANT_CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })) }
   },
 
   'GET /m/qrcode': async (req) => {

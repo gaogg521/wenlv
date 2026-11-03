@@ -139,3 +139,89 @@ export async function backfill(badgeId) {
   }
   return { eligible: users.length, granted, capped: capped > 0 }
 }
+
+// ===================== 商户徽章 =====================
+// 商户徽章与游客徽章共用 badge 表，规则类型以 m_ 开头：
+//   m_orders 累计完成订单 / m_gmv 累计成交（元）/ m_rating 评分×10（且评价数 ≥ profile.min_reviews，缺省 10）
+//   m_verify 累计成功核销 / m_months 入驻月数 / m_sealed 订单被可信记录封存数 / m_level 经营等级 ≥ 阈值
+// 发放写 merchant_badge，同样进存证队列（业务号 mbadge-<商户>-<徽章>）。
+import * as merchantLevel from './merchant-level.mjs'
+
+export const MERCHANT_RULES = ['m_orders', 'm_gmv', 'm_rating', 'm_verify', 'm_months', 'm_sealed', 'm_level']
+export const MERCHANT_CATEGORIES = ['mlevel', 'mhonor']
+/** 这枚徽章是不是商户徽章（规则类型或类别任一命中）；游客身份页 / 游客规则评估都要排除它们 */
+export const isMerchantBadge = (b) => String(b.rule_type || '').startsWith('m_') || MERCHANT_CATEGORIES.includes(prof(b).category)
+
+function merchantValue(badge, m, level) {
+  const t = badge.rule_type
+  if (t === 'm_orders') return m.orders
+  if (t === 'm_gmv') return Math.floor(m.gmv / 100)
+  if (t === 'm_rating') return m.reviews >= (Number(prof(badge).min_reviews) || 10) ? m.rating10 : 0
+  if (t === 'm_verify') return m.verifies
+  if (t === 'm_months') return m.months
+  if (t === 'm_sealed') return m.sealed
+  if (t === 'm_level') return level
+  return 0
+}
+
+export function merchantProgressOf(badge, m, level) {
+  if (!MERCHANT_RULES.includes(badge.rule_type)) return null
+  const need = Number(prof(badge).threshold) || 0
+  if (need <= 0) return null
+  const cur = Math.min(merchantValue(badge, m, level), need)
+  return { cur, need, pct: Math.floor(cur / need * 100) }
+}
+
+export async function grantMerchant(mid, badge, { by = 'system', reason = null, strict = false } = {}) {
+  if (await one('SELECT 1 x FROM merchant_badge WHERE merchant_id = ? AND badge_id = ?', [Number(mid), badge.id])) return { granted: false, reason: 'owned' }
+  const max = Number(prof(badge).max_issue) || 0
+  if (max > 0) {
+    const n = await one('SELECT COUNT(*) n FROM merchant_badge WHERE badge_id = ?', [badge.id])
+    if (Number(n.n) >= max) {
+      if (strict) throw new BizError(1001, `「${badge.name}」已达发行上限 ${max} 枚`)
+      return { granted: false, reason: 'max_issue' }
+    }
+  }
+  const r = await q('INSERT IGNORE INTO merchant_badge (merchant_id, badge_id, ref) VALUES (?,?,?)', [Number(mid), badge.id, String(by).slice(0, 48)])
+  if (!r.affectedRows) return { granted: false, reason: 'owned' }
+  await attest('badge', 'mbadge-' + mid + '-' + badge.id, { merchantId: Number(mid), badgeId: Number(badge.id), badge: badge.name, by, reason: reason || null }, null, 1)
+  return { granted: true }
+}
+
+/** 评定等级并按规则发放商户徽章；返回本次新发的徽章名 */
+export async function evaluateMerchant(mid) {
+  const r = await merchantLevel.refresh(mid)
+  if (!r) return []
+  const defs = (await q(`SELECT * FROM badge WHERE rule_type IN (${MERCHANT_RULES.map(() => '?').join(',')})`, MERCHANT_RULES))
+  const owned = new Set((await q('SELECT badge_id FROM merchant_badge WHERE merchant_id = ?', [mid])).map((x) => Number(x.badge_id)))
+  const out = []
+  for (const b of defs) {
+    if (owned.has(Number(b.id))) continue
+    const th = Number(prof(b).threshold) || 0
+    if (th <= 0) continue
+    const v = merchantValue(b, r.m, r.to)
+    if (v < th) continue
+    const g = await grantMerchant(mid, b, { by: 'rule:' + b.rule_type, reason: `${b.rule_type} ${v} ≥ ${th}` })
+    if (g.granted) out.push(b.name)
+  }
+  return out
+}
+export async function evaluateMerchantSafe(mid) {
+  try { return await evaluateMerchant(mid) } catch (e) { console.error('[badge:merchant]', mid, e.message); return [] }
+}
+
+/** 后台"按规则补发"：商户徽章 */
+export async function backfillMerchant(badge) {
+  const th = Number(prof(badge).threshold) || 0
+  if (th <= 0) throw new BizError(1001, '请先在徽章编辑器里设置「达成阈值」')
+  let granted = 0, eligible = 0, capped = false
+  for (const m of await q('SELECT id FROM merchant WHERE status = 1')) {
+    const r = await merchantLevel.refresh(m.id)
+    if (merchantValue(badge, r.m, r.to) < th) continue
+    eligible++
+    const g = await grantMerchant(m.id, badge, { by: 'backfill:' + badge.rule_type })
+    if (g.granted) granted++
+    if (g.reason === 'max_issue') { capped = true; break }
+  }
+  return { eligible, granted, capped }
+}

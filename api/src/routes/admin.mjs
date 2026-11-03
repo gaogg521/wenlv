@@ -20,6 +20,7 @@ import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
 import * as member from '../domain/member.mjs'
+import * as merchantLevel from '../domain/merchant-level.mjs'
 import * as taskReview from '../domain/task-review.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
@@ -31,6 +32,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
+
+// config_history 的 JSON 列被驱动读成了 JS 值（数组 / 对象 / 数字 / 字符串），写回 rule_config 必须序列化成 JSON 文本；
+// 直接 String() 会把数组变成 "[object Object]"（此前审批、回滚任何 JSON 数组类参数都会报错）
+const jsonText = (v) => JSON.stringify(v)
 
 const admin = {
   'POST /admin/login': async (req) => {
@@ -445,6 +450,9 @@ const admin = {
     if (key === 'member.levels') {
       try { member.parseLevels(newValue) } catch (e) { throw new BizError(1001, e.message) }
     }
+    if (key === 'merchant.levels') {
+      try { merchantLevel.parseLevels(newValue) } catch (e) { throw new BizError(1001, e.message) }
+    }
     if (key === 'settlement.refund_fee_merchant_pct' && !(Number(newValue) >= 0 && Number(newValue) <= 1)) {
       throw new BizError(1001, '商户分成比例需在 0~1 之间（如 0.5 = 50%）')
     }
@@ -469,11 +477,12 @@ const admin = {
     if (!h) throw new BizError(1004, '提案不存在或已处理')
     if (h.proposer === 'admin:' + a.name) throw new BizError(1003, '双人复核：提案人与审批人不能相同')
     await tx(async (c) => {
-      await c.upd('UPDATE rule_config SET v = CAST(? AS JSON), updated_by = ?, updated_version = updated_version + 1 WHERE k = ?', [String(h.new_value), 'admin:' + a.name, h.cfg_key])
+      await c.upd('UPDATE rule_config SET v = CAST(? AS JSON), updated_by = ?, updated_version = updated_version + 1 WHERE k = ?', [jsonText(h.new_value), 'admin:' + a.name, h.cfg_key])
       await c.upd("UPDATE config_history SET status = 1, approver = ?, effective_at = NOW(3) WHERE id = ?", ['admin:' + a.name, h.id])
       await audit(c, 'admin:' + a.name, 'config', 'approve', h.cfg_key, h.old_value, h.new_value)
     })
     await loadConfig(true)
+    if (h.cfg_key === 'merchant.levels') await merchantLevel.resyncAll() // 新门槛生效后立即重评所有商户
     if (h.cfg_key === 'member.levels') await member.resyncAll() // 新门槛生效后立即重算所有人的等级
     return { ok: true }
   },
@@ -482,9 +491,9 @@ const admin = {
     const h = await one('SELECT * FROM config_history WHERE cfg_key = ? ORDER BY id DESC LIMIT 1', [req.body.key])
     if (!h) throw new BizError(1004, '无历史版本')
     await tx(async (c) => {
-      await c.upd('UPDATE rule_config SET v = CAST(? AS JSON), updated_by = ?, updated_version = updated_version + 1 WHERE k = ?', [String(h.old_value), 'admin:' + a.name, h.cfg_key])
+      await c.upd('UPDATE rule_config SET v = CAST(? AS JSON), updated_by = ?, updated_version = updated_version + 1 WHERE k = ?', [jsonText(h.old_value), 'admin:' + a.name, h.cfg_key])
       await c.ins('INSERT INTO config_history (cfg_key, old_value, new_value, proposer, approver, status, reason, effective_at) VALUES (?,CAST(? AS JSON),CAST(? AS JSON),?,?,3,?,NOW(3))',
-        [h.cfg_key, String(h.new_value), String(h.old_value), 'admin:' + a.name, 'admin:' + a.name, '回滚'])
+        [h.cfg_key, jsonText(h.new_value), jsonText(h.old_value), 'admin:' + a.name, 'admin:' + a.name, '回滚'])
       await audit(c, 'admin:' + a.name, 'config', 'rollback', h.cfg_key, h.new_value, h.old_value)
     })
     await loadConfig(true)
@@ -817,6 +826,7 @@ const admin = {
     if (Number(o.amount_pay) > 0) await member.addGrowth(o.user_id, Number(o.amount_pay), orderNo) // 成长值与等级不依赖旅豆预算（与 jobs.completeOrder 一致）
     await promo.createCommission(orderNo)
     await badgeDomain.evaluateSafe(Number(o.user_id))
+    await badgeDomain.evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号
     await pass.attest('order', orderNo, {
       orderNo, amountPay: Number(o.amount_pay), status: 50,

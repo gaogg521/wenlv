@@ -2,6 +2,7 @@
   <view class="hi">{{merchant ? merchant.name : '商户工作台'}}</view>
   <view class="sub2">{{err === 'login' ? '未登录 · 在「我的」绑定门店' : greet + ' · 今日经营一目了然'}}</view>
   <view class="hero-chip" wx:if="{{wb}}"><view class="dot"></view>营业中 · 数据实时同步</view>
+  <view class="lv-chip" wx:if="{{wb.level}}" bindtap="goHonor"><image src="{{wb.level.art}}" mode="aspectFit" /><text>{{wb.level.name}} ›</text></view>
   <view class="hero-chip" wx:elif="{{err === 'login'}}">🔒 绑定门店后开启核销</view>
 </view>
 <!-- 平台公告：后台「小程序装修 · 商户端」维护 -->

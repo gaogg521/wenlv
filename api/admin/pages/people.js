@@ -146,6 +146,11 @@ async function merchantProfile(id) {
     <div class="pprofile-act"><button class="btn ghost sm" onclick="editMerchant(${m.id})">编辑资料</button></div></div>
   <div class="pstats">${stat('累计 GMV', fen(k.gmv), `近 30 日 ${fen(k.gmv30)}`)}${stat('订单', PN(k.orders), `核销 ${PN(k.verified)} · 客单价 ${fen(k.aov)}`)}
     ${stat('退款率', pct(k.refund_rate), `退款 ${PN(k.refunded)} 单`)}${stat('评分', k.rating != null ? k.rating.toFixed(1) + ' ★' : '—', `${k.reviews} 条评价 · 复购用户 ${k.repeat_buyers}`)}</div>
+  ${p.level ? `<div class="card" style="margin:0 0 12px"><div class="card-head"><h2>经营等级</h2><span class="muted">按订单、评价、退款率评定；门槛在参数中心 merchant.levels</span></div>
+    <div class="row" style="gap:16px;align-items:center"><img src="/badge-art/mlevel/${p.level.lv}.svg" width="84" height="84" alt=""><div><b style="font-size:16px">Lv${p.level.lv} ${esc(p.level.name)}</b>
+      <div class="td-sub">完成订单 ${PN(p.level.metrics.orders)} · 评价 ${PN(p.level.metrics.reviews)}${p.level.metrics.reviews ? ' · 评分 ' + p.level.metrics.rating10 / 10 : ''} · 退款率 ${p.level.metrics.refundPct}%</div>
+      <div class="td-sub">${p.level.next ? '距「' + esc(p.level.next.name) + '」：' + p.level.next.criteria.map((c) => esc(c.label) + ' ' + c.cur + '/' + c.need + c.unit + (c.ok ? ' ✓' : '')).join(' · ') : '已是最高等级'}</div></div></div>
+    <div class="row" style="gap:8px;margin-top:8px">${(p.badges || []).map((b) => '<span class="pill ok">' + esc(b.name) + '</span>').join('') || '<span class="muted">暂无商户徽章</span>'}</div></div>` : ''}
   <div class="card" style="margin:0 0 12px"><div class="card-head"><h2>近 14 日成交额</h2></div>${dayBars(p.daily, { key: 'gmv', fmt: (v) => fen(v), label: '成交额' })}</div>
   <div class="rv-grid"><div>
     <div class="rv-box"><div class="rv-h">商品与线路（${p.products.length}）</div>
