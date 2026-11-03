@@ -140,7 +140,7 @@ const adminEco = {
       ORDER BY r.id DESC LIMIT 100`)
   },
   'POST /admin/reviews/:id/hide': async (req) => {
-    const a = await requireAdmin(req, ['super', 'review'])
+    const a = await requireAdmin(req, 'review.moderate')
     const st = req.body.show ? 1 : 0
     await q('UPDATE review SET status = ? WHERE id = ?', [st, req.params.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'review', st ? 'show' : 'hide', 'review-' + req.params.id, null, null))
@@ -166,7 +166,7 @@ const adminEco = {
     return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
   },
   'POST /admin/content/:id/verdict': async (req) => {
-    const a = await requireAdmin(req, ['super', 'review'])
+    const a = await requireAdmin(req, 'note.review')
     const passed = req.body.pass === true
     const reason = String(req.body.reason || '').trim()
     if (!passed && reason.length < 4) throw new BizError(1001, '请填写驳回原因（至少 4 个字），作者会在小程序里看到')
@@ -185,7 +185,7 @@ const adminEco = {
     })
   },
   'POST /admin/merchants/:id/approve': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, 'merchant.approve')
     return tx(async cc => {
       const m = await cc.one('SELECT * FROM merchant WHERE id = ? AND status = 0 FOR UPDATE', [req.params.id])
       if (!m) throw new BizError(2002, '进件已处理或不存在')
@@ -321,7 +321,7 @@ const adminEdit = {
       ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT 200`)
   },
   'PUT /admin/creators/:id/tag': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, 'creator.manage')
     const tag = String(req.body.tag || '')
     if (!CREATOR_TAGS.includes(tag)) throw new BizError(1001, '未知创作者标签')
     const u = await one('SELECT id, creator_tag FROM user_account WHERE id = ?', [req.params.id])

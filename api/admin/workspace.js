@@ -3,6 +3,7 @@
 (() => {
   const app = document.getElementById('app')
   const descriptions = {
+    taskcash: '核对已通过投稿的现金奖励，线下实际支付后登记真实打款流水。',
     contentcases: '处理旅行笔记举报，复核作者下架申诉并反馈结果。',
     partnerperf: '按合伙人角色查看累计业绩排行，核对计佣、提现及来源结算明细。',
     contentdash: '查看笔记发布、审核、获赞与关联线路经营数据。',
@@ -29,7 +30,7 @@
     terms: '后台术语与小程序合规用语的对照表。',
     users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
   }
-  const renderers = { contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { taskcash: taskCash, contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage
@@ -102,6 +103,7 @@
     document.getElementById('crumb').textContent = (NAV.find(([, items]) => items.some(([k]) => k === key))?.[0] || '工作台') + ' / ' + titleFor(key)
     document.getElementById('pageTitle').textContent = titleFor(key)
     document.getElementById('pageDescription').textContent = descriptions[key] || '集中处理运营事项，让每一步操作清晰可追溯。'
+    renderPageOperations(key)
     document.getElementById('pageEyebrow').textContent = 'WANDERLUST / ' + (NAV.find(([, items]) => items.some(([k]) => k === key))?.[0] || '运营')
     document.title = titleFor(key) + ' · 向往的自由'
     if (options.history !== false && location.hash !== '#' + key) history.pushState(null, '', '#' + key)
@@ -148,7 +150,8 @@
     document.getElementById('clearOrders').onclick = () => { orderQuery = ''; orderStatus = 0; orderPage = 1; renderOrders() }
     app.querySelectorAll('[data-order-status]').forEach(button => { button.onclick = () => { orderStatus = Number(button.dataset.orderStatus); orderQuery = document.getElementById('orderKeyword').value.trim(); orderPage = 1; renderOrders() } })
     app.querySelectorAll('[data-order-no]').forEach(button => { button.onclick = () => orderDrawer(button.dataset.orderNo).catch(error => toast(error.message, true)) })
-    app.querySelectorAll('[data-refund-no]').forEach(button => { button.onclick = () => refundOrder(button.dataset.refundNo) })
+    app.querySelectorAll('[data-refund-no]').forEach(button => { if (!adminCan('order.refund')) button.remove(); else button.onclick = () => refundOrder(button.dataset.refundNo) })
+    app.querySelectorAll('button.btn[data-order-no]').forEach(button => { button.textContent = adminCan('order.service') || adminCan('order.refund') ? '查看与处理' : '详情' })
     app.querySelectorAll('[data-complete-no]').forEach(button => { button.onclick = () => completeOrder(button.dataset.completeNo) })
     document.getElementById('ordersPrev').onclick = () => { orderPage--; renderOrders() }
     document.getElementById('ordersNext').onclick = () => { orderPage++; renderOrders() }
@@ -156,6 +159,14 @@
   }
 
   function enhanceTables(root) {
+    const editorActions = { editMerchant: 'entity.merchant.edit', addMerchant: 'entity.merchant.create', approveMerchant: 'merchant.approve', editProduct: 'entity.product.edit', sessionModal: 'entity.session.create' }
+    root.querySelectorAll('button[onclick]').forEach(button => {
+      const handler = button.getAttribute('onclick') || ''
+      const named = handler.match(/^\s*(\w+)\(/)?.[1]
+      const entity = handler.match(/^\s*entityEditor\('([^']+)',\s*(null|\d+)/)
+      const action = entity ? `entity.${entity[1]}.${entity[2] === 'null' ? 'create' : 'edit'}` : editorActions[named]
+      if (action && !adminCan(action)) { button.disabled = true; button.title = adminWhy(action); button.setAttribute('aria-label', button.textContent.trim() + '：' + adminWhy(action)) }
+    })
     root.querySelectorAll('table').forEach(table => {
       if (table.parentElement.classList.contains('table-wrap')) return
       const wrap = document.createElement('div'); wrap.className = 'table-wrap'; wrap.tabIndex = 0
