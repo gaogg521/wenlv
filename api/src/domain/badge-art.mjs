@@ -85,9 +85,9 @@ const GLYPH = {
   S: 'M10 2 C6 -1 0 1 0 4 C0 8 10 6 10 10 C10 14 3 15 0 12', T: 'M0 0 H10 M5 0 V14', U: 'M0 0 V9 C0 16 10 16 10 9 V0', V: 'M0 0 L5 14 L10 0',
   W: 'M0 0 L2.5 14 L5 5 L7.5 14 L10 0', X: 'M0 0 L10 14 M10 0 L0 14', Y: 'M0 0 L5 7 L10 0 M5 7 V14', Z: 'M0 0 H10 L0 14 H10',
 }
-const glyphs = (text, cx, cy, ink, k = 3.1) => {
+const glyphs = (text, cx, cy, ink, k = 3.1, w0 = 3.4) => {
   const gap = 5, w = 10 * k, total = text.length * w + (text.length - 1) * gap * k / 2
-  return '<g fill="none" stroke="' + ink + '" stroke-width="' + f(3.4 / k) + '" stroke-linecap="round" stroke-linejoin="round">' + [...text].map((ch, i) =>
+  return '<g fill="none" stroke="' + ink + '" stroke-width="' + f(w0 / k) + '" stroke-linecap="round" stroke-linejoin="round">' + [...text].map((ch, i) =>
     '<path d="' + (GLYPH[ch] || GLYPH.X) + '" transform="translate(' + f(cx - total / 2 + i * (w + gap * k / 2)) + ' ' + f(cy - 7 * k) + ') scale(' + k + ')"/>').join('') + '</g>'
 }
 const polar = (r, deg, cx = 128, cy = 128) => [f(cx + r * Math.sin(deg * Math.PI / 180)), f(cy - r * Math.cos(deg * Math.PI / 180))]
@@ -302,11 +302,12 @@ function countryBadge(o, owned, rarity, u) {
   const code = /^[A-Za-z]{2}$/.test(o.country_code || '') ? o.country_code.toUpperCase() : 'XX'
   const defs = ''
   const out = [`<g transform="rotate(-9 128 128)">`]
-  out.push(`<circle cx="128" cy="128" r="119" fill="none" stroke="${ink}" stroke-width="5" stroke-dasharray="1 7" stroke-linecap="round" opacity="0.9"/>`)
-  out.push(`<circle cx="128" cy="128" r="110" fill="none" stroke="${ink}" stroke-width="5"/><circle cx="128" cy="128" r="99" fill="none" stroke="${ink}" stroke-width="1.8"/>`)
+  out.push(`<circle cx="128" cy="128" r="112" fill="${ink}" opacity="${owned ? 0.13 : 0.1}"/>`) // 浅色底：小尺寸下印章也有分量，不会只剩一圈细线
+  out.push(`<circle cx="128" cy="128" r="119" fill="none" stroke="${ink}" stroke-width="6" stroke-dasharray="1 7" stroke-linecap="round" opacity="0.9"/>`)
+  out.push(`<circle cx="128" cy="128" r="110" fill="none" stroke="${ink}" stroke-width="8"/><circle cx="128" cy="128" r="99" fill="none" stroke="${ink}" stroke-width="3"/>`)
   out.push(`<circle cx="128" cy="128" r="85" fill="none" stroke="${ink}" stroke-width="1.5" stroke-dasharray="5 3.5" opacity="0.85"/>`)
-  out.push(`<rect x="38" y="100" width="180" height="56" fill="${ink}" opacity="0.10"/><path d="M38 100 H218 M38 156 H218" stroke="${ink}" stroke-width="3"/>`)
-  out.push(glyphs(code, 128, 128, ink))
+  out.push(`<rect x="38" y="100" width="180" height="56" fill="${ink}" opacity="0.22"/><path d="M38 100 H218 M38 156 H218" stroke="${ink}" stroke-width="4"/>`)
+  out.push(glyphs(code, 128, 128, ink, 3.1, 4.4))
   out.push(iconG(o.icon_key, 1.05, 128, 62, ink, 3.2))
   const tier = Math.max(1, Math.min(5, Number(o.tier) || 3))
   for (let i = 0; i < 5; i++) out.push(star(f(128 - 40 + i * 20), 184, 5.2, i < tier || !o.series ? ink : 'none', `stroke="${ink}" stroke-width="1"`))
