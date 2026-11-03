@@ -114,3 +114,25 @@ export async function resyncAll() {
   for (const m of await q('SELECT id FROM merchant')) { const r = await refresh(m.id); if (r && r.to !== r.from) n++ }
   return n
 }
+
+const RARITY_RANK = { legend: 4, epic: 3, rare: 2, common: 1 }
+/**
+ * 游客可见的商户荣誉（白名单）：只有等级号 / 等级名 / 最多 3 枚徽章（名称、稀有度）。
+ * 不含订单量、流水、评价数、退款率等经营数据，也不含权益说明（那是运营侧的）。徽章按稀有度从高到低挑，等级认证类（mlevel）不重复展示。
+ */
+export async function publicHonor(mid) {
+  const m = await one('SELECT level FROM merchant WHERE id = ?', [mid])
+  if (!m) return null
+  const lvs = await levels(), cur = lvs.find((l) => l.lv === Number(m.level)) || lvs[0]
+  const rows = await q(`SELECT b.id, b.name, b.profile FROM merchant_badge mb JOIN badge b ON b.id = mb.badge_id WHERE mb.merchant_id = ? ORDER BY mb.granted_at DESC`, [mid])
+  const badges = rows.map((b) => { const pf = (typeof b.profile === 'string' ? JSON.parse(b.profile || '{}') : b.profile) || {}; return { id: Number(b.id), name: b.name, rarity: pf.rarity || 'common', category: pf.category } })
+    .filter((b) => b.category !== 'mlevel').sort((a, b) => (RARITY_RANK[b.rarity] || 0) - (RARITY_RANK[a.rarity] || 0)).slice(0, 3)
+  return { lv: cur.lv, name: cur.name, badges: badges.map(({ id, name, rarity }) => ({ id, name, rarity })) }
+}
+/** 列表页用的小标签：只有 Lv2 及以上才显示「优选商户」等，新晋商户不挂标签（不是负面标签，只是没必要占位） */
+export async function listTagFor(level) {
+  const lv = Number(level) || 1
+  if (lv < 2) return null
+  const cur = (await levels()).find((l) => l.lv === lv)
+  return cur ? { lv: cur.lv, name: cur.name } : null
+}

@@ -25,6 +25,7 @@ import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
 import * as member from '../domain/member.mjs'
 import * as badgeArt from '../domain/badge-art.mjs'
+import * as merchantLevel from '../domain/merchant-level.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -85,12 +86,14 @@ const c = {
     // 搜索同时命中标题、副标题，以及后台维护的「搜索关键词」「标签」
     const like = '%' + kw + '%'
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
-        JSON_EXTRACT(p.profile, '$.tags') tags_json
-      FROM tour_product p WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''}
+        JSON_EXTRACT(p.profile, '$.tags') tags_json, m.level merchant_lv
+      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''}
       ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
       ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
       [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
-    return rows.map(({ tags_json, ...r }) => ({ ...r, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    const tagCache = {}
+    for (const r of rows) if (!(r.merchant_lv in tagCache)) tagCache[r.merchant_lv] = await merchantLevel.listTagFor(r.merchant_lv)
+    return rows.map(({ tags_json, merchant_lv, ...r }) => ({ ...r, merchantTag: tagCache[merchant_lv] || null, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
   },
 
   'GET /c/tours/:id': async (req) => {
@@ -113,6 +116,7 @@ const c = {
     pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
     return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
       merchantCard: entities.publicProfile('merchant', merchantRow, img),
+      merchantHonor: await honorOf(p.merchant_id, req),
       scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
       relatedFaqs,
       sessions: sessions.map(({ profile, ...s }) => {
@@ -149,6 +153,7 @@ const c = {
     const col = kind === 'merchant' ? 'merchant_id' : 'scenic_id'
     const tours = await q(`SELECT id, title, price_from, images, city_code, cat, days_desc FROM tour_product WHERE ${col} = ? AND status = 1 ORDER BY id DESC LIMIT 10`, [row.id])
     return { kind, id: row.id, ...entities.publicProfile(kind, row, (u) => apiImg(u, req)),
+      honor: kind === 'merchant' ? await honorOf(row.id, req) : null,
       tours: tours.map((t) => ({ ...t, priceLabel: fen2yuan(t.price_from) })) }
   },
 
@@ -668,6 +673,13 @@ const cPhraseKyc = {
 }
 
 // 用户侧数字身份（小程序 A「我的数字身份」页：Travel ID = 凭证+徽章+存证流水）
+/** 游客可见的商户荣誉 + 图形地址（白名单见 merchant-level.publicHonor） */
+const honorOf = async (mid, req) => {
+  const h = await merchantLevel.publicHonor(mid)
+  if (!h) return null
+  return { lv: h.lv, name: h.name, art: apiImg('/badge-art/mlevel/' + h.lv + '.png', req),
+    badges: h.badges.map((b) => ({ name: b.name, rarity: b.rarity, rarityLabel: badgeArt.RARITIES[b.rarity] || '普通', art: apiImg('/badge-art/' + b.id + '.png', req) })) }
+}
 const withLevelArt = (lvl, req) => {
   lvl.art = apiImg('/badge-art/level/' + lvl.lv + '.png', req)
   lvl.levels = lvl.levels.map((l) => ({ ...l, art: apiImg('/badge-art/level/' + l.lv + '.png' + (l.lv <= lvl.lv ? '' : '?state=off'), req) }))

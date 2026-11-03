@@ -15,7 +15,7 @@
     <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
     <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
     <view style="flex:1;min-width:0">
-      <view class="tour-title">{{item.title}}</view>
+      <view class="tour-title">{{item.title}}<text class="mh-tag" wx:if="{{item.merchantTag}}">{{item.merchantTag.name}}</text></view>
       <view class="tour-desc">{{item.desc || item.subtitle || '实景 · 深度 · 小团'}}</view>
       <view class="tour-price"><text class="rmb">¥</text>{{(item.price || item.price_from) / 100}}
         <text class="u">返 {{item.beanGift || item.bean_gift}} 豆</text></view>
