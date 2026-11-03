@@ -732,6 +732,28 @@ await t('商户经营等级与徽章：B 端 / 后台 / 数据库 三处一致�
   // 商户徽章图公开可取（PNG；没装转换能力时回退 SVG）
   const art = await fetch(BASE + new URL(h.level.art).pathname); assert.equal(art.status, 200)
 })
+await t('游客端看商户等级：线路详情 / 商户资料页 / 线路列表只下发白名单字段（等级与最多 3 枚徽章），与 B 端、数据库一致，不泄露经营数据与权益说明', async () => {
+  const mid = sess.merchant_id, h = await mHonor()
+  const tour = ok(await call('GET', '/c/tours/' + sess.product_id, null, C)), place = ok(await call('GET', '/c/places/merchant/' + mid, null, C))
+  for (const [name, hn] of [['详情页', tour.merchantHonor], ['商户资料页', place.honor]]) {
+    assert.ok(hn, name + ' 应有商户荣誉')
+    assert.deepEqual(Object.keys(hn).sort(), ['art', 'badges', 'lv', 'name'], name + ' 只下发等级与徽章')
+    assert.equal(hn.lv, h.level.lv, name + ' 等级 = B 端'); assert.equal(hn.name, h.level.name)
+    assert.ok(hn.badges.length <= 3); for (const b of hn.badges) assert.deepEqual(Object.keys(b).sort(), ['art', 'name', 'rarity', 'rarityLabel'])
+    const owned = new Set(h.badges.filter((b) => b.owned && b.category !== 'mlevel').map((b) => b.name)); for (const b of hn.badges) assert.ok(owned.has(b.name), `${name} 的「${b.name}」应是商户已获得的徽章`)
+    const rank = { legend: 4, epic: 3, rare: 2, common: 1 }; for (let i = 1; i < hn.badges.length; i++) assert.ok(rank[hn.badges[i - 1].rarity] >= rank[hn.badges[i].rarity], '徽章按稀有度从高到低')
+    const txt = JSON.stringify(hn); for (const k of ['metrics', 'orders', 'refund', 'perks', 'need', 'gmv', 'rating10', 'reviews']) assert.ok(!txt.includes('"' + k + '"'), name + ' 不应含 ' + k)
+    assert.equal((await fetch(BASE + new URL(hn.art).pathname)).status, 200, '等级徽章图可取')
+  }
+  // 列表：Lv2 及以上才带标签；Lv1 为 null
+  const tagOf = async () => ok(await call('GET', '/c/tours', null, C)).find((x) => Number(x.id) === Number(sess.product_id)).merchantTag
+  const lvNow = Number((await one('SELECT level FROM merchant WHERE id = ?', [mid])).level)
+  try {
+    await q('UPDATE merchant SET level = 1 WHERE id = ?', [mid]); assert.equal(await tagOf(), null, 'Lv1 不挂标签')
+    await q('UPDATE merchant SET level = 3 WHERE id = ?', [mid]); const tg = await tagOf(); assert.deepEqual(tg, { lv: 3, name: ok(await call('GET', '/admin/merchant/levels', null, A))[2].name })
+    assert.ok(!Object.keys(ok(await call('GET', '/c/tours', null, C))[0]).includes('merchant_lv'), '内部字段 merchant_lv 不下发')
+  } finally { await q('UPDATE merchant SET level = ? WHERE id = ?', [lvNow, mid]) }
+})
 await t('商户徽章人工发放：只能发给商户、不能重复；订单封存后点亮「账实相符」且带封存编号；评分类徽章需要足够评价数', async () => {
   const h0 = await mHonor(), mid = sess.merchant_id
   const manual = await one("SELECT id, name FROM badge WHERE name = '入驻三年'")

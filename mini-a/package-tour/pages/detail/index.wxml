@@ -88,6 +88,11 @@
     <view style="flex:1;min-width:0">
       <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
       <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
+      <view class="mh-row" wx:if="{{merchant.honor}}">
+        <image class="mh-crest" src="{{merchant.honor.art}}" mode="aspectFit" />
+        <text class="mh-lv">{{merchant.honor.name}}</text>
+        <image class="mh-b" wx:for="{{merchant.honor.badges}}" wx:key="name" src="{{item.art}}" mode="aspectFit" />
+      </view>
       <view class="dt-meta" wx:if="{{merchant.tags.length}}"><text class="tag blue" wx:for="{{merchant.tags}}" wx:key="*this">{{item}}</text></view>
     </view><text class="pl-link">›</text>
   </view>

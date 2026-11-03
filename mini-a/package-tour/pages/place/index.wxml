@@ -30,6 +30,16 @@
     <view class="kv" wx:for="{{d.tickets}}" wx:key="index"><view><view>{{item.name}}</view><view class="muted2" wx:if="{{item.note}}">{{item.note}}</view></view><text class="tour-price" style="font-size:30rpx" wx:if="{{item.price}}">¥{{item.price}}</text></view>
   </view>
 
+  <view class="card mh-card" wx:if="{{d.honor}}">
+    <view class="mh-top">
+      <image class="mh-crest-lg" src="{{d.honor.art}}" mode="aspectFit" />
+      <view style="flex:1;min-width:0"><view class="mh-lv-lg">{{d.honor.name}}</view><view class="muted2">平台按订单履约、游客评价与退款情况评定</view></view>
+    </view>
+    <view class="mh-badges" wx:if="{{d.honor.badges.length}}">
+      <view class="mh-bd" wx:for="{{d.honor.badges}}" wx:key="name"><image src="{{item.art}}" mode="aspectFit" /><view class="mh-bn">{{item.name}}</view><view class="mh-br">{{item.rarityLabel}}</view></view>
+    </view>
+  </view>
+
   <view class="sec-title" wx:if="{{d.intro}}">{{d.kind === 'scenic' ? '景区介绍' : '关于我们'}}</view>
   <view class="card" wx:if="{{d.intro}}"><rich-text class="rich-p" nodes="{{d.intro}}"></rich-text></view>
 

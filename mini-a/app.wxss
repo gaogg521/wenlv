@@ -342,3 +342,18 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .me-chip { font-size: 20rpx; padding: 2rpx 14rpx; border-radius: 20rpx; background: rgba(255,226,140,.92); color: #5a3a00; font-weight: 700; }
 .me-chip.ghost { background: rgba(255,255,255,.18); color: #fff; font-weight: 400; }
 .me-hint { font-size: 21rpx; opacity: .85; margin-top: 8rpx; }
+/* 商户等级与荣誉（游客可见）：详情页商户卡片 / 商户资料页 / 线路列表标签 */
+.mh-row { display: flex; align-items: center; gap: 10rpx; margin: 8rpx 0 4rpx; }
+.mh-crest { width: 48rpx; height: 48rpx; flex-shrink: 0; }
+.mh-lv { font-size: 22rpx; font-weight: 700; color: #7a4b00; background: #fdf1d6; border-radius: 20rpx; padding: 2rpx 14rpx; }
+.mh-b { width: 44rpx; height: 44rpx; flex-shrink: 0; }
+.mh-tag { display: inline-block; margin-left: 10rpx; font-size: 19rpx; font-weight: 700; color: #7a4b00; background: #fdf1d6; border-radius: 16rpx; padding: 0 10rpx; vertical-align: middle; line-height: 30rpx; }
+.mh-card { padding: 24rpx 28rpx; }
+.mh-top { display: flex; align-items: center; gap: 18rpx; }
+.mh-crest-lg { width: 112rpx; height: 112rpx; flex-shrink: 0; }
+.mh-lv-lg { font-size: 32rpx; font-weight: 800; color: var(--ink, #2a2118); }
+.mh-badges { display: flex; gap: 12rpx; margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx solid var(--line); }
+.mh-bd { flex: 1; text-align: center; min-width: 0; }
+.mh-bd image { width: 84rpx; height: 84rpx; }
+.mh-bn { font-size: 21rpx; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh-br { font-size: 18rpx; color: var(--sub); }
