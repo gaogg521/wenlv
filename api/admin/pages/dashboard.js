@@ -22,7 +22,7 @@ async function dash() {
   const kpis = [
     ['gmv', 't-amber', '今日 GMV', '¥' + k.gmvToday, cityTag],
     ['order', 't-blue', '今日订单', k.ordersToday, '含已支付以上状态'],
-    ['check', 't-green', '今日核销率', k.verifyRate, '核销 / 签发凭证'],
+    ['check', 't-green', '核销率（累计）', k.verifyRate, '已核销 / 已签发凭证'],
     ['bean', 't-gold', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
     ['alert', 't-red', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
     ['trend', 't-violet', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],

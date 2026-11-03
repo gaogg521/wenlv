@@ -5,7 +5,7 @@ import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
-import { maskApplyMobile } from '../infra/mobile.mjs'
+import { maskApplyMobile, publicOrderPhone } from '../infra/mobile.mjs'
 import * as refund from '../domain/refund.mjs'
 import * as group from '../domain/group.mjs'
 import * as wxpay from '../domain/wxpay.mjs'
@@ -113,15 +113,16 @@ const admin = {
 
   'GET /admin/dash/kpi': async (req) => {
     const a = await requireAdmin(req)
-    const sc = a.scope_city // 城市合伙人：严格本城口径（数据边界 §数据边界）
+    const sc = a.scopeCity // 城市合伙人：严格本城口径（数据边界 §数据边界）
     const cityWhere = sc ? 'AND o.city_code = ' + Number(sc) : ''
     const t = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders o
       WHERE o.status IN (20,30,40,50) AND DATE(o.paid_at) = CURDATE() ${cityWhere}`)
-    const verified = await count(`SELECT COUNT(*) c FROM verification_log v
-      JOIN travel_pass tp ON tp.id = v.pass_id JOIN orders o ON o.id = tp.order_id
-      WHERE v.result = 1 AND DATE(v.created_at) = CURDATE() ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
+    // 核销率 = 已核销凭证 ÷ 已签发且未冲正的凭证（累计，同一批凭证）。旧口径是"今日核销次数 ÷ 今日新签发数"，
+    // 昨天出的票今天核销会让比率超过 100%，分子分母也不是同一批凭证
+    const verified = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
+      WHERE tp.status = 2 ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
     const issuedPass = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
-      WHERE DATE(tp.created_at) = CURDATE() ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
+      WHERE tp.status IN (1, 2) ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
     const budget = sc ? null : await one('SELECT SUM(total) t, SUM(granted) g FROM bean_budget WHERE status = 1')
     const alerts = sc ? 0 : await count('SELECT COUNT(*) c FROM risk_event WHERE handled = 0')
     const weekRaw = await q(`SELECT DATE(o.paid_at) d, COUNT(*) c, SUM(o.amount_pay) gmv FROM orders o
@@ -146,21 +147,24 @@ const admin = {
 
   // 看板三件套（低垂果实 #6）：待办聚合 / 热门主题游 TOP5 / 活动转化漏斗
   'GET /admin/dash/insights': async (req) => {
-    await requireAdmin(req)
-    const pendingWithdrawals = await one("SELECT COUNT(*) c FROM promoter_withdraw WHERE status = 0")
-    const pendingConflicts = await one("SELECT COUNT(*) c FROM verify_offline_conflict WHERE status = 0")
-    const pendingNotes = await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
-    const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant WHERE status = 0")
-    const pendingTasks = await one('SELECT COUNT(*) c FROM content_task_entry WHERE status = 2')
+    const a = await requireAdmin(req)
+    // 城市合伙人只看本城（与 dash/kpi 同口径）。提现 / 离线冲突 / 笔记 / 约稿是全局队列，城市账号按 0 处理；旅豆预算是全局的，城市账号不展示使用率
+    const sc = a.scopeCity
+    const oc = sc ? ' AND o.city_code = ' + Number(sc) : ''
+    const zero = { c: 0 }
+    const pendingWithdrawals = sc ? zero : await one("SELECT COUNT(*) c FROM promoter_withdraw WHERE status = 0")
+    const pendingConflicts = sc ? zero : await one("SELECT COUNT(*) c FROM verify_offline_conflict WHERE status = 0")
+    const pendingNotes = sc ? zero : await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
+    const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant m WHERE m.status = 0" + (sc ? ' AND m.city_code = ' + Number(sc) : ''))
+    const pendingTasks = sc ? zero : await one('SELECT COUNT(*) c FROM content_task_entry WHERE status = 2')
     const topTours = await q(`SELECT p.id, p.title, COUNT(o.id) orders, COALESCE(SUM(o.amount_pay),0) gmv
       FROM orders o JOIN tour_product p ON p.id = o.product_id
-      WHERE o.status >= 20 GROUP BY p.id, p.title ORDER BY orders DESC LIMIT 5`)
-    const allOrders = await one('SELECT COUNT(*) c FROM orders')
-    const paidOrders = await one('SELECT COUNT(*) c FROM orders WHERE status >= 20 AND status <> 90')
-    const uniqUsers = await one('SELECT COUNT(DISTINCT user_id) c FROM orders WHERE status >= 20 AND status <> 90')
-    const rebuyUsers = await one(`SELECT SUM(c > 1) c FROM (SELECT COUNT(*) c FROM orders WHERE status >= 20 AND status <> 90 GROUP BY user_id) t`)
-    const beanFlow = await one(`SELECT COALESCE(SUM(direction = 1 AND biz_type IN (1,2,3)),0) granted,
-      COALESCE(SUM(direction = 2),0) consumed FROM bean_ledger`)
+      WHERE o.status >= 20 ${oc} GROUP BY p.id, p.title ORDER BY orders DESC LIMIT 5`)
+    const allOrders = await one(`SELECT COUNT(*) c FROM orders o WHERE 1=1 ${oc}`)
+    const paidOrders = await one(`SELECT COUNT(*) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc}`)
+    const uniqUsers = await one(`SELECT COUNT(DISTINCT o.user_id) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc}`)
+    const rebuyUsers = await one(`SELECT SUM(c > 1) c FROM (SELECT COUNT(*) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc} GROUP BY o.user_id) t`)
+    const beanFlow = sc ? null : await bean.flow()
     const total = Number(allOrders.c) || 0
     const paid = Number(paidOrders.c) || 0
     return {
@@ -176,7 +180,7 @@ const admin = {
         payRate: total ? Math.round(paid / total * 100) + '%' : '—',
         verifyRate: '—', // 核销完成率在 dash/kpi 已有，这里保留占位
         rebuyRate: (Number(uniqUsers.c) && Number(rebuyUsers.c)) ? Math.round(Number(rebuyUsers.c) / Number(uniqUsers.c) * 100) + '%' : '0%',
-        beanUseRate: Number(beanFlow.granted) ? Math.round(Number(beanFlow.consumed) / Number(beanFlow.granted) * 100) + '%' : '0%',
+        beanUseRate: !beanFlow ? '—' : (beanFlow.granted ? Math.round(beanFlow.consumed / beanFlow.granted * 100) + '%' : '0%'),
       },
     }
   },
@@ -189,10 +193,10 @@ const admin = {
     if (sc.sql) where.push(sc.sql.replace(' AND ', ''))
     if (status) where.push('o.status = ' + Number(status))
     if (kw) where.push('o.order_no LIKE ' + JSON.stringify('%' + kw + '%'))
-    return await q(`SELECT o.*, p.title, u.nickname FROM orders o
+    return (await q(`SELECT o.*, p.title, u.nickname FROM orders o
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY o.id DESC LIMIT 100`, sc.params)
+      ORDER BY o.id DESC LIMIT 100`, sc.params)).map(publicOrderPhone)
   },
 
   'GET /admin/orders/:no': async (req) => {
@@ -206,7 +210,7 @@ const admin = {
     const refunds = await q('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC', [o.id])
     // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
     const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
-    return { ...o, events, passes, pay, refunds, refundQuote: quote }
+    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote }
   },
 
   'POST /admin/orders/:no/refund': async (req) => {
