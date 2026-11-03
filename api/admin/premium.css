@@ -8,7 +8,14 @@ body { font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsof
 .side-logo { padding: 26px 22px 22px; }
 .side-mark { background: var(--brand-grad); color: #fff; box-shadow: 0 6px 16px #c64e2840; font-size: 22px; }
 .side-logo span:last-child { font-weight: 700; letter-spacing: .5px; color: #3b2f25; }
-.nav-group { font-size: 11px; letter-spacing: 2px; color: #a8957d; font-weight: 600; padding: 18px 12px 6px; }
+.nav-group { font-size: 12px; letter-spacing: .5px; color: #71604e; font-weight: 600; padding: 12px 12px; }
+.nav-section summary { display: flex; align-items: center; gap: 10px; }
+.nav-section summary:after { content: '›'; float: none; font-size: 14px; }
+.nav-section[open] summary:after { content: '⌄'; }
+.nav-count { margin-left: auto; color: #9b8b79; font-size: 10px; font-weight: 400; letter-spacing: 0; }
+.nav-section { margin-bottom: 3px; }
+.nav-section[open] { padding-bottom: 5px; }
+#crumb:before { content: none; }
 .nav-item { border-radius: 10px; transition: background .15s, color .15s; }
 .nav-item.on { background: linear-gradient(90deg, #ffe9d6, #fff3e8); color: #a8441f; box-shadow: inset 0 0 0 1px #f3d4b6; }
 .nav-item.on:before { background: var(--brand-grad); width: 3px; height: 18px; }
