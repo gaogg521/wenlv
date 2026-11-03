@@ -70,8 +70,8 @@ const admin = {
         channel: ch, target: ch === 'sms' ? String(u.mobile || '').replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : (ch === 'email' ? String(u.email || '').replace(/^(.).*(@.*)$/, '$1***$2') : null) }
     }
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
-    return { token: jwtSign({ uid: u.id, end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
-      user: { username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null } }
+    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
+      user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
   },
 
   // 第二步：TOTP / 短信 / 邮箱验证码（challenge 5 分钟有效）
@@ -92,8 +92,8 @@ const admin = {
     else ok = await mfa.verifyCode(p.ch === 'sms' ? u.mobile : u.email, p.ch, code)
     if (!ok) throw new BizError(1002, '验证码不正确或已过期')
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
-    return { token: jwtSign({ uid: u.id, end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
-      user: { username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null } }
+    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
+      user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
   },
 
   // ===== 安全中心（系统工作区）：绑定 MFA / 发送测试 / 最近验证码（MOCK 通道演示用）=====

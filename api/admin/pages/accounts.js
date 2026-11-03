@@ -1,0 +1,168 @@
+// 后台账号与城市授权生命周期（T02）：仅超管。列表不含密码哈希 / MFA 密钥；
+// 停用 / 改角色 / 改城市 / 重置密码都会使该账号已登录会话立即失效。
+// 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
+
+const ACCOUNT_ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号' }
+const CITY_DICT_ACCOUNTS = [[310118, '上海·青浦'], [310000, '上海'], [320508, '苏州·姑苏'], [330500, '湖州'], [330523, '湖州·安吉']]
+const cityLabelAccounts = (code) => { const hit = CITY_DICT_ACCOUNTS.find(([c]) => String(c) === String(code)); return hit ? hit[1] : (code || '—') }
+
+async function accounts() {
+  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
+  const rows = await api('GET', '/admin/accounts')
+  const active = rows.filter((r) => Number(r.status) === 1)
+  const cityAccounts = rows.filter((r) => r.role === 'city_partner')
+  $('#app').innerHTML = `
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🧑‍💼</div><div><div class="l">有效账号</div><div class="v">${active.length}/${rows.length}</div><div class="s">停用后旧会话立即失效</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">🏙</div><div><div class="l">城市合伙人账号</div><div class="v">${cityAccounts.length}</div><div class="s">必绑城市 · 只看本城</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">绑定/重置在安全中心留痕</div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 停用恢复 / 重置密码与 MFA · 全部操作留审计</span></div>
+    <div class="row"><button class="btn primary sm" onclick="accountCreateModal()">＋ 新建账号</button>
+      <span class="muted">初始密码只显示一次；不得在列表或聊天中长期展示明文密码</span></div>
+    ${rows.length ? `<table><thead><tr><th>账号</th><th>角色</th><th>城市范围</th><th>状态</th><th>MFA</th><th>最近登录</th><th>备注</th><th>操作</th></tr></thead><tbody>
+    ${rows.map((u) => {
+      const self = Number(u.id) === Number(ME?.uid)
+      const ops = []
+      ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${esc(u.display_name)}', '${esc(u.note || '')}')">资料</button>`)
+      if (!self) {
+        ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${esc(u.username)}', '${u.role}', '${esc(u.scope_city || '')}')">角色/城市</button>`)
+        ops.push(Number(u.status) === 1
+          ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${esc(u.username)}')">停用</button>`
+          : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${esc(u.username)}')">恢复</button>`)
+        ops.push(`<button class="btn ghost sm" onclick="accountResetPwd(${u.id}, '${esc(u.username)}')">重置密码</button>`)
+        if (Number(u.mfa_enabled) === 1) ops.push(`<button class="btn ghost sm" onclick="accountMfaReset(${u.id}, '${esc(u.username)}')">重置MFA</button>`)
+      } else ops.push('<span class="td-sub">本人</span>')
+      return `<tr><td><div class="td-main">${esc(u.display_name)}${self ? ' <span class="pill ok">本人</span>' : ''}</div><div class="td-sub">${esc(u.username)} · #${u.id}</div></td>
+        <td><span class="pill ${u.role === 'super' ? 'warn' : 's60'}">${ACCOUNT_ROLE_CN[u.role] || esc(u.role)}</span>${Number(u.must_change_pwd) === 1 ? '<div><span class="pill warn">待改密</span></div>' : ''}</td>
+        <td>${u.role === 'city_partner' ? esc(cityLabelAccounts(u.scope_city)) + ' <span class="td-sub">' + esc(u.scope_city || '') + '</span>' : '<span class="td-sub">全域</span>'}</td>
+        <td>${Number(u.status) === 1 ? '<span class="pill ok">有效</span>' : '<span class="pill off">停用</span>'}</td>
+        <td>${Number(u.mfa_enabled) === 1 ? '<span class="pill ok">已绑定</span><div class="td-sub">' + esc(u.mfa_channel || '') + '</div>' : '<span class="td-sub">未绑定</span>'}</td>
+        <td class="td-sub">${esc(String(u.last_login_at || '').slice(0, 16).replace('T', ' ') || '从未登录')}</td>
+        <td class="td-sub" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.note || '—')}</td>
+        <td><div class="td-actions">${ops.join('')}</div></td></tr>` }).join('')}</tbody></table>`
+    : emptyBox('暂无账号')}</div>`
+}
+
+window.accountCreateModal = () => {
+  modal('新建后台账号', `
+    <div class="field"><label>登录名 *（3–32 位字母数字_-，唯一）</label><input id="acUser" maxlength="32"></div>
+    <div class="field"><label>显示名 *（列表与审计里显示的名字）</label><input id="acDisplay" maxlength="64"></div>
+    <div class="field"><label>角色 *</label><select id="acRole" onchange="document.getElementById('acCityRow').style.display=this.value==='city_partner'?'block':'none'">
+      ${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div class="field" id="acCityRow" style="display:none"><label>城市范围 *（城市合伙人必填）</label><select id="acCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}">${esc(n)}（${c}）</option>`).join('')}</select></div>
+    <div class="field"><label>初始密码 *（8–64 位，只显示一次）</label><div class="row"><input id="acPwd" style="flex:1"><button class="btn ghost sm" onclick="document.getElementById('acPwd').value=genTmpPwd()">随机生成</button></div></div>
+    <div class="field"><label>备注 / 所属责任人</label><input id="acNote" maxlength="200"></div>
+    <div id="acErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountCreateSubmit()">创建账号</button>`)
+  document.getElementById('acPwd').value = genTmpPwd()
+}
+const genTmpPwd = () => { const cs = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => cs[b % cs.length]).join('') }
+window.accountCreateSubmit = async () => {
+  try {
+    await api('POST', '/admin/accounts', { username: $('#acUser').value.trim(), displayName: $('#acDisplay').value.trim(), role: $('#acRole').value,
+      scopeCity: $('#acCity')?.value, password: $('#acPwd').value, note: $('#acNote').value.trim() })
+    closeModal(); toast('账号已创建；初始密码请在交付后勿再展示'); accounts()
+  } catch (e) { $('#acErr').textContent = e.message }
+}
+
+window.accountProfileModal = (id, displayName, note) => {
+  modal('账号展示资料 · #' + id, `
+    <div class="field"><label>显示名 *</label><input id="acPDisplay" value="${displayName}" maxlength="64"></div>
+    <div class="field"><label>备注 / 所属责任人</label><input id="acPNote" value="${note}" maxlength="200"></div>
+    <div id="acPErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountProfileSubmit(${id})">保存</button>`)
+}
+window.accountProfileSubmit = async (id) => {
+  try { await api('PUT', '/admin/accounts/' + id, { displayName: $('#acPDisplay').value.trim(), note: $('#acPNote').value.trim() }); closeModal(); toast('资料已保存'); accounts() }
+  catch (e) { $('#acPErr').textContent = e.message }
+}
+
+window.accountRoleModal = (id, username, role, city) => {
+  modal('角色 / 城市授权 · ' + username, `
+    <p class="td-sub">变更影响：该账号已登录的全部会话<b>立即失效</b>，需重新登录；城市账号的可见数据范围随之变化。变更原因进入审计。</p>
+    <div class="field"><label>角色 *</label><select id="acRRole">${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}" ${k === role ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div class="field"><label>城市范围（城市合伙人必填，其他角色清空）</label><select id="acRCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}" ${String(c) === String(city) ? 'selected' : ''}>${esc(n)}（${c}）</option>`).join('')}</select></div>
+    <div class="field"><label>变更原因 *（4–200 字，进入审计）</label><input id="acRReason" maxlength="200"></div>
+    <div id="acRErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountRoleSubmit(${id})">确认变更</button>`)
+}
+window.accountRoleSubmit = async (id) => {
+  try {
+    const r = await api('POST', '/admin/accounts/' + id + '/role', { role: $('#acRRole').value, scopeCity: $('#acRCity').value, reason: $('#acRReason').value.trim() })
+    closeModal(); toast('角色/城市已变更' + (r.sessionsRevoked ? '；该账号旧会话已全部失效' : '')); accounts()
+  } catch (e) { $('#acRErr').textContent = e.message }
+}
+
+window.accountToggle = async (id, status, username) => {
+  if (status === 1) {
+    try { await api('POST', '/admin/accounts/' + id + '/status', { status: 1 }); toast('已恢复；需本人重新登录'); accounts() } catch (e) { toast(e.message, true) }
+    return
+  }
+  // 停用必须填原因（不使用原生 prompt：部分环境不支持，且模态框可校验字数）
+  modal('停用账号 · ' + username, `
+    <p class="td-sub">停用后该账号全部已登录会话<b>立即失效</b>，恢复后也需重新登录。原因进入审计。</p>
+    <div class="field"><label>停用原因 *（4–200 字）</label><input id="acDisReason" maxlength="200"></div>
+    <div id="acDisErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="accountDisableSubmit(${id})">确认停用</button>`)
+}
+window.accountDisableSubmit = async (id) => {
+  const reason = ($('#acDisReason').value || '').trim()
+  if (reason.length < 4 || reason.length > 200) { $('#acDisErr').textContent = '请填写 4–200 字停用原因'; return }
+  try { await api('POST', '/admin/accounts/' + id + '/status', { status: 0, reason }); closeModal(); toast('已停用；旧会话已失效'); accounts() }
+  catch (e) { $('#acDisErr').textContent = e.message }
+}
+
+window.accountResetPwd = (id, username) => {
+  modal('重置密码 · ' + username, `
+    <p class="td-sub">重置后生成一次性临时密码（仅显示一次），该账号全部会话立即失效，本人下次登录必须改密。审计不记录密码。</p>
+    <div id="acRsErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountResetPwdSubmit(${id}, '${esc(username)}')">确认重置</button>`)
+}
+window.accountResetPwdSubmit = async (id, username) => {
+  try {
+    const r = await api('POST', '/admin/accounts/' + id + '/password-reset')
+    modal('一次性临时密码 · ' + username, `
+      <div class="field"><label>临时密码（关闭本窗口后不再显示，审计不记录密码）</label><input readonly value="${esc(r.tempPassword)}" style="font-size:18px;font-weight:700;letter-spacing:1px"></div>
+      <p class="td-sub">${esc(r.note)}</p>`,
+      `<button class="btn primary" onclick="closeModal()">我已安全保存</button>`)
+  } catch (e) { $('#acRsErr').textContent = e.message }
+}
+
+window.accountMfaReset = (id, username) => {
+  modal('重置 MFA · ' + username, `
+    <p class="td-sub">重置后 MFA 绑定清除、该账号全部会话立即失效；操作留审计。本人可在安全中心重新绑定。</p>
+    <div id="acMfErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="accountMfaResetSubmit(${id})">确认重置</button>`)
+}
+window.accountMfaResetSubmit = async (id) => {
+  try { await api('POST', '/admin/accounts/' + id + '/mfa-reset'); closeModal(); toast('MFA 已重置'); accounts() } catch (e) { $('#acMfErr').textContent = e.message }
+}
+
+// 城市合伙人中心直达：合伙人页城市行 → 直接打开该账号的角色/城市编辑（不混进合作资料）
+window.accountFromPartner = async (adminUserId) => {
+  const rows = await api('GET', '/admin/accounts')
+  const u = rows.find((x) => Number(x.id) === Number(adminUserId))
+  if (!u) return toast('未找到对应后台账号', true)
+  accountRoleModal(u.id, u.username, u.role, u.scope_city || '')
+}
+
+// 本人强制改密（重置后的临时密码登录时弹出，改完用新密码重新登录）
+window.showForcedPwdChange = () => {
+  modal('请修改临时密码', `
+    <p class="td-sub">当前密码是管理员下发的一次性临时密码。修改成功后需用新密码重新登录。</p>
+    <div class="field"><label>当前密码（临时密码）</label><input id="fpOld" type="password"></div>
+    <div class="field"><label>新密码（8–64 位）</label><input id="fpNew" type="password"></div>
+    <div class="field"><label>确认新密码</label><input id="fpNew2" type="password"></div>
+    <div id="fpErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="logout()">返回登录</button><button class="btn primary" onclick="submitForcedPwd()">修改并重新登录</button>`)
+}
+window.submitForcedPwd = async () => {
+  const n1 = $('#fpNew').value, n2 = $('#fpNew2').value
+  if (n1 !== n2) { $('#fpErr').textContent = '两次输入的新密码不一致'; return }
+  try {
+    await api('POST', '/admin/account/password', { oldPassword: $('#fpOld').value, newPassword: n1 })
+    toast('密码已修改，请用新密码重新登录'); logout()
+  } catch (e) { $('#fpErr').textContent = e.message }
+}

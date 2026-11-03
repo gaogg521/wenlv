@@ -217,12 +217,19 @@ window.coPayHistory = async (id) => {
         ${Number(y.status) === 0 && canPay && y.operator === myOperator ? `<button class="btn ghost sm" onclick="coWithdraw(${id}, ${y.id})">撤回</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">暂无打款流水</div>')
 }
-window.coApprove = async (id, payId, pass) => {
-  const note = pass ? '' : (prompt('驳回原因（登记人可见）：') || '')
-  try { const r = await api('POST', '/admin/co-profits/pays/' + payId + '/approve', { pass, note }); toast(pass ? '复核通过，打款登记生效' : '已驳回该笔登记'); coPayHistory(id); cocreate() } catch (e) { toast(e.message, true) }
+window.coApprove = (id, payId, pass) => {
+  if (pass) return coApproveSubmit(id, payId, true, '')
+  // 驳回原因用模态框收集（原生 prompt 在部分环境不可用）
+  modal('驳回打款登记 · #' + payId, `
+    <p class="td-sub">驳回后登记人可重新登记；原因登记人可见。</p>
+    <div class="field"><label>驳回原因（登记人可见）</label><input id="cpRejNote" maxlength="200"></div>
+    <div id="cpRejErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="coApproveSubmit(${id}, ${payId}, false, document.getElementById('cpRejNote').value.trim())">确认驳回</button>`)
+}
+window.coApproveSubmit = async (id, payId, pass, note) => {
+  try { const r = await api('POST', '/admin/co-profits/pays/' + payId + '/approve', { pass, note }); closeModal(); toast(pass ? '复核通过，打款登记生效' : '已驳回该笔登记'); coPayHistory(id); cocreate() } catch (e) { const el = document.getElementById('cpRejErr'); if (el && !pass) el.textContent = e.message; else toast(e.message, true) }
 }
 window.coWithdraw = async (id, payId) => {
-  if (!confirm('撤回后该笔待复核登记作废（留痕），需要重新登记。确定撤回？')) return
   try { await api('POST', '/admin/co-profits/pays/' + payId + '/withdraw'); toast('已撤回该笔登记'); coPayHistory(id); cocreate() } catch (e) { toast(e.message, true) }
 }
 window.coReverseModal = (id, payId, ref, amount) => {
@@ -241,10 +248,18 @@ window.coReverseSubmit = async (id, payId) => {
     closeModal(); toast('已登记冲正，分润单回到待打款'); cocreate()
   } catch (e) { $('#cpRevErr').textContent = e.message }
 }
-window.coVoid = async (id) => {
-  const reason = prompt('作废原因（4–200 字，进入审计）：')
-  if (!reason) return
-  try { await api('POST', '/admin/co-profits/' + id + '/void', { reason }); toast('分润单已作废'); cocreate() } catch (e) { toast(e.message, true) }
+window.coVoid = (id) => {
+  // 作废原因用模态框收集（原生 prompt 在部分环境不可用）
+  modal('作废分润单 · #' + id, `
+    <p class="td-sub">仅未付的待打款单可作废；作废后不参与应付，原因进入审计。</p>
+    <div class="field"><label>作废原因 *（4–200 字）</label><input id="cpVoidReason" maxlength="200"></div>
+    <div id="cpVoidErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="coVoidSubmit(${id})">确认作废</button>`)
+}
+window.coVoidSubmit = async (id) => {
+  const reason = ($('#cpVoidReason').value || '').trim()
+  if (reason.length < 4 || reason.length > 200) { $('#cpVoidErr').textContent = '请填写 4–200 字作废原因'; return }
+  try { await api('POST', '/admin/co-profits/' + id + '/void', { reason }); closeModal(); toast('分润单已作废'); cocreate() } catch (e) { $('#cpVoidErr').textContent = e.message }
 }
 window.coViewReceipt = async (payId) => {
   try {

@@ -39,7 +39,7 @@ const NAV = [
   ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
   ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
-  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
+  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['accounts', '后台账号', 'sys'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
 ]
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
@@ -91,20 +91,20 @@ let MFA_CHALLENGE = null
 function login() {
   $('#lerr').textContent = ''
   api('POST', '/admin/login', { username: norm(document.querySelector('#luser').value), password: norm(document.querySelector('#lpass').value) }).then((d) => {
-    if (d.mfaRequired) {
-      MFA_CHALLENGE = d.challenge
-      const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
-      $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
-      $('#step1').style.display = 'none'
-      $('#step2').style.display = 'block'
-      document.querySelector('#mfacode')?.focus()
-      return
-    }
-    TOKEN = d.token; ME = d.user
-    localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
-    boot()
-  }).catch((e) => { $('#lerr').textContent = e.message })
-}
+      if (d.mfaRequired) {
+        MFA_CHALLENGE = d.challenge
+        const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
+        $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+        $('#step1').style.display = 'none'
+        $('#step2').style.display = 'block'
+        document.querySelector('#mfacode')?.focus()
+        return
+      }
+      TOKEN = d.token; ME = d.user
+      localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
+      boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
+    }).catch((e) => { $('#lerr').textContent = e.message })
+  }
 async function mfaSubmit() {
   $('#lerr2').textContent = ''
   try {
@@ -112,7 +112,7 @@ async function mfaSubmit() {
     TOKEN = d.token; ME = d.user
     localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
     MFA_CHALLENGE = null
-    boot()
+    boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
   } catch (e) { $('#lerr2').textContent = e.message }
 }
 async function mfaResend() {
