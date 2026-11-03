@@ -2,6 +2,7 @@
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import { attest as attestCore } from './attest.mjs'
+import { isUserFrozen } from './promo.mjs'
 
 export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7 }
 export const SENTINEL_PLATFORM = 999999000001n
@@ -63,6 +64,8 @@ export async function grant(userId, amount, bizType, bizRef, budgetId, connectio
 /** 抵扣/回收（4/6/7）：借用户 */
 export async function deduct(userId, amount, bizType, bizRef, connection) {
   if (![4, 6, 7].includes(bizType)) throw new BizError(5001, '非法扣减类型')
+  // 冻结账号不能用旅豆抵扣（红线 12）；过期与风控回收（6/7）照常，本来就要能对冻结账号执行
+  if (bizType === BIZ.DEDUCT && await isUserFrozen(userId)) throw new BizError(6001, '账号已被停用，旅豆暂停使用')
   const run = async (c) => {
     const aid = await acctId(c, userId)
     const acc = await c.one('SELECT balance FROM bean_account WHERE id = ? FOR UPDATE', [aid])
@@ -103,6 +106,47 @@ export async function reverse(userId, amount, bizRef, connection) {
     return Number(acc.balance) + amount
   }
   return connection ? run(connection) : tx(run)
+}
+
+/**
+ * 订单完成返豆（定时任务与后台联调「完成」共用）。
+ * 账号冻结时不发，订单记为"待补发"（V39 bean_rebate_deferred），解冻后由 releaseDeferredRebates 补发：照常累计、不丢失。
+ */
+export async function rebateOrder(o) {
+  if (!(Number(o.amount_pay) > 0)) return 0
+  if (await isUserFrozen(o.user_id)) {
+    await q('UPDATE orders SET bean_rebate_deferred = 1 WHERE order_no = ?', [o.order_no])
+    return 0
+  }
+  const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
+  if (!budget) return 0
+  const rebate = await rebateOf(Number(o.amount_pay))
+  if (rebate > 0) await grant(Number(o.user_id), rebate, BIZ.REBATE, o.order_no, budget.id)
+  return rebate
+}
+
+/**
+ * 解冻后补发冻结期间的订单返豆。按补发时的返豆比例计算（冻结时没有快照）。
+ * 幂等：逐单加锁，账本里已有该单返豆就只清标记；已不是完成态（如退款）的单只清标记、不发。
+ * 没有可用预算或预算/总量触顶时保留标记，下次解冻或人工处理。返回补发的订单数。
+ */
+export async function releaseDeferredRebates(userId) {
+  if (await isUserFrozen(userId)) return 0
+  const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
+  if (!budget) return 0
+  let n = 0
+  for (const { order_no: orderNo } of await q('SELECT order_no FROM orders WHERE user_id = ? AND bean_rebate_deferred = 1 ORDER BY id', [userId])) {
+    await tx(async (c) => {
+      const o = await c.one('SELECT order_no, status, amount_pay, bean_rebate_deferred FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+      if (!o || !Number(o.bean_rebate_deferred)) return
+      const done = await c.one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+        WHERE a.user_id = ? AND l.biz_type = ? AND l.direction = 1 AND l.biz_ref = ? LIMIT 1`, [userId, BIZ.REBATE, orderNo])
+      const rebate = await rebateOf(Number(o.amount_pay))
+      if (!done && Number(o.status) === 50 && rebate > 0) { await grant(Number(userId), rebate, BIZ.REBATE, orderNo, budget.id, c); n++ }
+      await c.upd('UPDATE orders SET bean_rebate_deferred = 0 WHERE order_no = ?', [orderNo])
+    })
+  }
+  return n
 }
 
 /** 日终试算：真实用户户 balance==Σcredit-Σdebit；全账本 Σ贷==Σ借 */

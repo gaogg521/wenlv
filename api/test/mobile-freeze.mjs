@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { q, one, tx, BizError } from '../src/db.mjs'
 import { bindMobile, isLegacyPlain, openMobile, sealMobile } from '../src/infra/mobile.mjs'
 import * as promo from '../src/domain/promo.mjs'
+import * as bean from '../src/domain/bean.mjs'
 
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b ? JSON.stringify(b) : undefined })).json()
@@ -153,6 +154,31 @@ try {
     ok(await call('POST', `/admin/users/${U1.id}/status`, { status: 1 }, A))
     ok(await call('POST', `/admin/withdrawals/${w1}/verdict`, { pass: true, payRef: 'TESTREF0001' }, A))
     assert.equal(Number((await one('SELECT status FROM promoter_withdraw WHERE id = ?', [w1])).status), 1)
+  })
+  await t('冻结期间旅豆：订单返豆记为待补发、不能抵扣；解冻后补发一次，重跑不重复', async () => {
+    const src = await one('SELECT id, order_no, user_id, status, amount_pay, bean_rebate_deferred FROM orders WHERE amount_pay > 0 ORDER BY id LIMIT 1')
+    assert.ok(src, '隔离库需先 seed:scenario，库里应有已支付订单')
+    const ledger = async () => Number((await one(`SELECT COUNT(*) n FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE a.user_id = ? AND l.biz_type = 1 AND l.direction = 1 AND l.biz_ref = ?`, [U1.id, src.order_no])).n)
+    try {
+      await q('UPDATE orders SET user_id = ?, status = 50, bean_rebate_deferred = 0 WHERE id = ?', [U1.id, src.id])
+      const before = await bean.balance(U1.id)
+      ok(await call('POST', `/admin/users/${U1.id}/status`, { status: 0, reason: '测试冻结暂停旅豆' }, A))
+      assert.equal(await bean.rebateOrder({ order_no: src.order_no, user_id: U1.id, amount_pay: src.amount_pay }), 0)
+      assert.equal(Number((await one('SELECT bean_rebate_deferred d FROM orders WHERE id = ?', [src.id])).d), 1, '应记为待补发')
+      assert.equal(await ledger(), 0, '冻结期间不应发放')
+      await assert.rejects(bean.deduct(U1.id, 1, bean.BIZ.DEDUCT, 'test-frozen-deduct'), /旅豆暂停使用/)
+      const r = ok(await call('POST', `/admin/users/${U1.id}/status`, { status: 1 }, A))
+      assert.equal(r.beanRebatesReleased, 1)
+      assert.equal(Number((await one('SELECT bean_rebate_deferred d FROM orders WHERE id = ?', [src.id])).d), 0)
+      assert.equal(await ledger(), 1)
+      assert.equal(await bean.balance(U1.id), before + await bean.rebateOf(Number(src.amount_pay)))
+      assert.equal(await bean.releaseDeferredRebates(U1.id), 0, '重跑不应重复发放')
+      assert.equal(await ledger(), 1)
+    } finally {
+      await q('UPDATE orders SET user_id = ?, status = ?, bean_rebate_deferred = ? WHERE id = ?', [src.user_id, src.status, src.bean_rebate_deferred, src.id])
+      await q('UPDATE user_account SET status = 1 WHERE id = ?', [U1.id])
+    }
   })
   await t('冻结账号自己发起提现：被拒绝（含已登录会话）', async () => {
     ok(await call('POST', `/admin/users/${U1.id}/status`, { status: 0, reason: '测试冻结拒绝提现' }, A))

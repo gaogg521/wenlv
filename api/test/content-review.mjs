@@ -95,6 +95,16 @@ try {
   await t('第二位参与者独立投稿、独立通过', async () => {
     await submitAs(C2, BODY_OK)
     const e2 = (await entryOf(C2)).entry_id
+    // 冻结期间不能通过（旅豆奖励暂停），投稿保持审核中；解冻后正常通过
+    const u2 = Number((await one('SELECT user_id FROM content_task_entry WHERE id = ?', [e2])).user_id)
+    ok(await call('POST', `/admin/users/${u2}/status`, { status: 0, reason: '测试冻结暂停旅豆奖励' }, A))
+    try {
+      const r = await call('POST', `/admin/task-entries/${e2}/verdict`, { pass: true, rules: [true, true] }, A)
+      assert.equal(r.code, 6001); assert.match(r.msg, /冻结/)
+      assert.equal(Number((await one('SELECT status FROM content_task_entry WHERE id = ?', [e2])).status), 2, '仍是审核中')
+    } finally {
+      ok(await call('POST', `/admin/users/${u2}/status`, { status: 1 }, A))
+    }
     ok(await call('POST', `/admin/task-entries/${e2}/verdict`, { pass: true, rules: [true, true] }, A))
     const rows = ok(await call('GET', `/admin/content-tasks/${task.id}/entries`, null, A))
     assert.deepEqual(rows.map((x) => Number(x.status)).sort(), [3, 3])
