@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>微信开发者工具 · 模拟器放大图文教程</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f5f6f8; color: #2b2f36; padding: 32px 16px 64px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .sub { color: #6b7280; font-size: 14px; margin-bottom: 28px; }
+  .verdict { background: #fff7ed; border: 1px solid #fdba74; border-radius: 10px; padding: 14px 18px; font-size: 15px; line-height: 1.7; margin-bottom: 30px; }
+  .verdict b { color: #c2410c; }
+  h2 { font-size: 19px; margin: 34px 0 10px; padding-left: 12px; border-left: 4px solid #e87722; }
+  .step { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; line-height: 1.8; font-size: 15px; }
+  .step .tag { display: inline-block; background: #e87722; color: #fff; border-radius: 6px; font-size: 12px; padding: 2px 8px; margin-right: 8px; vertical-align: 2px; }
+  .step .eff { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 12px; padding: 2px 8px; margin-left: 6px; }
+  .step .eff.no { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  figure { margin: 14px 0 6px; position: relative; }
+  figure img { width: 100%; border-radius: 8px; border: 1px solid #d1d5db; display: block; }
+  .box { position: absolute; border: 3px dashed #ef4444; border-radius: 8px; box-shadow: 0 0 0 2000px rgba(239,68,68,0); }
+  .lbl { position: absolute; background: #ef4444; color: #fff; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+  .note { font-size: 13px; color: #6b7280; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; margin-top: 8px; }
+  th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+  th { background: #f9fafb; }
+  .kbd { background: #eef1f4; border: 1px solid #d5dbe1; border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; font-size: 13px; }
+  .ok { color: #047857; font-weight: 700; }
+  .no { color: #b91c1c; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>模拟器画面放大 · 图文教程</h1>
+  <div class="sub">基于 2026-11-03 你的实际窗口截图（wanderlust-mini-b）标注 · 截图即你当时的界面原样</div>
+
+  <div class="verdict">
+    <b>先说结论：</b>你这个窗口是「模拟器居中」布局——没有编辑器面板、没有可拖分隔条、「界面」菜单里只有
+    <b>编辑器 / 调试器</b> 两项（没有模拟器开关）、底部工具栏也<b>没有</b>「独立窗口」按钮（我此前凭印象说的，对着你的截图逐一核对后确认没有，向你道歉）。
+    所以画面大小只有两个杠杆：<b>机型 × 比例</b>（你已找到），外加一个系统级的兜底办法。
+  </div>
+
+  <h2>方法一：换大屏机型（你已在用，拉满即可）</h2>
+  <div class="step">
+    <span class="tag">已验证</span>点击模拟器<b>下方工具栏左侧的机型下拉框</b>（你截图里是「iPhone 16 …」），
+    在列表里选<b>屏幕最大的机型</b>（带 Pro Max / Plus / Ultra 字样的，或 iPad 系）。边框大了，画面自然大。<span class="eff">有效</span>
+    <figure>
+      <img src="./图1-工作台窗口全貌.png" alt="窗口全貌">
+      <div class="box" style="left:14%; top:93.5%; width:26%; height:4.2%;"></div>
+      <div class="lbl" style="left:12%; top:88.5%;">① 机型下拉框（点这里换大屏机型）</div>
+    </figure>
+    <div class="note">标注基于你的原图：红框 = 机型下拉框的位置。</div>
+  </div>
+
+  <h2>方法二：调比例（你已在用）</h2>
+  <div class="step">
+    <span class="tag">已验证</span>你已经找到了比例设置（跟在机型后面调）。把它拉到允许的最大档位即可。注意：比例放大会等比缩放整块模拟画面，<b>拉太大文字会轻微发虚</b>，一般 ≤150% 观感最好。<span class="eff">有效</span>
+  </div>
+
+  <h2>方法三：关于「独立窗口」按钮——别再找了，你这版没有</h2>
+  <div class="step">
+    <span class="tag">已核对</span>我把你截图里工具栏机型下拉框右侧的 4 个图标逐一放大核对过，从左到右是：
+    <b>刷新 ↻</b>、<b>圆形图标（回到首页/主页类）</b>、<b>手机轮廓（真机相关）</b>、<b>四格窗口图标</b>。
+    之前我说最右边那个是「独立窗口」，<b>这个判断是错的</b>——四格图标是窗口布局类功能，点了不会把模拟器单独弹成一个可最大化的窗口。此路在你这版不通，<span class="eff no">无效</span>
+    <figure>
+      <img src="./图1-工作台窗口全貌.png" alt="工具栏图标">
+      <div class="box" style="left:44%; top:93.5%; width:34%; height:4.2%;"></div>
+      <div class="lbl" style="left:44%; top:88.5%;">② 这 4 个图标：刷新 / 圆形 / 手机 / 四格——都不是「独立窗口」</div>
+    </figure>
+    <div class="note">同理，「界面」菜单里只有 编辑器、调试器 两项；「视图」菜单不存在。已全部按你的截图核实。</div>
+  </div>
+
+  <h2>方法四：Windows 系统缩放（比例拉满之后唯一还能更大的官方途径）</h2>
+  <div class="step">
+    <span class="tag">推荐</span>
+    <span class="kbd">Win + I</span> 打开设置 → <b>系统 → 屏幕 → 缩放</b>，从 100%/125% 改成 <b>150%</b>。
+    整个开发者工具窗口（含模拟器）一起等比放大，<b>清晰度无损</b>，演示完改回来即可，全程 10 秒。<span class="eff">有效</span>
+    <div class="note">适合「要投屏 / 给客户看」的场景；日常开发不必动它。</div>
+  </div>
+
+  <h2>一页速查</h2>
+  <table>
+    <tr><th>想要的效果</th><th>做法</th><th>状态</th></tr>
+    <tr><td>日常看页面细节</td><td>机型选最大 + 比例拉到 ≤150%</td><td class="ok">✓ 你已在用</td></tr>
+    <tr><td>比例拉满还想更大</td><td>Windows 系统缩放 150%</td><td class="ok">✓ 兜底</td></tr>
+    <tr><td>拖分隔条 / 独立窗口 / 界面菜单开关</td><td>你的布局与版本均不支持</td><td class="no">✗ 已排除</td></tr>
+    <tr><td>最大最真实的演示</td><td>真机预览（画面跑在手机上）</td><td class="no">mini-b 测试号无权限；mini-a 待修 preview 编译报错</td></tr>
+  </table>
+
+  <div class="sub" style="margin-top:26px;">教程所用截图：图0 = 扫码核销页窗口 · 图1 = 工作台窗口（均为你 2026-11-03 的原始截图）</div>
+</div>
+</body>
+</html>
