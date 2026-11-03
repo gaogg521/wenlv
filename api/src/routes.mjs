@@ -11,6 +11,7 @@ import { adminAccounts } from './routes/admin-accounts.mjs'
 import { adminTickets } from './routes/admin-tickets.mjs'
 import { adminUserOps } from './routes/admin-userops.mjs'
 import { adminRiskCases } from './routes/admin-riskcases.mjs'
+import { fundWorkbenchAgg } from './routes/admin-ops.mjs'
 import { integrations } from './routes/integrations.mjs'
 import { web3 } from './routes/web3.mjs'
 import { open } from './routes/open.mjs'
@@ -18,7 +19,7 @@ import { callback } from './routes/callback.mjs'
 import { people } from './routes/people.mjs'
 import { contentGovernance } from './routes/content-governance.mjs'
 
-export const routes = { ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')

@@ -36,7 +36,7 @@ const NAV = [
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
   ['内容运营', [['contentdash', '内容看板', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
   ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
-  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['资金结算', [['fund', '资金工作台', 'settlements'], ['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
   ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
   ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['accounts', '后台账号', 'sys'], ['cases', '风控案件', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
@@ -134,7 +134,7 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  const access = { ops: ['users','dash','orders','tickets','entitlements','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
+  const access = { ops: ['users','dash','orders','tickets','entitlements','fund','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements'], finance: ['dash','orders','fund','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
