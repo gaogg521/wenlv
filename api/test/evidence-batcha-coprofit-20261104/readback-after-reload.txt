@@ -1,0 +1,156 @@
+- complementary "主导航":
+  - link "向往的自由 文旅数据 · 运营工作台":
+    - /url: "#dash"
+    - generic: ↗
+    - text: 向往的自由
+    - generic: 文旅数据 · 运营工作台
+  - generic: 查找功能
+  - searchbox "查找功能"
+  - navigation:
+    - generic "经营总览 1 ⌄":
+      - text: 经营总览
+      - generic: "1"
+      - text: ⌄
+    - button "经营概览":
+      - generic: 经营概览
+    - generic "商品与资源 1 ›":
+      - text: 商品与资源
+      - generic: "1"
+      - text: ›
+    - generic "订单履约 1 ›":
+      - text: 订单履约
+      - generic: "1"
+      - text: ›
+    - generic "合伙人与推广 2 ›":
+      - text: 合伙人与推广
+      - generic: "2"
+      - text: ›
+    - generic "资金结算 6 ⌄":
+      - text: 资金结算
+      - generic: "6"
+      - text: ⌄
+    - button "结算":
+      - generic: 结算
+    - button "提现审批":
+      - generic: 提现审批
+    - button "现金加奖打款":
+      - generic: 现金加奖打款
+    - button "协议变更":
+      - generic: 协议变更
+    - button "旅豆预算":
+      - generic: 旅豆预算
+    - button "共创分润":
+      - generic: 共创分润
+    - generic "系统治理 1 ›":
+      - text: 系统治理
+      - generic: "1"
+      - text: ›
+  - generic: 支付通道：联调 MOCK
+- banner:
+  - generic: 资金结算 / 共创分润
+  - generic: ◍财务
+  - button "退出登录"
+- paragraph: WANDERLUST / 资金结算
+- heading "共创分润" [level=1]
+- paragraph: 共创人投资与分润台账：财务或超管按真实回单登记打款，运营核对进度；错单作废、误付冲正全留痕。
+- button "↻ 刷新数据"
+- complementary "本页办理指引":
+  - generic: 共创管理
+  - text: 登记共创人，编辑合作资料与状态，核对分润台账。
+  - button "去合伙人中心 →"
+- main:
+  - generic: 💰
+  - generic: 累计投资额
+  - generic: ¥2,000
+  - generic: 共创人投入
+  - generic: 🏦
+  - generic: 应付分润
+  - generic: ¥130
+  - generic: 结算期自动入账
+  - generic: ✅
+  - generic: 已登记打款
+  - generic: ¥100
+  - generic: 按真实回单累计
+  - generic: ⏳
+  - generic: 待打款 / 待复核
+  - generic: ¥30
+  - generic: 登记 ≠ 实际到账
+  - heading "共创人管理" [level=2]
+  - generic: 资金商/商品商 · 按产品投资分润 · 结算期自动入账
+  - button "＋ 登记共创人：当前角色不能新建共创人" [disabled]: ＋ 登记共创人
+  - generic: 身份 · 投资与分润 · 协议与收款账户
+  - region "数据表格，可横向滚动":
+    - table:
+      - rowgroup:
+        - row "编号 产品 姓名 角色 投资额 分润比例 状态 操作":
+          - columnheader "编号"
+          - columnheader "产品"
+          - columnheader "姓名"
+          - columnheader "角色"
+          - columnheader "投资额"
+          - columnheader "分润比例"
+          - columnheader "状态"
+          - columnheader "操作"
+      - rowgroup:
+        - row "C2099UI1 朱家角剧本游 · 江南谜案 UI验收·共创资金方 资金商 ¥2,000 10.0% 生效 资料：当前角色不能编辑共创人 停用":
+          - cell "C2099UI1"
+          - cell "朱家角剧本游 · 江南谜案"
+          - cell "UI验收·共创资金方"
+          - cell "资金商":
+            - generic: 资金商
+          - cell "¥2,000"
+          - cell "10.0%"
+          - cell "生效":
+            - generic: 生效
+          - cell "资料：当前角色不能编辑共创人 停用":
+            - button "资料：当前角色不能编辑共创人" [disabled]: 资料
+            - button "停用"
+  - heading "共创分润台账" [level=3]
+  - generic: 打款走唯一流水登记：核对后登记真实回单
+  - region "数据表格，可横向滚动":
+    - table:
+      - rowgroup:
+        - row "分润单 结算期 共创人 产品 应付 已付 状态 最近打款 操作":
+          - columnheader "分润单"
+          - columnheader "结算期"
+          - columnheader "共创人"
+          - columnheader "产品"
+          - columnheader "应付"
+          - columnheader "已付"
+          - columnheader "状态"
+          - columnheader "最近打款"
+          - columnheader "操作"
+      - rowgroup:
+        - row "#163 2099-W49 UI验收·共创资金方 C2099UI1 朱家角剧本游 · 江南谜案 ¥50.00 ¥20.00 部分已付 待打款 — 登记打款":
+          - cell "#163"
+          - cell "2099-W49"
+          - cell "UI验收·共创资金方 C2099UI1":
+            - text: UI验收·共创资金方
+            - generic: C2099UI1
+          - cell "朱家角剧本游 · 江南谜案"
+          - cell "¥50.00"
+          - cell "¥20.00 部分已付":
+            - text: ¥20.00
+            - generic: 部分已付
+          - cell "待打款":
+            - generic: 待打款
+          - cell "—"
+          - cell "登记打款":
+            - button "登记打款"
+        - row "#162 2099-W48 UI验收·共创资金方 C2099UI1 朱家角剧本游 · 江南谜案 ¥80.00 ¥80.00 已结清 UIQA-BANK-20261104-000162 bank · admin:财务 打款流水":
+          - cell "#162"
+          - cell "2099-W48"
+          - cell "UI验收·共创资金方 C2099UI1":
+            - text: UI验收·共创资金方
+            - generic: C2099UI1
+          - cell "朱家角剧本游 · 江南谜案"
+          - cell "¥80.00"
+          - cell "¥80.00"
+          - cell "已结清":
+            - generic: 已结清
+          - cell "UIQA-BANK-20261104-000162 bank · admin:财务":
+            - text: UIQA-BANK-20261104-000162
+            - text: bank · admin:财务
+          - cell "打款流水":
+            - button "打款流水"
+- status
