@@ -33,7 +33,7 @@ await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (
 const B = ok(await call('POST', '/m/auth/login', { code: 'mock-xend-staff-' + stamp, merchantId: sess.merchant_id })).token
 const C = buyer.token
 const PHONE = '139' + String(Math.floor(Math.random() * 1e8)).padStart(8, '0')
-const created = { orders: [], banners: [], faqs: [] }
+const created = { orders: [], banners: [], faqs: [], badges: [], notes: [] }
 
 // 同一个事实的多个视图（调用前后各取一次，比较差值）
 const views = async () => {
@@ -236,7 +236,9 @@ console.log('\n== 三、存证三端：后台 / 对外验证 / 游客侧同源�
   })
   await t('旅豆日终封存（只读核对，不由本测试触发封存，避免污染 web3-integrity 的同日封存）：已封存的当日根借贷必须平衡', async () => {
     const day = new Date().toISOString().slice(0, 10)
-    const r = ok(await call('GET', '/open/verify/bean-day/' + day))
+    const raw = await call('GET', '/open/verify/bean-day/' + day)
+    if (raw.code !== 0) { assert.equal(raw.code, 1004, '当日尚未封存时应是"无记录"（1004），而不是别的错误'); return }
+    const r = raw.data
     if (r.found) { assert.equal(r.balanced, true); assert.equal(Number(r.debitSum), Number(r.creditSum), '日终根：Σ借 = Σ贷'); assert.ok(Number(r.leafCount) > 0) }
   })
 
@@ -311,8 +313,9 @@ await t('实名认证：A 提交 → 后台待审（身份证脱敏）→ 驳回
   assert.equal(ok(await call('GET', '/c/kyc/mine', null, kt)).status, 1)
   assert.equal(ok(await call('GET', `/admin/users/${u.user.id}`, null, A)).kyc.status, 1, '后台用户画像里的实名状态同步')
 })
+let promoter5
 await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × 费率；A（推广员）、后台推广员列表对得上，客户清单非空', async () => {
-  const pu = await login('mock-xend-promoter-' + stamp)
+  const pu = await login('mock-xend-promoter-' + stamp); promoter5 = pu
   ok(await call('POST', '/admin/promoters/register', { userId: pu.user.id, tier: 1 }, A))
   const { createScene } = await import('../src/domain/promo.mjs')
   const scene = await createScene(pu.user.id, 'poster')
@@ -331,9 +334,185 @@ await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × �
   const wp = ok(await call('GET', '/admin/promoters', null, A)).find((p) => Number(p.user_id) === Number(pu.user.id)); assert.ok(wp && Number(wp.rate_bp) === Number(cm.rate_bp))
 })
 
+console.log('\n== 六、核销的各条路径：离线批量 / 冲突处理 / 暗号 / 城市归属 ==')
+const newPaid = async (tok, sessionId = sess.id) => {
+  const od = ok(await call('POST', '/c/orders', { sessionId, qty: 1, beanDeduct: 0 }, tok)); created.orders.push(od.orderNo)
+  ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
+  const passId = ok(await call('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
+  return { orderNo: od.orderNo, passId, amountPay: Number(od.amountPay) }
+}
+const qrOf = async (tok, passId) => ok(await call('GET', `/c/pass/${passId}/code`, null, tok)).qr
+await t('离线核销清单：已出票的凭证在清单和离线码表里；线上核销后从清单消失', async () => {
+  const x = await newPaid(C)
+  const list = ok(await call('GET', '/m/verify/offline-list', null, B))
+  assert.ok(list.passes.some((p) => Number(p.pass_id) === x.passId && p.order_no === x.orderNo), '离线清单应包含新出票的凭证')
+  assert.ok(Object.values(list.codes).map(Number).includes(x.passId), '离线码表应含该凭证的窗口码')
+  assert.equal(ok(await call('POST', '/m/verify/scan', { payload: await qrOf(C, x.passId) }, B)).ok, true)
+  assert.ok(!ok(await call('GET', '/m/verify/offline-list', null, B)).passes.some((p) => Number(p.pass_id) === x.passId), '已核销的凭证不应再出现在离线清单')
+})
+await t('离线批量上传：正常的核销成功（A / B / 后台同步）；重放与无效码进人工队列，后台能处理且无凭证的不能"确认核销"', async () => {
+  const y = await newPaid(C); const qr = await qrOf(C, y.passId)
+  const r = ok(await call('POST', '/m/verify/offline-batch', { items: [{ payload: qr, offlineAt: new Date().toISOString() }] }, B))
+  assert.equal(r.uploaded, 1); assert.equal(r.conflicts, 0)
+  assert.equal(ok(await call('GET', '/c/orders/' + y.orderNo, null, C)).status, 40)
+  assert.equal(Number(ok(await call('GET', '/admin/orders/' + y.orderNo, null, A)).status), 40)
+  assert.ok(ok(await call('GET', '/m/verify/records', null, B)).some((x) => x.order_no === y.orderNo && Number(x.result) === 1))
+  const bogus = 'wl://v/not-a-real-code-' + stamp
+  const r2 = ok(await call('POST', '/m/verify/offline-batch', { items: [{ payload: qr }, { payload: bogus }] }, B))
+  assert.equal(r2.conflicts, 2); assert.equal(r2.uploaded, 0)
+  const pend = ok(await call('GET', '/admin/verify/conflicts', null, A))
+  const replay = pend.find((c) => Number(c.pass_id) === y.passId && /重复/.test(c.reason)); const bad = pend.find((c) => String(c.payload).includes('not-a-real-code-' + stamp))
+  assert.ok(replay, '重放应进冲突队列'); assert.ok(bad, '无效码应进冲突队列'); assert.equal(bad.pass_id, null)
+  assert.equal((await call('POST', `/admin/verify/conflicts/${bad.id}/resolve`, { action: 'confirm' }, A)).code, 1001, '无法定位凭证的冲突只能驳回')
+  ok(await call('POST', `/admin/verify/conflicts/${replay.id}/resolve`, { action: 'reject' }, A)); ok(await call('POST', `/admin/verify/conflicts/${bad.id}/resolve`, { action: 'reject' }, A))
+  const left = ok(await call('GET', '/admin/verify/conflicts', null, A)); assert.ok(!left.some((c) => c.id === replay.id || c.id === bad.id))
+  assert.ok(ok(await call('GET', '/admin/verify/conflicts?status=2', null, A)).some((c) => c.id === replay.id), '已驳回的应在已处理里')
+})
+await t('离线冲突里有凭证的（如离线时码已过期）：运营确认核销 → A 订单 40、凭证已核销、后台订单 40、记录有人工确认一条', async () => {
+  const z = await newPaid(C)
+  const cid = (await q('INSERT INTO verify_offline_conflict (merchant_id, pass_id, payload, offline_at, reason) VALUES (?,?,?,NOW(3),?)', [sess.merchant_id, z.passId, 'wl://v/expired-' + stamp, '码已过期'])).insertId
+  ok(await call('POST', `/admin/verify/conflicts/${cid}/resolve`, { action: 'confirm' }, A))
+  assert.equal(ok(await call('GET', '/c/orders/' + z.orderNo, null, C)).status, 40)
+  assert.equal(Number((await one('SELECT status FROM travel_pass WHERE id = ?', [z.passId])).status), 2)
+  assert.equal(Number(ok(await call('GET', '/admin/orders/' + z.orderNo, null, A)).status), 40)
+  assert.ok(await one('SELECT id FROM verification_log WHERE pass_id = ? AND method = 3 AND result = 1', [z.passId]), '应有人工确认的核销记录')
+  await q('DELETE FROM verify_offline_conflict WHERE id = ?', [cid])
+})
+await t('暗号核销：后台设置 → A 只看到上半句（下半句不下发）→ B 错暗号被拒、对暗号核销并拿到下半句 → A / 后台订单 40；重复暗号不能再核销', async () => {
+  const ph = await newPaid(C)
+  const up = '跨端上句' + stamp, down = '跨端下句' + stamp
+  const prev = await one('SELECT phrase_user, phrase_merchant FROM tour_product WHERE id = ?', [sess.product_id])
+  ok(await call('POST', `/admin/phrases/${sess.product_id}`, { userPhrase: up, merchantPhrase: down }, A))
+  try {
+    assert.ok(ok(await call('GET', '/admin/phrases', null, A)).some((p) => Number(p.id) === sess.product_id && p.phrase_user === up))
+    const a = ok(await call('GET', `/c/orders/${ph.orderNo}/phrase`, null, C))
+    assert.equal(a.enabled, true); assert.equal(a.userPhrase, up); assert.ok(!JSON.stringify(a).includes(down), 'A 端不应拿到下半句')
+    const bad = ok(await call('POST', '/m/verify/phrase', { phrase: '不对的暗号', orderNo: ph.orderNo }, B)); assert.equal(bad.ok, false)
+    assert.equal(ok(await call('GET', '/c/orders/' + ph.orderNo, null, C)).status, 30, '错暗号不应核销')
+    const good = ok(await call('POST', '/m/verify/phrase', { phrase: up, orderNo: ph.orderNo }, B))
+    assert.equal(good.ok, true); assert.equal(good.counterPhrase, down); assert.ok(good.verified >= 1)
+    const a2 = ok(await call('GET', '/c/orders/' + ph.orderNo, null, C))
+    assert.equal(a2.status, 40); assert.ok(a2.passes.every((p) => p.status === 2))
+    assert.equal(Number(ok(await call('GET', '/admin/orders/' + ph.orderNo, null, A)).status), 40)
+    assert.ok(await one('SELECT id FROM verification_log WHERE pass_id = ? AND method = 4 AND result = 1', [ph.passId]), '应有暗号核销记录')
+    assert.equal(ok(await call('POST', '/m/verify/phrase', { phrase: up, orderNo: ph.orderNo }, B)).ok, true, '已核销订单再对暗号：不应报错')
+  } finally { await q('UPDATE tour_product SET phrase_user = ?, phrase_merchant = ? WHERE id = ?', [prev.phrase_user, prev.phrase_merchant, sess.product_id]) }
+})
+await t('核销的城市归属：外城门店的扫码 / 离线批量核销，核销记录里的城市是门店所在城市，不是写死的青浦', async () => {
+  const other = await one(`SELECT s.id sid, p.merchant_id mid, p.city_code FROM tour_session s JOIN tour_product p ON p.id = s.product_id JOIN merchant m ON m.id = p.merchant_id
+    WHERE p.city_code <> ? AND m.city_code = p.city_code AND p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 3 ORDER BY s.id LIMIT 1`, [sess.city_code])
+  assert.ok(other, '隔离库需有外城商品（seed:scenario 会建）')
+  const st2 = await login('mock-xend-staff2-' + stamp)
+  await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [other.mid, st2.user.id])
+  const B2 = ok(await call('POST', '/m/auth/login', { code: 'mock-xend-staff2-' + stamp, merchantId: other.mid })).token
+  const e1 = await newPaid(C, other.sid), e2 = await newPaid(C, other.sid)
+  assert.equal(ok(await call('POST', '/m/verify/scan', { payload: await qrOf(C, e1.passId) }, B2)).ok, true)
+  assert.equal(ok(await call('POST', '/m/verify/offline-batch', { items: [{ payload: await qrOf(C, e2.passId) }] }, B2)).uploaded, 1)
+  for (const x of [e1, e2]) {
+    const lg = await one('SELECT city_code FROM verification_log WHERE pass_id = ? AND result = 1', [x.passId])
+    assert.equal(String(lg.city_code), String(other.city_code), `核销记录的城市应是门店城市 ${other.city_code}，实际 ${lg.city_code}`)
+  }
+})
+
+console.log('\n== 七、勋章 / 城市轮播 / 举报申诉：三端同步 ==')
+await t('勋章：后台新建"首评"规则 → A 完成订单并评价得到勋章（评价接口、身份页、后台勋章页、用户画像、存证）；重复评价不重复发', async () => {
+  const bname = '跨端勋章' + stamp
+  const bd = ok(await call('POST', '/admin/entities/badge', { values: { name: bname, icon_key: 'xe' + stamp, rule_type: 'review', threshold: 1, rule_desc: '发表 1 条评价' } }, A)); created.badges.push(bd.id)
+  const u = await login('mock-xend-badge-' + stamp)
+  const bo = await newPaid(u.token)
+  assert.equal(ok(await call('POST', '/m/verify/scan', { payload: await qrOf(u.token, bo.passId) }, B)).ok, true)
+  ok(await call('POST', '/admin/dev/complete', { orderNo: bo.orderNo }, A))
+  const g0 = ok(await call('GET', '/admin/web3/overview', null, A)).badgeGrants
+  const rv = ok(await call('POST', `/c/orders/${bo.orderNo}/review`, { rating: 5, content: '跨端回归的评价内容' }, u.token))
+  assert.ok(rv.badges.includes(bname), '评价接口应返回新得到的勋章（小程序据此弹窗）')
+  assert.ok(ok(await call('GET', '/c/identity', null, u.token)).badges.some((b) => b.name === bname || b.id === bd.id), 'A 身份页应显示勋章')
+  assert.equal(ok(await call('GET', '/admin/web3/overview', null, A)).badgeGrants - g0, 1, '后台勋章发放数 +1')
+  assert.ok(JSON.stringify(ok(await call('GET', '/admin/web3/badges', null, A))).includes(bname), '后台勋章页应有该勋章')
+  const prof = ok(await call('GET', `/admin/users/${u.user.id}`, null, A))
+  assert.ok(JSON.stringify(prof).includes(bname), '后台用户画像应有该勋章：content=' + JSON.stringify(prof.content).slice(0, 400))
+  assert.ok(await one(`SELECT id FROM attest_event WHERE biz_type = 'badge' AND biz_ref = ?`, ['badge-' + u.user.id + '-' + bd.id]), '勋章发放应有存证')
+  assert.equal(Number((await one('SELECT COUNT(*) n FROM user_badge WHERE user_id = ? AND badge_id = ?', [u.user.id, bd.id])).n), 1)
+  assert.notEqual((await call('POST', `/c/orders/${bo.orderNo}/review`, { rating: 5, content: '重复评价' }, u.token)).code, 0, '同一订单不能重复评价')
+})
+await t('轮播按城市投放：限定外城的只在该城市下发；未限定的所有城市都有；不传城市给全部', async () => {
+  const mk = async (title, cities) => { const r = ok(await call('POST', '/admin/entities/banner', { values: { title, image: '/uploads/x.png', cities, sort: 0, status: '1' } }, A)); created.banners.push(r.id); return r.id }
+  const idCity = await mk('跨端城市轮播' + stamp, ['330500']), idAll = await mk('跨端全域轮播' + stamp, [])
+  const ids = async (q2) => ok(await call('GET', '/c/banners' + q2, null, C)).map((b) => b.id)
+  const f330500 = await ids('?city=330500'), f310118 = await ids('?city=310118'), fAll = await ids('')
+  assert.ok(f330500.includes(idCity) && f330500.includes(idAll)); assert.ok(!f310118.includes(idCity) && f310118.includes(idAll))
+  assert.ok(fAll.includes(idCity) && fAll.includes(idAll))
+})
+await t('举报与申诉：读者举报 → 后台处理下架 → 作者看到原因且读者读不到 → 作者申诉 → 后台复核恢复 → 作者与读者恢复；后台内容看板数字 = 数据库', async () => {
+  const author = await login('mock-xend-author-' + stamp), reader = await login('mock-xend-reader-' + stamp)
+  const n = ok(await call('POST', '/c/notes', { title: '跨端笔记' + stamp, body: '<p>旅行事实与体验正文</p>', relatedProductId: sess.product_id }, author.token)); created.notes.push(n.id)
+  const dashCheck = async () => {
+    const st = ok(await call('GET', '/admin/content-dashboard', null, A)).stats
+    const c = await one('SELECT COUNT(*) total, SUM(status = 2) pub, SUM(status = 4) off FROM content_note')
+    assert.equal(Number(st.total), Number(c.total), '看板总数 = 数据库'); assert.equal(Number(st.offline), Number(c.off || 0), '看板下架数 = 数据库')
+    return st
+  }
+  const s0 = await dashCheck()
+  const rp = ok(await call('POST', `/c/notes/${n.id}/report`, { reason: '涉嫌虚假宣传，请核实事实' }, reader.token))
+  assert.ok(ok(await call('GET', `/admin/content-cases/reports/${rp.id}`, null, A)), '后台应能看到该举报')
+  ok(await call('POST', `/admin/content-cases/reports/${rp.id}/verdict`, { action: 'takedown', reason: '已核实相关内容事实并完成处理' }, A))
+  const mine = ok(await call('GET', '/c/notes', null, author.token)).find((x) => x.id === n.id)
+  assert.equal(Number(mine.status), 4); assert.ok(mine.offline_reason, '作者应看到下架原因'); assert.equal(Number(mine.can_appeal), 1)
+  assert.equal((await call('GET', `/c/notes/${n.id}`, null, reader.token)).code, 1004, '读者读不到已下架的笔记')
+  assert.equal(ok(await call('GET', '/c/content-reports', null, reader.token))[0].status, 2, '读者看到举报已处理')
+  const s1 = await dashCheck(); assert.equal(Number(s1.offline) - Number(s0.offline), 1, '后台看板下架数 +1')
+  const ap = ok(await call('POST', `/c/notes/${n.id}/appeal`, { reason: '内容为本人真实体验，请重新核实' }, author.token))
+  assert.ok(ok(await call('GET', `/admin/content-cases/appeals/${ap.id}`, null, A)), '后台应能看到该申诉')
+  ok(await call('POST', `/admin/content-cases/appeals/${ap.id}/verdict`, { action: 'restore', reason: '已复核作品事实及相关依据' }, A))
+  const back = ok(await call('GET', '/c/notes', null, author.token)).find((x) => x.id === n.id)
+  assert.equal(Number(back.status), 2, '申诉恢复后作者的笔记应是已发布'); assert.ok(ok(await call('GET', `/c/notes/${n.id}`, null, reader.token)), '读者又能读到')
+  const s2 = await dashCheck(); assert.equal(Number(s2.offline), Number(s0.offline), '看板下架数回落')
+})
+
+console.log('\n== 八、统计口径交叉：同一个数字的几个出处 ==')
+await t('推广员的钱：后台合伙人画像、对账页、A 推广中心、数据库 四处对得上；佣金放行后同步变化', async () => {
+  assert.ok(promoter5, '需要第五部分建的推广员')
+  const uid = promoter5.user.id
+  const truth = async () => {
+    const rows = await q('SELECT status, COALESCE(SUM(amount),0) a, COUNT(*) n FROM commission WHERE promoter_id = ? GROUP BY status', [uid])
+    const by = (...ss) => rows.filter((r) => ss.includes(Number(r.status))).reduce((s, r) => s + Number(r.a), 0)
+    return { observing: by(0), earned: by(1, 2), reversed: by(3, 4) }
+  }
+  const check = async (when) => {
+    const tr = await truth()
+    const rec = ok(await call('GET', `/admin/partner-reconciliation/promoter/${uid}`, null, A)).summary
+    assert.equal(Number(rec.observing), tr.observing, when + '：对账页观察期'); assert.equal(Number(rec.earned), tr.earned, when + '：对账页已放行'); assert.equal(Number(rec.reversed), tr.reversed, when + '：对账页冲正')
+    const prof = ok(await call('GET', `/admin/partners/promoter/${uid}`, null, A))
+    const sum = prof.commissions.reduce((s, r) => s + Number(r.amount), 0); assert.equal(sum, tr.observing + tr.earned + tr.reversed, when + '：画像里的佣金合计')
+    const ov = ok(await call('GET', '/c/promote/overview', null, promoter5.token)); assert.notEqual(ov.promoter, false)
+    return { tr, ov }
+  }
+  const before = await check('放行前'); assert.ok(before.tr.observing > 0, '应有观察期佣金')
+  await q('UPDATE commission SET payable_at = NOW(3) - INTERVAL 1 DAY WHERE promoter_id = ? AND status = 0', [uid])
+  ok(await call('POST', '/admin/system/jobs/commission-due/run', {}, A))
+  const after = await check('放行后'); assert.equal(after.tr.observing, 0); assert.equal(after.tr.earned, before.tr.observing, '放行后已放行 = 原观察期')
+  const ovTxt = JSON.stringify(after.ov); assert.ok(ovTxt.includes(String(after.tr.earned)) || ovTxt.includes((after.tr.earned / 100).toFixed(2)), 'A 推广中心应显示放行后的金额 ' + after.tr.earned + '：' + ovTxt.slice(0, 300))
+})
+await t('景点数据：景点下的线路，景点页的数字 = 该线路自己的商品数据；A 的景点页能看到这条线路', async () => {
+  const sc = ok(await call('POST', '/admin/scenics', { name: '跨端景点' + stamp, cityCode: sess.city_code }, A)); const scId = sc.id
+  const prevSc = (await one('SELECT scenic_id FROM tour_product WHERE id = ?', [sess.product_id])).scenic_id
+  await q('UPDATE tour_product SET scenic_id = ? WHERE id = ?', [scId, sess.product_id])
+  try {
+    const so = ok(await call('GET', `/admin/scenics/${scId}/overview`, null, A)), po = ok(await call('GET', `/admin/products/${sess.product_id}/overview`, null, A)).kpi
+    const skpi = so.kpi || so
+    // 景点页口径是"有效销量"（不含退款），线路页的 orders 含已退款，所以以数据库为准分别核对
+    const truthRows = await one("SELECT COALESCE(SUM(qty),0) sold, COALESCE(SUM(amount_pay),0) gmv, COUNT(*) n FROM orders WHERE product_id = ? AND status IN (20,30,40,50)", [sess.product_id])
+    assert.equal(Number(skpi.sold), Number(truthRows.sold), '景点页有效销量 = 数据库：' + JSON.stringify(skpi) + ' vs ' + JSON.stringify(truthRows))
+    assert.equal(Number(skpi.gmv), Number(truthRows.gmv), '景点页 GMV = 数据库有效订单合计')
+    assert.equal(Number(po.orders) - Number(po.refunded), Number(truthRows.n), '线路页订单数 - 退款数 = 有效订单数：' + JSON.stringify(po))
+    const place = ok(await call('GET', `/c/places/scenic/${scId}`, null, C)); assert.ok(JSON.stringify(place).includes(sess.title), 'A 景点页应列出该线路')
+  } finally { await q('UPDATE tour_product SET scenic_id = ? WHERE id = ?', [prevSc, sess.product_id]) }
+})
+
 // ---------- 清理本轮造出的业务数据 ----------
 for (const id of created.banners) await q('DELETE FROM banner WHERE id = ?', [id]).catch(() => {})
 for (const id of created.faqs) await q('DELETE FROM faq WHERE id = ?', [id]).catch(() => {})
+for (const id of created.badges) { await q('DELETE FROM user_badge WHERE badge_id = ?', [id]).catch(() => {}); await q('DELETE FROM badge WHERE id = ?', [id]).catch(() => {}) }
+for (const id of created.notes) await q('DELETE FROM content_note WHERE id = ?', [id]).catch(() => {})
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 process.exit(process.exitCode || 0)
 

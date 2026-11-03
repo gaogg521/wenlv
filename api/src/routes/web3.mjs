@@ -229,7 +229,7 @@ const web3 = {
     const kw = String(req.query.kw || '').trim()
     const rows = await q(`SELECT a.id account_id, a.user_id, a.balance, u.nickname, u.member_level, u.growth_value,
       (SELECT COUNT(*) FROM user_badge ub WHERE ub.user_id = a.user_id) badges,
-      (SELECT COUNT(*) FROM attest_event e WHERE e.biz_type = 'order' AND e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = a.user_id)) attest_n
+      (SELECT COUNT(DISTINCT e.biz_ref) FROM attest_event e WHERE e.biz_type = 'order' AND e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = a.user_id)) attest_n
       FROM bean_account a JOIN user_account u ON u.id = a.user_id
       ${kw ? 'WHERE u.nickname LIKE ? OR CAST(a.user_id AS CHAR) = ?' : ''}
       ORDER BY a.balance DESC LIMIT 30`, kw ? ['%' + kw + '%', kw] : [])
@@ -246,7 +246,7 @@ const web3 = {
     const orders = await q('SELECT order_no, amount_pay, status FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 10', [uid])
     const attestations = []
     for (const o of orders) {
-      const e = await one("SELECT status, payload_hash, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ?", [o.order_no])
+      const e = await one("SELECT status, payload_hash, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ? ORDER BY version_no DESC, id DESC LIMIT 1", [o.order_no])
       if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
     return { profile: u, balance: acc ? acc.balance : 0, ledger, badges, attestations,

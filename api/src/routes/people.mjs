@@ -188,7 +188,8 @@ export const people = {
     const tasks = await one(`SELECT COUNT(*) joined, SUM(status = 3) passed, SUM(status = 2) reviewing, COALESCE(SUM(reward_beans), 0) beans,
         COALESCE(SUM(CASE WHEN cash_status = 2 THEN cash_reward END), 0) cash_paid, COALESCE(SUM(CASE WHEN cash_status = 1 THEN cash_reward END), 0) cash_pending
       FROM content_task_entry WHERE user_id = ?`, [id])
-    const badges = await q('SELECT b.name, ub.created_at FROM user_badge ub JOIN badge b ON b.id = ub.badge_id WHERE ub.user_id = ? ORDER BY ub.created_at DESC', [id]).catch(() => [])
+    // user_badge 的时间列是 granted_at；之前写成 created_at，SQL 报错被 .catch 吞掉，后台画像从来看不到勋章。这里不再吞错
+    const badges = await q('SELECT b.name, ub.granted_at AS created_at FROM user_badge ub JOIN badge b ON b.id = ub.badge_id WHERE ub.user_id = ? ORDER BY ub.granted_at DESC', [id])
     const promoter = await one('SELECT tier, rate_bp, valid_gmv_90d, service_score, status FROM promoter WHERE user_id = ?', [id])
     const commission = promoter ? await one('SELECT COUNT(*) n, COALESCE(SUM(amount), 0) amt FROM commission WHERE promoter_id = ?', [id]) : null
     const staff = await q(`SELECT m.id, m.name, s.role, s.status FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id WHERE s.user_id = ?`, [id])

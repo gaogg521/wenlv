@@ -105,6 +105,12 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
     }
     await c.upd('UPDATE orders SET status=30,version=version+1 WHERE id=?', [o.id])
     await c.q('INSERT INTO order_event(order_id,from_st,to_st,actor,detail) VALUES(?,20,30,?,?)', [o.id,'system',JSON.stringify('确认出票·'+o.qty+'张凭证')])
+    // 支付成功即订单存证（同事务，version=30）。此前订单事件只在"完成"时才有（version=50），后台"一单六锚"的"支付成功"一步
+    // 在订单完成前是空的；canonical 与完成时同字段、只有 status 不同，白名单，不含个人信息
+    await attest('order', orderNo, {
+      orderNo, amountPay: Number(o.amount_pay), status: 30, merchantId: Number(o.merchant_id),
+      qty: Number(o.qty), cityCode: o.city_code,
+    }, c, 30)
     return { ...o, status:30, duplicated:false }
   })
 }
