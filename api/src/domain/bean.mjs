@@ -149,6 +149,19 @@ export async function releaseDeferredRebates(userId) {
   return n
 }
 
+/**
+ * 旅豆发放 / 净消耗（按"数量"，不是账本行数）。
+ * 发放 = 用户户收到的 1/2/3 类入账；消耗 = 用户户被扣的 4/6/7 类出账 − 退款冲正退回的 5 类入账。
+ * 注意不能数 direction=2 的全部行：每笔发放在预算哨兵户上还有一条借方，数进去会让"使用率"虚高、甚至超过 100%。
+ */
+export async function flow() {
+  const r = await one(`SELECT
+    COALESCE(SUM(CASE WHEN direction = 1 AND biz_type IN (1,2,3) THEN amount END), 0) granted,
+    COALESCE(SUM(CASE WHEN direction = 2 AND biz_type IN (4,6,7) THEN amount END), 0) debited,
+    COALESCE(SUM(CASE WHEN direction = 1 AND biz_type = 5 THEN amount END), 0) reversed FROM bean_ledger`)
+  return { granted: Number(r.granted), consumed: Number(r.debited) - Number(r.reversed) }
+}
+
 /** 日终试算：真实用户户 balance==Σcredit-Σdebit；全账本 Σ贷==Σ借 */
 export async function trialBalance() {
   const perAcct = await q(`SELECT a.id, a.balance,

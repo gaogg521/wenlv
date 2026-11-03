@@ -157,14 +157,13 @@ const web3 = {
     const e = await one(`SELECT COUNT(*) total, SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) anchored,
       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) pending FROM attest_event`)
     const badges = await one('SELECT COUNT(*) c FROM user_badge')
-    const bean = await one(`SELECT COALESCE(SUM(direction = 1 AND biz_type IN (1,2,3)),0) granted,
-      COALESCE(SUM(direction = 2),0) consumed FROM bean_ledger`)
+    const beanFlow = await bean.flow()
     const events = await q(`SELECT biz_type, biz_ref, status, created_at FROM attest_event ORDER BY id DESC LIMIT 12`)
     return {
       batches: Number(b.batches) || 0, anchoredBatches: Number(b.anchored) || 0,
       events: Number(e.total) || 0, anchoredEvents: Number(e.anchored) || 0, pendingEvents: Number(e.pending) || 0,
       badgeGrants: Number(badges.c) || 0,
-      beanGranted: Number(bean.granted) || 0, beanConsumed: Number(bean.consumed) || 0,
+      beanGranted: beanFlow.granted, beanConsumed: beanFlow.consumed,
       chain: chain.chainStatus(),
       chainMode: chain.chainMode() === 'real'
         ? '已接入链数根：批次真实锚定'

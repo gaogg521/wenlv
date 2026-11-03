@@ -12,7 +12,11 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
-import { bindMobile, sealMobile } from '../infra/mobile.mjs'
+import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
+
+// 游客订单详情可见的订单字段（小程序订单页实际用到的 + 本人订单的基本事实）
+const ORDER_PUBLIC = ['id', 'order_no', 'channel', 'product_id', 'session_id', 'city_code', 'qty', 'amount_goods', 'amount_bean_ded', 'bean_deducted',
+  'amount_pay', 'insurance_fee', 'status', 'contact_name', 'refund_deadline', 'paid_at', 'completed_at', 'created_at', 'title', 'days_desc']
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -248,7 +252,9 @@ const c = {
     const mRow = await one('SELECT * FROM merchant WHERE id = ?', [o.merchant_id])
     const mp = entities.publicProfile('merchant', mRow, (u) => apiImg(u, req)) || {}
     const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
-    return { ...o, amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
+    // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
+    const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
+    return { ...pub, contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
