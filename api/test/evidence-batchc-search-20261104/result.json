@@ -1,0 +1,32 @@
+{
+  "task": "批次C：T03 订单服务端全量检索 + T10 核心列表分页契约",
+  "date": "2026-11-04",
+  "branch": "feat/batch-c-server-search",
+  "environment": {
+    "service": "http://127.0.0.1:18089/admin-ui",
+    "db": "wanderlust_qa_batchc_20261104 (隔离库，V1–V45，seed:scenario + 260 条 UIQA 夹具订单)",
+    "jwt": "devsecret",
+    "payMode": "MOCK"
+  },
+  "apiTests": {
+    "npmTest": "200 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2）；新增 test/admin-orders-search.mjs 7 项（老单精确命中/契约与库内复算/筛选组合与计数口径/买家检索含盲索引/城市隔离/导出同口径/T10 列表契约与负向）",
+    "callersSynced": "cross-end / mobile-freeze / e2e-phase2 / e2e-phase7 四处数组调用方同步为分页契约"
+  },
+  "uiChecks": [
+    { "step": "订单页显示 共 370 笔（110 场景 + 260 夹具），状态页签为服务端计数（待支付38/已支付37/…），含日期范围筛选", "result": "通过", "evidence": "01-orders-server-search.png" },
+    { "step": "搜索 UIQA-SRCH-0000（第 1 条订单，100 条以外）→ 精确命中 1 笔，地址栏 hash 自动带 kw", "result": "通过（AC-08）", "evidence": "02-old-order-exact-hit.png" },
+    { "step": "状态页签=服务端过滤（待支付 38 笔，行状态全为待支付），hash 带 status=10", "result": "通过", "evidence": "03-page-restore-status-tab.png" },
+    { "step": "翻页 → hash=#orders?page=2 → 刷新后页码/筛选完整恢复（共 370 笔 · 第 2/19 页）", "result": "通过（AC-08，修复 core.js boot 对 hash 查询串的剥离后复验）", "evidence": "04-page-restore-after-reload.png" }
+  ],
+  "fixesDuringVerification": [
+    "core.js boot 剥离 hash 查询串导致刷新后回到第 1 页：改为保留完整 location.hash",
+    "filters 回显完整手机号违反红线 11：kw 为手机号时回显脱敏值",
+    "无绑定城市账号可在旧订单/商品/商户/结算/供应商/导出接口退化为全平台：全部补 1003 守卫"
+  ],
+  "boundaries": [
+    "T10 其余列表（约稿/暗号/逐品佣金/audit-logs 等）本轮未全部改造，仅完成订单/内容/创作者/提现/风控五个核心列表",
+    "orders 旧数组接口保留（LIMIT 100）供未迁移调用方，后台页面已全部切服务端检索",
+    "导出仍为全量口径（上限 5000），未支持按筛选导出（列入 T10 后续）"
+  ]
+}

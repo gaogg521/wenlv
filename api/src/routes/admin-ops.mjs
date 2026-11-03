@@ -146,9 +146,30 @@ const adminSys = {
 }
 
 const adminEco = {
+  // T03/T10：服务端检索 + 分页契约 { rows, total, page, pageSize, statusCounts, countsScope, filters }
   'GET /admin/content': async (req) => {
-    const a=await requireAdmin(req, ['super', 'ops', 'review']),sc=scopeFilter(a,'p.city_code')
-    return await q(`SELECT c.*,u.nickname,u.creator_tag FROM content_note c JOIN user_account u ON u.id=c.user_id LEFT JOIN tour_product p ON p.id=c.related_product_id WHERE 1=1${sc.sql} ORDER BY c.id DESC LIMIT 100`,sc.params)
+    const a = await requireAdmin(req, ['super', 'ops', 'review'])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const sc = scopeFilter(a, 'p.city_code')
+    const conds = sc.sql ? [sc.sql.replace(' AND ', '')] : []
+    const args = [...sc.params]
+    const filters = {}
+    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (status != null) { conds.push('c.status = ?'); args.push(status); filters.status = status }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('(c.title LIKE ? OR u.nickname LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const from = `FROM content_note c JOIN user_account u ON u.id = c.user_id LEFT JOIN tour_product p ON p.id = c.related_product_id`
+    const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, args)).n)
+    const rows = await q(`SELECT c.*, u.nickname, u.creator_tag ${from} ${W} ORDER BY c.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    const condsNoStatus = conds.filter((c) => c !== 'c.status = ?')
+    const argsNoStatus = (() => { const out = []; let ai = 0; for (const c of conds) { const n = (c.match(/\?/g) || []).length; if (c === 'c.status = ?') { ai += n; continue } for (let k = 0; k < n; k++) out.push(args[ai++]); ai += n } return out })()
+    const countsRaw = await q(`SELECT c.status, COUNT(*) n ${from} ${condsNoStatus.length ? 'WHERE ' + condsNoStatus.join(' AND ') : ''} GROUP BY c.status`, argsNoStatus)
+    const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
+    statusCounts.all = countsRaw.reduce((s, r) => s + Number(r.n), 0)
+    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters }
   },
 
   // 评价管理（内容审核工作区）
@@ -287,6 +308,7 @@ const adminEdit = {
 
   'GET /admin/suppliers': async (req) => {
     const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a)
     return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
       FROM supplier s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
@@ -326,18 +348,29 @@ const adminEdit = {
     return { updated: true }
   },
 
-  // 创作者池（UGC 运营）：按用户聚合内容产出；标签=资源状态（none/signed/star/limited）
+  // 创作者池（UGC 运营）：按用户聚合内容产出；标签=资源状态（none/signed/star/limited）。T03：服务端检索 + 分页
   'GET /admin/creators': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'review'])
-    return await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level, u.status,
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 30)))
+    const conds = [`(u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id))`]
+    const args = []
+    const filters = {}
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%'); filters.kw = kw }
+    const tag = String(req.query.tag || '').trim()
+    if (tag && CREATOR_TAGS.includes(tag)) { conds.push('u.creator_tag = ?'); args.push(tag); filters.tag = tag }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const base = `FROM user_account u`
+    const total = Number((await one(`SELECT COUNT(*) n ${base} ${W}`, args)).n)
+    const rows = await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level, u.status,
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id) note_count,
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
       (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count,
       (SELECT COUNT(*) FROM content_task_entry t WHERE t.user_id = u.id AND t.status = 3) task_done,
       (SELECT MAX(c.published_at) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) last_published
-      FROM user_account u
-      WHERE u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id)
-      ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT 200`)
+      ${base} ${W} ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
   },
   'PUT /admin/creators/:id/tag': async (req) => {
     const a = await requireAdmin(req, 'creator.manage')
@@ -615,9 +648,21 @@ const adminNew = {
 }
 
 const adminFin = {
+  // T03/T10：提现审批服务端分页 + 状态筛选（旧数组契约同步为对象契约）
   'GET /admin/withdrawals': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
-    return await q('SELECT w.*, u.nickname, u.status AS user_status FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id ORDER BY w.id DESC LIMIT 100')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = ['1=1'], args = [], filters = {}
+    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (status != null && [0, 1, 2].includes(status)) { conds.push('w.status = ?'); args.push(status); filters.status = status }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%'); filters.kw = kw }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const from = 'FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id'
+    const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, args)).n)
+    const rows = await q(`SELECT w.*, u.nickname, u.status AS user_status ${from} ${W} ORDER BY w.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
   },
   'POST /admin/withdrawals/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])

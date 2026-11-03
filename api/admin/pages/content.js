@@ -4,10 +4,21 @@
 /* ============ 内容审核（笔记 + 线路评价） ============ */
 async function content() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const [rows, rvs] = await Promise.all([api('GET', '/admin/content'), api('GET', '/admin/reviews')])
+  // T03/T10：服务端检索 + 分页契约 { rows, total, page, pageSize, statusCounts }
+  window.__contentQ = window.__contentQ || { page: 1, status: '', kw: '' }
+  const Q = window.__contentQ
+  const search = new URLSearchParams()
+  if (Q.status !== '') search.set('status', Q.status)
+  if (Q.kw) search.set('kw', Q.kw)
+  search.set('page', Q.page)
+  const [data, rvs] = await Promise.all([api('GET', '/admin/content?' + search.toString()), api('GET', '/admin/reviews')])
+  const rows = data.rows
+  const pages = Math.max(1, Math.ceil(data.total / data.pageSize))
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>笔记审核</h2><span class="muted">查看全文与图片，处理待审笔记；已发布内容可下架并告知作者原因。</span></div>
+    <div class="cfg-tabs">${[['', '全部'], [1, '人工审核'], [2, '已发布'], [3, '已驳回'], [4, '已下架']].map(([v, n]) => `<button class="cfg-tab ${String(Q.status) === String(v) ? 'on' : ''}" onclick="window.__contentQ.status='${v}';window.__contentQ.page=1;content()">${n}</button>`).join('')}
+      <input class="inp" id="contentKw" placeholder="标题 / 作者" value="${esc(Q.kw)}" style="width:180px;margin-left:8px"> <button class="btn ghost sm" onclick="window.__contentQ.kw=document.getElementById('contentKw').value.trim();window.__contentQ.page=1;content()">搜索</button></div>
     ${adminCan('note.review') ? '' : '<p class="muted">当前账号可查看审核材料；通过、驳回由审核员或超级管理员处理。</p>'}
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
@@ -15,7 +26,8 @@ async function content() {
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
       <td>${[0, 1].includes(Number(n.status)) && adminCan('note.review') ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
-    </tbody></table>` : emptyBox('暂无笔记；游客提交笔记后会显示在这里，待审内容可查看材料后处理。')}
+    </tbody></table>` : emptyBox((Q.kw || Q.status !== '') ? '没有符合条件的笔记——调整关键词或状态后重试。' : '暂无笔记；游客提交笔记后会显示在这里，待审内容可查看材料后处理。')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${pages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__contentQ.page--;content()">上一页</button> <button class="btn ghost sm" ${data.page >= pages ? 'disabled' : ''} onclick="window.__contentQ.page++;content()">下一页</button></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>线路评价管理</h2><span class="muted">游客核销后一单一评 · 文本已过机审 · 可隐藏违规/刷评</span></div>
@@ -246,14 +258,18 @@ const CREATOR_TAG = { none: '普通', signed: '签约', star: '优质', limited:
 async function creators() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   window.__kw = window.__kw || {}
-  const all = await api('GET', '/admin/creators')
   const K = (window.__kw.creators || '').trim()
-  const rows = K ? all.filter((c) => (c.nickname || '').includes(K) || (c.creator_tag || '').includes(K)) : all
+  // T03：创作者池改服务端检索（不再前端拉全量过滤）
+  const data = await api('GET', '/admin/creators?' + new URLSearchParams({ kw: K, page: (window.__crPage || 1) }).toString())
+  const all = data.rows
+  const crPages = Math.max(1, Math.ceil(data.total / data.pageSize))
+  window.__crPage = data.page
+  const rows = all
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>创作者池</h2>
-      <input id="cr_kw" placeholder="搜昵称 / 标签" style="width:170px" value="${esc(window.__kw.creators || '')}" onchange="window.__kw.creators=this.value;creators()">
-      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 人' : '共 ' + all.length + ' 人'}</span>
+      <input id="cr_kw" placeholder="搜昵称" style="width:170px" value="${esc(window.__kw.creators || '')}" onchange="window.__kw.creators=this.value;window.__crPage=1;creators()">
+      <span class="muted">${K ? '筛出 ' + Number(data.total).toLocaleString() + ' 人' : '共 ' + Number(data.total).toLocaleString() + ' 人'}</span>
       ${EXPBTN('creators', '创作者 CSV')}<span class="muted">有内容产出的用户自动入池 · 标签 = 资源合作状态（签约/优质享受激励加权）</span></div>
     ${rows.length ? `<table><thead><tr><th>用户</th><th>标签</th><th>笔记</th><th>已发布</th><th>点评</th><th>约稿完成</th><th>最近发布</th><th></th></tr></thead><tbody>
     ${rows.map((c) => `<tr><td class="td-main">${esc(c.nickname || '用户' + c.id)}<div class="td-sub">Lv${c.member_level}${Number(c.status) === 0 ? ' · <span class="pill s70">封禁</span>' : ''}</div></td>
@@ -262,6 +278,7 @@ async function creators() {
       <td class="num">${c.task_done}</td><td class="td-sub">${c.last_published ? esc(String(c.last_published).slice(0, 10)) : '—'}</td>
       <td><button class="btn primary sm" onclick="userProfile(${c.id})">画像</button> ${adminCan('creator.manage') ? `<button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${esc(c.creator_tag || 'none')}')">设标签</button>` : '<span class="muted">标签由运营维护</span>'}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(window.__kw.creators ? '没有匹配的创作者' : '池子还空：用户发布笔记或点评后自动入池')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 人 · 第 ${data.page} / ${crPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__crPage--;creators()">上一页</button> <button class="btn ghost sm" ${data.page >= crPages ? 'disabled' : ''} onclick="window.__crPage++;creators()">下一页</button></div></div>
   </div>`
 }
 async function setCreatorTag(id, cur) {

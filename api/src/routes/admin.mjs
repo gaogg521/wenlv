@@ -210,6 +210,7 @@ const admin = {
 
   'GET /admin/orders': async (req) => {
     const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const { status, kw } = req.query
     const sc = scopeFilter(a, 'o.city_code')
     const where = []
@@ -220,6 +221,68 @@ const admin = {
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY o.id DESC LIMIT 100`, sc.params)).map(publicOrderPhone)
+  },
+
+  // ===== T03：订单服务端全量检索（老单可查）=====
+  // 契约：{ rows, total, page, pageSize, statusCounts, countsScope, filters }。
+  // statusCounts 是"其他筛选保持不变、去掉状态筛选"的各状态计数（口径见 countsScope），不是当前页行数。
+  // 手机号按完整号码检索走盲索引（红线 11：任何响应不含完整号码，行数据统一过 publicOrderPhone）。
+  'GET /admin/orders/search': async (req) => {
+    const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const date = (v, label) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, label + '格式应为 YYYY-MM-DD'); return v }
+    // filters 收集的是"除 status 外"的条件（状态计数要与主查询共用它们）
+    const conds = [], condArgs = [] // [sql, args[]]
+    const addCond = (sql, ...args) => { conds.push({ sql, args }); }
+    const sc = scopeFilter(a, 'o.city_code')
+    if (sc.sql) addCond(sc.sql.replace(' AND ', ''), ...sc.params)
+    const filters = {}
+    const cityCode = String(req.query.cityCode || '').trim()
+    if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
+    const productId = Number(req.query.productId || 0)
+    if (productId) { addCond('o.product_id = ?', productId); filters.productId = productId }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) {
+      // 红线 11：完整手机号检索时不把号码原样回显（filters.kw 脱敏）
+      filters.kw = /^1\d{10}$/.test(kw) ? kw.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : kw
+      if (/^1\d{10}$/.test(kw)) {
+        // 完整手机号：走盲索引查 user_id，不把号码拼进 SQL/响应
+        const w = (await import('../infra/mobile.mjs')).whereMobile(kw)
+        const users = await q(`SELECT u.id FROM user_account u WHERE ${w.sql}`, w.args)
+        if (!users.length) addCond('1 = 0')
+        else addCond(`o.user_id IN (${users.map((u) => Number(u.id)).join(',')})`)
+      } else addCond('(o.order_no LIKE ? OR u.nickname LIKE ? OR o.contact_name LIKE ?)', '%' + kw + '%', '%' + kw + '%', '%' + kw + '%')
+    }
+    const range = (col, from, to, label) => {
+      if (from) { date(from, label); addCond(`${col} >= ?`, from + ' 00:00:00') }
+      if (to) { date(to, label); addCond(`${col} <= ?`, to + ' 23:59:59.999') }
+    }
+    range('o.created_at', req.query.createdFrom, req.query.createdTo, '创建日期')
+    if (req.query.createdFrom) filters.createdFrom = req.query.createdFrom
+    if (req.query.createdTo) filters.createdTo = req.query.createdTo
+    range('o.paid_at', req.query.paidFrom, req.query.paidTo, '支付日期')
+    if (req.query.paidFrom) filters.paidFrom = req.query.paidFrom
+    if (req.query.paidTo) filters.paidTo = req.query.paidTo
+    const departDate = String(req.query.departDate || '').trim()
+    if (departDate) { date(departDate, '出发日期'); addCond('o.session_id IN (SELECT id FROM tour_session WHERE depart_date = ?)', departDate); filters.departDate = departDate }
+    const baseWhere = conds.map((c) => c.sql).join(' AND ')
+    const baseArgs = conds.flatMap((c) => c.args)
+    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (status != null && ![10, 20, 30, 40, 50, 60, 70, 90].includes(status)) throw new BizError(1001, '订单状态无效')
+    const mainConds = status != null ? [...conds, { sql: 'o.status = ?', args: [status] }] : conds
+    const W = mainConds.length ? 'WHERE ' + mainConds.map((c) => c.sql).join(' AND ') : ''
+    const mainArgs = mainConds.flatMap((c) => c.args)
+    const from = `FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id`
+    const sort = { id: 'o.id DESC', paid: 'o.paid_at DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC' }[req.query.sort] || 'o.id DESC'
+    const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, mainArgs)).n)
+    const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone)
+    // 状态计数：baseWhere（去掉状态、其余筛选不变）
+    const countsRaw = await q(`SELECT o.status, COUNT(*) n ${from} ${baseWhere ? 'WHERE ' + baseWhere : ''} GROUP BY o.status`, baseArgs)
+    const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
+    statusCounts.all = countsRaw.reduce((s, r) => s + Number(r.n), 0)
+    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters, sort: req.query.sort || 'id' }
   },
 
   'GET /admin/orders/:no': async (req) => {
@@ -288,6 +351,7 @@ const admin = {
   // 商品/团期管理（"简单内容填充"的落点）
   'GET /admin/products': async (req) => {
     const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 'p.city_code')
     return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
       FROM tour_product p
@@ -426,6 +490,7 @@ const admin = {
 
   'GET /admin/merchants': async (req) => {
     const a = await requireAdmin(req); const sc = scopeFilter(a)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
     return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + ' ORDER BY id', sc.params))
       .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
@@ -585,6 +650,7 @@ const admin = {
   },
   'GET /admin/settlements': async (req) => {
     const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 'm.city_code')
     return await q(`SELECT s.*, m.name merchant_name FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
   },
@@ -640,7 +706,20 @@ const admin = {
     return { resolved: true }  },
 
 
-  'GET /admin/risk': async (req) => { await requireAdmin(req, ['super', 'risk']); return await q('SELECT * FROM risk_event ORDER BY id DESC LIMIT 50') },
+  'GET /admin/risk': async (req) => {
+    await requireAdmin(req, ['super', 'risk'])
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = [], args = [], filters = {}
+    const handled = req.query.handled == null || req.query.handled === '' ? null : Number(req.query.handled)
+    if (handled != null && [0, 1].includes(handled)) { conds.push('handled = ?'); args.push(handled); filters.handled = handled }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('(type LIKE ? OR detail LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const total = Number((await one(`SELECT COUNT(*) n FROM risk_event ${W}`, args)).n)
+    const rows = await q(`SELECT * FROM risk_event ${W} ORDER BY id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
+  },
   'GET /admin/audit-logs': async (req) => { await requireAdmin(req, ['super', 'finance', 'risk']); return await q('SELECT * FROM audit_log ORDER BY id DESC LIMIT 100') },
   'GET /admin/attestations': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -661,6 +740,7 @@ const admin = {
   'GET /admin/export/:what': async (req) => {
     const what = req.params.what
     const a = await requireAdmin(req, 'export.' + what)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a)
     let rows = [], name = what
     if (what === 'orders') {

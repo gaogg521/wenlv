@@ -65,9 +65,14 @@ async function addPromoter() {
 /* ============ 提现审批（资金出口）============ */
 async function withdrawals() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/withdrawals')
+  // T03/T10：服务端分页 + 状态筛选（契约 { rows, total, page, pageSize }）
+  window.__wdQ = window.__wdQ || { page: 1, status: '' }
+  const data = await api('GET', '/admin/withdrawals?' + new URLSearchParams({ page: window.__wdQ.page, status: window.__wdQ.status }).toString())
+  const rows = data.rows
+  const wdPages = Math.max(1, Math.ceil(data.total / data.pageSize))
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务费提现审批</h2><span class="muted">资金出口 · 财务角色审批 · 打款流水必填留痕</span></div>
+    <div class="cfg-tabs">${[['', '全部'], [0, '待审'], [1, '已打款'], [2, '已驳回']].map(([v, n]) => `<button class="cfg-tab ${String(window.__wdQ.status) === String(v) ? 'on' : ''}" onclick="window.__wdQ.status='${v}';window.__wdQ.page=1;withdrawals()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>申请号</th><th>推广员</th><th>金额</th><th>备注</th><th>状态</th><th>审批</th><th>操作</th></tr></thead><tbody>
     ${rows.map((w) => `<tr><td class="num">#${w.id}</td><td>${esc(w.nickname)}${Number(w.user_status) === 0 ? ' <span class="pill s70">已冻结</span>' : ''}<div class="td-sub">ID ${w.promoter_id}</div></td>
       <td class="money num">${fen(w.amount)}</td><td class="td-sub">${esc(w.proposer_note || '')}</td>
@@ -75,7 +80,8 @@ async function withdrawals() {
       <td class="td-sub">${esc(w.reviewed_by || '—')}${w.pay_ref ? '<div>' + esc(w.pay_ref) + '</div>' : ''}</td>
       <td>${w.status === 0 ? `${Number(w.user_status) === 0 ? '<span class="td-sub">账号冻结，暂停打款</span>' : `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>`}
         <button class="btn danger sm" onclick="approveWithdraw(${w.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
-    </tbody></table>` : emptyBox('暂无提现申请（推广员在小程序 A「推广中心」发起）')}
+    </tbody></table>` : emptyBox(window.__wdQ.status !== '' ? '没有符合条件的提现申请。' : '暂无提现申请（推广员在小程序 A「推广中心」发起）')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${wdPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__wdQ.page--;withdrawals()">上一页</button> <button class="btn ghost sm" ${data.page >= wdPages ? 'disabled' : ''} onclick="window.__wdQ.page++;withdrawals()">下一页</button></div></div>
   </div>`
 }
 async function approveWithdraw(id, pass) {

@@ -519,7 +519,7 @@ await t('提现闭环：A 申请 → 后台待办 +1 且金额同额；重复申
   const w1 = ok(await call('POST', '/c/promote/withdraw', { note: '跨端测试' }, pu.token)); assert.equal(w1.amount, 30000)
   assert.notEqual((await call('POST', '/c/promote/withdraw', {}, pu.token)).code, 0, '已有待处理申请时，不得再次申请同一笔余额')
   assert.equal(ok(await call('GET', '/c/promote/overview', null, pu.token)).pendingRequests, 1, 'A 看到 1 张待处理申请')
-  const row = ok(await call('GET', '/admin/withdrawals', null, A)).find((w) => Number(w.id) === Number(w1.id))
+  const row = ok(await call('GET', '/admin/withdrawals', null, A)).rows.find((w) => Number(w.id) === Number(w1.id))
   assert.ok(row && Number(row.status) === 0 && Number(row.amount) === 30000 && Number(row.promoter_id) === Number(uid), '后台提现列表应有同额待审核记录')
   assert.equal(await pendingWd(), pend0 + 1, '后台待办提现 +1')
   // 冻结期间：不能通过（打款）；申请入口也停
