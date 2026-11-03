@@ -49,6 +49,9 @@ export async function currentQr(passId) {
 
 /** 商户扫码/输码核销：窗口±1 → 签名 → 唯一约束消费 → 全单核销完推订单 40 */
 export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
+  // 核销记录与存证里的城市取门店自己的城市。调用方过去把 '310118' 写死传进来，非青浦门店的核销会被记到青浦；传入值只作兜底
+  const store = await one('SELECT city_code FROM merchant WHERE id = ?', [merchantId])
+  cityCode = (store && store.city_code) || cityCode
   const raw = String(payload || '').trim()
   let passId = null, hit = -1
   if (/^\d{6}$/.test(raw)) {
@@ -149,16 +152,21 @@ export async function offlineListForStore(merchantId) {
 }
 
 /** 人工队列确认核销：凭证置已核销 + 补流水 + 全单核销完推订单 40 */
-export async function adminConfirmPass(passId, adminId) {
+export async function adminConfirmPass(passId, adminId, way = 'admin') {
   const p = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!p) throw new Error('凭证不存在')
   if (p.status !== 1) return false
-  const oc = await one('SELECT city_code FROM orders WHERE id = ?', [p.order_id])
+  const oc = await one('SELECT city_code, merchant_id FROM orders WHERE id = ?', [p.order_id])
   await tx(async (c) => {
     const n = await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ? AND status = 1', [passId])
     if (n !== 1) throw new Error('并发冲突')
     await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,3,1,?)',
       [passId, 0, adminId || 0, oc && oc.city_code ? oc.city_code : '310118'])
+    // 核销即存证（同事务）。扫码路径在 verifyScan 里写；这里覆盖人工确认（way=admin）与暗号核销（way=phrase），
+    // 之前人工确认的核销没有存证，订单"六锚"的核销一步在链上是空的。biz_ref 带来源后缀，避免与扫码事件互相覆盖
+    await attestCore('pass_verify', 'pass-' + passId + '-' + way, {
+      passId: Number(passId), merchantId: Number(oc && oc.merchant_id) || 0, way, cityCode: (oc && oc.city_code) || '310118',
+    }, c, 1)
   })
   const remaining = await one('SELECT COUNT(*) c FROM travel_pass WHERE order_id = ? AND status = 1', [p.order_id])
   if (Number(remaining.c) === 0) {

@@ -652,7 +652,7 @@ const cIdentity = {
     const myOrders = await q('SELECT order_no FROM orders WHERE user_id = ?', [u.uid])
     const attestations = []
     for (const o of myOrders.slice(0, 10)) {
-      const e = await one("SELECT payload_hash, status, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ?", [o.order_no])
+      const e = await one("SELECT payload_hash, status, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ? ORDER BY version_no DESC, id DESC LIMIT 1", [o.order_no]) // 同一订单有支付(30)与完成(50)两个版本，取最新
       if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
     return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, growth: acc.growth_value, joinedAt: acc.created_at },

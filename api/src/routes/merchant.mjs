@@ -339,11 +339,8 @@ const mPhrase = {
     if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
     const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
     for (const pid of ids) {
-      await pass.adminConfirmPass(pid, u.uid)
-      // 暗号核销不是窗口码，用 -phrase 后缀区分事件来源，避免与扫码事件互相覆盖
-      await pass.attest('pass_verify', 'pass-' + pid + '-phrase', {
-        passId: Number(pid), merchantId: Number(u.merchantId), way: 'phrase', cityCode: o.city_code || '310118',
-      }, null, 1)
+      // 暗号核销不是窗口码：way=phrase 作后缀区分事件来源，存证由 adminConfirmPass 在同一事务里写
+      await pass.adminConfirmPass(pid, u.uid, 'phrase')
     }
     if (ids.length) await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,?,1,?)',
       [ids[0], u.merchantId, u.uid, 4, o.city_code || '310118'])

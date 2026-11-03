@@ -109,6 +109,117 @@ await t('后台撤回：删除轮播 → A 首页消失；改商户端公告 →
   ok(await api('PUT', '/admin/entities/site/1', { values: { merchant_notice: n2 } }, A))
   assert.equal((await open(mb, '/pages/index/index', (x) => x.notice === n2)).d.notice, n2)
 })
+
+console.log('\n== 界面层：相机扫码 / 勋章弹窗 / 当前城市 / 举报申诉 ==')
+// 说明：这个版本的开发者工具里，reLaunch 返回的页面对象等一会儿就会"No context"，page.callMethod 也不可靠。
+// 所以读数据每次重新取当前页，操作用 evaluate 在服务层直接调用当前页的方法（等价于用户点击后触发的 handler）。
+const cur = async (mini) => mini.currentPage()
+const until = async (mini, pred, ms = 8000) => { const t0 = Date.now(); for (;;) { let d = {}; try { d = await (await cur(mini)).data() } catch { /* 页面切换中 */ } if (pred(d) || Date.now() - t0 > ms) return d; await sleep(300) } }
+const callPage = (mini, method, data, ...args) => mini.evaluate((m, d, a) => { const p = getCurrentPages().slice(-1)[0]; if (d) p.setData(d); return p[m] ? (p[m](...a), 'called') : 'no method ' + m }, method, data || null, args)
+const asBuyer = async (tok) => { await ma.callWxMethod('setStorageSync', 'token', tok); await ma.evaluate((x) => { getApp().globalData.token = x }, tok) }
+const paid = async (tok) => {
+  const od = ok(await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, tok))
+  ok(await api('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
+  const passId = ok(await api('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
+  return { orderNo: od.orderNo, passId }
+}
+await t('B 核销页：mock 相机扫码并点击"打开相机扫码"→ 界面显示核销成功、连扫计数；A 订单变已核销；再用手动输 6 位码核销另一单', async () => {
+  const x = await paid(buyer.token)
+  const qr = ok(await api('GET', `/c/pass/${x.passId}/code`, null, buyer.token)).qr
+  await mb.mockWxMethod('scanCode', { result: qr })
+  await mb.reLaunch('/pages/verify/index'); await sleep(1500)
+  let tapped = false
+  for (const b of await (await cur(mb)).$$('.btn')) { if ((await b.text()).includes('打开相机扫码')) { await b.tap(); tapped = true; break } }
+  assert.ok(tapped, '核销页应有"打开相机扫码"按钮')
+  const d = await until(mb, (z) => z.result && z.result.ok)
+  assert.equal(d.result.ok, true, '界面应显示核销成功'); assert.ok(d.streak >= 1, '连扫计数应 ≥ 1')
+  await shot(mb, 'b-verify-scan')
+  // 连续扫码模式会在 800ms 后重开相机：用一个无效的手动码结束连扫，并还原 mock
+  await callPage(mb, 'submit', { input: '000000' }); await sleep(700); await mb.restoreWxMethod('scanCode')
+  assert.equal(ok(await api('GET', '/c/orders/' + x.orderNo, null, buyer.token)).status, 40, 'A 订单应已核销')
+  const y = await paid(buyer.token)
+  const display = ok(await api('GET', `/c/pass/${y.passId}/code`, null, buyer.token)).display
+  await callPage(mb, 'submit', { input: display })
+  await until(mb, (z) => z.result && z.result.ok && z.lastQr === display)
+  assert.equal(ok(await api('GET', '/c/orders/' + y.orderNo, null, buyer.token)).status, 40, '手动输码核销后 A 订单应已核销')
+})
+await t('A 订单页写评价：界面真的弹出"获得新勋章"；身份页显示勋章；后台勋章发放数 +1', async () => {
+  const bname = '界面勋章' + stamp
+  const dropBadges = async () => { await q("DELETE FROM user_badge WHERE badge_id IN (SELECT id FROM badge WHERE name LIKE '界面勋章%')").catch(() => {}); await q("DELETE FROM badge WHERE name LIKE '界面勋章%'").catch(() => {}) }
+  await dropBadges() // 清掉历史运行残留的同名规则，否则一次评价会把它们全部触发
+  ok(await api('POST', '/admin/entities/badge', { values: { name: bname, icon_key: 'ui' + stamp, rule_type: 'review', threshold: 1, rule_desc: '发表 1 条评价' } }, A))
+  const u = await login('mock-ui-badge-' + stamp); const x = await paid(u.token)
+  assert.equal(ok(await api('POST', '/m/verify/scan', { payload: ok(await api('GET', `/c/pass/${x.passId}/code`, null, u.token)).qr }, B.token)).ok, true)
+  ok(await api('POST', '/admin/dev/complete', { orderNo: x.orderNo }, A))
+  const g0 = ok(await api('GET', '/admin/web3/overview', null, A)).badgeGrants
+  await asBuyer(u.token)
+  await ma.evaluate(() => { getApp().globalData.__modal = null })
+  await ma.mockWxMethod('showModal', function (opt) { getApp().globalData.__modal = opt; return { confirm: true } })
+  await ma.reLaunch('/package-order/pages/order-detail/index?no=' + x.orderNo)
+  await until(ma, (z) => z.o && Number(z.o.status) === 50)
+  await callPage(ma, 'submitReview', { rating: 5, rvText: '界面回归的评价内容' })
+  await until(ma, (z) => z.reviewDone === true)
+  const modal = await ma.evaluate(() => getApp().globalData.__modal)
+  await ma.restoreWxMethod('showModal')
+  assert.ok(modal && modal.title === '获得新勋章' && String(modal.content).includes(bname), '界面应弹出新勋章：' + JSON.stringify(modal))
+  assert.ok(ok(await api('GET', '/admin/web3/overview', null, A)).badgeGrants - g0 >= 1, '后台勋章发放数应增加')
+  await ma.reLaunch('/package-content/pages/identity/index')
+  const idp = await until(ma, (z) => JSON.stringify(z).includes(bname))
+  assert.ok(JSON.stringify(idp).includes(bname), 'A 身份页应显示勋章')
+  await shot(ma, 'a-identity-badge')
+  await asBuyer(buyer.token); await dropBadges()
+})
+await t('A 当前城市：在目的地页选外城 → 首页记为当前城市，轮播按该城市投放（限定外城的显示、限定其他城市的不显示）', async () => {
+  const mk = async (title, cities) => ok(await api('POST', '/admin/entities/banner', { values: { title, image: '/uploads/x.png', cities, sort: 0, status: '1' } }, A)).id
+  const t330 = '界面外城轮播' + stamp, t310 = '界面本城轮播' + stamp
+  const id330 = await mk(t330, ['330500']), id310 = await mk(t310, ['310118'])
+  try {
+    await ma.reLaunch('/pages/destination/index')
+    await until(ma, (z) => !z.loading && (z.list || []).length)
+    await callPage(ma, 'goList', null, { currentTarget: { dataset: { city: '330500' } } }); await sleep(1200)
+    const hc = await ma.callWxMethod('getStorageSync', 'homeCity'); assert.equal((hc && hc.code) || (hc && hc.data && hc.data.code), '330500')
+    await ma.reLaunch('/pages/home/index')
+    const home = await until(ma, (z) => !z.loading && z.homeCity)
+    assert.equal(home.homeCity.code, '330500')
+    const titles = (home.banners || []).map((b) => b.title)
+    assert.ok(titles.includes(t330), '首页应显示限定 330500 的轮播：' + titles); assert.ok(!titles.includes(t310), '首页不应显示只限定 310118 的轮播')
+    await shot(ma, 'a-home-city')
+  } finally {
+    await ma.callWxMethod('removeStorageSync', 'homeCity')
+    for (const id of [id330, id310]) await q('DELETE FROM banner WHERE id = ?', [id]).catch(() => {})
+  }
+})
+await t('A 举报与申诉界面：读者在笔记页举报 → 后台下架 → 作者创作中心看到"已下架"并提交申诉 → 后台恢复 → 创作中心显示已发布', async () => {
+  const author = await login('mock-ui-author-' + stamp), reader = await login('mock-ui-reader-' + stamp)
+  const n = ok(await api('POST', '/c/notes', { title: '界面笔记' + stamp, body: '<p>旅行事实与体验正文</p>', relatedProductId: sess.product_id }, author.token))
+  try {
+    await asBuyer(reader.token)
+    await ma.reLaunch('/package-content/pages/note/index?id=' + n.id)
+    await until(ma, (z) => z.n)
+    await callPage(ma, 'toggleReport'); await until(ma, (z) => z.reporting === true)
+    await callPage(ma, 'submitReport', { reportReason: '涉嫌虚假宣传，请核实事实' })
+    const nd = await until(ma, (z) => z.reporting === false && !z.reportBusy)
+    assert.equal(nd.reporting, false, '提交举报后举报框应收起')
+    const rp = (await q('SELECT id FROM content_report WHERE note_id = ? ORDER BY id DESC LIMIT 1', [n.id]))[0]; assert.ok(rp, '举报应已入库')
+    ok(await api('POST', `/admin/content-cases/reports/${rp.id}/verdict`, { action: 'takedown', reason: '已核实相关内容事实并完成处理' }, A))
+    await asBuyer(author.token)
+    await ma.reLaunch('/package-content/pages/create/index')
+    let d = await until(ma, (z) => (z.notes || []).some((x) => x.id === n.id && Number(x.status) === 4))
+    const mine = d.notes.find((x) => x.id === n.id)
+    assert.equal(mine.statusText, '已下架'); assert.ok(mine.offline_reason, '创作中心应显示下架原因')
+    await shot(ma, 'a-create-offline')
+    await callPage(ma, 'openAppeal', null, { currentTarget: { dataset: { id: n.id } } })
+    await callPage(ma, 'submitAppeal', { appealReason: '内容为本人真实体验，请重新核实' })
+    d = await until(ma, (z) => (z.notes || []).some((x) => x.id === n.id && x.appealText === '申诉复核中'))
+    assert.equal(d.notes.find((x) => x.id === n.id).appealText, '申诉复核中', '申诉后创作中心应显示申诉复核中')
+    const ap = (await q('SELECT id FROM content_appeal ORDER BY id DESC LIMIT 1'))[0]
+    ok(await api('POST', `/admin/content-cases/appeals/${ap.id}/verdict`, { action: 'restore', reason: '已复核作品事实及相关依据' }, A))
+    await ma.reLaunch('/package-content/pages/create/index')
+    d = await until(ma, (z) => (z.notes || []).some((x) => x.id === n.id && Number(x.status) === 2))
+    assert.equal(d.notes.find((x) => x.id === n.id).statusText, '已发布', '恢复后创作中心应显示已发布')
+  } finally { await asBuyer(buyer.token); await q('DELETE FROM content_note WHERE id = ?', [n.id]).catch(() => {}) }
+})
+
 ma.disconnect(); mb.disconnect()
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 process.exit(process.exitCode || 0)
