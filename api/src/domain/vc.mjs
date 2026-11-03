@@ -10,6 +10,7 @@
 import crypto from 'node:crypto'
 import { q, one } from '../db.mjs'
 import { getSecret, setSecret } from '../infra/secrets.mjs'
+import * as member from './member.mjs'
 
 const KEY_NAME = 'VC_ISSUER_KEY'
 const PEPPER_NAME = 'VC_DID_PEPPER'
@@ -17,8 +18,14 @@ const DEFAULT_ISSUER = 'did:cn:wl:issuer-main'
 const VC_TTL_DAYS = Number(process.env.VC_TTL_DAYS || 30)
 
 const b64u = (b) => Buffer.from(b).toString('base64url')
-const LEVELS = ['探索者', '旅行家', '城市探索官', '环球探索家']
-const BANDS = [[0, '起步'], [2000, '2千–1万'], [10000, '1万–5万'], [50000, '5万以上']]
+// 成长值区间的披露口径：只给所在等级的区间（如「2千–1万」），不给精确值；等级名与门槛来自参数中心 member.levels
+const fmtPts = (n) => (n >= 10000 ? n / 10000 + '万' : n >= 1000 ? n / 1000 + '千' : String(n))
+async function levelBand(lv) {
+  const lvs = await member.levels()
+  const cur = lvs.find((l) => l.lv === lv) || lvs[0], next = lvs.find((l) => l.lv === cur.lv + 1)
+  const lo = Math.floor(cur.min / 100), hi = next ? Math.floor(next.min / 100) : null
+  return { name: cur.name, band: hi == null ? fmtPts(lo) + '以上' : lo === 0 ? fmtPts(hi) + '以内' : fmtPts(lo) + '–' + fmtPts(hi) }
+}
 
 /** 取（或首次生成并加密落库）issuer 私钥。私钥只在服务端，永不出接口 */
 async function issuerKey() {
@@ -83,10 +90,11 @@ export async function userDid(userId) {
 async function claimsOf(userId, scope) {
   const u = await one(`SELECT member_level, growth_value, created_at FROM user_account WHERE id = ?`, [userId])
   const lv = Number(u.member_level || 1)
+  const lb = await levelBand(lv)
   const base = {
-    level: LEVELS[lv - 1] || '探索者',
+    level: lb.name,
     levelNo: lv,
-    growthBand: (BANDS.filter(([min]) => Number(u.growth_value) >= min).pop() || BANDS[0])[1],
+    growthBand: lb.band,
     memberSince: String(u.created_at || '').slice(0, 7),
     scope,
   }
