@@ -1,11 +1,11 @@
 // 勋章图形：由数据生成 SVG（不依赖美工出图，也不引入图片库）。每个类别有自己的造型与材质，而不只是换色：
-//   level   会员等级  带翼金属奖章：铜 / 银 / 金 / 钻石 逐级升格，奖章上方按等级点亮星数
+//   level   会员等级  带翼金属奖章：铜 / 翡翠 / 金 / 钻蓝 逐级升格，奖章上方按等级点亮星数
 //   member  会员荣誉  月桂花环 + 缎带，奖章金属随稀有度变化
 //   city    城市印记  朱红篆刻印章（圆角缺角方章，白文地标图案，带磨损质感）
 //   country 国家印章  护照出入境章：双圈 + 齿孔边 + 国家代码，微倾斜、带盖章磨损
 //   trusted 可信勋章  深色玻璃八边形 + 虹彩边框 + 节点网络 + 每枚唯一的「指纹条」，右下角封存印记
 //   journey 旅程 盾牌 / explore 足迹 六边形 / creator 创作 花边圆章 / special 特别 花边章：金属质感徽章
-// 配色 = 稀有度（普通铜 / 稀有银 / 史诗紫晶 / 传说金）；系列勋章用小圆点标阶数；未获得 = 灰阶。
+// 配色 = 稀有度（普通铜 / 稀有宝石蓝 / 史诗紫晶 / 传说金）；系列勋章用小圆点标阶数；未获得 = 灰阶。
 // 后台上传了「勋章图」（icon_img）时仍以上传图为准；这里是默认形象，也是后台编辑器的实时预览。
 import { q, one } from '../db.mjs'
 
@@ -28,15 +28,16 @@ export const RARITIES = { common: '普通', rare: '稀有', epic: '史诗', lege
 
 const METAL = {
   bronze: { s: ['#fbe3c4', '#e0a769', '#a8683a', '#5f3416'], ink: '#6b3a17', glow: '#f0b36b' },
+  sapphire: { s: ['#dcefff', '#6db3f5', '#2c7bd8', '#12407f'], ink: '#0d2f6a', glow: '#8ec9ff' },
   silver: { s: ['#ffffff', '#dfe6ef', '#9aa7bb', '#4f5b70'], ink: '#33435e', glow: '#cfe0f5' },
   gold: { s: ['#fff7cf', '#f6d35a', '#c19013', '#6e4a00'], ink: '#6b4600', glow: '#ffe58a' },
   violet: { s: ['#f6ecff', '#cfaef7', '#8f5bd6', '#3f2080'], ink: '#3b1f78', glow: '#d9b8ff' },
-  diamond: { s: ['#f7fdff', '#bfe6ff', '#6fb0e8', '#1d3b73'], ink: '#16335f', glow: '#a8dcff' },
-  jade: { s: ['#eafff1', '#9fe3b6', '#3fae6b', '#14532d'], ink: '#14532d', glow: '#b8f0cc' },
+  diamond: { s: ['#e8f9ff', '#7fd6ff', '#2f9be8', '#0f3a7a'], ink: '#0b2f66', glow: '#7fd6ff' },
+  jade: { s: ['#dcfbe8', '#6fdc9f', '#1fa65f', '#0b5a2f'], ink: '#0a4a28', glow: '#9cf0c3' },
   off: { s: ['#f6f6f6', '#dedede', '#bfbfbf', '#8f8f8f'], ink: '#a6a6a6', glow: '#e8e8e8' },
 }
-const RARITY_METAL = { common: 'bronze', rare: 'silver', epic: 'violet', legend: 'gold' }
-const LEVEL_METAL = ['bronze', 'silver', 'gold', 'diamond']
+const RARITY_METAL = { common: 'bronze', rare: 'sapphire', epic: 'violet', legend: 'gold' }
+const LEVEL_METAL = ['bronze', 'jade', 'gold', 'diamond'] // 铜 / 翡翠 / 金 / 钻石：每一档都是饱和的颜色，不用灰白的银
 
 // 48×48 画布上的线性图标（描边绘制）
 const ICONS = {
@@ -126,7 +127,7 @@ function metalBadge(o, m, owned, rarity, u) {
   const fancy = owned && (rarity === 'epic' || rarity === 'legend')
   const accent = owned && hex(o.color) ? o.color : m.s[2]
   const ink = owned && hex(o.color) ? shade(o.color, -0.55) : m.ink
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.5)], [1, mix(m.s[1], '#ffffff', 0.25)]])
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]])
     + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.55 : 0.3], [1, '#fff', 0]]) + rad(u + 'gm', [[0, '#ffffff'], [0.45, owned ? accent : m.s[1]], [1, m.s[3]]], 0.35, 0.3, 0.8)
     + `<clipPath id="${u}c"><path d="${d}"/></clipPath><clipPath id="${u}cf"><path d="${d}" ${sc(0.84)}/></clipPath>`
   const out = []
@@ -163,7 +164,7 @@ function levelBadge(o, owned, u) {
   const m = METAL[owned ? (o.metal && METAL[o.metal] ? o.metal : LEVEL_METAL[(lv - 1) % LEVEL_METAL.length]) : 'off']
   const icon = ICONS[o.icon_key] ? o.icon_key : ['compass', 'boat', 'crown', 'globe'][(lv - 1) % 4]
   const cx = 128, cy = 138
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.55)], [1, mix(m.s[1], '#ffffff', 0.2)]])
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]])
     + lin(u + 'w', [[0, m.s[0]], [0.5, m.s[1]], [1, m.s[2]]], 0, 0, 1, 0) + rad(u + 'gl', [[0, m.glow, owned ? 0.55 : 0.2], [1, m.glow, 0]], 0.5, 0.5, 0.5)
     + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.6 : 0.3], [1, '#fff', 0]]) + `<clipPath id="${u}c"><circle cx="${cx}" cy="${cy}" r="64"/></clipPath>`
   const out = []
@@ -188,13 +189,13 @@ function levelBadge(o, owned, u) {
   return { defs, body: out.join('') }
 }
 
-/** 商户等级：门楼招牌——屋檐 + 两根吊绳 + 金属匾额；铜 / 银 / 金 / 钻随等级，匾额下沿点亮等级星 */
+/** 商户等级：门楼招牌——屋檐 + 两根吊绳 + 金属匾额；铜 / 翡翠 / 金 / 钻蓝随等级，匾额下沿点亮等级星 */
 function merchantLevelBadge(o, owned, u) {
   const lv = Math.max(1, Math.min(8, Number(o.tier) || 1))
   const m = METAL[owned ? LEVEL_METAL[(lv - 1) % LEVEL_METAL.length] : 'off']
   const icon = ICONS[o.icon_key] ? o.icon_key : 'store'
   const body = 'M40 74 H216 a10 10 0 0 1 10 10 V196 a10 10 0 0 1 -10 10 H40 a10 10 0 0 1 -10 -10 V84 a10 10 0 0 1 10 -10 Z'
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.55)], [1, mix(m.s[1], '#ffffff', 0.2)]], 0.35, 0.25, 0.95)
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]], 0.35, 0.25, 0.95)
     + lin(u + 'rf', owned ? [[0, '#6b3a17'], [1, '#2e1707']] : [[0, '#b8b8b8'], [1, '#8f8f8f']], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.55 : 0.3], [1, '#fff', 0]])
     + rad(u + 'gl', [[0, m.glow, owned ? 0.5 : 0.15], [1, m.glow, 0]], 0.5, 0.5, 0.5) + '<clipPath id="' + u + 'c"><path d="' + body + '"/></clipPath>'
   const out = []
@@ -224,7 +225,7 @@ function merchantHonorBadge(o, owned, rarity, u) {
   const accent = owned && hex(o.color) ? o.color : m.s[2]
   const ink = owned && hex(o.color) ? shade(o.color, -0.55) : m.ink
   const ribbon = owned ? [shade(accent, 0.05), shade(accent, -0.35)] : ['#d0d0d0', '#a8a8a8']
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.55)], [1, mix(m.s[1], '#ffffff', 0.2)]])
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]])
     + lin(u + 'rb', [[0, ribbon[0]], [1, ribbon[1]]], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.6 : 0.3], [1, '#fff', 0]]) + '<clipPath id="' + u + 'c"><circle cx="128" cy="112" r="68"/></clipPath>'
   const out = ['<ellipse cx="128" cy="250" rx="52" ry="5" fill="#000" opacity="0.10"/>']
   out.push('<path d="M82 160 L58 246 L92 230 L104 250 L124 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/><path d="M174 160 L198 246 L164 230 L152 250 L132 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/>')
@@ -245,7 +246,7 @@ function merchantHonorBadge(o, owned, rarity, u) {
 function memberBadge(o, owned, rarity, u) {
   const m = METAL[owned ? RARITY_METAL[rarity] : 'off'], j = METAL[owned ? 'jade' : 'off']
   const cx = 128, cy = 122
-  const defs = lin(u + 'r', metalStops(m)) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.5)], [1, mix(m.s[1], '#ffffff', 0.2)]])
+  const defs = lin(u + 'r', metalStops(m)) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]])
     + lin(u + 'lf', metalStops(j)) + lin(u + 'rb', owned ? [[0, '#e5533f'], [1, '#9f1d12']] : [[0, '#e0e0e0'], [1, '#b0b0b0']], 0, 0, 0, 1)
     + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.55 : 0.3], [1, '#fff', 0]]) + `<clipPath id="${u}c"><circle cx="${cx}" cy="${cy}" r="62"/></clipPath>`
   const out = [`<ellipse cx="128" cy="248" rx="64" ry="6" fill="#000" opacity="0.10"/>`]
