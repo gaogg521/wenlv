@@ -10,6 +10,7 @@ assertIsolatedDb('test/cross-end.mjs')
 import assert from 'node:assert/strict'
 import { q, one } from '../src/db.mjs'
 import * as bean from '../src/domain/bean.mjs'
+import { cfgNum } from '../src/config.mjs'
 
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b == null ? undefined : JSON.stringify(b) })).json()
@@ -26,6 +27,7 @@ const CITY = ok(await call('POST', '/admin/login', { username: 'city310118', pas
 const sess = await one(`SELECT s.id, s.product_id, s.price_adult, p.merchant_id, p.city_code, p.title FROM tour_session s JOIN tour_product p ON p.id = s.product_id
   WHERE p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 5 AND s.price_adult > 0 ORDER BY s.id LIMIT 1`)
 assert.ok(sess, '隔离库需先 seed:scenario，库里应有可买团期')
+await q('UPDATE tour_session SET quota = GREATEST(quota, booked + 30) WHERE id = ?', [sess.id]) // 本测试会连续下很多单：给足余量，重复运行也不会因名额不足误报
 const login = async (code) => ok(await call('POST', '/c/auth/login', { code }))
 const buyer = await login('mock-xend-buyer-' + stamp)
 const staffUser = await login('mock-xend-staff-' + stamp)
@@ -426,7 +428,7 @@ await t('勋章：后台新建"首评"规则 → A 完成订单并评价得到�
   const rv = ok(await call('POST', `/c/orders/${bo.orderNo}/review`, { rating: 5, content: '跨端回归的评价内容' }, u.token))
   assert.ok(rv.badges.includes(bname), '评价接口应返回新得到的勋章（小程序据此弹窗）')
   assert.ok(ok(await call('GET', '/c/identity', null, u.token)).badges.some((b) => b.name === bname || b.id === bd.id), 'A 身份页应显示勋章')
-  assert.equal(ok(await call('GET', '/admin/web3/overview', null, A)).badgeGrants - g0, 1, '后台勋章发放数 +1')
+  assert.ok(ok(await call('GET', '/admin/web3/overview', null, A)).badgeGrants - g0 >= 1, '后台勋章发放数增加（含同时达标的预置勋章）')
   assert.ok(JSON.stringify(ok(await call('GET', '/admin/web3/badges', null, A))).includes(bname), '后台勋章页应有该勋章')
   const prof = ok(await call('GET', `/admin/users/${u.user.id}`, null, A))
   assert.ok(JSON.stringify(prof).includes(bname), '后台用户画像应有该勋章：content=' + JSON.stringify(prof.content).slice(0, 400))
@@ -492,6 +494,167 @@ await t('推广员的钱：后台合伙人画像、对账页、A 推广中心、
   const after = await check('放行后'); assert.equal(after.tr.observing, 0); assert.equal(after.tr.earned, before.tr.observing, '放行后已放行 = 原观察期')
   const ovTxt = JSON.stringify(after.ov); assert.ok(ovTxt.includes(String(after.tr.earned)) || ovTxt.includes((after.tr.earned / 100).toFixed(2)), 'A 推广中心应显示放行后的金额 ' + after.tr.earned + '：' + ovTxt.slice(0, 300))
 })
+const finishOrder = async (tok, promoScene) => {
+  const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, ...(promoScene ? { promoScene } : {}) }, tok)); created.orders.push(od.orderNo)
+  ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
+  const pid = ok(await call('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
+  assert.equal(ok(await call('POST', '/m/verify/scan', { payload: ok(await call('GET', `/c/pass/${pid}/code`, null, tok)).qr }, B)).ok, true)
+  ok(await call('POST', '/admin/dev/complete', { orderNo: od.orderNo }, A))
+  return od
+}
+const pendingWd = async () => Number(ok(await call('GET', '/admin/dash/insights', null, A)).pending.withdrawals)
+await t('提现闭环：A 申请 → 后台待办 +1 且金额同额；重复申请被拒；冻结期间不能打款；驳回不扣余额；通过后 A / 对账页 / 排行同步', async () => {
+  const pu = await login('mock-xend-wd-' + stamp); const uid = pu.user.id
+  ok(await call('POST', '/admin/promoters/register', { userId: uid, tier: 1 }, A))
+  const { createScene } = await import('../src/domain/promo.mjs')
+  const od = await finishOrder((await login('mock-xend-wd-buyer-' + stamp)).token, await createScene(uid, 'poster'))
+  assert.ok(od.orderNo)
+  // 先按真实佣金把这笔订单结掉，再放大佣金：否则放大的佣金会被计进之后的结算单，把留存压成负数
+  ok(await call('POST', '/admin/settlements/generate', { period: isoWeek(new Date()) }, A))
+  // 把这笔佣金放大到可提现：基数 ¥6000 × 5% = ¥300（仍满足 佣金 = 基数 × 费率）并直接置为已放行
+  await q('UPDATE commission SET base_amount = 600000, amount = 30000, status = 1 WHERE promoter_id = ?', [uid])
+  const ov0 = ok(await call('GET', '/c/promote/overview', null, pu.token))
+  assert.deepEqual([ov0.earned, ov0.withdrawn, ov0.withdrawable, ov0.pendingRequests], [30000, 0, 30000, 0], 'A 推广中心起点')
+  const pend0 = await pendingWd()
+  const w1 = ok(await call('POST', '/c/promote/withdraw', { note: '跨端测试' }, pu.token)); assert.equal(w1.amount, 30000)
+  assert.notEqual((await call('POST', '/c/promote/withdraw', {}, pu.token)).code, 0, '已有待处理申请时，不得再次申请同一笔余额')
+  assert.equal(ok(await call('GET', '/c/promote/overview', null, pu.token)).pendingRequests, 1, 'A 看到 1 张待处理申请')
+  const row = ok(await call('GET', '/admin/withdrawals', null, A)).find((w) => Number(w.id) === Number(w1.id))
+  assert.ok(row && Number(row.status) === 0 && Number(row.amount) === 30000 && Number(row.promoter_id) === Number(uid), '后台提现列表应有同额待审核记录')
+  assert.equal(await pendingWd(), pend0 + 1, '后台待办提现 +1')
+  // 冻结期间：不能通过（打款）；申请入口也停
+  await q('UPDATE user_account SET status = 0 WHERE id = ?', [uid])
+  try {
+    assert.notEqual((await call('POST', `/admin/withdrawals/${w1.id}/verdict`, { pass: true, payRef: 'FROZEN-' + stamp }, A)).code, 0, '冻结账号不能通过提现')
+    assert.notEqual((await call('POST', '/c/promote/withdraw', {}, pu.token)).code, 0, '冻结账号不能申请提现')
+  } finally { await q('UPDATE user_account SET status = 1 WHERE id = ?', [uid]) }
+  // 驳回：状态 2，可提现余额不变，待办回落
+  assert.equal(ok(await call('POST', `/admin/withdrawals/${w1.id}/verdict`, { pass: false }, A)).status, 2)
+  const ov1 = ok(await call('GET', '/c/promote/overview', null, pu.token))
+  assert.deepEqual([ov1.withdrawn, ov1.withdrawable, ov1.pendingRequests], [0, 30000, 0], '驳回后余额不扣、待处理清零')
+  assert.equal(await pendingWd(), pend0, '待办回落')
+  // 再申请 → 缺/短流水号不能通过 → 填真实流水号通过
+  const w2 = ok(await call('POST', '/c/promote/withdraw', {}, pu.token))
+  assert.notEqual((await call('POST', `/admin/withdrawals/${w2.id}/verdict`, { pass: true, payRef: '123' }, A)).code, 0, '流水号过短不能通过')
+  const payRef = 'XEND-PAY-' + stamp
+  assert.equal(ok(await call('POST', `/admin/withdrawals/${w2.id}/verdict`, { pass: true, payRef }, A)).status, 1)
+  const ov2 = ok(await call('GET', '/c/promote/overview', null, pu.token))
+  assert.deepEqual([ov2.earned, ov2.withdrawn, ov2.withdrawable, ov2.pendingRequests], [30000, 30000, 0, 0], '通过后 A 看到已提现 ¥300、可提现 0')
+  assert.notEqual((await call('POST', '/c/promote/withdraw', {}, pu.token)).code, 0, '余额不足 ¥100 不能再申请')
+  const rec = ok(await call('GET', `/admin/partner-reconciliation/promoter/${uid}?tab=withdrawal`, null, A))
+  assert.deepEqual([Number(rec.summary.earned), Number(rec.summary.paid), Number(rec.summary.pending), Number(rec.summary.balance)], [30000, 30000, 0, 0], '对账页：已放行 / 已打款 / 待审 / 余额')
+  const paidRow = rec.rows.find((r) => Number(r.id) === Number(w2.id)); assert.ok(paidRow && paidRow.pay_ref === payRef && paidRow.issues.length === 0, '对账明细：回单号一致且无异常标记')
+  const rk = ok(await call('GET', '/admin/partner-performance?kind=promoter&sort=paid', null, A)).rows.find((r) => Number(r.id) === Number(uid))
+  assert.ok(rk, '排行里应有该推广员'); assert.equal(Number(rk.paid), 30000); assert.equal(Number(rk.earned), 30000)
+})
+
+const coIds = []
+await t('共创分润：后台出结算单 → 分润 = 留存 × 产品占比 × 分润比例；台账 / 对账页 / 画像 / 排行同额；发放后同步', async () => {
+  const co = ok(await call('POST', '/admin/co-creators', { productId: sess.product_id, name: '跨端共创' + stamp, mobile: PHONE, role: 1, investAmount: 1000000, sharePct: 5000 }, A))
+  coIds.push(co.id)
+  await finishOrder((await login('mock-xend-co-buyer-' + stamp)).token)
+  const gen = ok(await call('POST', '/admin/settlements/generate', { period: isoWeek(new Date()) }, A)); assert.ok((gen.settlementIds || []).length, '应生成结算单')
+  const cps = await q('SELECT cp.id, cp.settlement_id, cp.base_amount, cp.amount, cp.status FROM co_profit cp WHERE cp.co_creator_id = ?', [co.id])
+  assert.ok(cps.length >= 1, '结算后应生成分润记录')
+  let profit = 0
+  for (const cp of cps) {
+    const ex = await one(`SELECT ROUND(s.amt_retained * pg.gmv / s.total_amount) base, ROUND(s.amt_retained * pg.gmv / s.total_amount * cc.share_pct / 10000) amount
+      FROM settlement s JOIN co_creator cc ON cc.id = ?
+      JOIN (SELECT SUM(amount_pay - insurance_fee) gmv FROM orders WHERE settlement_id = ? AND product_id = ?) pg WHERE s.id = ?`, [co.id, cp.settlement_id, sess.product_id, cp.settlement_id])
+    assert.equal(Number(cp.base_amount), Number(ex.base), '分润基数 = 留存 × 产品 GMV 占比'); assert.equal(Number(cp.amount), Number(ex.amount), '分润金额 = 基数 × 分润比例')
+    assert.equal(Number(cp.status), 0, '新分润待发放'); profit += Number(cp.amount)
+  }
+  assert.ok(profit > 0, '分润合计应大于 0')
+  const list = ok(await call('GET', '/admin/co-profits', null, A)).filter((x) => cps.some((c) => Number(c.id) === Number(x.id)))
+  assert.equal(list.length, cps.length, '后台分润台账应列出全部'); assert.equal(list.reduce((s, x) => s + Number(x.amount), 0), profit)
+  const rec = ok(await call('GET', `/admin/partner-reconciliation/cocreator/${co.id}`, null, A))
+  assert.deepEqual([Number(rec.summary.profit), Number(rec.summary.paid), Number(rec.summary.pending)], [profit, 0, profit], '对账页：应分 / 已发 / 待发')
+  assert.ok(rec.rows.every((r) => r.issues.length === 0), '对账明细不应有异常标记：' + JSON.stringify(rec.rows.map((r) => r.issues)))
+  const prof = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A))
+  assert.equal(prof.profits.reduce((s, x) => s + Number(x.amount), 0), profit); assert.equal(prof.paid, 0)
+  assert.ok(!JSON.stringify(prof.co).includes(PHONE), '画像里的电话必须脱敏')
+  // 发放
+  for (const cp of cps) ok(await call('POST', `/admin/co-profits/${cp.id}/pay`, {}, A))
+  const rec2 = ok(await call('GET', `/admin/partner-reconciliation/cocreator/${co.id}`, null, A))
+  assert.deepEqual([Number(rec2.summary.paid), Number(rec2.summary.pending)], [profit, 0], '发放后对账页已发 = 应分')
+  const prof2 = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A)); assert.equal(prof2.paid, profit); assert.equal(Number(prof2.returnRate), profit / 1000000)
+  const rk = ok(await call('GET', '/admin/partner-performance?kind=cocreator&sort=paid', null, A)).rows.find((r) => Number(r.id) === Number(co.id))
+  assert.ok(rk, '排行里应有该共创人'); assert.deepEqual([Number(rk.profit), Number(rk.paid)], [profit, profit]); assert.ok(Math.abs(Number(rk.return_rate) - profit / 1000000) < 1e-4, '回报率 = 已发 ÷ 投入（库内小数 4 位）')
+})
+await t('合伙人排行：三个榜单每一行的数字 = 数据库复算，排序严格降序、名次连续；城市账号只能看本城榜', async () => {
+  const PAIDST = '(20,30,40,50)'
+  const truth = {
+    city: async (r) => { const g = await one(`SELECT COALESCE(SUM(amount_pay),0) gmv, COUNT(*) orders FROM orders WHERE city_code = ? AND status IN ${PAIDST}`, [r.city_code]); const m = await one('SELECT COUNT(*) n FROM merchant WHERE city_code = ?', [r.city_code]); return { gmv: g.gmv, orders: g.orders, merchants: m.n } },
+    promoter: async (r) => {
+      const e = await one('SELECT COALESCE(SUM(amount),0) s FROM commission WHERE promoter_id = ? AND status IN (1,2)', [r.id]); const p = await one('SELECT COALESCE(SUM(amount),0) s FROM promoter_withdraw WHERE promoter_id = ? AND status = 1', [r.id])
+      const g = await one(`SELECT COALESCE(SUM(o.amount_pay),0) s FROM commission c JOIN orders o ON o.id = c.order_id WHERE c.promoter_id = ? AND c.status IN (0,1,2) AND o.status IN ${PAIDST}`, [r.id]); return { gmv: g.s, earned: e.s, paid: p.s }
+    },
+    cocreator: async (r) => { const p = await one('SELECT COALESCE(SUM(amount),0) s FROM co_profit WHERE co_creator_id = ?', [r.id]); const d = await one('SELECT COALESCE(SUM(amount),0) s FROM co_profit WHERE co_creator_id = ? AND status = 1', [r.id]); return { profit: p.s, paid: d.s } },
+  }
+  for (const [kind, sorts] of [['city', ['gmv', 'orders', 'merchants']], ['promoter', ['gmv', 'earned', 'paid']], ['cocreator', ['profit', 'paid', 'return_rate']]]) {
+    for (const sort of sorts) {
+      const r = ok(await call('GET', `/admin/partner-performance?kind=${kind}&sort=${sort}`, null, A), kind + '/' + sort)
+      r.rows.forEach((x, i) => assert.equal(x.rank, i + 1, kind + ' 名次应连续'))
+      for (let i = 1; i < r.rows.length; i++) assert.ok(Number(r.rows[i - 1][sort]) >= Number(r.rows[i][sort]), `${kind} 按 ${sort} 应降序：${r.rows[i - 1][sort]} < ${r.rows[i][sort]}`)
+      for (const x of r.rows) { const tr = await truth[kind](x); for (const [k, v] of Object.entries(tr)) assert.equal(Number(x[k]), Number(v), `${kind}#${x.id} ${k}：榜单 ${x[k]} ≠ 数据库 ${v}`) }
+    }
+  }
+  const cityRank = ok(await call('GET', '/admin/partner-performance?kind=city', null, CITY))
+  assert.ok(cityRank.scopeCity && cityRank.rows.every((r) => String(r.city_code) === String(cityRank.scopeCity)), '城市账号的城市榜只含本城')
+  for (const kind of ['promoter', 'cocreator']) assert.notEqual((await call('GET', `/admin/partner-performance?kind=${kind}`, null, CITY)).code, 0, `城市账号不能看全局${kind}榜`)
+})
+const rebateOf = async (uid, orderNo) => Number((await one(`SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ? AND l.biz_type = 1 AND l.direction = 1 AND l.biz_ref = ?`, [uid, orderNo])).s)
+await t('会员等级：达到门槛自动升级 → 我的页 / 旅豆页 / 数字身份 / 后台 同一个等级名；升级后返豆多出加成；等级配置错误被拒', async () => {
+  const lvs = ok(await call('GET', '/admin/member/levels', null, A))
+  const u = await login('mock-xend-level-' + stamp)
+  const rate = await cfgNum('bean.order_rate')
+  // 起点：成长值离 Lv2 只差一点（门槛来自参数中心，不写死）
+  await q('UPDATE user_account SET growth_value = ?, member_level = 1 WHERE id = ?', [lvs[1].min - 1000, u.user.id])
+  const m0 = ok(await call('GET', '/c/member', null, u.token))
+  assert.deepEqual([m0.lv, m0.name, m0.next.name], [1, lvs[0].name, lvs[1].name], '起点是 Lv1，下一级是 Lv2'); assert.equal(m0.next.gap, 1000)
+  // 第一单：按 Lv1（无加成）返豆，完成后升到 Lv2
+  const o1 = await finishOrder(u.token); const amt1 = Number(o1.amountPay)
+  assert.equal(await rebateOf(u.user.id, o1.orderNo), Math.round(amt1 / 10 * (rate + lvs[0].rebateBonusBp / 10000)), '升级前按 Lv1 返豆')
+  const me = ok(await call('GET', '/c/me', null, u.token))
+  assert.equal(me.memberLevel, 2); assert.equal(me.level.name, lvs[1].name); assert.equal(me.level.growth, lvs[1].min - 1000 + amt1)
+  const idn = ok(await call('GET', '/c/identity', null, u.token))
+  assert.equal(idn.profile.levelName, lvs[1].name, '数字身份页的等级名 = 我的页'); assert.equal(idn.profile.memberLevel, 2)
+  assert.deepEqual(ok(await call('GET', '/c/member', null, u.token)).levels.map((l) => l.name), lvs.map((l) => l.name), '旅豆页的等级表 = 后台等级配置')
+  assert.equal(ok(await call('GET', `/admin/users/${u.user.id}`, null, A)).user.member_level, 2, '后台画像同步')
+  assert.ok(idn.badges.find((b) => b.name === '旅行家认证').owned, '升到 Lv2 自动点亮「旅行家认证」'); assert.ok(idn.badges.find((b) => b.name === '水乡首游').owned, '完成首单点亮「水乡首游」')
+  // 第二单：按 Lv2 返豆，多出等级加成
+  const o2 = await finishOrder(u.token); const amt2 = Number(o2.amountPay)
+  const r2 = await rebateOf(u.user.id, o2.orderNo)
+  assert.equal(r2, Math.round(amt2 / 10 * (rate + lvs[1].rebateBonusBp / 10000)), '升级后按 Lv2 加成返豆')
+  assert.ok(r2 > Math.round(amt2 / 10 * rate), 'Lv2 返豆应高于基础返豆')
+  // 成长日志 = 订单实付
+  assert.equal(Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id = ?', [u.user.id])).s), amt1 + amt2)
+  // 配置错误在提案阶段就被拒绝（不用等审批）
+  assert.notEqual((await call('POST', '/admin/config/proposal', { key: 'member.levels', newValue: JSON.stringify([{ lv: 1, name: '探索者', min: 5 }, { lv: 2, name: '旅行家', min: 10 }]), reason: 'x' }, A)).code, 0, '门槛首项不为 0 应被拒')
+  assert.notEqual((await call('POST', '/admin/config/proposal', { key: 'member.levels', newValue: JSON.stringify(lvs.map((l, i) => (i === 1 ? { ...l, perks: ['链上权益'] } : l))), reason: 'x' }, A)).code, 0, '含禁用词应被拒')
+})
+await t('勋章墙：每枚勋章有类别 / 系列 / 阶数和默认图形；未获得的给出进度；图形接口公开可取，已获得与未获得不同', async () => {
+  const u = await login('mock-xend-wall-' + stamp)
+  const idn = ok(await call('GET', '/c/identity', null, u.token))
+  const preset = idn.badges.filter((b) => ['水乡首游', '旅途常客', '足迹初印', '落笔留痕', '游记新手', '旅行家认证', '元老旅友'].includes(b.name))
+  assert.equal(preset.length, 7, '预置勋章应都在（V40）')
+  for (const b of idn.badges) { assert.ok(b.category && b.categoryLabel && b.art, `${b.name} 缺类别 / 图形`); assert.ok(!JSON.stringify(b).includes('rule_param'), '不下发内部字段') }
+  const always = idn.badges.find((b) => b.name === '旅途常客'); assert.deepEqual(always.progress, { cur: 0, need: 5, pct: 0 }, '未获得的自动规则勋章带进度')
+  assert.equal(idn.badges.find((b) => b.name === '元老旅友').progress, null, '人工授予的勋章没有进度')
+  assert.deepEqual(['旅途常客', '资深旅人', '传奇旅者'].map((n) => idn.badges.find((b) => b.name === n).tier), [2, 3, 4], '系列阶数递增')
+  // 图形接口：不带登录也能取；类型 / 状态区别 / 不存在返回 404
+  const raw = async (p) => fetch(BASE + p)
+  const au = new URL(always.art); assert.equal(au.searchParams.get('state'), 'off', '未获得的图形地址带 state=off')
+  const on = await raw(au.pathname + '?state=on'), off = await raw(au.pathname + au.search)
+  assert.equal(on.status, 200); assert.match(on.headers.get('content-type'), /image\/svg\+xml/)
+  const [svgOn, svgOff] = [await on.text(), await off.text()]
+  assert.ok(svgOn.startsWith('<svg') && svgOff.startsWith('<svg') && svgOn !== svgOff, '获得 / 未获得是两张不同的图')
+  assert.equal((await raw('/badge-art/99999999.svg')).status, 404)
+  assert.equal((await raw('/badge-art/preview.svg?icon_key=compass&rarity=legend&category=explore')).status, 200)
+  // 后台勋章页：每枚都有图形与分类
+  const defs = ok(await call('GET', '/admin/web3/badges', null, A)).defs
+  assert.ok(defs.length >= 18); assert.ok(defs.every((d) => d.profile))
+})
 await t('景点数据：景点下的线路，景点页的数字 = 该线路自己的商品数据；A 的景点页能看到这条线路', async () => {
   const sc = ok(await call('POST', '/admin/scenics', { name: '跨端景点' + stamp, cityCode: sess.city_code }, A)); const scId = sc.id
   const prevSc = (await one('SELECT scenic_id FROM tour_product WHERE id = ?', [sess.product_id])).scenic_id
@@ -509,6 +672,7 @@ await t('景点数据：景点下的线路，景点页的数字 = 该线路自�
 })
 
 // ---------- 清理本轮造出的业务数据 ----------
+for (const id of coIds) { await q('DELETE FROM co_profit WHERE co_creator_id = ?', [id]).catch(() => {}); await q('DELETE FROM co_creator WHERE id = ?', [id]).catch(() => {}) }
 for (const id of created.banners) await q('DELETE FROM banner WHERE id = ?', [id]).catch(() => {})
 for (const id of created.faqs) await q('DELETE FROM faq WHERE id = ?', [id]).catch(() => {})
 for (const id of created.badges) { await q('DELETE FROM user_badge WHERE badge_id = ?', [id]).catch(() => {}); await q('DELETE FROM badge WHERE id = ?', [id]).catch(() => {}) }

@@ -23,11 +23,14 @@
 <view class="card fade-up" wx:if="{{beanIntro}}"><rich-text class="rich-p" nodes="{{beanIntro}}"></rich-text></view>
 
 <view class="sec-title">会员等级 <text class="more">成长值随真实消费累积</text></view>
-<view class="card fade-up" wx:if="{{bean}}">
+<view class="card fade-up" wx:if="{{bean && levels.length}}">
+  <view class="lv-bar dark"><view class="lv-fill" style="width:{{levelPct}}%"></view></view>
+  <view class="muted2" style="margin:10rpx 0 6rpx">{{levelHint}}</view>
   <view class="lv-row" wx:for="{{levels}}" wx:key="lv">
     <view class="lv-badge {{level >= item.lv ? 'on' : ''}}">Lv.{{item.lv}}</view>
     <view style="flex:1"><text style="font-weight:600;font-size:25rpx">{{item.name}}</text>
-      <text class="muted2" style="margin-left:12rpx">{{item.need}}</text></view>
+      <text class="muted2" style="margin-left:12rpx">{{item.need}}</text>
+      <view class="muted2" wx:if="{{item.perkText}}" style="margin-top:4rpx">{{item.perkText}}</view></view>
     <text wx:if="{{level === item.lv}}" class="tag" style="margin:0">当前</text>
   </view>
 </view>

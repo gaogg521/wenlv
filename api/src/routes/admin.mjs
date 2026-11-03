@@ -19,6 +19,7 @@ import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportD
 import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
+import * as member from '../domain/member.mjs'
 import * as taskReview from '../domain/task-review.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
@@ -441,6 +442,9 @@ const admin = {
       for (const k of keys) sum += k === key ? nv : Number(await cfg(k))
       if (sum > 1) throw new BizError(1001, `履约 + 服务费 + 权益预算合计 ${(sum * 100).toFixed(1)}% 超过 100%，留存毛利将为负`)
     }
+    if (key === 'member.levels') {
+      try { member.parseLevels(newValue) } catch (e) { throw new BizError(1001, e.message) }
+    }
     if (key === 'settlement.refund_fee_merchant_pct' && !(Number(newValue) >= 0 && Number(newValue) <= 1)) {
       throw new BizError(1001, '商户分成比例需在 0~1 之间（如 0.5 = 50%）')
     }
@@ -470,6 +474,7 @@ const admin = {
       await audit(c, 'admin:' + a.name, 'config', 'approve', h.cfg_key, h.old_value, h.new_value)
     })
     await loadConfig(true)
+    if (h.cfg_key === 'member.levels') await member.resyncAll() // 新门槛生效后立即重算所有人的等级
     return { ok: true }
   },
   'POST /admin/config/rollback': async (req) => {
@@ -808,17 +813,8 @@ const admin = {
     })
     // 返豆 + 佣金 + 成长值 + 存证（同一动作位，生产在 beanWorker）
     const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
-    if (budget && Number(o.amount_pay) > 0) {
-      await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
-      const amt = Number(o.amount_pay)
-      await q('UPDATE user_account SET growth_value = growth_value + ? WHERE id = ?', [amt, o.user_id])
-      const th = [0, 2000, 10000, 50000]
-      const ua = await one('SELECT growth_value FROM user_account WHERE id = ?', [o.user_id])
-      const lv = th.filter((t) => Number(ua.growth_value) >= t).length
-      await q('UPDATE user_account SET member_level = ? WHERE id = ?', [lv, o.user_id])
-      await q('INSERT INTO user_growth_log (user_id, delta, biz_type, biz_ref, after_val) VALUES (?,?,1,?,?)',
-        [o.user_id, amt, orderNo, Number(ua.growth_value)])
-    }
+    if (budget && Number(o.amount_pay) > 0) await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
+    if (Number(o.amount_pay) > 0) await member.addGrowth(o.user_id, Number(o.amount_pay), orderNo) // 成长值与等级不依赖旅豆预算（与 jobs.completeOrder 一致）
     await promo.createCommission(orderNo)
     await badgeDomain.evaluateSafe(Number(o.user_id))
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号

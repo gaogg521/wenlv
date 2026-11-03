@@ -35,14 +35,22 @@ Page({
   onShow() {
     siteData.get().then((site) => this.setData({ site }))
     this.setData({ user: app.globalData.user })
-    api.getMe().then((m) => this.setData({ avatarUrl: m.avatarUrl || '', user: { nickname: m.nickname, levelName: ['探索者', '旅行家', '城市探索官', '环球探索家'][m.memberLevel - 1] || '探索者' } })).catch(() => {})
+    this.loadMe()
+  },
+  // 等级名与升级进度来自服务端（参数中心「会员等级体系」），页面里不写死
+  loadMe() {
+    return api.getMe().then((m) => {
+      const lv = m.level || {}
+      const hint = lv.next ? '再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 成长值升级「' + lv.next.name + '」' : '已是最高等级'
+      this.setData({ avatarUrl: m.avatarUrl || '', user: { nickname: m.nickname, levelName: lv.name || '探索者', levelPct: lv.pct || 0, levelHint: hint } })
+    }).catch(() => {})
   },
   async login() {
     try {
       const api = require('../../utils/api')
       const d = await api.login()
-      const lv = ['探索者', '旅行家', '城市探索官', '环球探索家'][d.user.memberLevel - 1] || '探索者'
-      this.setData({ user: { nickname: d.user.nickname, levelName: lv } })
+      this.setData({ user: { nickname: d.user.nickname, levelName: '', levelPct: 0, levelHint: '' } })
+      await this.loadMe()
     } catch (e) { wx.showToast({ title: e.msg || '登录失败（后端未启动时可用演示模式浏览）', icon: 'none' }) }
   },
   // 官方头像填写能力：chooseAvatar 临时文件 → base64 上传 → 服务端存 /uploads

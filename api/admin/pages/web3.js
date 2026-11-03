@@ -22,7 +22,7 @@ async function attest() {
       <button class="btn ghost sm" onclick="runJob('attest-anchor','attest')">② 补锚（按 seq 升序）</button>
       <button class="btn ghost sm" onclick="runJob('bean-day-close','attest')">③ 封存昨日旅豆账本</button>
       <button class="btn ghost sm" onclick="runJob('attest-reconcile','attest')">④ 六条不变式对账</button>
-      <span class="muted">${real ? '已接入链数根：补锚将真实上链' : 'NOOP：①后停留在「已打包·待锚定」，②不会产生假交易号'}</span>
+      <span class="muted">${real ? '已接入' + esc((d.chain && d.chain.label) || '当前链') + '：补锚将真实上链' : 'NOOP：①后停留在「已打包·待锚定」，②不会产生假交易号'}</span>
     </div>
     <div class="row" style="margin-top:6px"><input id="vref" placeholder="输入订单号验证（如 WL20261024…）" style="width:320px">
       <button class="btn primary sm" onclick="verifyAttest()">验证</button>
@@ -63,26 +63,19 @@ async function attest() {
   </div>`
 }
 
-/* ============ 术语映射（合规词 ↔ 链词，D6 双层口径） ============ */
-const TERM_MAP = [
-  ['旅豆', '向往自由链积分（Bean Token）', '小程序端一律叫「旅豆」；后台台账/存证语境可用链上口径'],
-  ['入园凭证', '链上权益凭证（Pass NFT 语义）', '凭证编号即链上资产编号；小程序端禁提 NFT'],
-  ['存证中心', '上链存证（Merkle Anchor）', '对外讲「一网可信」；后台展示 Merkle 根与锚定批次'],
-  ['积分发行台账', '按预算批次发行', '发行即 mint 语义，但受 global_cap 哨兵约束，严禁超发'],
-  ['勋章', '链上数字勋章（Badge SBT 语义）', '不可转让（SBT）；小程序端叫「勋章」'],
-  ['权益账户', '用户旅豆账户 + 权益视图', '仅后台可见链词；小程序端无「钱包/资产」概念'],
-  ['共创分润', '链上分润凭证（Revenue Share）', '分润台账每期上链锚定；小程序端不出现'],
-  ['推广服务商', '分销合约节点（Affiliate Node）', 'D2 定稿禁止层级计酬；链词仅内部运营语境'],
-]
+/* ============ 术语映射（合规词 ↔ 内部口径；数据源 = 服务端 LEXICON.TERMS，与小程序同一份字典） ============ */
 async function terms() {
+  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  const lex = await api('GET', '/admin/lexicon')
+  const TERM_MAP = lex.TERMS || []
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>术语映射</h2><span class="muted">后台 Web3 口径 ↔ 小程序合规口径 · D6 双层口径总表</span></div>
-    <div class="muted" style="margin-bottom:12px">后台不上小程序审核，可用 Web3 真实词汇；两个小程序端一律走合规词。改动任何界面文案前先对照本表，避免口径串台。</div>
-    <table><thead><tr><th style="width:160px">小程序合规词（用户可见）</th><th style="width:220px">后台/存证链词（内部运营）</th><th>使用边界</th></tr></thead><tbody>
-    ${TERM_MAP.map((t) => `<tr><td><b style="color:var(--brand-deep)">${t[0]}</b></td><td><code>${t[1]}</code></td><td class="td-sub">${t[2]}</td></tr>`).join('')}</tbody></table>
+    <div class="card-head"><h2>术语映射</h2><span class="muted">后台内部口径 ↔ 小程序合规口径 · 字典更新于 ${esc(lex.updatedAt)}</span></div>
+    <div class="muted" style="margin-bottom:12px">后台不上小程序审核，可用内部词汇；两个小程序端一律走合规词（小程序文案取自同一份字典 /c/lexicon）。改动任何界面文案前先对照本表，避免口径串台。</div>
+    <table><thead><tr><th style="width:160px">小程序合规词（用户可见）</th><th style="width:260px">后台 / 存证口径（内部运营）</th><th>使用边界</th></tr></thead><tbody>
+    ${TERM_MAP.map((t) => `<tr><td><b style="color:var(--brand-deep)">${esc(t[0])}</b></td><td><code>${esc(t[1])}</code></td><td class="td-sub">${esc(t[2])}</td></tr>`).join('')}</tbody></table>
     <div class="note" style="margin-top:14px;padding:12px;background:#fdf3e0;border-radius:8px;color:#92400e">
-      <b>⚠ D6 红线：</b>不对应股权/Token 收益权、不按层级计酬、境内外隔离。链词仅出现在本后台与存证报告，<b>绝不回灌小程序</b>。
+      <b>⚠ D6 红线：</b>不对应股权/Token 收益权、不按层级计酬、境内外隔离。内部口径仅出现在本后台与存证报告，<b>绝不回灌小程序</b>。
     </div></div>`
 }
 
@@ -680,11 +673,18 @@ async function badges() {
   <div class="card">
     <div class="card-head"><h2>勋章发行</h2><span class="muted">勋章发放即写入链上存证队列（badge 事件）</span></div>
     <div class="row"><button class="btn primary sm" onclick="createBadge()">＋ 新建勋章</button><span class="muted">外观（勋章图/稀有度/故事）与获得规则（类型/阈值/发行上限/有效期）</span></div>
-    <table style="margin-top:10px"><thead><tr><th>ID</th><th>名称</th><th>图标键</th><th>授予规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
-    ${(d.defs || []).map((b) => `<tr><td>#${b.id}</td><td>${esc(b.name)}</td><td class="td-sub">${esc(b.icon_key)}</td>
+    <table style="margin-top:10px"><thead><tr><th>ID</th><th>图形</th><th>名称</th><th>类别 · 系列</th><th>授予规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
+    ${(d.defs || []).map((b) => { const pf = (typeof b.profile === 'string' ? JSON.parse(b.profile || '{}') : b.profile) || {}; const CATS = { journey: '旅程', explore: '探索', creator: '创作', growth: '成长', special: '特别' }, RAR = { common: '普通', rare: '稀有', epic: '史诗', legend: '传说' }; return `<tr><td>#${b.id}</td>
+      <td><img src="${pf.icon_img ? esc(pf.icon_img) : '/badge-art/' + b.id + '.svg'}" width="44" height="44" alt=""></td>
+      <td>${esc(b.name)}<div class="td-sub">${esc(RAR[pf.rarity] || '普通')} · ${esc(b.icon_key)}</div></td><td class="td-sub">${esc(CATS[pf.category] || '特别')}${pf.series ? ' · ' + esc(pf.series) + (pf.tier ? ' 第' + Number(pf.tier) + '阶' : '') : ''}</td>
       <td class="td-sub">${esc(b.rule_desc || '—')}</td><td class="num">${Number(b.granted)}</td>
-      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button>${b.rule_type && b.rule_type !== 'manual' ? ` <button class="btn ghost sm" onclick="backfillBadge(${b.id})">按规则补发</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
+      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button>${b.rule_type && b.rule_type !== 'manual' ? ` <button class="btn ghost sm" onclick="backfillBadge(${b.id})">按规则补发</button>` : ''}</td></tr>` }).join('') || '<tr><td colspan="7" class="td-sub">暂无勋章定义（先新建）</td></tr>'}
     </tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>图标库 · 外形与稀有度预览</h3><span class="muted">没上传勋章图时，系统按「类别 + 稀有度 + 图标键」生成默认图形；下面是全部可选图标（图标键写在图标下方）</span></div>
+    <div class="row" style="gap:14px;flex-wrap:wrap">${['compass','mountain','water','boat','ticket','pen','camera','star','flag','heart','pin','crown','footprint','lantern','globe','book','bridge'].map((k) => `<div style="text-align:center;width:72px"><img src="/badge-art/preview.svg?icon_key=${k}&rarity=rare&category=explore" width="64" height="64" alt="${k}"><div class="td-sub">${k}</div></div>`).join('')}</div>
+    <div class="row" style="gap:18px;margin-top:14px">${[['journey','旅程'],['explore','探索'],['creator','创作'],['growth','成长'],['special','特别']].map(([c, n]) => ['common','rare','epic','legend'].map((r) => `<img src="/badge-art/preview.svg?icon_key=star&rarity=${r}&category=${c}" width="56" height="56" alt="${n}-${r}" title="${n} · ${r}">`).join('')).join('<span style="width:8px"></span>')}</div>
   </div>
   <div class="card">
     <div class="card-head"><h3>最近发放</h3></div>

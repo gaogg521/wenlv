@@ -340,14 +340,17 @@ const S = {
     sections: [
       { title: '外观', fields: [
         { k: 'name', label: '勋章名称', type: 'text', store: 'col', required: true, max: 20 },
-        { k: 'icon_key', label: '图标键', type: 'text', store: 'col', required: true, max: 32, pattern: '^[a-z0-9_-]+$', patternMsg: '小写字母、数字、下划线', help: '小程序内置图标的键名' },
+        { k: 'icon_key', label: '图标键', type: 'text', store: 'col', required: true, max: 32, pattern: '^[a-z0-9_-]+$', patternMsg: '小写字母、数字、下划线', help: '内置线性图标：compass mountain water boat ticket pen camera star flag heart pin crown footprint lantern globe book bridge（勋章页底部有图标库可预览）；没上传勋章图时按它生成默认图形' },
         { k: 'icon_img', label: '勋章图', type: 'image', help: '透明底 PNG，256×256' },
         { k: 'rarity', label: '稀有度', type: 'select', options: [['common', '普通'], ['rare', '稀有'], ['epic', '史诗'], ['legend', '传说']], dflt: 'common' },
-        { k: 'color', label: '主题色', type: 'color' },
+        { k: 'color', label: '主题色', type: 'color', help: '不填则按稀有度取色（普通铜 / 稀有银蓝 / 史诗紫金 / 传说金）' },
+        { k: 'category', label: '勋章类别', type: 'select', options: [['journey', '旅程'], ['explore', '探索'], ['creator', '创作'], ['growth', '成长'], ['special', '特别']], dflt: 'special', help: '决定默认图形的外形，也是小程序勋章墙的分组' },
+        { k: 'series', label: '所属系列', type: 'text', max: 16, help: '同系列勋章在勋章墙里连排；留空为单枚勋章' },
+        { k: 'tier', label: '系列阶数', type: 'int', min: 0, max: 5, help: '1 = 入门阶，数字越大越难；系列勋章图形底部会标出阶数。非系列填 0' },
         { k: 'description', label: '勋章故事', type: 'rich', span: 2 },
       ] },
       { title: '获得规则', fields: [
-        { k: 'rule_type', label: '规则类型', type: 'select', store: 'col', options: [['manual', '人工授予'], ['order_count', '完成订单数'], ['city_count', '打卡城市数'], ['review', '发表评价']], dflt: 'manual' },
+        { k: 'rule_type', label: '规则类型', type: 'select', store: 'col', options: [['manual', '人工授予'], ['order_count', '完成订单数'], ['city_count', '打卡城市数'], ['review', '发表评价'], ['note_count', '发布旅行笔记'], ['level', '会员等级']], dflt: 'manual' },
         { k: 'rule_desc', label: '规则说明（游客可见）', type: 'text', store: 'col', max: 120, span: 2 },
         { k: 'threshold', label: '达成阈值', type: 'int', min: 1, max: 10000, help: '自动规则必填：订单完成或写评价时自动检查并发放；改阈值后可在列表点「按规则补发」' },
         { k: 'max_issue', label: '发行上限', type: 'int', min: 0, max: 10000000, help: '0=不限' },
@@ -900,7 +903,7 @@ const PUBLIC = {
   scenic: ['name', 'alias', 'scenic_level', 'cover', 'gallery', 'intro', 'address', 'geo', 'open_hours', 'tickets', 'traffic'],
   // 领队姓名电话只在已支付订单里给（见 sessionForOrder）
   session: ['sign_deadline', 'gather_time', 'end_time', 'vehicle', 'note'],
-  badge: ['name', 'icon_key', 'icon_img', 'rarity', 'color', 'description', 'rule_desc', 'valid_days', 'display_order'],
+  badge: ['name', 'icon_key', 'icon_img', 'rarity', 'color', 'category', 'series', 'tier', 'description', 'rule_desc', 'valid_days', 'display_order'],
   task: ['title', 'category', 'product_id', 'brief', 'cover_img', 'tags', 'platforms', 'rich_brief', 'must_mention', 'forbidden',
     'min_words', 'min_images', 'references', 'review_rules', 'reward_beans', 'cash_reward', 'max_participants', 'deadline'],
 }

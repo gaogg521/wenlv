@@ -4,7 +4,12 @@
 const PN = (v) => Number(v || 0)
 const pct = (v) => (Math.round(PN(v) * 1000) / 10) + '%'
 const dt = (t, n = 16) => t ? esc(String(t).slice(0, n).replace('T', ' ')) : '—'
-const LEVEL_CN = { 1: '旅友', 2: '行者', 3: '探索家', 4: '向往家' }
+const LEVEL_CN = {} // 等级名来自参数中心 member.levels（levelNames() 拉取），不再在前端写死一份
+let __lvLoaded = false
+async function levelNames() {
+  if (__lvLoaded) return
+  try { (await api('GET', '/admin/member/levels')).forEach((l) => { LEVEL_CN[l.lv] = l.name }); __lvLoaded = true } catch { /* 取不到时回退显示 Lv 数字 */ }
+}
 const KYC_CN = { 0: '<span class="pill warn">审核中</span>', 1: '<span class="pill ok">已实名</span>', 2: '<span class="pill s70">未通过</span>' }
 const MERCHANT_ST = { 0: '<span class="pill warn">进件中</span>', 1: '<span class="pill ok">生效</span>', 2: '<span class="pill off">暂停</span>', 3: '<span class="pill s70">清退</span>' }
 const STAFF_ROLE = { 1: '店员', 2: '店长', 3: '老板' }
@@ -26,6 +31,7 @@ const USER_SEGS = [['', '全部'], ['new7', '近 7 日新增'], ['buyer', '下�
 window.__userQ = window.__userQ || { seg: '', kw: '', sort: '', page: 1 }
 async function users() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
+  await levelNames()
   const Q = window.__userQ
   const [st, list] = await Promise.all([
     api('GET', '/admin/users/stats'),
@@ -71,6 +77,7 @@ async function users() {
 }
 
 async function userProfile(id) {
+  await levelNames()
   let p
   try { p = await api('GET', '/admin/users/' + id) } catch (e) { return toast(e.message, true) }
   const u = p.user, t = p.trade, c = p.content

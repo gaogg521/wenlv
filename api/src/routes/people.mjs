@@ -1,6 +1,7 @@
 // 主体管理：用户中心（列表 / 画像 / 冻结与风险标记）、商户全景、商品数据。
 // 设计见仓库根目录《后台管理体系设计-20261102.md》：每类主体 = 列表（搜索、分群、统计）+ 360 画像（注册信息、关系、行为数据、治理操作、操作留痕）。
 // 隐私：手机号、证件号、实名只下发脱敏值；城市合伙人只能看本城商户。
+import * as member from '../domain/member.mjs'
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
@@ -125,6 +126,8 @@ export const people = {
     return { partner, co, profits, paid, returnRate: N(co.invest_amount) > 0 ? paid / N(co.invest_amount) : null }
   },
   // ---------------- 用户中心 ----------------
+  // 会员等级配置（后台各页把等级数字显示成等级名；与小程序同源）
+  'GET /admin/member/levels': async (req) => { await requireAdmin(req); return await member.levels() },
   'GET /admin/users/stats': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'risk'])
     const seg = {}

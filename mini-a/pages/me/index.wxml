@@ -7,6 +7,8 @@
       <view>
         <input class="nick-input" type="nickname" value="{{user.nickname}}" placeholder="填写昵称" bindblur="onNickname" />
         <view class="sub2">{{user.levelName}} · 文旅数字身份</view>
+        <view class="lv-bar" wx:if="{{user.levelHint}}"><view class="lv-fill" style="width:{{user.levelPct}}%"></view></view>
+        <view class="sub2" wx:if="{{user.levelHint}}" style="font-size:22rpx">{{user.levelHint}}</view>
       </view>
     </view>
   </block>
@@ -19,7 +21,7 @@
   <view class="kv" bindtap="goOrders"><text>我的订单</text><text class="v">›</text></view>
   <view class="kv" bindtap="goPromo"><text>推广中心</text><text class="v">›</text></view>
   <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
-  <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 徽章 · 可信记录 ›</text></view>
+  <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 勋章 · 可信记录 ›</text></view>
   <view class="kv" bindtap="kyc"><text>实名认证</text><text class="v">出行保险 · 合规出行 ›</text></view>
   <view wx:if="{{kycOpen}}" class="card" style="margin:-8rpx 0 16rpx">
     <view wx:if="{{kycStatus === 2}}" class="note" style="color:var(--red)">上次被驳回：{{kycNote || '资料不符'}}</view>
