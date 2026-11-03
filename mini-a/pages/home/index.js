@@ -36,7 +36,12 @@ Page({
       const tours = (list || []).filter(t => (t.cat || '') !== 'shop')
         .map(t => ({ ...t, cover: api.coverFor(t) }))
       this.setData({ tours, loading: false }, done)
-    }).catch(e => this.setData({ tours: [], loading: false, error: e.msg || '暂时无法加载线路' }, done))
+    }).catch(e => {
+      // 后端不可达（真机演示常见）：回退内置演示线路，页面照常可用
+      const tours = api.FALLBACK.tours.map(t => ({ ...t, cover: api.coverFor(t) }))
+      this.setData({ tours, loading: false, fallback: true }, done)
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+    })
   },
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
   goDestinations() { wx.navigateTo({ url: '/pages/destination/index' }) },

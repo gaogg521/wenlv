@@ -19,7 +19,13 @@ Page({
     api.request('/c/tours?cat=' + this.data.active + '&kw=' + encodeURIComponent(this.data.kw || '') + (this.city ? '&city=' + this.city : '')).then(list => {
       const tours = (list || []).map(t => ({ ...t, cover: api.coverFor(t) }))
       this.setData({ tours, loading: false })
-    }).catch(e => { this.setData({ tours: [], loading: false, error: e.msg || '线路加载失败，请重试' })
+    }).catch(e => {
+      // 演示兜底：按当前分类过滤内置演示线路
+      const cat = this.data.active
+      const src = (cat && cat !== 'all') ? api.FALLBACK.tours.filter(t => t.cat === cat) : api.FALLBACK.tours
+      const tours = src.map(t => ({ ...t, cover: api.coverFor(t) }))
+      this.setData({ tours, loading: false, fallback: true })
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
     })
   }
 })

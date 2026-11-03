@@ -8,7 +8,12 @@ Page({
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
       this.setData({ items: (items || []).map(t => ({ ...t, price: t.price || t.price_from, cover: api.coverFor(t) })), fromApi: true, loading: false })
-    }).catch(e => this.setData({ loading: false, error: e.msg || '暂时无法加载商品' }))
+    }).catch(e => {
+      // 演示兜底：内置演示商品
+      const items = api.FALLBACK.shop.map(t => ({ ...t, cover: api.coverFor(t) }))
+      this.setData({ items, fromApi: false, loading: false, fallback: true })
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+    })
   },
   buy(e) {
     const id = e.currentTarget.dataset.id

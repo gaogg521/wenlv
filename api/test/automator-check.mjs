@@ -26,8 +26,12 @@ for (let i = 0; i < 40 && !mini; i++) {
 }
 if (!mini) { console.error('无法连接自动化端口 ' + WS); process.exit(1) }
 log('已连接模拟器')
-const sys = await mini.systemInfo()
-log('模拟器:', sys.platform, sys.SDKVersion)
+// 通道刚起时首条命令可能超时，systemInfo 加重试（原代码裸调用，会把整个脚本炸掉）
+let sys = null
+for (let i = 0; i < 3 && !sys; i++) {
+  try { sys = await mini.systemInfo() } catch (e) { log('systemInfo 超时重试', i + 1); await new Promise((r) => setTimeout(r, 2000)) }
+}
+log('模拟器:', sys ? `${sys.platform} ${sys.SDKVersion}` : '信息获取失败（继续）')
 
 // 冷启动时模拟器可能还没有活动页面；此时 reLaunch 会让自动化会话崩掉
 // （报 getPageMetaByWebviewId(...) 为 null，之后整条通道失联）。等条件，不等时间。
