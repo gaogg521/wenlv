@@ -703,7 +703,7 @@ async function badges() {
     <div class="row" style="gap:18px;flex-wrap:wrap">${(lvs || []).map((l) => `<div style="text-align:center;width:120px"><img src="/badge-art/level/${l.lv}.svg" width="96" height="96" alt=""><div><b>Lv${l.lv} ${esc(l.name)}</b></div><div class="td-sub">成长值 ${Math.floor(l.min / 100).toLocaleString()} 起</div><div class="td-sub">返豆 +${l.rebateBonusBp / 100} 个百分点</div></div>`).join('')}</div>
   </div>
   <div class="card">
-    <div class="card-head"><h3>商户等级徽章</h3><span class="muted">等级名、订单 / 评价 / 评分 / 退款率门槛、权益说明在「参数中心 → 商户经营等级体系」修改（双人复核）；徽章图形随等级自动变化（门楼招牌，铜 / 银 / 金 / 钻）</span></div>
+    <div class="card-head"><h3>商户等级徽章</h3><span class="muted">等级名、订单 / 评价 / 评分 / 退款率门槛、权益说明在「参数中心 → 商户经营等级体系」修改（双人复核）；徽章图形随等级自动变化（门楼招牌，铜 / 翡翠 / 金 / 钻蓝）</span></div>
     <div class="row" style="gap:18px;flex-wrap:wrap">${(mlvs || []).map((l) => `<div style="text-align:center;width:150px"><img src="/badge-art/mlevel/${l.lv}.svg" width="112" height="112" alt=""><div><b>Lv${l.lv} ${esc(l.name)}</b></div><div class="td-sub">订单 ≥${l.minOrders} · 评价 ≥${l.minReviews}</div><div class="td-sub">${l.minRating ? '评分 ≥' + l.minRating / 10 : '不限评分'} · 退款率 ≤${l.maxRefundPct}%</div></div>`).join('')}</div>
   </div>
   <div class="card">
