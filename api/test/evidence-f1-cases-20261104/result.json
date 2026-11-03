@@ -1,0 +1,24 @@
+{
+  "task": "批次F-1：T12 风险案件与核销异常闭环",
+  "date": "2026-11-04",
+  "branch": "feat/f1-risk-cases",
+  "environment": { "service": "http://127.0.0.1:18092/admin-ui", "db": "wanderlust_qa_batchf_20261104 (隔离库，V1–V48，seed:scenario)", "jwt": "devsecret", "payMode": "MOCK" },
+  "apiTests": {
+    "npmTest": "207 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2）",
+    "newSuite": "api/test/admin-riskcases.mjs 4 项：建案来源与角色城市边界/全状态机与复核人≠责任人/冻结解冻引用案件且解冻≠结案/队列契约+并发结案+旧handle结论必填"
+  },
+  "uiChecks": [
+    { "step": "超管 → 系统治理 → 风控案件：KPI 联动、建案（人工）→ 研判受理 → 处理中", "result": "通过", "evidence": "01-case-created-judged.png" },
+    { "step": "提交复核 → 待复核 1；责任人本人看不到『复核结案』按钮（复核人≠责任人 UI 级落实）", "result": "通过（AC-05 核心面）", "evidence": "02-review-self-hidden.png" }
+  ],
+  "fixesDuringVerification": [
+    "存量缺陷：risk_event 无 handled_by/handled_at 列——旧『标记已处理』自 V1 起一调即 SQL 报错从未成功过；已修（处理人/时间进审计与案件时间线）",
+    "事件处理权收紧为 super/risk（运营原可处理，按风控职责边界收回）",
+    "cases.js 路由顺序（note 先于 :action 通配）与 UI 提交复核按钮逻辑修正"
+  ],
+  "boundaries": [
+    "核销冲突（verify_offline_conflict）可作为案件来源建案，冲突本身的确认/驳回流程未改",
+    "案件不自动改资金状态；冻结/解冻仍走 user.manage 权限并写入案件时间线"
+  ]
+}

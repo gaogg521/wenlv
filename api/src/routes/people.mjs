@@ -214,11 +214,13 @@ export const people = {
       content: { notes, recentNotes, tasks, badges }, promoter: promoter ? { ...promoter, commission } : null, staff, growth, ops,
     }
   },
-  // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计
+  // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计。
+  // T12：传 caseId 时把冻结/解冻写入案件时间线（处置动作引用案件）；解冻不等于结案（案件关闭仍走复核）。
   'POST /admin/users/:id/status': async (req) => {
     const a = await requireAdmin(req, 'user.manage')
     const st = Number(req.body.status)
     const reason = String(req.body.reason || '').trim()
+    const caseId = Number(req.body.caseId) || null
     if (![0, 1].includes(st)) throw new BizError(1001, '状态只能是正常或冻结')
     if (st === 0 && reason.length < 4) throw new BizError(1001, '冻结需要填写原因（至少 4 个字）')
     const id = await tx(async (c) => {
@@ -226,6 +228,12 @@ export const people = {
       if (!u) throw new BizError(1004, '用户不存在')
       await c.upd('UPDATE user_account SET status = ? WHERE id = ?', [st, u.id])
       await audit(c, 'admin:' + a.name, 'user', st ? 'unfreeze' : 'freeze', 'user-' + u.id, { status: N(u.status) }, { status: st, reason: reason || null })
+      if (caseId) {
+        const k = await c.one('SELECT id, status FROM risk_case WHERE id = ? FOR UPDATE', [caseId])
+        if (!k) throw new BizError(1004, '引用的案件不存在')
+        await c.q('INSERT INTO risk_case_record (case_id, actor, action, note, from_status, to_status) VALUES (?,?,?,?,?,?)',
+          [k.id, 'admin:' + a.name, st ? 'unfreeze' : 'freeze', reason || null, Number(k.status), Number(k.status)])
+      }
       return Number(u.id)
     })
     if (!st) return { status: st }
