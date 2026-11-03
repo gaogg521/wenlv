@@ -330,3 +330,15 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .bdg-r { font-size: 18rpx; }
 .bdg-prog { margin: 6rpx 10rpx 0; height: 6rpx; }
 .bdg-seal { right: 6rpx; top: 6rpx; width: 28rpx; height: 28rpx; font-size: 17rpx; line-height: 28rpx; }
+/* 「我的」顶部卡片：金边头像 + 昵称 / 等级 / 进度 + 等级徽章 */
+.me-card { display: flex; align-items: center; gap: 22rpx; position: relative; }
+.me-ring { width: 124rpx; height: 124rpx; border-radius: 50%; padding: 5rpx; box-sizing: border-box; flex-shrink: 0; background: linear-gradient(135deg, #ffe9a8, #e0a23a); box-shadow: 0 6rpx 18rpx rgba(0,0,0,.25); }
+.me-ring .avatar-btn { width: 114rpx; height: 114rpx; }
+.me-ring .avatar-img { width: 114rpx; height: 114rpx; }
+.avatar-ph { width: 114rpx; height: 114rpx; border-radius: 50%; background: linear-gradient(135deg, #f08a3c, #c25a14); color: #fff; font-size: 50rpx; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.me-main { flex: 1; min-width: 0; }
+.me-main .nick-input { min-width: 0; width: 100%; color: #fff; }
+.me-chips { display: flex; gap: 10rpx; margin: 6rpx 0 8rpx; }
+.me-chip { font-size: 20rpx; padding: 2rpx 14rpx; border-radius: 20rpx; background: rgba(255,226,140,.92); color: #5a3a00; font-weight: 700; }
+.me-chip.ghost { background: rgba(255,255,255,.18); color: #fff; font-weight: 400; }
+.me-hint { font-size: 21rpx; opacity: .85; margin-top: 8rpx; }

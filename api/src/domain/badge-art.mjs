@@ -66,6 +66,21 @@ const ICONS = {
 export const ICON_KEYS = Object.keys(ICONS)
 
 const f = (n) => Math.round(n * 100) / 100
+// 26 个大写字母的描边字形（10×14 网格）：国家代码用它画，避免 SVG 文字对字体的依赖
+const GLYPH = {
+  A: 'M0 14 L5 0 L10 14 M2 9 H8', B: 'M0 0 V14 M0 0 H6 C10 0 10 7 6 7 H0 M6 7 C11 7 11 14 6 14 H0', C: 'M10 2 C6 -1 0 0 0 7 C0 14 6 15 10 12',
+  D: 'M0 0 V14 H4 C11 14 11 0 4 0 Z', E: 'M10 0 H0 V14 H10 M0 7 H7', F: 'M10 0 H0 V14 M0 7 H7', G: 'M10 2 C6 -1 0 0 0 7 C0 14 7 15 10 11 V8 H6',
+  H: 'M0 0 V14 M10 0 V14 M0 7 H10', I: 'M2 0 H8 M5 0 V14 M2 14 H8', J: 'M10 0 V9 C10 15 2 15 0 10', K: 'M0 0 V14 M10 0 L0 8 M3 6 L10 14',
+  L: 'M0 0 V14 H10', M: 'M0 14 V0 L5 8 L10 0 V14', N: 'M0 14 V0 L10 14 V0', O: 'M5 0 C-3 0 -3 14 5 14 C13 14 13 0 5 0 Z',
+  P: 'M0 14 V0 H6 C11 0 11 8 6 8 H0', Q: 'M5 0 C-3 0 -3 14 5 14 C13 14 13 0 5 0 Z M6 10 L11 15', R: 'M0 14 V0 H6 C11 0 11 8 6 8 H0 M5 8 L10 14',
+  S: 'M10 2 C6 -1 0 1 0 4 C0 8 10 6 10 10 C10 14 3 15 0 12', T: 'M0 0 H10 M5 0 V14', U: 'M0 0 V9 C0 16 10 16 10 9 V0', V: 'M0 0 L5 14 L10 0',
+  W: 'M0 0 L2.5 14 L5 5 L7.5 14 L10 0', X: 'M0 0 L10 14 M10 0 L0 14', Y: 'M0 0 L5 7 L10 0 M5 7 V14', Z: 'M0 0 H10 L0 14 H10',
+}
+const glyphs = (text, cx, cy, ink, k = 3.1) => {
+  const gap = 5, w = 10 * k, total = text.length * w + (text.length - 1) * gap * k / 2
+  return '<g fill="none" stroke="' + ink + '" stroke-width="' + f(3.4 / k) + '" stroke-linecap="round" stroke-linejoin="round">' + [...text].map((ch, i) =>
+    '<path d="' + (GLYPH[ch] || GLYPH.X) + '" transform="translate(' + f(cx - total / 2 + i * (w + gap * k / 2)) + ' ' + f(cy - 7 * k) + ') scale(' + k + ')"/>').join('') + '</g>'
+}
 const polar = (r, deg, cx = 128, cy = 128) => [f(cx + r * Math.sin(deg * Math.PI / 180)), f(cy - r * Math.cos(deg * Math.PI / 180))]
 const poly = (pts) => 'M' + pts.map((p) => p.join(' ')).join(' L') + ' Z'
 const hex = (c) => /^#[0-9a-fA-F]{6}$/.test(c || '')
@@ -229,7 +244,7 @@ function countryBadge(o, owned, rarity, u) {
   out.push(`<circle cx="128" cy="128" r="110" fill="none" stroke="${ink}" stroke-width="5"/><circle cx="128" cy="128" r="99" fill="none" stroke="${ink}" stroke-width="1.8"/>`)
   out.push(`<circle cx="128" cy="128" r="85" fill="none" stroke="${ink}" stroke-width="1.5" stroke-dasharray="5 3.5" opacity="0.85"/>`)
   out.push(`<rect x="38" y="100" width="180" height="56" fill="${ink}" opacity="0.10"/><path d="M38 100 H218 M38 156 H218" stroke="${ink}" stroke-width="3"/>`)
-  out.push(`<text x="128" y="145" text-anchor="middle" font-size="48" font-weight="900" font-family="Arial, Helvetica, sans-serif" letter-spacing="7" fill="${ink}">${code}</text>`)
+  out.push(glyphs(code, 128, 128, ink))
   out.push(iconG(o.icon_key, 1.05, 128, 62, ink, 3.2))
   const tier = Math.max(1, Math.min(5, Number(o.tier) || 3))
   for (let i = 0; i < 5; i++) out.push(star(f(128 - 40 + i * 20), 184, 5.2, i < tier || !o.series ? ink : 'none', `stroke="${ink}" stroke-width="1"`))
@@ -318,6 +333,15 @@ export function renderBeanSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs>${defs}</defs>${body}</svg>`
 }
 
+// SVG → PNG：@resvg/resvg-js 是动态引入的；没安装时返回 null，调用方回退发 SVG
+let resvgMod
+async function toPng(svg, size) {
+  if (resvgMod === undefined) { try { resvgMod = (await import('@resvg/resvg-js')).Resvg } catch { resvgMod = null } }
+  if (!resvgMod) return null
+  return new resvgMod(svg, { fitTo: { mode: 'width', value: size } }).render().asPng()
+}
+const cache = new Map() // 路径 + 查询 → PNG；上限 400 张
+
 const prof = (b) => ((typeof b.profile === 'string' ? JSON.parse(b.profile || '{}') : b.profile) || {})
 
 /** 数据行 → 绘制参数 */
@@ -332,9 +356,20 @@ export function artOptions(b) {
  *   /badge-art/preview.svg?icon_key=&rarity=&category=&tier=&series=&color=&country_code=&state=
  *   /badge-art/level/<n>.svg?state=off        会员等级徽章（n = 等级）
  *   /badge-art/bean.svg                        旅豆币
- * 返回 SVG 字符串；路径不匹配返回 null；找不到勋章返回 ''（调用方回 404）。
+ * 以上路径把 .svg 换成 .png 即得 PNG（Buffer）。返回：SVG 字符串 / PNG Buffer；路径不匹配 null；找不到勋章 ''（调用方回 404）。
  */
 export async function serveBadgeArt(pathname, query) {
+  // .png：同一张图转成 PNG（?size=64~512，默认 256）；服务端没有转换能力时回退为 SVG 字符串
+  if (pathname.startsWith('/badge-art/') && pathname.endsWith('.png')) {
+    const svg = await serveBadgeArt(pathname.slice(0, -4) + '.svg', query)
+    if (!svg) return svg
+    const size = Math.max(64, Math.min(512, Number(query.get('size')) || 256))
+    const key = pathname + '?' + query.toString()
+    if (cache.has(key)) return cache.get(key)
+    const png = await toPng(svg, size)
+    if (png) { cache.set(key, png); if (cache.size > 400) cache.delete(cache.keys().next().value) }
+    return png || svg
+  }
   const owned = query.get('state') !== 'off'
   if (pathname === '/badge-art/bean.svg') return renderBeanSvg()
   const lm = /^\/badge-art\/level\/(\d{1,2})\.svg$/.exec(pathname)

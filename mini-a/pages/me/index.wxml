@@ -1,14 +1,17 @@
 <view class="hero">
   <block wx:if="{{user}}">
-    <view style="display:flex;align-items:center;gap:20rpx">
-      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-        <image class="avatar-img {{avatarUrl ? '' : 'avatar-empty'}}" src="{{avatarUrl}}" mode="aspectFill" />
-      </button>
-      <view style="flex:1;min-width:0">
+    <view class="me-card">
+      <view class="me-ring">
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-ph">{{initial}}</view>
+        </button>
+      </view>
+      <view class="me-main">
         <input class="nick-input" type="nickname" value="{{user.nickname}}" placeholder="填写昵称" bindblur="onNickname" />
-        <view class="sub2">{{user.levelName}} · 文旅数字身份</view>
+        <view class="me-chips"><text class="me-chip">{{user.levelName}}</text><text class="me-chip ghost">文旅数字身份</text></view>
         <view class="lv-bar" wx:if="{{user.levelHint}}"><view class="lv-fill" style="width:{{user.levelPct}}%"></view></view>
-        <view class="sub2" wx:if="{{user.levelHint}}" style="font-size:22rpx">{{user.levelHint}}</view>
+        <view class="me-hint" wx:if="{{user.levelHint}}">{{user.levelHint}}</view>
       </view>
       <image class="me-crest" wx:if="{{user.levelArt}}" src="{{user.levelArt}}" mode="aspectFit" />
     </view>
