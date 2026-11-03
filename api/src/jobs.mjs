@@ -3,6 +3,7 @@
 import { q, one } from './db.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
+import * as member from './domain/member.mjs'
 import * as pass from './domain/pass.mjs'
 import * as promo from './domain/promo.mjs'
 import * as group from './domain/group.mjs'
@@ -20,12 +21,7 @@ export async function completeOrder(orderNo) {
   // 返豆：账号冻结时不发，记为待补发，解冻后补发
   await bean.rebateOrder({ ...o, order_no: orderNo })
   const amt = Number(o.amount_pay)
-  await q('UPDATE user_account SET growth_value = growth_value + ? WHERE id = ?', [amt, o.user_id])
-  const th = [0, 2000, 10000, 50000]
-  const ua = await one('SELECT growth_value FROM user_account WHERE id = ?', [o.user_id])
-  await q('UPDATE user_account SET member_level = ? WHERE id = ?', [th.filter((t) => Number(ua.growth_value) >= t).length, o.user_id])
-  await q('INSERT INTO user_growth_log (user_id, delta, biz_type, biz_ref, after_val) VALUES (?,?,1,?,?)',
-    [o.user_id, amt, orderNo, Number(ua.growth_value)])
+  await member.addGrowth(o.user_id, amt, orderNo)
   await promo.createCommission(orderNo)
   // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
   await pass.attest('order', orderNo, {

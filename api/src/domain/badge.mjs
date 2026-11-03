@@ -3,11 +3,13 @@
 //   order_count  完成订单数 ≥ 阈值（订单状态 50 已完成）
 //   city_count   打卡城市数 ≥ 阈值（已核销或已完成订单的不同城市）
 //   review       发表评价数 ≥ 阈值
+//   note_count   已发布的旅行笔记数 ≥ 阈值
+//   level        会员等级 ≥ 阈值（等级见 member.mjs）
 // 触发点：订单完成（jobs.completeOrder / 后台调试完成）、游客写评价；后台可对某个勋章"按规则补发"存量用户。
 import { q, one, BizError } from '../db.mjs'
 import { attest } from './attest.mjs'
 
-export const AUTO_RULES = ['order_count', 'city_count', 'review']
+export const AUTO_RULES = ['order_count', 'city_count', 'review', 'note_count', 'level']
 const prof = (b) => ((typeof b.profile === 'string' ? JSON.parse(b.profile || '{}') : b.profile) || {})
 
 /** 用户在各自动规则上的当前数值 */
@@ -15,7 +17,18 @@ export async function metrics(userId) {
   const o = await one('SELECT COUNT(*) n FROM orders WHERE user_id = ? AND status = 50', [userId])
   const c = await one('SELECT COUNT(DISTINCT city_code) n FROM orders WHERE user_id = ? AND status IN (40, 50)', [userId])
   const r = await one('SELECT COUNT(*) n FROM review WHERE user_id = ?', [userId])
-  return { order_count: Number(o.n), city_count: Number(c.n), review: Number(r.n) }
+  const n = await one('SELECT COUNT(*) n FROM content_note WHERE user_id = ? AND status = 2', [userId])
+  const l = await one('SELECT member_level FROM user_account WHERE id = ?', [userId])
+  return { order_count: Number(o.n), city_count: Number(c.n), review: Number(r.n), note_count: Number(n.n), level: Number(l?.member_level || 1) }
+}
+
+/** 某枚勋章对该用户的达成进度（人工授予类返回 null） */
+export function progressOf(badge, m) {
+  if (!AUTO_RULES.includes(badge.rule_type)) return null
+  const need = Number(prof(badge).threshold) || 0
+  if (need <= 0) return null
+  const cur = Math.min(Number(m[badge.rule_type] || 0), need)
+  return { cur, need, pct: Math.floor(cur / need * 100) }
 }
 
 /**
@@ -74,6 +87,8 @@ export async function backfill(badgeId) {
     order_count: `SELECT user_id, COUNT(*) n FROM orders WHERE status = 50 GROUP BY user_id HAVING n >= ?`,
     city_count: `SELECT user_id, COUNT(DISTINCT city_code) n FROM orders WHERE status IN (40, 50) GROUP BY user_id HAVING n >= ?`,
     review: `SELECT user_id, COUNT(*) n FROM review GROUP BY user_id HAVING n >= ?`,
+    note_count: `SELECT user_id, COUNT(*) n FROM content_note WHERE status = 2 GROUP BY user_id HAVING n >= ?`,
+    level: `SELECT id AS user_id, member_level n FROM user_account WHERE member_level >= ?`,
   }
   const users = await q(SQL[b.rule_type], [th])
   let granted = 0, capped = 0

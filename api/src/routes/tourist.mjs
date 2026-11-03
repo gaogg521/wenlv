@@ -23,6 +23,8 @@ import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportD
 import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
+import * as member from '../domain/member.mjs'
+import * as badgeArt from '../domain/badge-art.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -291,11 +293,15 @@ const c = {
     const acc = await one('SELECT * FROM user_account WHERE id = ?', [u.uid])
     return {
       id: acc.id, nickname: acc.nickname, avatarUrl: acc.avatar_url, memberLevel: acc.member_level, growth: acc.growth_value,
-      levelThresholds: await cfgArr('member.level.thresholds'),
+      level: await member.progress(u.uid),
+      levelThresholds: (await member.levels()).map((l) => l.min),
       bean: await bean.balance(u.uid),
       passes: await count('SELECT COUNT(*) c FROM travel_pass WHERE user_id = ?', [u.uid]),
     }
   },
+
+  // 会员等级：当前等级 / 距下一级进度 / 全部等级与权益（来自参数中心，三个页面共用）
+  'GET /c/member': async (req) => member.progress(requireUser(req).uid),
 
   // 头像昵称填写能力（官方组件）：昵称过机审；头像走 base64 上传
   'POST /c/me/profile': async (req) => {
@@ -392,10 +398,16 @@ const cWithdraw = {
     const cfgs = await cfgAll()
     if (String(cfgs['feature.withdraw'] || '"on"').includes('off')) throw new BizError(1003, '提现入口维护中')
     const ov = await cWithdraw['GET /c/promote/overview'](req)
-    if (ov.withdrawable < 10000) throw new BizError(6001, '可提现余额不足 ¥100')
-    const id = await tx(async (c) => c.ins(
-      'INSERT INTO promoter_withdraw (promoter_id, amount, proposer_note) VALUES (?,?,?)',
-      [u.uid, ov.withdrawable, req.body.note || '']))
+    const minFen = await cfgNum('promoter.withdraw_min')
+    if (ov.withdrawable < minFen) throw new BizError(6001, `可提现余额不足 ¥${minFen / 100}`)
+    // 同一推广员同一时刻只能有一张待处理申请：锁推广员行后再查，避免连点 / 并发把同一笔余额申请多次
+    const id = await tx(async (c) => {
+      await c.one('SELECT user_id FROM promoter WHERE user_id = ? FOR UPDATE', [u.uid])
+      const pend = await c.one('SELECT COUNT(*) n FROM promoter_withdraw WHERE promoter_id = ? AND status = 0', [u.uid])
+      if (Number(pend.n) > 0) throw new BizError(6001, '已有待处理的提现申请，请等待审核')
+      return c.ins('INSERT INTO promoter_withdraw (promoter_id, amount, proposer_note) VALUES (?,?,?)',
+        [u.uid, ov.withdrawable, req.body.note || ''])
+    })
     return { id, amount: ov.withdrawable }
   },
 }
@@ -405,7 +417,7 @@ const cWithdraw = {
 const LEXICON = {
   T1: {
     attestation: '可信记录', attest_list: '可信记录流水', attest_empty: '暂无记录',
-    did: '文旅数字身份', pass: '权益凭证', badge: '数字徽章', bean: '旅豆',
+    did: '文旅数字身份', pass: '权益凭证', badge: '勋章', bean: '旅豆', level: '会员等级', growth: '成长值',
     note: '记录仅用于权益与贡献核算',
     ledger_sealed: '今日账本已封存',
   },
@@ -416,7 +428,21 @@ const LEXICON = {
   T3: {
     chain: '向往自由链', pass: '链上权益凭证', attest: '联盟链存证',
   },
-  updatedAt: '2026-10-26',
+  // 后台「术语映射」页的唯一数据源：[小程序合规词, 后台/存证口径, 使用边界]
+  TERMS: [
+    ['旅豆', '积分账本（双边记账 + 发行总量哨兵）', '小程序端一律叫「旅豆」；后台台账语境可称积分'],
+    ['入园凭证 / 权益凭证', '权益凭证（凭证编号即存证业务单号）', '小程序不出现 NFT / 资产类用语'],
+    ['可信记录', '存证事件（attest_event）', '对外讲「可信记录」；后台展示事件、批次与 Merkle 根'],
+    ['校验码 / 今日账本已封存', 'Merkle 根 / 日终封存（bean_day_root）', '小程序只展示校验码与「已封存」，不出现根哈希词汇'],
+    ['积分发行台账', '按预算批次发行', '发行受总量上限哨兵约束，严禁超发'],
+    ['勋章', '数字勋章（不可转让）', '小程序端统一叫「勋章」；勋章墙显示已点亮 / 总数；不可转让、不可交易'],
+    ['会员等级 / 成长值', '等级体系参数（参数中心 member.levels：等级名 / 门槛 / 返豆加成 / 权益）', '等级名、门槛、返豆加成均由后台配置，小程序只读展示'],
+    ['权益账户', '用户旅豆账户 + 权益视图', '仅后台可见；小程序端无「钱包 / 资产」概念'],
+    ['共创分润', '分润台账（每期封存）', '小程序端只显示分润金额与状态'],
+    ['推广服务商', '推广节点', '禁止层级计酬；仅内部运营语境'],
+    ['文旅数字身份', '可携出旅行凭证（VC-JWT）', '小程序端叫「数字身份」，不出现 DID / 凭证签发等词'],
+  ],
+  updatedAt: '2026-11-03',
 }
 
 const lexicon = {
@@ -637,7 +663,10 @@ const cIdentity = {
     const u = requireUser(req)
     const acc = await one('SELECT nickname, member_level, growth_value, created_at FROM user_account WHERE id = ?', [u.uid])
     const passes = await q('SELECT id, name, kind, status, valid_to, created_at FROM travel_pass WHERE user_id = ? ORDER BY id DESC LIMIT 20', [u.uid])
-    // 勋章墙：全部勋章（已获得点亮、未获得置灰并给出获得条件），有效期从授予日起算
+    // 勋章墙：全部勋章（已获得点亮、未获得置灰并给出获得条件与进度），有效期从授予日起算
+    // 先按自动规则补一次评估：笔记发布、等级变化等没有单独触发点的规则，在打开勋章墙时也能及时点亮
+    const fresh = await badgeDomain.evaluateSafe(u.uid)
+    const mtr = await badgeDomain.metrics(u.uid)
     const defs = await q('SELECT * FROM badge')
     const owned = await q('SELECT badge_id, MAX(granted_at) granted_at FROM user_badge WHERE user_id = ? GROUP BY badge_id', [u.uid])
     const badges = defs.map((b) => {
@@ -645,7 +674,10 @@ const cIdentity = {
       const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
       const days = Number(pp.valid_days) || 0
       const expireAt = got && days ? new Date(new Date(String(got.granted_at).replace(' ', 'T') + '+08:00').getTime() + days * 86400000).toISOString().slice(0, 10) : null
-      return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
+      const cat = badgeArt.CATEGORIES[pp.category] ? pp.category : 'special'
+      const art = apiImg('/badge-art/' + b.id + '.svg?state=' + (got ? 'on' : 'off'), req)
+      return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, art, category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label, series: pp.series || '', tier: Number(pp.tier) || 0,
+        progress: got ? null : badgeDomain.progressOf(b, mtr), rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
         color: pp.color || null, description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0,
         owned: !!got, granted_at: got ? got.granted_at : null, expireAt, expired: !!(expireAt && expireAt < bizDay()) }
     }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
@@ -655,8 +687,9 @@ const cIdentity = {
       const e = await one("SELECT payload_hash, status, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ? ORDER BY version_no DESC, id DESC LIMIT 1", [o.order_no]) // 同一订单有支付(30)与完成(50)两个版本，取最新
       if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
-    return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, growth: acc.growth_value, joinedAt: acc.created_at },
-      passes, badges, attestations,
+    const lvl = await member.progress(u.uid)
+    return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, levelName: lvl.name, growth: lvl.points, joinedAt: acc.created_at, level: lvl },
+      passes, badges, fresh, attestations,
       statement: '消费与权益的可信记录，作为贡献分与会员成长的依据' }
   },
   // 数字身份凭证（VC-JWT）：用户可取走、可出示、他方可验。微信内不展示字样（D6），由 B/G 端与生态 H5 使用

@@ -222,7 +222,11 @@ page {
 .badge-wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16rpx; margin: 0 24rpx 24rpx; }
 .bdg { --bc: #b8b2a7; background: #fff; border-radius: 20rpx; padding: 22rpx 10rpx; text-align: center; box-shadow: var(--shadow); filter: grayscale(1); opacity: .55; }
 .bdg.on { filter: none; opacity: 1; border: 2rpx solid var(--bc); }
-.bdg-img { width: 96rpx; height: 96rpx; }
+.bdg-img { width: 128rpx; height: 128rpx; }
+.bdg-group { margin: 12rpx 28rpx 8rpx; font-size: 26rpx; font-weight: 700; color: var(--ink, #2a2118); }
+.bdg-group .more { margin-left: 12rpx; font-weight: 400; font-size: 22rpx; color: var(--sub); }
+.bdg-prog { height: 8rpx; border-radius: 4rpx; background: #eee6da; margin: 8rpx 14rpx 0; overflow: hidden; }
+.bdg-prog-fill { height: 100%; background: #e87722; border-radius: 4rpx; }
 .bdg-ico { font-size: 64rpx; line-height: 96rpx; }
 .bdg-name { font-size: 24rpx; font-weight: 700; margin-top: 8rpx; }
 .bdg-r { font-size: 20rpx; color: var(--sub); }
@@ -267,3 +271,8 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .dt-bottom-price { color: #c64e28; }
 .book-bar { border-radius: 32rpx; box-shadow: 0 16rpx 40rpx rgba(58,46,31,.1); }
 .bean-rule { border-radius: 24rpx; box-shadow: 0 12rpx 30rpx rgba(58,46,31,.1); }
+
+/* 会员等级进度条 */
+.lv-bar { position: relative; height: 10rpx; border-radius: 6rpx; background: rgba(255,255,255,.28); margin-top: 16rpx; overflow: hidden; }
+.lv-fill { height: 100%; border-radius: 6rpx; background: #ffe08a; transition: width .4s; }
+.lv-bar.dark { background: #f0e6da; } .lv-bar.dark .lv-fill { background: var(--brand, #e87722); }

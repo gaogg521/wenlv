@@ -33,6 +33,15 @@ async function main() {
     await q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')
+  // 清库会连「出厂数据」一起删掉：补回 V30 小程序装修默认行与 V40 预置勋章（两份迁移都是幂等的），
+  // 否则灌完演示数据后 entity-engine 会缺 site_config、勋章墙是空的
+  {
+    const mysql = (await import('mysql2/promise')).default
+    const c = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASS || 'root', database: process.env.DB_NAME, multipleStatements: true, charset: 'utf8mb4_0900_ai_ci' })
+    for (const m of ['V30__site_config.sql', 'V40__member_levels_badge_set.sql']) await c.query(fs.readFileSync(new URL('../db/migration/' + m, import.meta.url), 'utf8'))
+    await c.end()
+  }
   await q('SET FOREIGN_KEY_CHECKS = 1')
   if (Number((await q('SELECT COUNT(*) c FROM admin_user'))[0].c) === 0) {
     const pw = process.env.ADMIN_INIT_PASSWORD || 'admin123'
@@ -152,10 +161,10 @@ async function main() {
   ok(v.ok, '核销成功')
 
   // 观察期结束 → 返豆/佣金（真实=定时任务；剧本用后台触发）
-  step('系统-jobs', '7 天观察期结束 → 返豆 278 + 陈姐佣金 12.90 元 + 小满升旅行家')
+  step('系统-jobs', '7 天观察期结束 → 返豆 278 + 陈姐佣金 12.90 元 + 成长值 +278（距「旅行家」还差一段）')
   await api('POST', '/admin/dev/complete', { orderNo: order.orderNo }, admin)
   const me = await api('GET', '/c/me', null, buyer)
-  ok(me.bean === 278 && me.memberLevel >= 2, '返豆278·等级≥旅行家')
+  ok(me.bean === 278 && me.level.points === 278 && me.level.next && me.level.next.gapPoints > 0, '返豆278·成长值278·有升级进度')
 
   // 游客评价（核销完成后一单一评 · 服务端机审）
   step('游客-小满', '写真实评价（5 星 · 一单一评）')

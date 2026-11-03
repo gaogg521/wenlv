@@ -8,6 +8,7 @@ import { routes } from './routes.mjs'
 import { q, one, count } from './db.mjs'
 import { hashPassword } from './auth.mjs'
 import { isLive } from './domain/wxpay.mjs'
+import { serveBadgeArt } from './domain/badge-art.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8080)
@@ -86,6 +87,15 @@ const server = http.createServer(async (req, res) => {
     if (file.startsWith(path.join(__dirname, '..', 'static')) && fs.existsSync(file) && fs.statSync(file).isFile()) {
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' })
       return res.end(fs.readFileSync(file))
+    }
+  }
+  // 静态：/badge-art/<勋章id>.svg → 服务端生成的勋章图形（公开，不含任何用户数据；?state=off 为未获得灰阶）
+  if (req.method === 'GET' && pathname.startsWith('/badge-art/')) {
+    const svg = await serveBadgeArt(pathname, url.searchParams)
+    if (svg !== null) {
+      if (!svg) { res.writeHead(404); return res.end() }
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' })
+      return res.end(svg)
     }
   }
   if (req.method === 'GET' && pathname === '/c/health') {

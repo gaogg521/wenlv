@@ -3,6 +3,7 @@ import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import { attest as attestCore } from './attest.mjs'
 import { isUserFrozen } from './promo.mjs'
+import * as member from './member.mjs'
 
 export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7 }
 export const SENTINEL_PLATFORM = 999999000001n
@@ -24,7 +25,8 @@ export async function balance(userId) {
   return m ? Number(m.balance) : 0
 }
 
-export const rebateOf = async (payFen) => Math.round(payFen / 10 * (await cfgNum('bean.order_rate')))
+// bonusBp：会员等级带来的返豆加成（bp，叠加在基础返豆率上），见 member.mjs
+export const rebateOf = async (payFen, bonusBp = 0) => Math.round(payFen / 10 * ((await cfgNum('bean.order_rate')) + bonusBp / 10000))
 export const clampDeduct = async (wanted, orderFen) =>
   Math.max(0, Math.min(wanted, Math.floor((orderFen * (await cfgNum('bean.deduct_max_pct'))) / 10)))
 
@@ -120,7 +122,7 @@ export async function rebateOrder(o) {
   }
   const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
   if (!budget) return 0
-  const rebate = await rebateOf(Number(o.amount_pay))
+  const rebate = await rebateOf(Number(o.amount_pay), await member.rebateBonusBp(o.user_id))
   if (rebate > 0) await grant(Number(o.user_id), rebate, BIZ.REBATE, o.order_no, budget.id)
   return rebate
 }
@@ -141,7 +143,7 @@ export async function releaseDeferredRebates(userId) {
       if (!o || !Number(o.bean_rebate_deferred)) return
       const done = await c.one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
         WHERE a.user_id = ? AND l.biz_type = ? AND l.direction = 1 AND l.biz_ref = ? LIMIT 1`, [userId, BIZ.REBATE, orderNo])
-      const rebate = await rebateOf(Number(o.amount_pay))
+      const rebate = await rebateOf(Number(o.amount_pay), await member.rebateBonusBp(userId))
       if (!done && Number(o.status) === 50 && rebate > 0) { await grant(Number(userId), rebate, BIZ.REBATE, orderNo, budget.id, c); n++ }
       await c.upd('UPDATE orders SET bean_rebate_deferred = 0 WHERE order_no = ?', [orderNo])
     })

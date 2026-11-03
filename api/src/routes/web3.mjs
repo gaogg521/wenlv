@@ -47,7 +47,7 @@ const web3 = {
       batches, queue, recent, dayRoots,
       chain: chain.chainStatus(),
       // 语义分档：NOOP 期一律"已打包·待锚定"，绝不出现"已上链"
-      chainMode: chain.chainMode() === 'real' ? '已接入链数根：新批次真实锚定' : 'NOOP：哈希与 Merkle 根实时落库，批次停在「已打包·待锚定」',
+      chainMode: chain.chainMode() === 'real' ? `已接入${chain.chainStatus().label}：新批次真实锚定` : 'NOOP：哈希与 Merkle 根实时落库，批次停在「已打包·待锚定」' // 文案跟着当前链走，不能写死某一家,
     }
   },
 
@@ -166,7 +166,7 @@ const web3 = {
       beanGranted: beanFlow.granted, beanConsumed: beanFlow.consumed,
       chain: chain.chainStatus(),
       chainMode: chain.chainMode() === 'real'
-        ? '已接入链数根：批次真实锚定'
+        ? `已接入${chain.chainStatus().label}：批次真实锚定`
         : 'NOOP（哈希与根实时落库；批次停在「已打包·待锚定」，凭据到位后补锚）',
       trustPath: ['订单支付', '权益核销', '勋章发放', '存证报告'],
       recentEvents: events,
