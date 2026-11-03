@@ -344,13 +344,15 @@ const S = {
         { k: 'icon_img', label: '勋章图', type: 'image', help: '透明底 PNG，256×256' },
         { k: 'rarity', label: '稀有度', type: 'select', options: [['common', '普通'], ['rare', '稀有'], ['epic', '史诗'], ['legend', '传说']], dflt: 'common' },
         { k: 'color', label: '主题色', type: 'color', help: '不填则按稀有度取色（普通铜 / 稀有银蓝 / 史诗紫金 / 传说金）' },
-        { k: 'category', label: '勋章类别', type: 'select', options: [['journey', '旅程'], ['explore', '探索'], ['creator', '创作'], ['growth', '成长'], ['special', '特别']], dflt: 'special', help: '决定默认图形的外形，也是小程序勋章墙的分组' },
+        { k: 'category', label: '徽章类别', type: 'select', options: [['level', '会员等级'], ['member', '会员荣誉'], ['city', '城市徽章'], ['country', '国家徽章'], ['trusted', '链上勋章'], ['journey', '旅程'], ['explore', '足迹'], ['creator', '创作'], ['special', '特别']], dflt: 'special', help: '每类有自己的造型与材质：会员等级=带翼奖章（铜银金钻随等级）、会员荣誉=月桂缎带、城市=朱红印章、国家=护照出入境章、链上勋章=玻璃质感（小程序里叫「可信勋章」）；也决定勋章墙分组' },
+        { k: 'city_code', label: '城市（城市徽章）', type: 'select', options: DICT.city, help: '规则类型选「城市到访」时必填，按该城市的已核销 / 已完成订单统计' },
+        { k: 'country_code', label: '国家代码（国家徽章）', type: 'text', max: 2, pattern: '^[A-Za-z]{2}$', patternMsg: 'ISO 两位字母，如 CN、JP', help: '规则类型选「国家到访」时必填；城市属于哪个国家见参数中心 city.country（缺省 CN）；也是国家印章中央显示的代码' },
         { k: 'series', label: '所属系列', type: 'text', max: 16, help: '同系列勋章在勋章墙里连排；留空为单枚勋章' },
         { k: 'tier', label: '系列阶数', type: 'int', min: 0, max: 5, help: '1 = 入门阶，数字越大越难；系列勋章图形底部会标出阶数。非系列填 0' },
         { k: 'description', label: '勋章故事', type: 'rich', span: 2 },
       ] },
       { title: '获得规则', fields: [
-        { k: 'rule_type', label: '规则类型', type: 'select', store: 'col', options: [['manual', '人工授予'], ['order_count', '完成订单数'], ['city_count', '打卡城市数'], ['review', '发表评价'], ['note_count', '发布旅行笔记'], ['level', '会员等级']], dflt: 'manual' },
+        { k: 'rule_type', label: '规则类型', type: 'select', store: 'col', options: [['manual', '人工授予'], ['order_count', '完成订单数'], ['city_count', '打卡城市数'], ['review', '发表评价'], ['note_count', '发布旅行笔记'], ['level', '会员等级'], ['city_visit', '城市到访'], ['country_visit', '国家到访'], ['sealed_count', '订单封存数（链上勋章）'], ['member_days', '注册天数']], dflt: 'manual' },
         { k: 'rule_desc', label: '规则说明（游客可见）', type: 'text', store: 'col', max: 120, span: 2 },
         { k: 'threshold', label: '达成阈值', type: 'int', min: 1, max: 10000, help: '自动规则必填：订单完成或写评价时自动检查并发放；改阈值后可在列表点「按规则补发」' },
         { k: 'max_issue', label: '发行上限', type: 'int', min: 0, max: 10000000, help: '0=不限' },
@@ -360,6 +362,8 @@ const S = {
     ],
     async validate(v) {
       if (v.rule_type && v.rule_type !== 'manual' && !(Number(v.threshold) > 0)) return { threshold: '自动规则需要设置达成阈值' }
+      if (v.rule_type === 'city_visit' && !v.city_code) return { city_code: '城市徽章需要选择城市' }
+      if (v.rule_type === 'country_visit' && !/^[A-Za-z]{2}$/.test(String(v.country_code || ''))) return { country_code: '国家徽章需要填两位国家代码' }
     },
     async create(c, v) { return c.ins('INSERT INTO badge (name, icon_key, rule_desc, rule_type) VALUES (?,?,?,?)', [v.name, v.icon_key, v.rule_desc || '', v.rule_type || 'manual']) },
   },
@@ -903,7 +907,7 @@ const PUBLIC = {
   scenic: ['name', 'alias', 'scenic_level', 'cover', 'gallery', 'intro', 'address', 'geo', 'open_hours', 'tickets', 'traffic'],
   // 领队姓名电话只在已支付订单里给（见 sessionForOrder）
   session: ['sign_deadline', 'gather_time', 'end_time', 'vehicle', 'note'],
-  badge: ['name', 'icon_key', 'icon_img', 'rarity', 'color', 'category', 'series', 'tier', 'description', 'rule_desc', 'valid_days', 'display_order'],
+  badge: ['name', 'icon_key', 'icon_img', 'rarity', 'color', 'category', 'series', 'tier', 'city_code', 'country_code', 'description', 'rule_desc', 'valid_days', 'display_order'],
   task: ['title', 'category', 'product_id', 'brief', 'cover_img', 'tags', 'platforms', 'rich_brief', 'must_mention', 'forbidden',
     'min_words', 'min_images', 'references', 'review_rules', 'reward_beans', 'cash_reward', 'max_participants', 'deadline'],
 }

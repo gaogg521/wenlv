@@ -129,6 +129,8 @@ await t('游客侧"可信记录"：该订单已封存，校验码取最新版本
   assert.ok(a, '游客身份页应有该订单的可信记录'); assert.equal(a.sealed, true)
   const latest = await one("SELECT payload_hash FROM attest_event WHERE biz_type='order' AND biz_ref=? ORDER BY version_no DESC, id DESC LIMIT 1", [full.order_no])
   assert.equal(a.code, String(latest.payload_hash).slice(0, 8).toUpperCase(), '校验码应是最新版本的')
+  // 打开身份页会按规则补评勋章（城市 / 国家 / 可信勋章等），新发放的勋章也会进存证队列：这里把它们一并打包锚定，保持「没有事件停在中间状态」
+  await runChain()
 })
 await t('后台总览 / 存证中心：已锚定数 = 数据库，待处理为 0', async () => {
   const ov = ok(await call('GET', '/admin/web3/overview', null, A)); const e = await one('SELECT COUNT(*) n, SUM(status = 2) a FROM attest_event'); const b = await one('SELECT COUNT(*) n, SUM(status = 2) a FROM attest_batch')

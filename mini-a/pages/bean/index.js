@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 Page({
-  data: { bean: null, ledger: [], level: 1, levels: [], levelPct: 0, levelHint: '', bizName: { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '滚动过期', 7: '风控调整' } },
+  data: { bean: null, ledger: [], level: 1, levels: [], levelPct: 0, levelHint: '', levelName: '', levelArt: '', glyph: { 1: '返', 2: '任', 3: '文', 4: '抵', 5: '退', 6: '期', 7: '调' }, bizName: { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '滚动过期', 7: '风控调整' } },
   retry() { this.onShow() },
   onShow() {
     this.setData({ error: '' })
@@ -11,11 +11,11 @@ Page({
     api.getMe().then((m) => {
       const lv = m.level || {}
       this.setData({
-        level: m.memberLevel || 1, levelPct: lv.pct || 0,
+        level: m.memberLevel || 1, levelPct: lv.pct || 0, levelName: lv.name || '', levelArt: lv.art || '',
         levelHint: lv.next ? '成长值 ' + Number(lv.points).toLocaleString() + '，再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 升级「' + lv.next.name + '」' : '成长值 ' + Number(lv.points || 0).toLocaleString() + '，已是最高等级',
         levels: (lv.levels || []).map((l) => ({ ...l, need: l.points ? '成长值 ' + Number(l.points).toLocaleString() : '注册即享', perkText: (l.perks || []).join(' · ') })),
       })
     }).catch(() => {})
-    api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: ledger.slice(0, 10) })).catch(() => {})
+    api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: ledger.slice(0, 20) })).catch(() => {})
   }
 })

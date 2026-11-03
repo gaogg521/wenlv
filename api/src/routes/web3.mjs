@@ -188,7 +188,8 @@ const web3 = {
   // 勋章资产发行：定义列表 + 发放
   'GET /admin/web3/badges': async (req) => {
     await requireAdmin(req)
-    const defs = await q(`SELECT b.*, (SELECT COUNT(*) FROM user_badge ub WHERE ub.badge_id = b.id) granted
+    const defs = await q(`SELECT b.*, (SELECT COUNT(*) FROM user_badge ub WHERE ub.badge_id = b.id) granted,
+      (SELECT COUNT(*) FROM attest_event e WHERE e.biz_type = 'badge' AND e.biz_ref LIKE CONCAT('badge-%-', b.id) AND e.status = 2) anchored
       FROM badge b ORDER BY b.id`)
     const recent = await q(`SELECT ub.user_id, u.nickname, b.name, ub.granted_at FROM user_badge ub
       JOIN user_account u ON u.id = ub.user_id JOIN badge b ON b.id = ub.badge_id ORDER BY ub.granted_at DESC LIMIT 20`)

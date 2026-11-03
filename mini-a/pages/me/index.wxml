@@ -4,12 +4,13 @@
       <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
         <image class="avatar-img {{avatarUrl ? '' : 'avatar-empty'}}" src="{{avatarUrl}}" mode="aspectFill" />
       </button>
-      <view>
+      <view style="flex:1;min-width:0">
         <input class="nick-input" type="nickname" value="{{user.nickname}}" placeholder="填写昵称" bindblur="onNickname" />
         <view class="sub2">{{user.levelName}} · 文旅数字身份</view>
         <view class="lv-bar" wx:if="{{user.levelHint}}"><view class="lv-fill" style="width:{{user.levelPct}}%"></view></view>
         <view class="sub2" wx:if="{{user.levelHint}}" style="font-size:22rpx">{{user.levelHint}}</view>
       </view>
+      <image class="me-crest" wx:if="{{user.levelArt}}" src="{{user.levelArt}}" mode="aspectFit" />
     </view>
   </block>
   <block wx:else>

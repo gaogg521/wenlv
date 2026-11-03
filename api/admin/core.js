@@ -35,9 +35,9 @@ const NAV = [
   ['商户与资源', [['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['小程序', [['miniapp', '装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
   ['用户与内容', [['users', '用户中心', 'promoters'], ['content', '内容审核', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content'], ['promoters', '推广服务商', 'promoters'], ['kyc', '实名认证', 'audit']]],
-  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['badges', '勋章发行', 'flag'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
+  ['可信存证', [['web3dash', '链路总览', 'eco'], ['chainhub', '链接入中心', 'sys'], ['attest', '存证中心', 'eco'], ['chainassets', '链与资产', 'sys'], ['pointassets', '积分发行台账', 'budgets'], ['wallets', '权益账户', 'orders'], ['vc', '数字身份', 'kyc'], ['terms', '术语映射', 'flag']]],
   ['风控与审计', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit']]],
-  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
+  ['系统设置', [['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['badges', '徽章管理', 'flag'], ['security', '安全中心', 'risk'], ['system', '运维控制台', 'sys']]],
 ]
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',

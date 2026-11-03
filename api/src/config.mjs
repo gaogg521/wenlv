@@ -16,7 +16,7 @@ export const DEFAULTS = {
   'pass.code_window': '60', 'commission.settle_delay_days': '7', 'settlement.weekday': '1', 'settlement.refund_fee_merchant_pct': '0', 'settlement.split_fulfill': '0.58', 'settlement.split_service': '0.12', 'settlement.split_beanbudget': '0.05',
   'budget.approval.l1': '300000', 'budget.approval.l2': '800000', 'budget.fuse_pct': '0.25',
   'budget.forecast.warn': '[0.25,0.50]',
-  'city.initial': '["310118","320508"]', 'channel.initial': '["main"]',
+  'city.initial': '["310118","320508"]', 'city.country': '{"310118":"CN","310000":"CN","320508":"CN","330500":"CN","330523":"CN"}', 'channel.initial': '["main"]',
 }
 
 // 仅展示元数据，不改变参数键、值、单位或审批规则；新增参数应同时补名称。
@@ -39,7 +39,7 @@ export const CONFIG_NAMES = {
   'settlement.split_service': '平台服务费比例', 'settlement.split_beanbudget': '旅豆预算比例',
   'budget.approval.l1': '预算一级审批额度', 'budget.approval.l2': '预算二级审批额度',
   'budget.fuse_pct': '预算超支熔断线', 'budget.forecast.warn': '预算预测预警阈值',
-  'city.initial': '初始开放城市', 'channel.initial': '初始主题频道',
+  'city.initial': '初始开放城市', 'city.country': '城市所属国家', 'channel.initial': '初始主题频道',
   'admin.mfa.mode': '后台多因素认证策略', 'feature.city.320508': '苏州姑苏开城开关',
   'feature.create': '创作中心开关', 'feature.promo': '推广中心开关',
   'feature.script': '剧本闯关开关', 'feature.shop': '商城入口开关', 'feature.withdraw': '佣金提现开关',

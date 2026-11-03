@@ -276,3 +276,57 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .lv-bar { position: relative; height: 10rpx; border-radius: 6rpx; background: rgba(255,255,255,.28); margin-top: 16rpx; overflow: hidden; }
 .lv-fill { height: 100%; border-radius: 6rpx; background: #ffe08a; transition: width .4s; }
 .lv-bar.dark { background: #f0e6da; } .lv-bar.dark .lv-fill { background: var(--brand, #e87722); }
+
+/* 旅豆页（重设计）：深色金边卡片 + 旅豆币 + 本月收支 */
+.bn-hero { background: linear-gradient(150deg, #3a2410 0%, #6b4313 55%, #b07a1c 100%); color: #fff; padding: 36rpx 32rpx 30rpx; border-radius: 0 0 44rpx 44rpx; position: relative; overflow: hidden; box-shadow: 0 16rpx 40rpx rgba(80,50,10,.28); }
+.bn-hero::before { content: ""; position: absolute; right: -80rpx; top: -80rpx; width: 360rpx; height: 360rpx; border-radius: 50%; background: radial-gradient(circle, rgba(255,226,140,.35), rgba(255,226,140,0) 70%); }
+.bn-top { display: flex; align-items: center; justify-content: space-between; position: relative; }
+.bn-label { font-size: 26rpx; opacity: .82; letter-spacing: 2rpx; }
+.bn-num { font-size: 96rpx; font-weight: 800; line-height: 1.15; background: linear-gradient(180deg, #fff8d6, #f6d35a); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 1rpx; }
+.bn-sub { font-size: 22rpx; opacity: .8; margin-top: 4rpx; }
+.bn-coin { width: 210rpx; height: 210rpx; margin-right: 6rpx; transform: rotate(-10deg); filter: drop-shadow(0 10rpx 18rpx rgba(0,0,0,.35)); }
+.bn-chips { display: flex; gap: 14rpx; margin-top: 26rpx; position: relative; }
+.bn-chip { flex: 1; background: rgba(255,255,255,.12); border: 1rpx solid rgba(255,226,140,.35); border-radius: 18rpx; padding: 16rpx 10rpx; text-align: center; }
+.bn-chip.warn { background: rgba(255,170,60,.22); border-color: rgba(255,200,120,.7); }
+.bn-cv { font-size: 30rpx; font-weight: 700; color: #ffe9a8; }
+.bn-cl { font-size: 20rpx; opacity: .78; margin-top: 2rpx; }
+.bn-rules { display: flex; gap: 12rpx; margin: 22rpx 24rpx 6rpx; }
+.bn-rule { flex: 1; background: #fff; border-radius: 18rpx; padding: 16rpx 8rpx; text-align: center; box-shadow: 0 6rpx 20rpx rgba(58,46,31,.08); display: flex; flex-direction: column; }
+.bn-rv { font-size: 24rpx; font-weight: 700; color: var(--ink); }
+.bn-rl { font-size: 20rpx; color: var(--sub); margin-top: 4rpx; }
+.bn-level { padding-top: 22rpx; }
+.bn-lv-top { display: flex; align-items: center; gap: 20rpx; padding-bottom: 18rpx; border-bottom: 1rpx solid var(--line); }
+.bn-crest { width: 150rpx; height: 150rpx; flex-shrink: 0; }
+.bn-lv-info { flex: 1; }
+.bn-lv-name { font-size: 32rpx; font-weight: 800; color: var(--ink); }
+.bn-lv-hint { font-size: 22rpx; color: var(--sub); margin: 4rpx 0 6rpx; }
+.bn-lv-row { display: flex; align-items: center; gap: 16rpx; padding: 14rpx 0; border-bottom: 1rpx solid var(--line); opacity: .6; }
+.bn-lv-row.on { opacity: 1; }
+.bn-lv-row:last-child { border-bottom: none; }
+.bn-lv-ico { width: 84rpx; height: 84rpx; flex-shrink: 0; }
+.bn-lv-txt { flex: 1; }
+.bn-lv-n { font-size: 26rpx; font-weight: 700; }
+.bn-led { display: flex; align-items: center; gap: 18rpx; padding: 16rpx 0; border-bottom: 1rpx solid var(--line); }
+.bn-led:last-child { border-bottom: none; }
+.bn-ico { width: 64rpx; height: 64rpx; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26rpx; font-weight: 700; flex-shrink: 0; }
+.bn-ico.in { background: #e3f6ec; color: #1f9d55; }
+.bn-ico.out { background: #fdeadf; color: #d9631f; }
+.bn-led-txt { flex: 1; }
+.bn-led-n { font-weight: 600; font-size: 26rpx; }
+.bn-led-amt { font-size: 30rpx; font-weight: 700; }
+.bn-led-amt.in { color: #1f9d55; } .bn-led-amt.out { color: #d9631f; }
+/* 勋章墙：封存标记 / 可信勋章分组 */
+.bdg { position: relative; }
+.bdg-seal { position: absolute; right: 10rpx; top: 10rpx; width: 34rpx; height: 34rpx; border-radius: 50%; background: #0b1230; color: #5ef0ff; font-size: 20rpx; line-height: 34rpx; text-align: center; border: 2rpx solid #8a6bff; }
+.bdg-group.g-trusted { color: #1d2a6e; }
+.bdg-tip { font-size: 21rpx; color: var(--sub); margin: -2rpx 28rpx 10rpx; }
+.me-crest { width: 104rpx; height: 104rpx; margin-left: auto; flex-shrink: 0; }
+.hero-crest { position: absolute; right: 30rpx; top: 26rpx; width: 150rpx; height: 150rpx; }
+/* 勋章墙：一行 4 枚，图形缩小，名称单行省略（全名在点开的详情里） */
+.badge-wall { grid-template-columns: repeat(4, 1fr); gap: 12rpx; margin: 0 20rpx 20rpx; }
+.bdg { padding: 14rpx 4rpx 12rpx; border-radius: 16rpx; }
+.bdg-img { width: 100rpx; height: 100rpx; }
+.bdg-name { font-size: 21rpx; margin-top: 4rpx; padding: 0 4rpx; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bdg-r { font-size: 18rpx; }
+.bdg-prog { margin: 6rpx 10rpx 0; height: 6rpx; }
+.bdg-seal { right: 6rpx; top: 6rpx; width: 28rpx; height: 28rpx; font-size: 17rpx; line-height: 28rpx; }
