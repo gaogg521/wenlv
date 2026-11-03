@@ -19,8 +19,11 @@ export const CATEGORIES = {
   explore: { label: '足迹', adminLabel: '足迹' },
   creator: { label: '创作', adminLabel: '创作' },
   special: { label: '特别', adminLabel: '特别' },
+  mlevel: { label: '商户等级', adminLabel: '商户等级' }, // 商户端：门楼招牌
+  mhonor: { label: '经营荣誉', adminLabel: '经营荣誉' }, // 商户端：花结奖章
 }
-export const CATEGORY_ORDER = ['level', 'member', 'city', 'country', 'trusted', 'journey', 'explore', 'creator', 'special']
+export const CATEGORY_ORDER = ['level', 'member', 'city', 'country', 'trusted', 'journey', 'explore', 'creator', 'special'] // 游客端勋章墙
+export const MERCHANT_CATEGORY_ORDER = ['mlevel', 'mhonor', 'trusted'] // 商户端勋章墙
 export const RARITIES = { common: '普通', rare: '稀有', epic: '史诗', legend: '传说' }
 
 const METAL = {
@@ -61,6 +64,11 @@ const ICONS = {
   plane: '<path d="M5 26 L43 8 L35 41 L24 31 L18 39 L18 29 Z"/>',
   seal: '<circle cx="24" cy="24" r="15"/><path d="M16 24 L22 30 L33 18"/>',
   node: '<circle cx="24" cy="12" r="4"/><circle cx="12" cy="34" r="4"/><circle cx="36" cy="34" r="4"/><path d="M22 15 L14 31 M26 15 L34 31 M16 34 H32"/>',
+  store: '<path d="M6 18 L10 8 H38 L42 18 Z"/><path d="M8 18 V40 H40 V18"/><path d="M6 18 q4 6 9 0 q4 6 9 0 q4 6 9 0 q4 6 9 0"/><path d="M20 40 V28 H28 V40"/>',
+  trend: '<path d="M6 38 L18 24 L26 31 L42 10"/><path d="M32 10 H42 V20"/>',
+  thumb: '<path d="M10 22 H18 V40 H10 Z"/><path d="M18 24 L25 9 C30 9 30 15 28 20 H40 C42 20 43 22 42 25 L39 37 C38.5 39 37 40 35 40 H18"/>',
+  calendar: '<rect x="7" y="11" width="34" height="30" rx="3"/><path d="M7 20 H41 M16 6 V15 M32 6 V15"/><path d="M15 28 H21 M27 28 H33 M15 35 H21"/>',
+  scan: '<path d="M8 16 V8 H16 M32 8 H40 V16 M40 32 V40 H32 M16 40 H8 V32"/><path d="M12 24 H36"/>',
   shieldcheck: '<path d="M24 6 L39 11 V23 C39 33 32 39 24 43 C16 39 9 33 9 23 V11 Z"/><path d="M17 24 L22 29 L31 18"/>',
 }
 export const ICON_KEYS = Object.keys(ICONS)
@@ -177,6 +185,59 @@ function levelBadge(o, owned, u) {
   const n = Math.min(lv, 5)
   for (let i = 0; i < n; i++) { const a = n === 1 ? 0 : -((n - 1) * 15) + i * 30; const [sx, sy] = polar(88, a, cx, cy - 4); out.push(star(sx, sy, 8.5, owned ? m.s[1] : '#cfcfcf', `stroke="${m.s[3]}" stroke-opacity="0.6" stroke-width="1"`)) }
   if (owned && lv >= 4) out.push(star(34, 62, 11, '#ffffff') + star(224, 84, 8, '#ffffff') + star(214, 214, 9, m.s[1]))
+  return { defs, body: out.join('') }
+}
+
+/** 商户等级：门楼招牌——屋檐 + 两根吊绳 + 金属匾额；铜 / 银 / 金 / 钻随等级，匾额下沿点亮等级星 */
+function merchantLevelBadge(o, owned, u) {
+  const lv = Math.max(1, Math.min(8, Number(o.tier) || 1))
+  const m = METAL[owned ? LEVEL_METAL[(lv - 1) % LEVEL_METAL.length] : 'off']
+  const icon = ICONS[o.icon_key] ? o.icon_key : 'store'
+  const body = 'M40 74 H216 a10 10 0 0 1 10 10 V196 a10 10 0 0 1 -10 10 H40 a10 10 0 0 1 -10 -10 V84 a10 10 0 0 1 10 -10 Z'
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.55)], [1, mix(m.s[1], '#ffffff', 0.2)]], 0.35, 0.25, 0.95)
+    + lin(u + 'rf', owned ? [[0, '#6b3a17'], [1, '#2e1707']] : [[0, '#b8b8b8'], [1, '#8f8f8f']], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.55 : 0.3], [1, '#fff', 0]])
+    + rad(u + 'gl', [[0, m.glow, owned ? 0.5 : 0.15], [1, m.glow, 0]], 0.5, 0.5, 0.5) + '<clipPath id="' + u + 'c"><path d="' + body + '"/></clipPath>'
+  const out = []
+  if (owned && lv >= 3) out.push('<ellipse cx="128" cy="140" rx="126" ry="100" fill="url(#' + u + 'gl)"/>')
+  out.push('<ellipse cx="128" cy="248" rx="80" ry="6" fill="#000" opacity="0.10"/>')
+  // 吊绳
+  out.push('<path d="M74 52 V76 M182 52 V76" stroke="' + m.s[3] + '" stroke-width="4" stroke-linecap="round"/><circle cx="74" cy="76" r="5" fill="' + m.s[1] + '" stroke="' + m.s[3] + '" stroke-width="1.5"/><circle cx="182" cy="76" r="5" fill="' + m.s[1] + '" stroke="' + m.s[3] + '" stroke-width="1.5"/>')
+  // 屋檐
+  out.push('<path d="M18 52 Q128 -4 238 52 Z" fill="url(#' + u + 'rf)"/><path d="M18 52 Q128 -4 238 52" fill="none" stroke="' + m.s[1] + '" stroke-width="3.5"/><path d="M12 54 H244" stroke="' + m.s[2] + '" stroke-width="6" stroke-linecap="round"/>')
+  out.push('<path d="M52 44 Q128 10 204 44" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="3"/>')
+  // 匾额
+  out.push('<path d="' + body + '" fill="url(#' + u + 'r)"/><path d="' + body + '" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="2.4" ' + sc(0.985, 128, 140) + '/>')
+  out.push('<path d="' + body + '" fill="url(#' + u + 'rr)" opacity="0.9" ' + sc(0.9, 128, 140) + '/><path d="' + body + '" fill="url(#' + u + 'f)" ' + sc(0.86, 128, 140) + '/>')
+  for (const [x, y] of [[48, 92], [208, 92], [48, 188], [208, 188]]) out.push('<circle cx="' + x + '" cy="' + y + '" r="4.5" fill="' + m.s[2] + '" stroke="' + m.s[3] + '" stroke-opacity="0.6"/>')
+  out.push('<circle cx="128" cy="134" r="46" fill="none" stroke="' + m.s[2] + '" stroke-opacity="0.5" stroke-width="1.6" stroke-dasharray="' + (owned ? '1.5 4.5' : '0') + '" stroke-linecap="round"/>')
+  out.push(engraved(icon, 1.7, 128, 134, m.ink))
+  const n = Math.min(lv, 5)
+  for (let i = 0; i < n; i++) out.push(star(f(128 - (n - 1) * 15 + i * 30), 190, 8, owned ? m.s[1] : '#cfcfcf', 'stroke="' + m.s[3] + '" stroke-opacity="0.6" stroke-width="1"'))
+  out.push('<g clip-path="url(#' + u + 'c)"><path d="M10 120 L100 60 L150 60 L40 170 Z" fill="url(#' + u + 'sh)"/><ellipse cx="96" cy="100" rx="70" ry="18" fill="#fff" opacity="' + (owned ? 0.25 : 0.14) + '" transform="rotate(-12 96 100)"/></g>')
+  if (owned && lv >= 4) out.push(star(24, 30, 10, '#ffffff') + star(236, 40, 8, '#ffffff'))
+  return { defs, body: out.join('') }
+}
+
+/** 经营荣誉：花结奖章——波纹圆章 + 两条垂带；金属随稀有度，系列阶数画在垂带上 */
+function merchantHonorBadge(o, owned, rarity, u) {
+  const m = METAL[owned ? RARITY_METAL[rarity] : 'off']
+  const accent = owned && hex(o.color) ? o.color : m.s[2]
+  const ink = owned && hex(o.color) ? shade(o.color, -0.55) : m.ink
+  const ribbon = owned ? [shade(accent, 0.05), shade(accent, -0.35)] : ['#d0d0d0', '#a8a8a8']
+  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], '#ffffff', 0.55)], [1, mix(m.s[1], '#ffffff', 0.2)]])
+    + lin(u + 'rb', [[0, ribbon[0]], [1, ribbon[1]]], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.6 : 0.3], [1, '#fff', 0]]) + '<clipPath id="' + u + 'c"><circle cx="128" cy="112" r="68"/></clipPath>'
+  const out = ['<ellipse cx="128" cy="250" rx="52" ry="5" fill="#000" opacity="0.10"/>']
+  out.push('<path d="M82 160 L58 246 L92 230 L104 250 L124 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/><path d="M174 160 L198 246 L164 230 L152 250 L132 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/>')
+  out.push('<path d="M98 200 L88 232 M158 200 L168 232" stroke="#fff" stroke-opacity="0.35" stroke-width="2"/>')
+  const tier = Math.max(0, Math.min(5, Number(o.tier) || 0))
+  if (tier > 0 && o.series) out.push(pips(tier, 128, 232, owned ? '#fff3d6' : '#f0f0f0', ribbon[1], 13, 4))
+  const ruffle = poly(Array.from({ length: 40 }, (_, i) => polar(i % 2 ? 76 : 88, i * 9, 128, 112)))
+  out.push('<path d="' + ruffle + '" fill="url(#' + u + 'r)"/><circle cx="128" cy="112" r="72" fill="none" stroke="#fff" stroke-opacity="0.65" stroke-width="2.2"/>')
+  out.push('<circle cx="128" cy="112" r="66" fill="url(#' + u + 'rr)"/><circle cx="128" cy="112" r="60" fill="url(#' + u + 'f)"/><circle cx="128" cy="112" r="50" fill="none" stroke="' + accent + '" stroke-opacity="0.55" stroke-width="1.8" stroke-dasharray="' + (owned ? '1.5 4.5' : '0') + '" stroke-linecap="round"/>')
+  out.push(engraved(o.icon_key, 1.6, 128, 112, ink))
+  out.push('<g clip-path="url(#' + u + 'c)"><path d="M50 60 L150 40 L190 40 L80 130 Z" fill="url(#' + u + 'sh)"/><ellipse cx="102" cy="76" rx="48" ry="16" fill="#fff" opacity="' + (owned ? 0.28 : 0.15) + '" transform="rotate(-24 102 76)"/></g>')
+  if (owned && rarity === 'legend') out.push(star(34, 40, 12, accent) + star(222, 54, 9, accent) + star(212, 176, 7, accent))
+  if (owned && rarity === 'epic') out.push(star(40, 46, 9, accent) + star(216, 58, 7, accent))
   return { defs, body: out.join('') }
 }
 
@@ -301,12 +362,14 @@ export function renderBadgeSvg(o = {}, owned = true) {
   const cat0 = o.category === 'growth' ? 'level' : o.category
   const category = CATEGORIES[cat0] ? cat0 : 'special'
   const rarity = RARITIES[o.rarity] ? o.rarity : 'common'
-  const icon_key = ICONS[o.icon_key] ? o.icon_key : (category === 'level' ? '' : 'star')
+  const icon_key = ICONS[o.icon_key] ? o.icon_key : (category === 'level' || category === 'mlevel' ? '' : 'star')
   const oo = { ...o, category, icon_key }
   const u = 'b' + hash(JSON.stringify([category, rarity, icon_key, o.tier, o.series, o.color, o.country_code, o.seed, o.metal, owned])).toString(36) + '_'
   let parts
   if (category === 'level') parts = levelBadge(oo, owned, u)
   else if (category === 'member') parts = memberBadge(oo, owned, rarity, u)
+  else if (category === 'mlevel') parts = merchantLevelBadge(oo, owned, u)
+  else if (category === 'mhonor') parts = merchantHonorBadge(oo, owned, rarity, u)
   else if (category === 'city') parts = cityBadge(oo, owned, rarity, u)
   else if (category === 'country') parts = countryBadge(oo, owned, rarity, u)
   else if (category === 'trusted') parts = trustedBadge(oo, owned, rarity, u)
@@ -355,6 +418,7 @@ export function artOptions(b) {
  *   /badge-art/<id>.svg?state=off
  *   /badge-art/preview.svg?icon_key=&rarity=&category=&tier=&series=&color=&country_code=&state=
  *   /badge-art/level/<n>.svg?state=off        会员等级徽章（n = 等级）
+ *   /badge-art/mlevel/<n>.svg?state=off       商户等级徽章（n = 商户等级）
  *   /badge-art/bean.svg                        旅豆币
  * 以上路径把 .svg 换成 .png 即得 PNG（Buffer）。返回：SVG 字符串 / PNG Buffer；路径不匹配 null；找不到勋章 ''（调用方回 404）。
  */
@@ -372,6 +436,8 @@ export async function serveBadgeArt(pathname, query) {
   }
   const owned = query.get('state') !== 'off'
   if (pathname === '/badge-art/bean.svg') return renderBeanSvg()
+  const mm = /^\/badge-art\/mlevel\/(\d{1,2})\.svg$/.exec(pathname)
+  if (mm) return renderBadgeSvg({ category: 'mlevel', tier: Number(mm[1]), seed: 'ml' + mm[1] }, owned)
   const lm = /^\/badge-art\/level\/(\d{1,2})\.svg$/.exec(pathname)
   if (lm) return renderBadgeSvg({ category: 'level', tier: Number(lm[1]), seed: 'lv' + lm[1] }, owned)
   const m = /^\/badge-art\/(\d+|preview)\.svg$/.exec(pathname)

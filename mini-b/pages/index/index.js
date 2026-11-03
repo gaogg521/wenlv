@@ -23,5 +23,6 @@ Page({
   goRecords() { wx.navigateTo({ url: '/pages/records/index' }) },
   goOrders() { wx.switchTab({ url: '/pages/orders/index' }) },
   goSupply() { wx.switchTab({ url: '/pages/supply/index' }) },
+  goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
 })

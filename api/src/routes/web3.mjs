@@ -188,8 +188,8 @@ const web3 = {
   // 勋章资产发行：定义列表 + 发放
   'GET /admin/web3/badges': async (req) => {
     await requireAdmin(req)
-    const defs = await q(`SELECT b.*, (SELECT COUNT(*) FROM user_badge ub WHERE ub.badge_id = b.id) granted,
-      (SELECT COUNT(*) FROM attest_event e WHERE e.biz_type = 'badge' AND e.biz_ref LIKE CONCAT('badge-%-', b.id) AND e.status = 2) anchored
+    const defs = await q(`SELECT b.*, (SELECT COUNT(*) FROM user_badge ub WHERE ub.badge_id = b.id) + (SELECT COUNT(*) FROM merchant_badge mb WHERE mb.badge_id = b.id) granted,
+      (SELECT COUNT(*) FROM attest_event e WHERE e.biz_type = 'badge' AND (e.biz_ref LIKE CONCAT('badge-%-', b.id) OR e.biz_ref LIKE CONCAT('mbadge-%-', b.id)) AND e.status = 2) anchored
       FROM badge b ORDER BY b.id`)
     const recent = await q(`SELECT ub.user_id, u.nickname, b.name, ub.granted_at FROM user_badge ub
       JOIN user_account u ON u.id = ub.user_id JOIN badge b ON b.id = ub.badge_id ORDER BY ub.granted_at DESC LIMIT 20`)
@@ -206,15 +206,25 @@ const web3 = {
   // 按规则补发：对存量用户评估自动规则（改了阈值或新建规则后使用）
   'POST /admin/web3/badges/:id/backfill': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
-    const r = await badgeDomain.backfill(Number(req.params.id))
+    const bd = await one('SELECT * FROM badge WHERE id = ?', [req.params.id])
+    if (!bd) throw new BizError(1004, '勋章不存在')
+    const r = badgeDomain.isMerchantBadge(bd) ? await badgeDomain.backfillMerchant(bd) : await badgeDomain.backfill(Number(req.params.id))
     await tx(async (c) => audit(c, 'admin:' + a.name, 'badge', 'backfill', 'badge-' + req.params.id, null, r))
     return r
   },
   'POST /admin/web3/badges/:id/grant': async (req) => {
     const a = await requireAdmin(req)
-    const { userId, reason } = req.body
+    const { userId, merchantId, reason } = req.body
     const b = await one('SELECT id, name FROM badge WHERE id = ?', [req.params.id])
     if (!b) throw new BizError(1004, '勋章定义不存在')
+    const fullB = await one('SELECT * FROM badge WHERE id = ?', [b.id])
+    if (badgeDomain.isMerchantBadge(fullB)) { // 商户徽章发给商户，不发给用户
+      if (!merchantId) throw new BizError(1001, '这是商户徽章，请填写商户 ID')
+      if (!(await one('SELECT id FROM merchant WHERE id = ?', [merchantId]))) throw new BizError(1004, '商户不存在')
+      const g = await badgeDomain.grantMerchant(Number(merchantId), fullB, { by: 'admin:' + a.name, reason, strict: true })
+      if (!g.granted && g.reason === 'owned') throw new BizError(1001, '该商户已拥有此徽章')
+      return { granted: true, badge: b.name, attestQueued: true }
+    }
     const u = await one('SELECT id FROM user_account WHERE id = ?', [userId])
     if (!u) throw new BizError(1004, '用户不存在')
     // 与自动发放同一入口：校验发行上限、幂等、入存证队列

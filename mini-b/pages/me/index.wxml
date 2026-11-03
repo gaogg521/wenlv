@@ -22,6 +22,7 @@
 </view>
 <block wx:else>
   <view class="card">
+    <view class="row" bindtap="goHonor"><text>经营等级与荣誉</text><text class="v">等级 · 权益 · 徽章 ›</text></view>
     <view class="row" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>
     <view class="row" bindtap="storeQrcode"><text>门店码</text><text class="v">{{qr ? '查看' : '生成'}} ›</text></view>
     <view class="row" wx:if="{{role >= 2}}" bindtap="copyInvite"><text>店员邀请码</text><text class="v">{{inviteCode || '生成中…'}} ⧉</text></view>

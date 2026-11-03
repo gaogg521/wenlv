@@ -667,18 +667,21 @@ async function pointassets() {
   </div>`
 }
 const BADGE_CATS = [['level', '会员等级'], ['member', '会员荣誉'], ['city', '城市徽章'], ['country', '国家徽章'], ['trusted', '链上勋章'], ['journey', '旅程'], ['explore', '足迹'], ['creator', '创作'], ['special', '特别']]
+const isMBadge = (b) => String(b.rule_type || '').startsWith('m_') || ['mlevel', 'mhonor'].includes(b.pf && b.pf.category) // 商户徽章
 const BADGE_RAR = { common: '普通', rare: '稀有', epic: '史诗', legend: '传说' }
-const BADGE_ICONS = ['compass', 'mountain', 'water', 'boat', 'ticket', 'pen', 'camera', 'star', 'flag', 'heart', 'pin', 'crown', 'footprint', 'lantern', 'globe', 'book', 'bridge', 'moongate', 'bamboo', 'pagoda', 'skyline', 'plane', 'seal', 'node', 'shieldcheck']
+const BADGE_ICONS = ['compass', 'mountain', 'water', 'boat', 'ticket', 'pen', 'camera', 'star', 'flag', 'heart', 'pin', 'crown', 'footprint', 'lantern', 'globe', 'book', 'bridge', 'moongate', 'bamboo', 'pagoda', 'skyline', 'plane', 'seal', 'node', 'shieldcheck', 'store', 'trend', 'thumb', 'calendar', 'scan']
 function badgeSwitch(c) { window.__badgeCat = c; badges() }
 async function badges() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const [d, lvs] = await Promise.all([api('GET', '/admin/web3/badges'), api('GET', '/admin/member/levels').catch(() => [])])
+  const [d, lvs, mlvs] = await Promise.all([api('GET', '/admin/web3/badges'), api('GET', '/admin/member/levels').catch(() => []), api('GET', '/admin/merchant/levels').catch(() => [])])
   const cur = window.__badgeCat || 'all'
   const pfOf = (b) => (typeof b.profile === 'string' ? JSON.parse(b.profile || '{}') : b.profile) || {}
   const defs = (d.defs || []).map((b) => ({ ...b, pf: pfOf(b) }))
-  const cnt = (c) => defs.filter((b) => (b.pf.category === 'growth' ? 'level' : b.pf.category || 'special') === c).length
-  const shown = cur === 'all' ? defs : defs.filter((b) => (b.pf.category === 'growth' ? 'level' : b.pf.category || 'special') === cur)
-  const tabs = [['all', '全部', defs.length], ...BADGE_CATS.map(([k, n]) => [k, n, cnt(k)])]
+  const catOf = (b) => (b.pf.category === 'growth' ? 'level' : b.pf.category || 'special')
+  const userDefs = defs.filter((b) => !isMBadge(b)), merchDefs = defs.filter(isMBadge)
+  const cnt = (c) => userDefs.filter((b) => catOf(b) === c).length
+  const shown = cur === 'all' ? defs : cur === 'merchant' ? merchDefs : userDefs.filter((b) => catOf(b) === cur)
+  const tabs = [['all', '全部', defs.length], ...BADGE_CATS.map(([k, n]) => [k, n, cnt(k)]), ['merchant', '商户徽章', merchDefs.length]]
   const ruleName = { manual: '人工授予', order_count: '完成订单', city_count: '打卡城市数', review: '评价', note_count: '发布笔记', level: '会员等级', city_visit: '城市到访', country_visit: '国家到访', sealed_count: '封存订单', member_days: '注册天数' }
   $('#app').innerHTML = `
   <div class="card">
@@ -686,13 +689,13 @@ async function badges() {
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">${tabs.map(([k, n, c]) => `<button class="btn ${cur === k ? 'primary' : 'ghost'} sm" onclick="badgeSwitch('${k}')">${n} ${c}</button>`).join('')}</div>
     <div class="row"><button class="btn primary sm" onclick="createBadge()">＋ 新建徽章</button><span class="muted">外观（类别 / 稀有度 / 图标 / 系列）与获得规则（类型 / 阈值 / 城市 / 国家 / 发行上限）；没上传徽章图时按「类别 + 稀有度 + 图标」自动生成</span></div>
     <table style="margin-top:10px"><thead><tr><th>ID</th><th>图形</th><th>名称</th><th>类别 · 系列</th><th>获得规则</th><th>已发放</th><th>操作</th></tr></thead><tbody>
-    ${shown.map((b) => { const pf = b.pf; const cat = pf.category === 'growth' ? 'level' : pf.category || 'special'; return `<tr><td>#${b.id}</td>
+    ${shown.map((b) => { const pf = b.pf; const cat = pf.category === 'growth' ? 'level' : pf.category || 'special'; return `<tr><td>#${b.id}${isMBadge(b) ? '<div class="td-sub">商户</div>' : ''}</td>
       <td><img src="${pf.icon_img ? esc(pf.icon_img) : '/badge-art/' + b.id + '.svg'}" width="52" height="52" alt=""></td>
       <td>${esc(b.name)}<div class="td-sub">${esc(BADGE_RAR[pf.rarity] || '普通')} · ${esc(b.icon_key)}</div></td>
-      <td class="td-sub">${esc((BADGE_CATS.find((c) => c[0] === cat) || [0, '特别'])[1])}${pf.series ? ' · ' + esc(pf.series) + (pf.tier ? ' 第' + Number(pf.tier) + '阶' : '') : ''}${pf.city_code ? ' · ' + esc(pf.city_code) : ''}${pf.country_code ? ' · ' + esc(pf.country_code) : ''}</td>
+      <td class="td-sub">${esc((BADGE_CATS.find((c) => c[0] === cat) || [0, { mlevel: '商户等级', mhonor: '经营荣誉' }[cat] || '特别'])[1])}${pf.series ? ' · ' + esc(pf.series) + (pf.tier ? ' 第' + Number(pf.tier) + '阶' : '') : ''}${pf.city_code ? ' · ' + esc(pf.city_code) : ''}${pf.country_code ? ' · ' + esc(pf.country_code) : ''}</td>
       <td class="td-sub">${esc(b.rule_desc || '—')}<div>${esc(ruleName[b.rule_type] || b.rule_type)}${pf.threshold ? ' ≥ ' + Number(pf.threshold) : ''}</div></td>
       <td class="num">${Number(b.granted)}<div class="td-sub">已锚定 ${Number(b.anchored || 0)}</div></td>
-      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id})">发放给用户</button>${b.rule_type && b.rule_type !== 'manual' ? ` <button class="btn ghost sm" onclick="backfillBadge(${b.id})">按规则补发</button>` : ''}</td></tr>` }).join('') || '<tr><td colspan="7" class="td-sub">这一类还没有徽章</td></tr>'}
+      <td><button class="btn ghost sm" onclick="entityEditor('badge', ${b.id}, { onSaved: () => badges() })">编辑</button> <button class="btn ghost sm" onclick="grantBadge(${b.id}, ${isMBadge(b) ? 1 : 0})">${isMBadge(b) ? '发放给商户' : '发放给用户'}</button>${b.rule_type && b.rule_type !== 'manual' ? ` <button class="btn ghost sm" onclick="backfillBadge(${b.id})">按规则补发</button>` : ''}</td></tr>` }).join('') || '<tr><td colspan="7" class="td-sub">这一类还没有徽章</td></tr>'}
     </tbody></table>
   </div>
   <div class="card">
@@ -700,8 +703,12 @@ async function badges() {
     <div class="row" style="gap:18px;flex-wrap:wrap">${(lvs || []).map((l) => `<div style="text-align:center;width:120px"><img src="/badge-art/level/${l.lv}.svg" width="96" height="96" alt=""><div><b>Lv${l.lv} ${esc(l.name)}</b></div><div class="td-sub">成长值 ${Math.floor(l.min / 100).toLocaleString()} 起</div><div class="td-sub">返豆 +${l.rebateBonusBp / 100} 个百分点</div></div>`).join('')}</div>
   </div>
   <div class="card">
+    <div class="card-head"><h3>商户等级徽章</h3><span class="muted">等级名、订单 / 评价 / 评分 / 退款率门槛、权益说明在「参数中心 → 商户经营等级体系」修改（双人复核）；徽章图形随等级自动变化（门楼招牌，铜 / 银 / 金 / 钻）</span></div>
+    <div class="row" style="gap:18px;flex-wrap:wrap">${(mlvs || []).map((l) => `<div style="text-align:center;width:150px"><img src="/badge-art/mlevel/${l.lv}.svg" width="112" height="112" alt=""><div><b>Lv${l.lv} ${esc(l.name)}</b></div><div class="td-sub">订单 ≥${l.minOrders} · 评价 ≥${l.minReviews}</div><div class="td-sub">${l.minRating ? '评分 ≥' + l.minRating / 10 : '不限评分'} · 退款率 ≤${l.maxRefundPct}%</div></div>`).join('')}</div>
+  </div>
+  <div class="card">
     <div class="card-head"><h3>设计预览 · 各类徽章 × 稀有度</h3><span class="muted">每一类有自己的造型与材质；链上勋章为深色玻璃质感，带虹彩边框与唯一指纹条</span></div>
-    ${[['city', 'bridge', '城市徽章 · 朱红印章'], ['country', 'flag', '国家徽章 · 护照出入境章'], ['trusted', 'seal', '链上勋章 · 玻璃质感'], ['member', 'heart', '会员荣誉 · 月桂缎带'], ['journey', 'ticket', '旅程 · 盾牌'], ['explore', 'compass', '足迹 · 六边形'], ['creator', 'pen', '创作 · 花边圆章']].map(([c, ic, n]) => `<div class="row" style="gap:12px;align-items:center;margin-bottom:6px"><span class="muted" style="width:150px">${n}</span>${['common', 'rare', 'epic', 'legend'].map((r) => `<img src="/badge-art/preview.svg?category=${c}&rarity=${r}&icon_key=${ic}&country_code=CN&seed=${c}${r}" width="72" height="72" alt="" title="${BADGE_RAR[r]}">`).join('')}</div>`).join('')}
+    ${[['city', 'bridge', '城市徽章 · 朱红印章'], ['country', 'flag', '国家徽章 · 护照出入境章'], ['trusted', 'seal', '链上勋章 · 玻璃质感'], ['member', 'heart', '会员荣誉 · 月桂缎带'], ['mhonor', 'store', '商户荣誉 · 花结奖章'], ['journey', 'ticket', '旅程 · 盾牌'], ['explore', 'compass', '足迹 · 六边形'], ['creator', 'pen', '创作 · 花边圆章']].map(([c, ic, n]) => `<div class="row" style="gap:12px;align-items:center;margin-bottom:6px"><span class="muted" style="width:150px">${n}</span>${['common', 'rare', 'epic', 'legend'].map((r) => `<img src="/badge-art/preview.svg?category=${c}&rarity=${r}&icon_key=${ic}&country_code=CN&seed=${c}${r}" width="72" height="72" alt="" title="${BADGE_RAR[r]}">`).join('')}</div>`).join('')}
     <div class="card-head" style="margin-top:12px"><h3>图标库</h3><span class="muted">图标键写在图标下方，新建徽章时填入</span></div>
     <div class="row" style="gap:12px;flex-wrap:wrap">${BADGE_ICONS.map((k) => `<div style="text-align:center;width:68px"><img src="/badge-art/preview.svg?icon_key=${k}&rarity=rare&category=explore" width="56" height="56" alt="${k}"><div class="td-sub">${k}</div></div>`).join('')}</div>
   </div>
@@ -718,12 +725,12 @@ async function backfillBadge(id) {
   try { const r = await api('POST', '/admin/web3/badges/' + id + '/backfill', {}); toast(`达标 ${r.eligible} 人，本次发放 ${r.granted} 枚${r.capped ? '（已达发行上限，部分未发）' : ''}`); badges() }
   catch (e) { toast(e.message, true) }
 }
-async function grantBadge(id) {
-  const userId = prompt('发放给用户 ID：')
+async function grantBadge(id, isMerchant) {
+  const userId = prompt(isMerchant ? '发放给商户 ID：' : '发放给用户 ID：')
   if (!userId) return
   const reason = prompt('授予原因（可选）：') || ''
   try {
-    const r = await api('POST', '/admin/web3/badges/' + id + '/grant', { userId: Number(userId), reason })
+    const r = await api('POST', '/admin/web3/badges/' + id + '/grant', isMerchant ? { merchantId: Number(userId), reason } : { userId: Number(userId), reason })
     toast('已发放「' + r.badge + '」并入存证队列'); badges()
   } catch (e) { toast(e.message, true) }
 }

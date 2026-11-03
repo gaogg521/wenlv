@@ -701,6 +701,71 @@ await t('旅豆页数据：本月获得 / 使用与账本一致、折合金额�
   const me = ok(await call('GET', '/c/me', null, C)); assert.ok(me.level.art && me.level.levels.every((l) => l.art))
   for (const l of me.level.levels) assert.equal((await fetch(BASE + new URL(l.art).pathname + new URL(l.art).search)).status, 200)
 })
+const FIN = ok(await call('POST', '/admin/login', { username: 'finance', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' })).token
+const mHonor = async () => ok(await call('GET', '/m/honor', null, B))
+await t('商户经营等级与徽章：B 端 / 后台 / 数据库 三处一致；徽章墙只含商户徽章且游客看不到；规则按数据库复算点亮', async () => {
+  const h = await mHonor(), mid = sess.merchant_id
+  assert.deepEqual(h.groups.map((g) => g.key), ['mlevel', 'mhonor', 'trusted']); assert.equal(h.groups[2].label, '可信勋章', 'B 端不出现链相关词')
+  assert.ok(h.badges.length >= 20, '预置 20 枚商户徽章（V42）'); assert.ok(h.badges.every((b) => b.art && b.category && !JSON.stringify(b).includes('rule_param')))
+  // 数据库复算指标
+  const o = await one("SELECT COUNT(*) n, COALESCE(SUM(amount_pay),0) gmv FROM orders WHERE merchant_id = ? AND status = 50", [mid])
+  const v = await one('SELECT COUNT(*) n FROM verification_log WHERE merchant_id = ? AND result = 1', [mid])
+  assert.equal(h.level.metrics.orders, Number(o.n)); assert.equal(h.level.metrics.verifies, Number(v.n))
+  const th = (b) => Number(JSON.parse(typeof b.profile === 'string' ? b.profile : JSON.stringify(b.profile)).threshold)
+  const defs = await q("SELECT * FROM badge WHERE rule_type IN ('m_orders','m_verify')")
+  for (const d of defs) { const val = d.rule_type === 'm_orders' ? Number(o.n) : Number(v.n); const row = h.badges.find((b) => Number(b.id) === Number(d.id)); assert.equal(row.owned, val >= th(d), `${d.name}：规则值 ${val} / 阈值 ${th(d)}`) }
+  if (Number(o.n) >= 1) assert.ok(h.badges.find((b) => b.name === '首单开张').owned, '完成过订单的商户应有「首单开张」')
+  // 等级：按 /admin/merchant/levels 的门槛复算
+  const lvs = ok(await call('GET', '/admin/merchant/levels', null, A)); const m = h.level.metrics
+  const okLv = (l) => m.orders >= l.minOrders && m.reviews >= l.minReviews && (!l.minRating || m.rating10 >= l.minRating) && m.refundPct <= l.maxRefundPct
+  assert.equal(h.level.lv, lvs.reduce((best, l) => (okLv(l) ? l.lv : best), 1), '等级 = 达标的最高档')
+  assert.ok(h.level.levels.every((l) => l.art) && h.level.art, '等级徽章图地址齐全')
+  // 后台：列表与全景同一个等级、徽章
+  const row = ok(await call('GET', '/admin/merchants', null, A)).find((x) => Number(x.id) === Number(mid)); assert.equal(Number(row.level), h.level.lv)
+  const ov = ok(await call('GET', `/admin/merchants/${mid}/overview`, null, A)); assert.equal(ov.level.lv, h.level.lv)
+  assert.deepEqual(ov.badges.map((b) => b.name).sort(), h.badges.filter((b) => b.owned).map((b) => b.name).sort(), '后台全景的徽章 = B 端已点亮的徽章')
+  // 工作台带等级简讯
+  assert.equal(ok(await call('GET', '/m/workbench', null, B)).level.lv, h.level.lv)
+  // 游客勋章墙里没有商户徽章
+  const names = new Set(h.badges.map((b) => b.name)); const idn = ok(await call('GET', '/c/identity', null, C))
+  assert.ok(!idn.badges.some((b) => names.has(b.name)), '游客身份页不应出现商户徽章'); assert.ok(!idn.badges.some((b) => ['mlevel', 'mhonor'].includes(b.category)))
+  // 商户徽章图公开可取（PNG；没装转换能力时回退 SVG）
+  const art = await fetch(BASE + new URL(h.level.art).pathname); assert.equal(art.status, 200)
+})
+await t('商户徽章人工发放：只能发给商户、不能重复；订单封存后点亮「账实相符」且带封存编号；评分类徽章需要足够评价数', async () => {
+  const h0 = await mHonor(), mid = sess.merchant_id
+  const manual = await one("SELECT id, name FROM badge WHERE name = '入驻三年'")
+  assert.notEqual((await call('POST', `/admin/web3/badges/${manual.id}/grant`, { userId: buyer.user.id }, A)).code, 0, '商户徽章不能发给用户')
+  assert.notEqual((await call('POST', `/admin/web3/badges/${manual.id}/grant`, { merchantId: 99999999 }, A)).code, 0, '商户不存在')
+  const owned0 = h0.badges.find((b) => b.id === manual.id).owned
+  if (!owned0) { ok(await call('POST', `/admin/web3/badges/${manual.id}/grant`, { merchantId: mid, reason: '跨端测试' }, A)); assert.notEqual((await call('POST', `/admin/web3/badges/${manual.id}/grant`, { merchantId: mid }, A)).code, 0, '不能重复发放') }
+  assert.ok((await mHonor()).badges.find((b) => b.id === manual.id).owned, 'B 端点亮人工发放的徽章')
+  assert.ok(await one("SELECT id FROM attest_event WHERE biz_type = 'badge' AND biz_ref = ?", ['mbadge-' + mid + '-' + manual.id]), '商户徽章发放进存证队列')
+  // 订单封存 → 账实相符
+  ok(await call('POST', '/admin/system/jobs/attest-pack/run', {}, A))
+  const hs = await mHonor(), sealed = hs.badges.find((b) => b.name === '账实相符')
+  if (hs.level.metrics.sealed >= 1) { assert.ok(sealed.owned, '订单已封存 → 「账实相符」点亮'); assert.match(sealed.proof.code, /^[0-9A-F]{8}$/) } else assert.ok(!sealed.owned)
+  // 评分类：评价数不够时即使评分满分也不点亮
+  const rated = hs.badges.find((b) => b.name === '口碑卓越'); if (hs.level.metrics.reviews < 50) assert.ok(!rated.owned, '评价数不足 50 不应点亮「口碑卓越」')
+  // 后台列表：商户徽章带已发放 / 已锚定
+  assert.ok(ok(await call('GET', '/admin/web3/badges', null, A)).defs.find((d) => Number(d.id) === Number(manual.id)).granted >= 1)
+})
+await t('商户等级配置：错误配置在提案阶段被拒；双人复核生效后立即重评，回滚后恢复', async () => {
+  const lvs = ok(await call('GET', '/admin/merchant/levels', null, A)), mid = sess.merchant_id
+  const prop = (v) => call('POST', '/admin/config/proposal', { key: 'merchant.levels', newValue: JSON.stringify(v), reason: '跨端测试' }, A)
+  assert.notEqual((await prop([lvs[0]])).code, 0, '等级数量不足'); assert.notEqual((await prop(lvs.map((l, i) => (i === 1 ? { ...l, minRating: 45, minReviews: 0 } : l)))).code, 0, '设评分门槛必须设评价数')
+  assert.notEqual((await prop(lvs.map((l, i) => (i === 2 ? { ...l, minOrders: 1 } : l)))).code, 0, '门槛不能比上一级更低'); assert.notEqual((await prop(lvs.map((l, i) => (i === 1 ? { ...l, perks: ['链上权益'] } : l)))).code, 0, '含禁用词')
+  const before = (await mHonor()).level
+  if (before.metrics.orders < 1 || before.lv > 1) return // 数据库里的商户已不是"仅有订单、未达 Lv2"的状态，这条只验证提案校验
+  const easy = lvs.map((l, i) => (i === 1 ? { ...l, minOrders: 1, minReviews: 0, minRating: 0, maxRefundPct: 100 } : i === 2 ? { ...l, minOrders: 1000 } : i === 3 ? { ...l, minOrders: 2000 } : l))
+  const p = ok(await call('POST', '/admin/config/proposal', { key: 'merchant.levels', newValue: JSON.stringify(easy), reason: '跨端测试' }, A))
+  assert.notEqual((await call('POST', '/admin/config/approve', { historyId: p.historyId }, A)).code, 0, '提案人不能自己审批')
+  ok(await call('POST', '/admin/config/approve', { historyId: p.historyId }, FIN))
+  assert.equal(Number((await one('SELECT level FROM merchant WHERE id = ?', [mid])).level), 2, '新门槛生效后立即重评：有订单的商户升到 Lv2')
+  assert.equal((await mHonor()).level.lv, 2)
+  ok(await call('POST', '/admin/config/rollback', { key: 'merchant.levels' }, A))
+  assert.equal((await mHonor()).level.lv, 1, '回滚后恢复原门槛，等级随之恢复')
+})
 await t('景点数据：景点下的线路，景点页的数字 = 该线路自己的商品数据；A 的景点页能看到这条线路', async () => {
   const sc = ok(await call('POST', '/admin/scenics', { name: '跨端景点' + stamp, cityCode: sess.city_code }, A)); const scId = sc.id
   const prevSc = (await one('SELECT scenic_id FROM tour_product WHERE id = ?', [sess.product_id])).scenic_id

@@ -9,6 +9,7 @@ import path from 'node:path'
 import { parseLevels, levelFor, DEFAULT_LEVELS } from '../src/domain/member.mjs'
 import { renderBadgeSvg, renderBeanSvg, serveBadgeArt, CATEGORIES, CATEGORY_ORDER, RARITIES, ICON_KEYS } from '../src/domain/badge-art.mjs'
 import { DEFAULTS } from '../src/config.mjs'
+import * as ml from '../src/domain/merchant-level.mjs'
 import { findBanned } from '../src/domain/wording.mjs'
 
 let pass = 0
@@ -55,9 +56,9 @@ t('9 类别 × 4 稀有度 × 获得/未获得 全部生成合法 SVG', () => {
   }
 })
 t('全部图标都能画，彼此不同；未知键回退为星形', () => {
-  assert.equal(ICON_KEYS.length, 25)
+  assert.equal(ICON_KEYS.length, 30)
   const set = new Set(ICON_KEYS.map((k) => renderBadgeSvg({ icon_key: k, rarity: 'rare', category: 'explore' })))
-  assert.equal(set.size, 25)
+  assert.equal(set.size, 30)
   assert.equal(renderBadgeSvg({ icon_key: 'no-such', rarity: 'rare', category: 'explore' }), renderBadgeSvg({ icon_key: 'star', rarity: 'rare', category: 'explore' }))
 })
 t('未获得 ≠ 已获得；稀有度换配色；外形随类别变化', () => {
@@ -89,9 +90,41 @@ await (async () => {
     assert.equal(big.readUInt32BE(16), 512, '宽度 512'); assert.equal(png.readUInt32BE(16), 256, '默认宽度 256')
   })
 })()
+console.log('\n== 商户等级与商户徽章 ==')
+t('商户等级默认配置合法；代码默认 = 参数中心默认 = V42 种子', () => {
+  const d = ml.parseLevels(ml.DEFAULT_LEVELS)
+  assert.deepEqual(ml.parseLevels(DEFAULTS['merchant.levels']), d)
+  const sql = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../db/migration/V42__merchant_levels_badges.sql'), 'utf8')
+  const m = /'(\[\{"lv":1[\s\S]*?\}\])'/.exec(sql); assert.ok(m, 'V42 应有 merchant.levels 种子'); assert.deepEqual(ml.parseLevels(m[1]), d)
+})
+t('商户等级评定：四项全部达标才升级；评分要有足够评价数；退款率超限不升级；表现下滑会降级', () => {
+  const L = ml.parseLevels(ml.DEFAULT_LEVELS), base = { orders: 60, reviews: 20, rating10: 48, refundPct: 3 }
+  assert.equal(ml.levelFor(L, base), 3, '60 单 / 20 评 / 4.8 / 3% → Lv3')
+  assert.equal(ml.levelFor(L, { ...base, reviews: 14 }), 2, '评价数不够 Lv3 的 15 条')
+  assert.equal(ml.levelFor(L, { ...base, refundPct: 8 }), 2, '退款率 8% 超过 Lv3 的 6%')
+  assert.equal(ml.levelFor(L, { ...base, rating10: 44 }), 1, '评分 4.4 低于 Lv2 的 4.5')
+  assert.equal(ml.levelFor(L, { ...base, orders: 9 }), 1, '订单不足 10')
+  assert.equal(ml.levelFor(L, { orders: 300, reviews: 80, rating10: 49, refundPct: 1 }), 4)
+  assert.equal(ml.levelFor(L, { orders: 0, reviews: 0, rating10: 0, refundPct: 0 }), 1)
+})
+t('商户等级配置错误被拒：数量 / 编号 / 评分无评价数 / 门槛倒挂 / 无区分 / 文案禁用词', () => {
+  const D = ml.DEFAULT_LEVELS, mk = (i, o) => D.map((l, k) => (k === i ? { ...l, ...o } : l))
+  const bad = [[[D[0]], '等级数量'], [mk(1, { lv: 7 }), '连续编号'], [mk(1, { minRating: 45, minReviews: 0 }), '评价数门槛'], [mk(2, { minOrders: 1 }), '不能比'], [mk(1, { name: '' }), '等级名'],
+    [mk(1, { minOrders: 0, minReviews: 0, minRating: 0, maxRefundPct: 100 }), '没有区分度'], [mk(1, { perks: ['链上权益'] }), '禁用词'], [mk(0, { minOrders: 5 }), 'Lv1 不设门槛'], [mk(1, { minRating: 51 }), '评分门槛'], [mk(1, { maxRefundPct: 120 }), '退款率']]
+  for (const [cfg, key] of bad) assert.throws(() => ml.parseLevels(cfg), (e) => e.message.includes(key), '应拒绝：' + key)
+})
+t('商户徽章图：门楼招牌随等级换材质、经营荣誉随稀有度换色、未获得灰阶；与游客徽章造型不同', () => {
+  const lv = [1, 2, 3, 4].map((n) => renderBadgeSvg({ category: 'mlevel', tier: n })); assert.equal(new Set(lv).size, 4)
+  const h = ['common', 'rare', 'epic', 'legend'].map((r) => renderBadgeSvg({ category: 'mhonor', icon_key: 'trend', rarity: r })); assert.equal(new Set(h).size, 4)
+  assert.notEqual(renderBadgeSvg({ category: 'mlevel', tier: 2 }), renderBadgeSvg({ category: 'mlevel', tier: 2 }, false))
+  assert.notEqual(renderBadgeSvg({ category: 'mlevel', tier: 2 }), renderBadgeSvg({ category: 'level', tier: 2 }))
+  assert.notEqual(renderBadgeSvg({ category: 'mhonor', icon_key: 'star', rarity: 'rare' }), renderBadgeSvg({ category: 'creator', icon_key: 'star', rarity: 'rare' }))
+  assert.equal(renderBadgeSvg({ category: 'mlevel', tier: 1 }), renderBadgeSvg({ category: 'mlevel', tier: 1, icon_key: 'nope' }), '未知图标回退为店铺')
+})
+
 console.log('\n== 分种类设计 ==')
 t('分类与顺序：9 类，勋章墙顺序固定，小程序用语里没有链相关词，后台叫「链上勋章」', () => {
-  assert.equal(CATEGORY_ORDER.length, 9); assert.deepEqual([...CATEGORY_ORDER].sort(), Object.keys(CATEGORIES).sort())
+  assert.equal(CATEGORY_ORDER.length, 9); assert.deepEqual([...CATEGORY_ORDER, 'mlevel', 'mhonor'].sort(), Object.keys(CATEGORIES).sort(), '游客 9 类 + 商户 2 类')
   assert.equal(CATEGORIES.trusted.label, '可信勋章'); assert.equal(CATEGORIES.trusted.adminLabel, '链上勋章')
   for (const c of Object.values(CATEGORIES)) assert.equal(findBanned(c.label), null, c.label + ' 含禁用词')
 })

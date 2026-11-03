@@ -94,6 +94,7 @@ const adminSys = {
     let n = -1
     if (name === 'close-timeout') n = await closeTimeout()
     else if (name === 'commission-due') n = await settleDue()
+    else if (name === 'merchant-level') { n = 0; for (const m of await q('SELECT id FROM merchant WHERE status = 1')) { await badgeDomain.evaluateMerchantSafe(Number(m.id)); n++ } }
     else if (name === 'attest-pack') { const b = await attestDomain.packBatch(); n = b.leaves }
     else if (name === 'attest-anchor') { const c = await attestDomain.confirmPending(50); const r = await attestDomain.reanchorPending(50); n = [...c, ...r].filter((x) => x.anchored).length }
     else if (name === 'bean-day-close') { const r = await attestDomain.closeBeanDay(req.body && req.body.date); n = r.leaves || 0 }

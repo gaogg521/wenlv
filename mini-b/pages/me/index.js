@@ -69,6 +69,7 @@ Page({
     }).catch((e) => wx.showToast({ title: e.msg || '登录失败', icon: 'none' }))
   },
   logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ merchant: null, role: 0, staff: [], inviteCode: '', applications: [] }) },
+  goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
   // 门店码：官方 getUnlimitedQRCode，游客扫码带商户归因进入首页
   async storeQrcode() {
