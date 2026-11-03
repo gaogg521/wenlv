@@ -2,6 +2,9 @@
 const $ = (s) => document.querySelector(s)
 let TOKEN = localStorage.getItem('admin_token') || ''
 let ME = JSON.parse(localStorage.getItem('admin_me') || 'null')
+let ADMIN_CAPABILITIES = { actions: {} }
+const adminCan = action => ADMIN_CAPABILITIES.actions[action]?.allowed === true
+const adminWhy = action => ADMIN_CAPABILITIES.actions[action]?.reason || '当前账号无此操作权限'
 
 const ICONS = {
   sys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>',
@@ -33,7 +36,7 @@ const NAV = [
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag']]],
   ['内容运营', [['contentdash', '内容看板', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
   ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
-  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
   ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
   ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
@@ -118,9 +121,16 @@ async function mfaResend() {
 function backToStep1() { $('#step2').style.display = 'none'; $('#step1').style.display = 'block'; MFA_CHALLENGE = null }
 function logout() { TOKEN = ''; ME = null; localStorage.clear(); location.reload() }
 
-function boot() {
+async function boot() {
   if (!TOKEN) { $('#login').style.display = 'flex'; $('#frame').style.display = 'none'; return }
   $('#login').style.display = 'none'; $('#frame').style.display = 'flex'
+  try {
+    ADMIN_CAPABILITIES = await api('GET', '/admin/capabilities')
+    ME = { ...ME, role: ADMIN_CAPABILITIES.role, scopeCity: ADMIN_CAPABILITIES.scopeCity }
+  } catch (e) {
+    $('#app').innerHTML = `<div class="card error-state"><h2>操作权限加载失败</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="boot()">重试</button></div>`
+    return
+  }
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
@@ -131,6 +141,7 @@ function boot() {
   for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentdash')
   for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentcases')
   const allowed = access[ME?.role]
+  if (allowed && ['ops', 'finance'].includes(ME.role)) allowed.push('taskcash')
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = items.filter(([k]) => k !== 'contentcases' || ['super', 'ops', 'review', 'city_partner'].includes(ME?.role))
     items = items.filter(([k]) => k !== 'partnerperf' || ['super', 'ops', 'finance', 'city_partner'].includes(ME?.role))

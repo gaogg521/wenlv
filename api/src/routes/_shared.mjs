@@ -27,6 +27,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
+import { actionRoles } from '../domain/admin-capabilities.mjs'
 
 export const fen2yuan = (f) => (Number(f) / 100).toFixed(2)
 // 相对路径图片补全为对外基址（PUBLIC_BASE 或按请求头推断），真机/外网不能拿到 127.0.0.1
@@ -41,6 +42,7 @@ export function toCsv(rows) {
 }
 // ---------- /admin 运营后台 ----------
 export async function requireAdmin(req, roles) {
+  if (typeof roles === 'string') roles = actionRoles(roles)
   const h = (req.headers.authorization || '').replace(/^Bearer /, '')
   const { jwtVerify } = await import('../auth.mjs')
   const p = jwtVerify(h)

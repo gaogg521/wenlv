@@ -1,0 +1,6325 @@
+{
+  "at": "2026-11-03T14:59:01.455Z",
+  "database": "wanderlust_qa_ops_20261103",
+  "base": "http://127.0.0.1:18084",
+  "results": [
+    "super actual login and 44 pages with operation guidance",
+    "order contact and note saved via browser, masked and retained after refresh",
+    "partner direct edit saved and refreshed with registered cooperation name",
+    "user management entry and freeze/unfreeze persisted",
+    "390px operation guidance fits viewport",
+    "ops actual login and 19 pages with operation guidance",
+    "ops sees actionable responsibility rather than rejected review/payment buttons",
+    "finance actual login and 11 pages with operation guidance",
+    "finance independent payment entry, real registration and refresh readback",
+    "review actual login and 4 pages with operation guidance",
+    "reviewer actually publishes note and has no unauthorised task status buttons",
+    "risk actual login and 4 pages with operation guidance",
+    "city_partner actual login and 10 pages with operation guidance",
+    "city role sees local operational data without platform edit/refund buttons"
+  ],
+  "inventory": [
+    {
+      "role": "super",
+      "key": "dash",
+      "title": "经营概览",
+      "purpose": "经营分析\n查看经营与待办，进入对应业务页办理。\n去订单管理 →\n去内容审核 →\n去商户与进件 →",
+      "buttons": [
+        {
+          "label": "商户进件0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "提现待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "核销异常0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容待审1去审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部订单 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "products",
+      "title": "商品与团期",
+      "purpose": "资料维护\n新增线路、编辑图文与履约资源，管理团期并上下架。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商品 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "＋ 新增线路",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "merchants",
+      "title": "商户与进件",
+      "purpose": "入驻管理\n维护商户资料，审核进件；交易与结算数据随业务生成。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商户 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "＋ 新增商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "scenics",
+      "title": "景区资源",
+      "purpose": "资源维护\n维护景区合作资料、状态与关联线路，查看景点业绩。",
+      "buttons": [
+        {
+          "label": "＋ 新增景区",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "suppliers",
+      "title": "供应商",
+      "purpose": "资源维护\n维护供给方资料、合作状态和服务能力。",
+      "buttons": [
+        {
+          "label": "＋ 新增供应商",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "orders",
+      "title": "订单管理",
+      "purpose": "订单处理\n点“查看与处理”修正履约联系人、记录客服备注或处理退款；金额与状态按业务流程变更。\n去离线核销冲突 →",
+      "buttons": [
+        {
+          "label": "⬇ 导出订单 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部 78",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "待支付 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已支付 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已确认 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已核销 12",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已完成 32",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款中 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已退款 28",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已关闭 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "UIOP1793717932745",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678941543",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678930420",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678920021",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678905291",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678887527",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678862218",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678857079",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678855483",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678848566",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678844134",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678838266",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678834791",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678826797",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678788776",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "phrases",
+      "title": "核销暗号",
+      "purpose": "核销配置\n配置线路的核销暗号、剧情和适用场景。\n去商品与团期 →",
+      "buttons": [
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "清除",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置暗号与剧情 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "conflicts",
+      "title": "离线核销冲突",
+      "purpose": "异常处理\n逐笔核实离线凭证冲突，确认核销或驳回并记录原因。\n去订单管理 →",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "users",
+      "title": "用户中心",
+      "purpose": "账号管理\n点“查看与管理”进入用户画像，冻结/解冻或管理风险；等级、余额由规则与业务流水形成。\n去徽章管理 →\n去实名认证 →",
+      "buttons": [
+        {
+          "label": "1创作者",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "6推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "5商户员工",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "2已实名",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0风险标记",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0已冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "近 7 日新增 110",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下单用户 33",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "复购用户 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "沉睡（90 天未下单） 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "创作者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商 6",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户员工 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已实名 2",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "风险标记 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已冻结 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "kyc",
+      "title": "实名认证",
+      "purpose": "审核处理\n审核用户提交的实名材料，通过或驳回；原始证件信息不作为普通资料编辑。\n去用户中心 →",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "wallets",
+      "title": "权益账户",
+      "purpose": "权益台账\n核对用户积分、等级、徽章和存证记录；余额不提供直接覆盖修改。\n去用户中心 →\n去徽章管理 →",
+      "buttons": [
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "账户明细 ›",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "badges",
+      "title": "徽章管理",
+      "purpose": "权益管理\n维护徽章定义与发放规则，人工授予或按规则补发。\n去用户中心 →",
+      "buttons": [
+        {
+          "label": "全部 55",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "会员等级 4",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "会员荣誉 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "城市徽章 6",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "国家徽章 4",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "链上勋章 3",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "旅程 4",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "足迹 4",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "创作 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "特别 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户徽章 20",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "＋ 新建徽章",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给用户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "发放给商户",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "按规则补发",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "contentdash",
+      "title": "内容看板",
+      "purpose": "内容分析\n查看发布、审核与转化数据；内容处理进入审核或举报申诉。\n去内容审核 →\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "content",
+      "title": "内容审核",
+      "purpose": "审核处理\n查看投稿全文与图片，审核笔记、处理评价展示或下架违规笔记；正文由作者修改。\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "审核",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "contentcases",
+      "title": "举报与申诉",
+      "purpose": "举报与申诉\n处理举报、记录下架原因，复核作者申诉并反馈处理结论。\n去内容审核 →",
+      "buttons": [
+        {
+          "label": "读者举报",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "作者申诉",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "tasks",
+      "title": "约稿任务",
+      "purpose": "任务管理\n创建和编辑约稿，管理上线状态、参与者与投稿审核；现金奖励交财务登记。\n去现金加奖打款 →\n去创作者池 →",
+      "buttons": [
+        {
+          "label": "＋ 新建任务",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参与者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下线",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记打款",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "creators",
+      "title": "创作者池",
+      "purpose": "合作维护\n查看创作者作品与履约表现，维护合作标签和限制状态。\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "⬇ 导出创作者 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设标签",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "partners",
+      "title": "合伙人中心",
+      "purpose": "合作管理\n可直接编辑推广服务商、共创人合作资料；城市账号的新建、改城市与停用流程尚未开放。\n去推广服务商 →\n去排行与对账 →",
+      "buttons": [
+        {
+          "label": "开通推广资格",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "partnerperf",
+      "title": "排行与对账",
+      "purpose": "业绩与对账\n核对角色业绩和资金来源；维护合作资料或处理资金请进入源业务。\n去合伙人中心 →\n去结算 →\n去提现审批 →",
+      "buttons": [
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看对账",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "promoters",
+      "title": "推广服务商",
+      "purpose": "推广管理\n开通推广资格，维护合作资料，调档、冻结或解冻。\n去合伙人中心 →\n去提现审批 →",
+      "buttons": [
+        {
+          "label": "＋ 开通推广资格",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "settlements",
+      "title": "结算",
+      "purpose": "结算处理\n生成结算单、复核并登记回单；历史计账金额不作为普通表格编辑。\n去协议变更 →",
+      "buttons": [
+        {
+          "label": "⬇ 导出结算 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "生成本周结算单",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记支付回单",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "withdrawals",
+      "title": "提现审批",
+      "purpose": "资金审批\n核实提现申请，登记真实打款流水或驳回；冻结账号暂停打款。\n去合伙人中心 →",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "taskcash",
+      "title": "现金加奖打款",
+      "purpose": "奖励打款\n核对已通过投稿的现金奖励，实际线下支付后登记唯一流水号；登记不会自动发起转账。",
+      "buttons": [
+        {
+          "label": "登记打款",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "agreements",
+      "title": "协议变更",
+      "purpose": "协议审批\n审批商户发起的协议变更；已生效协议通过新变更保留历史。\n去商户与进件 →",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "budgets",
+      "title": "旅豆预算",
+      "purpose": "预算管理\n新建、编辑、启停旅豆预算批次；已发放量随业务流水累计。",
+      "buttons": [
+        {
+          "label": "＋ 新建批次",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "停用",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "rateov",
+      "title": "逐品佣金",
+      "purpose": "佣金配置\n维护单品佣金覆盖规则，核对比例与适用商品。\n去推广服务商 →",
+      "buttons": [
+        {
+          "label": "设置覆盖 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "cocreate",
+      "title": "共创分润",
+      "purpose": "共创管理\n登记共创人，编辑合作资料与状态，核对分润台账。\n去合伙人中心 →",
+      "buttons": [
+        {
+          "label": "＋ 登记共创人",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "miniapp",
+      "title": "小程序装修与映射",
+      "purpose": "渠道配置\n编辑小程序装修文案；页面业务内容通过映射进入对应管理栏目。\n去轮播管理 →\n去常见问题 →",
+      "buttons": [
+        {
+          "label": "编辑小程序装修",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 首页 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 首页 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "轮播管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 品牌与分享 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 列表与商城 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 目的地 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期（频道：商城 SKU） →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 列表与商城 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 → 编辑资料 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 → 团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景区资源 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "常见问题（关联线路） →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · 订单/旅豆 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容审核 · 评价管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 → 团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · order.refund_policy →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "集成中心 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 → 编辑 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景区资源 → 编辑 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 → 团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 → 退款 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · 核销 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "暗号管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · 旅豆 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 旅豆与推广 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "积分发行台账 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿任务 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "举报与申诉 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容审核 → 审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿任务 → 审核投稿 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿任务 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿任务 → 审核投稿 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "创作者池 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "举报与申诉 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "勋章发行 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "存证中心 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "权益账户 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 客服与协议 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "逐品佣金 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "提现审批 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 旅豆与推广 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "常见问题 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 客服与协议 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "实名认证 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 商户端 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容审核 · 评价管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "暗号管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线冲突 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "审计日志 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "订单 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商品与团期 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "结算 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "协议变更 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · settlement.refund_fee_merchant_pct →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户资料 · 结算账户 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参数中心 · merchant.levels →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "徽章管理 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 → 全景 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "小程序装修 · 商户端 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户与进件 → 编辑 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "banners",
+      "title": "轮播管理",
+      "purpose": "投放管理\n新增、编辑、排序及启停轮播素材。",
+      "buttons": [
+        {
+          "label": "＋ 新增轮播",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "faqs",
+      "title": "常见问题",
+      "purpose": "内容维护\n新增、编辑、分类、排序及启停常见问题。",
+      "buttons": [
+        {
+          "label": "＋ 新增问题",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "web3dash",
+      "title": "链路总览",
+      "purpose": "链路分析\n查看业务存证链路与队列；需要处理时进入存证或接入中心。\n去存证中心 →\n去链接入中心 →",
+      "buttons": [
+        {
+          "label": "演示 · 多节点形态",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "刷新 ↻",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "追踪此单 ↗",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "演示完整流程",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "进入存证中心 ›",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "attest",
+      "title": "存证中心",
+      "purpose": "存证处理\n打包、锚定、核验并查看证明；历史已确认记录不可直接改写。\n去链接入中心 →",
+      "buttons": [
+        {
+          "label": "① 打包（出 Merkle 根）",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "② 补锚（按 seq 升序）",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "③ 封存昨日旅豆账本",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "④ 六条不变式对账",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "验证",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "vc",
+      "title": "数字身份",
+      "purpose": "凭证管理\n签发、验签或吊销旅行凭证；原凭证内容不可直接覆盖修改。",
+      "buttons": [
+        {
+          "label": "签发",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "用当前凭证打开验签台",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "pointassets",
+      "title": "积分发行台账",
+      "purpose": "发行台账\n核对发行批次、持有人和年度总量，发放通过预算及业务规则办理。\n去旅豆预算 →",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "chainassets",
+      "title": "链与资产",
+      "purpose": "接入与资产\n查看链能力、发行台账和已接入状态，连接参数在链接入中心维护。\n去链接入中心 →",
+      "buttons": [
+        {
+          "label": "发行",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "chainhub",
+      "title": "链接入中心",
+      "purpose": "接入配置\n维护接入参数、探测与切换；自检成功不代表真实业务上链完成。",
+      "buttons": [
+        {
+          "label": "联盟链政务 / 景区 / 金融场景的主流选择：许可制节点，只写指纹",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "公链境外业务与可流通权益：托管签名，私钥不进本服务",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开发与测试自测链与未接入状态",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置接入",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线自检",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "连通性探测",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设为当前链",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置接入",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线自检",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "连通性探测",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设为当前链",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置接入",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线自检",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设为当前链",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置接入",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线自检",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "连通性探测",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设为当前链",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "配置接入",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "离线自检",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "连通性探测",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设为当前链",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "terms",
+      "title": "术语映射",
+      "purpose": "参考说明\n统一内部与小程序用语口径；词表由代码统一维护，此页不提供业务编辑。",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "risk",
+      "title": "风控事件",
+      "purpose": "风险处理\n查看风险明细，核实并标记处理；账号风险到用户中心管理。\n去用户中心 →",
+      "buttons": [
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "audit",
+      "title": "审计日志",
+      "purpose": "审计台账\n追踪操作人与变更记录；历史审计只读，修正业务需生成新记录。",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "security",
+      "title": "安全中心",
+      "purpose": "安全管理\n维护验证器、验证通道与访问安全；后台角色账号生命周期管理尚未完整提供。",
+      "buttons": [
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "开 TOTP",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑手机",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "绑邮箱",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "config",
+      "title": "参数中心",
+      "purpose": "规则审批\n修改规则需提交提案，按敏感等级复核；生效与回滚均保留历史。",
+      "buttons": [
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "修改",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "features",
+      "title": "功能开关",
+      "purpose": "功能配置\n按现有功能键启停功能，变更写入审计。",
+      "buttons": []
+    },
+    {
+      "role": "super",
+      "key": "integrations",
+      "title": "集成中心",
+      "purpose": "服务配置\n维护支付、小程序等外部通道配置，确认真实接入状态。",
+      "buttons": [
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "设置",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "super",
+      "key": "system",
+      "title": "运维控制台",
+      "purpose": "运维处理\n查看健康、任务与告警，按需触发后台任务；业务资料到相应业务页维护。",
+      "buttons": [
+        {
+          "label": "关单",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "佣金到期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成到期单",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "存证打包",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "豆过期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "检索",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "dash",
+      "title": "经营概览",
+      "purpose": "经营分析\n查看经营与待办，进入对应业务页办理。\n去订单管理 →\n去内容审核 →\n去商户与进件 →",
+      "buttons": [
+        {
+          "label": "商户进件0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "提现待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "核销异常0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容待审1去审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部订单 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "products",
+      "title": "商品与团期",
+      "purpose": "资料维护\n新增线路、编辑图文与履约资源，管理团期并上下架。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商品 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "＋ 新增线路",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下架",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑资料",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "merchants",
+      "title": "商户与进件",
+      "purpose": "入驻管理\n维护商户资料，审核进件；交易与结算数据随业务生成。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商户 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "scenics",
+      "title": "景区资源",
+      "purpose": "资源维护\n维护景区合作资料、状态与关联线路，查看景点业绩。",
+      "buttons": [
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "orders",
+      "title": "订单管理",
+      "purpose": "订单处理\n点“查看与处理”修正履约联系人、记录客服备注或处理退款；金额与状态按业务流程变更。",
+      "buttons": [
+        {
+          "label": "⬇ 导出订单 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部 78",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "待支付 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已支付 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已确认 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已核销 12",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已完成 32",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款中 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已退款 28",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已关闭 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "UIOP1793717932745",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678941543",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678930420",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678920021",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678905291",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678887527",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678862218",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678857079",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678855483",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678848566",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678844134",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678838266",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678834791",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678826797",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678788776",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "users",
+      "title": "用户中心",
+      "purpose": "账号管理\n点“查看与管理”进入用户画像，冻结/解冻或管理风险；等级、余额由规则与业务流水形成。\n去实名认证 →",
+      "buttons": [
+        {
+          "label": "1创作者",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "6推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "5商户员工",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "2已实名",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0风险标记",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0已冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "近 7 日新增 110",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下单用户 33",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "复购用户 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "沉睡（90 天未下单） 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "创作者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商 6",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户员工 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已实名 2",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "风险标记 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已冻结 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "kyc",
+      "title": "实名认证",
+      "purpose": "审核处理\n审核用户提交的实名材料，通过或驳回；原始证件信息不作为普通资料编辑。\n去用户中心 →",
+      "buttons": []
+    },
+    {
+      "role": "ops",
+      "key": "contentdash",
+      "title": "内容看板",
+      "purpose": "内容分析\n查看发布、审核与转化数据；内容处理进入审核或举报申诉。\n去内容审核 →\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "content",
+      "title": "内容审核",
+      "purpose": "审核处理\n查看投稿全文与图片，审核笔记、处理评价展示或下架违规笔记；正文由作者修改。\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "查看",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "contentcases",
+      "title": "举报与申诉",
+      "purpose": "举报与申诉\n处理举报、记录下架原因，复核作者申诉并反馈处理结论。\n去内容审核 →",
+      "buttons": [
+        {
+          "label": "读者举报",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "作者申诉",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "tasks",
+      "title": "约稿任务",
+      "purpose": "任务管理\n创建和编辑约稿，管理上线状态、参与者与投稿审核；现金奖励交财务登记。\n去现金加奖打款 →",
+      "buttons": [
+        {
+          "label": "＋ 新建任务",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参与者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下线",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "partners",
+      "title": "合伙人中心",
+      "purpose": "合作管理\n可直接编辑推广服务商、共创人合作资料；城市账号的新建、改城市与停用流程尚未开放。\n去推广服务商 →\n去排行与对账 →",
+      "buttons": [
+        {
+          "label": "开通推广资格",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑合作资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "partnerperf",
+      "title": "排行与对账",
+      "purpose": "业绩与对账\n核对角色业绩和资金来源；维护合作资料或处理资金请进入源业务。\n去合伙人中心 →",
+      "buttons": [
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看对账",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "promoters",
+      "title": "推广服务商",
+      "purpose": "推广管理\n开通推广资格，维护合作资料，调档、冻结或解冻。\n去合伙人中心 →",
+      "buttons": [
+        {
+          "label": "＋ 开通推广资格",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "资料",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "调档",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "taskcash",
+      "title": "现金加奖打款",
+      "purpose": "奖励打款\n核对已通过投稿的现金奖励，实际线下支付后登记唯一流水号；登记不会自动发起转账。",
+      "buttons": []
+    },
+    {
+      "role": "ops",
+      "key": "agreements",
+      "title": "协议变更",
+      "purpose": "协议审批\n审批商户发起的协议变更；已生效协议通过新变更保留历史。\n去商户与进件 →",
+      "buttons": []
+    },
+    {
+      "role": "ops",
+      "key": "cocreate",
+      "title": "共创分润",
+      "purpose": "共创管理\n登记共创人，编辑合作资料与状态，核对分润台账。\n去合伙人中心 →",
+      "buttons": [
+        {
+          "label": "＋ 登记共创人",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "banners",
+      "title": "轮播管理",
+      "purpose": "投放管理\n新增、编辑、排序及启停轮播素材。",
+      "buttons": [
+        {
+          "label": "＋ 新增轮播",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "ops",
+      "key": "faqs",
+      "title": "常见问题",
+      "purpose": "内容维护\n新增、编辑、分类、排序及启停常见问题。",
+      "buttons": [
+        {
+          "label": "＋ 新增问题",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "dash",
+      "title": "经营概览",
+      "purpose": "经营分析\n查看经营与待办，进入对应业务页办理。\n去订单管理 →",
+      "buttons": [
+        {
+          "label": "商户进件0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "提现待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "核销异常0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容待审1去审核 →",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部订单 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "scenics",
+      "title": "景区资源",
+      "purpose": "资源维护\n维护景区合作资料、状态与关联线路，查看景点业绩。",
+      "buttons": [
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "orders",
+      "title": "订单管理",
+      "purpose": "订单处理\n点“查看与处理”修正履约联系人、记录客服备注或处理退款；金额与状态按业务流程变更。",
+      "buttons": [
+        {
+          "label": "⬇ 导出订单 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部 78",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "待支付 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已支付 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已确认 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已核销 12",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已完成 32",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款中 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已退款 28",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已关闭 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "UIOP1793717932745",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678941543",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678930420",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678920021",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678905291",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678887527",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678862218",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678857079",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678855483",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678848566",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678844134",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678838266",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678834791",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678826797",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678788776",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "partners",
+      "title": "合伙人中心",
+      "purpose": "合作管理\n可直接编辑推广服务商、共创人合作资料；城市账号的新建、改城市与停用流程尚未开放。\n去排行与对账 →",
+      "buttons": [
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "partnerperf",
+      "title": "排行与对账",
+      "purpose": "业绩与对账\n核对角色业绩和资金来源；维护合作资料或处理资金请进入源业务。\n去合伙人中心 →\n去结算 →\n去提现审批 →",
+      "buttons": [
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "共创人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看对账",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "settlements",
+      "title": "结算",
+      "purpose": "结算处理\n生成结算单、复核并登记回单；历史计账金额不作为普通表格编辑。\n去协议变更 →",
+      "buttons": [
+        {
+          "label": "⬇ 导出结算 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "生成本周结算单",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记支付回单",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "withdrawals",
+      "title": "提现审批",
+      "purpose": "资金审批\n核实提现申请，登记真实打款流水或驳回；冻结账号暂停打款。\n去合伙人中心 →",
+      "buttons": []
+    },
+    {
+      "role": "finance",
+      "key": "taskcash",
+      "title": "现金加奖打款",
+      "purpose": "奖励打款\n核对已通过投稿的现金奖励，实际线下支付后登记唯一流水号；登记不会自动发起转账。",
+      "buttons": [
+        {
+          "label": "登记打款",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "agreements",
+      "title": "协议变更",
+      "purpose": "协议审批\n审批商户发起的协议变更；已生效协议通过新变更保留历史。",
+      "buttons": []
+    },
+    {
+      "role": "finance",
+      "key": "budgets",
+      "title": "旅豆预算",
+      "purpose": "预算管理\n新建、编辑、启停旅豆预算批次；已发放量随业务流水累计。",
+      "buttons": [
+        {
+          "label": "＋ 新建批次",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "停用",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "finance",
+      "key": "audit",
+      "title": "审计日志",
+      "purpose": "审计台账\n追踪操作人与变更记录；历史审计只读，修正业务需生成新记录。",
+      "buttons": []
+    },
+    {
+      "role": "review",
+      "key": "contentdash",
+      "title": "内容看板",
+      "purpose": "内容分析\n查看发布、审核与转化数据；内容处理进入审核或举报申诉。\n去内容审核 →\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "review",
+      "key": "content",
+      "title": "内容审核",
+      "purpose": "审核处理\n查看投稿全文与图片，审核笔记、处理评价展示或下架违规笔记；正文由作者修改。\n去举报与申诉 →\n去约稿任务 →",
+      "buttons": [
+        {
+          "label": "审核",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "隐藏",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "review",
+      "key": "contentcases",
+      "title": "举报与申诉",
+      "purpose": "举报与申诉\n处理举报、记录下架原因，复核作者申诉并反馈处理结论。\n去内容审核 →",
+      "buttons": [
+        {
+          "label": "读者举报",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "作者申诉",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "review",
+      "key": "tasks",
+      "title": "约稿任务",
+      "purpose": "任务管理\n创建和编辑约稿，管理上线状态、参与者与投稿审核；现金奖励交财务登记。",
+      "buttons": [
+        {
+          "label": "＋ 新建任务",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "参与者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "risk",
+      "key": "conflicts",
+      "title": "离线核销冲突",
+      "purpose": "异常处理\n逐笔核实离线凭证冲突，确认核销或驳回并记录原因。",
+      "buttons": []
+    },
+    {
+      "role": "risk",
+      "key": "users",
+      "title": "用户中心",
+      "purpose": "账号管理\n点“查看与管理”进入用户画像，冻结/解冻或管理风险；等级、余额由规则与业务流水形成。",
+      "buttons": [
+        {
+          "label": "1创作者",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "6推广服务商",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "5商户员工",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "2已实名",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0风险标记",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "0已冻结",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "近 7 日新增 110",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "下单用户 33",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "复购用户 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "沉睡（90 天未下单） 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "创作者 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "推广服务商 6",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "商户员工 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已实名 2",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "风险标记 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已冻结 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看与管理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "risk",
+      "key": "risk",
+      "title": "风控事件",
+      "purpose": "风险处理\n查看风险明细，核实并标记处理；账号风险到用户中心管理。\n去用户中心 →",
+      "buttons": [
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "标记已处理",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "risk",
+      "key": "audit",
+      "title": "审计日志",
+      "purpose": "审计台账\n追踪操作人与变更记录；历史审计只读，修正业务需生成新记录。",
+      "buttons": []
+    },
+    {
+      "role": "city_partner",
+      "key": "dash",
+      "title": "经营概览",
+      "purpose": "经营分析\n查看经营与待办，进入对应业务页办理。\n去订单管理 →\n去商户与进件 →",
+      "buttons": [
+        {
+          "label": "商户进件0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "提现待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "核销异常0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "内容待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "约稿待审0已清空",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部订单 →",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "products",
+      "title": "商品与团期",
+      "purpose": "资料维护\n新增线路、编辑图文与履约资源，管理团期并上下架。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商品 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "团期",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "merchants",
+      "title": "商户与进件",
+      "purpose": "入驻管理\n维护商户资料，审核进件；交易与结算数据随业务生成。",
+      "buttons": [
+        {
+          "label": "⬇ 导出商户 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全景",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "编辑",
+          "disabled": true,
+          "title": "当前角色不能编辑商户"
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "scenics",
+      "title": "景区资源",
+      "purpose": "资源维护\n维护景区合作资料、状态与关联线路，查看景点业绩。",
+      "buttons": [
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "景点数据",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "orders",
+      "title": "订单管理",
+      "purpose": "订单处理\n点“查看与处理”修正履约联系人、记录客服备注或处理退款；金额与状态按业务流程变更。",
+      "buttons": [
+        {
+          "label": "⬇ 导出订单 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部 73",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "待支付 5",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已支付 1",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已确认 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已核销 8",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已完成 32",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "退款中 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已退款 27",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "已关闭 0",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "UIOP1793717932745",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678941543",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678930420",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678920021",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678905291",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678887527",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678862218",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678848566",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678844134",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678838266",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678834791",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "完成",
+          "disabled": false,
+          "title": "联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）"
+        },
+        {
+          "label": "WL202611031678826797",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678788776",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678762396",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "WL202611031678262097",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "详情",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "contentdash",
+      "title": "内容看板",
+      "purpose": "内容分析\n查看发布、审核与转化数据；内容处理进入审核或举报申诉。\n去举报与申诉 →",
+      "buttons": [
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "contentcases",
+      "title": "举报与申诉",
+      "purpose": "举报与申诉\n处理举报、记录下架原因，复核作者申诉并反馈处理结论。",
+      "buttons": [
+        {
+          "label": "读者举报",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "作者申诉",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "partners",
+      "title": "合伙人中心",
+      "purpose": "合作管理\n可直接编辑推广服务商、共创人合作资料；城市账号的新建、改城市与停用流程尚未开放。\n去排行与对账 →",
+      "buttons": [
+        {
+          "label": "查询",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "重置",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "全部",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "业绩画像",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "partnerperf",
+      "title": "排行与对账",
+      "purpose": "业绩与对账\n核对角色业绩和资金来源；维护合作资料或处理资金请进入源业务。\n去合伙人中心 →\n去结算 →",
+      "buttons": [
+        {
+          "label": "城市合伙人",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "查看对账",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "上一页",
+          "disabled": true,
+          "title": ""
+        },
+        {
+          "label": "下一页",
+          "disabled": true,
+          "title": ""
+        }
+      ]
+    },
+    {
+      "role": "city_partner",
+      "key": "settlements",
+      "title": "结算",
+      "purpose": "结算处理\n生成结算单、复核并登记回单；历史计账金额不作为普通表格编辑。",
+      "buttons": [
+        {
+          "label": "⬇ 导出结算 CSV",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "生成本周结算单",
+          "disabled": false,
+          "title": ""
+        },
+        {
+          "label": "登记支付回单",
+          "disabled": false,
+          "title": ""
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "local isolated database",
+    "WeChat and payment MOCK",
+    "cash entry fixture represents previously approved reward; no external bank transfer",
+    "production not deployed"
+  ]
+}

@@ -5,7 +5,8 @@ import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
-import { maskApplyMobile, publicOrderPhone } from '../infra/mobile.mjs'
+import { maskApplyMobile, publicOrderPhone, sealMobile } from '../infra/mobile.mjs'
+import { ADMIN_ACTIONS } from '../domain/admin-capabilities.mjs'
 import * as refund from '../domain/refund.mjs'
 import * as group from '../domain/group.mjs'
 import * as wxpay from '../domain/wxpay.mjs'
@@ -38,6 +39,19 @@ import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_T
 const jsonText = (v) => JSON.stringify(v)
 
 const admin = {
+  'GET /admin/capabilities': async (req) => {
+    const a = await requireAdmin(req)
+    const actions = Object.fromEntries(Object.entries(ADMIN_ACTIONS).map(([key, rule]) => [key, {
+      allowed: rule.roles.includes(a.role), reason: '需' + rule.label,
+    }]))
+    for (const kind of entities.kinds()) {
+      const sc = entities.get(kind)
+      for (const [op, roles] of [['edit', sc.roles], ['create', sc.createRoles || sc.roles]]) {
+        actions[`entity.${kind}.${op}`] = { allowed: (op !== 'create' || !sc.noCreate) && roles.includes(a.role), reason: '当前角色不能' + (op === 'create' ? '新建' : '编辑') + sc.label }
+      }
+    }
+    return { role: a.role, scopeCity: a.scopeCity || null, actions }
+  },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
     const u = await one('SELECT * FROM admin_user WHERE username = ? AND status = 1', [username || ''])
@@ -206,23 +220,58 @@ const admin = {
   },
 
   'GET /admin/orders/:no': async (req) => {
-    await requireAdmin(req)
+    const a = await requireAdmin(req)
     const o = await one(`SELECT o.*, p.title, u.nickname FROM orders o
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id WHERE o.order_no = ?`, [req.params.no])
     if (!o) throw new BizError(2003, '订单不存在')
+    if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可查看本城订单')
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const pay = await one('SELECT wx_trans_no, status, amount, callback_at FROM payment WHERE order_id = ?', [o.id])
     const refunds = await q('SELECT refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, settled_at FROM refunds WHERE order_id = ? ORDER BY id DESC', [o.id])
     // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
     const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
-    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote }
+    const serviceRecords = await q("SELECT actor, action, after_val, created_at FROM audit_log WHERE module = 'order' AND biz_ref = ? AND action IN ('contact-update','service-note') ORDER BY id DESC LIMIT 30", [o.order_no])
+    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote, serviceRecords }
+  },
+
+  // 客服只修正履约联系人，不更改订单归属、交易金额、出行人或团期。
+  'POST /admin/orders/:no/contact': async (req) => {
+    const a = await requireAdmin(req, 'order.service')
+    const name = String(req.body.name || '').trim(), phone = String(req.body.phone || '').trim(), reason = String(req.body.reason || '').trim()
+    if (!name || name.length > 64 || (phone && !/^1\d{10}$/.test(phone))) throw new BizError(1001, '请填写 1–64 字联系人；新手机号须为 11 位，不修改号码请留空')
+    if (reason.length < 4 || reason.length > 300) throw new BizError(1001, '请填写 4–300 字修改原因')
+    return tx(async (c) => {
+      const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [req.params.no])
+      if (!o) throw new BizError(2003, '订单不存在')
+      if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可处理本城订单')
+      if (![10, 20, 30].includes(Number(o.status))) throw new BizError(2002, '仅待支付、已支付和已确认订单可修正联系人')
+      const sealed = phone ? sealMobile(phone).enc : o.contact_phone_sealed
+      await c.upd('UPDATE orders SET contact_name = ?, contact_phone_sealed = ?, contact_phone_enc = ? WHERE id = ?', [name, sealed, phone ? null : o.contact_phone_enc, o.id])
+      const next = publicOrderPhone({ ...o, contact_name: name, contact_phone_sealed: sealed, contact_phone_enc: phone ? null : o.contact_phone_enc })
+      await audit(c, 'admin:' + a.name, 'order', 'contact-update', o.order_no, { name: o.contact_name, phone: publicOrderPhone(o).contactPhone }, { name, phone: next.contactPhone, reason })
+      return { updated: true, contactName: name, contactPhone: next.contactPhone }
+    })
+  },
+  'POST /admin/orders/:no/service-notes': async (req) => {
+    const a = await requireAdmin(req, 'order.service')
+    const note = String(req.body.note || '').trim()
+    if (note.length < 4 || note.length > 500) throw new BizError(1001, '请填写 4–500 字客服备注；请勿录入手机号、证件号等敏感信息')
+    if (/\d{11,}/.test(note)) throw new BizError(1001, '备注请勿录入完整手机号、证件号等敏感信息')
+    return tx(async (c) => {
+      const o = await c.one('SELECT id, order_no, city_code FROM orders WHERE order_no = ? FOR UPDATE', [req.params.no])
+      if (!o) throw new BizError(2003, '订单不存在')
+      if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可处理本城订单')
+      await audit(c, 'admin:' + a.name, 'order', 'service-note', o.order_no, null, { note })
+      return { saved: true }
+    })
   },
 
   'POST /admin/orders/:no/refund': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'finance'])
+    const a = await requireAdmin(req, 'order.refund')
     const o = await order.byNo(req.params.no)
     if (!o) throw new BizError(2003, '订单不存在')
+    if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可处理本城订单')
     if (![20, 30, 40].includes(o.status)) throw new BizError(2002, '状态不可退款')
     // mode=policy 按退改梯度扣手续费；默认 full 为客服全额处理（已核销售后、平台原因等），操作人与原因进审计和存证
     const mode = req.body.mode === 'policy' ? 'policy' : 'full'
@@ -336,7 +385,7 @@ const admin = {
     return { images: imgs }
   },
   'POST /admin/products/:id/status': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, 'product.status')
     if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
     if (Number(req.body.status) === 1) {
       const p = await one('SELECT * FROM tour_product WHERE id=?', [req.params.id])
@@ -651,7 +700,7 @@ const admin = {
   },
   // 下线 / 重新上线（下线后不能再领取，已领取的人仍可投稿与审核）
   'POST /admin/content-tasks/:id/status': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, 'task.status')
     const st = Number(req.body.status)
     if (![0, 4].includes(st)) throw new BizError(1001, '状态只能是招募中或已下线')
     const n = await tx(async (c) => {
@@ -761,7 +810,7 @@ const admin = {
       WHERE e.cash_status IN (1, 2) ORDER BY e.cash_status, e.finished_at DESC LIMIT 200`)
   },
   'POST /admin/task-entries/:id/cash-paid': async (req) => {
-    const a = await requireAdmin(req, ['super', 'finance'])
+    const a = await requireAdmin(req, 'task.cashPaid')
     const ref = String(req.body.ref || '').trim()
     if (!/^[\w-]{6,64}$/.test(ref)) throw new BizError(1001, '请填写打款流水号（6–64 位字母、数字、- 或 _）')
     return tx(async (c) => {
@@ -776,7 +825,7 @@ const admin = {
     })
   },
   'POST /admin/content-tasks/:id/delete': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, 'task.delete')
     const t = await one('SELECT id, status, title FROM content_task WHERE id = ?', [req.params.id])
     if (!t) throw new BizError(1004, '任务不存在')
     // 有人领取后删除会让作者的投稿和奖励记录失去归属：有参与记录的只能下线

@@ -218,6 +218,8 @@
 
   /* ---------------- 主入口 ---------------- */
   window.entityEditor = async (kind, id, opts = {}) => {
+    const action = `entity.${kind}.${id ? 'edit' : 'create'}`
+    if (!adminCan(action)) return toast(adminWhy(action), true)
     if (st && st.dirty && !confirm('当前编辑尚未保存，确定放弃？')) return
     closeEditor(true)
     const root = document.createElement('div')
@@ -283,6 +285,8 @@
 
   window.eeSave = async () => {
     if (!st) return
+    const action = `entity.${st.kind}.${st.id ? 'edit' : 'create'}`
+    if (!adminCan(action)) return toast(adminWhy(action), true)
     document.querySelectorAll('.ee-err').forEach((x) => { x.textContent = '' })
     document.querySelectorAll('.ee-field.bad').forEach((x) => x.classList.remove('bad'))
     const btn = document.getElementById('eeSave')
