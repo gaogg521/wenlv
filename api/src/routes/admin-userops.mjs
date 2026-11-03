@@ -3,6 +3,7 @@
 // 审批人不能与申请人相同；内部标签与备注不下发游客接口。
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, audit } from './_shared.mjs'
+import { maskMobile } from '../infra/mobile.mjs'
 import { attest } from '../domain/attest.mjs'
 import { cfgArr } from '../config.mjs'
 import * as bean from '../domain/bean.mjs'
@@ -194,5 +195,53 @@ export const adminUserOps = {
       await audit(c, 'admin:' + a.name, 'entitlement', 'approve', 'eq-' + r.id, { status: 0 }, { status: 1, reqNo: r.req_no, kind: r.kind, amount: r.amount, execResult, note })
       return { approved: true, execResult }
     })
+  },
+
+  // ---- T08：用户搜索选择器（推广开通/权益调整等场景选用户，代替手填 ID）----
+  'GET /admin/user-picker': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance', 'risk'])
+    const kw = String(req.query.kw || '').trim()
+    if (!kw || kw.length < 1) return { rows: [] }
+    if (/^1\d{10}$/.test(kw)) {
+      const w = (await import('../infra/mobile.mjs')).whereMobile(kw)
+      const rows = await q(`SELECT u.id, u.nickname, u.status, u.mobile_enc,
+        EXISTS (SELECT 1 FROM promoter p WHERE p.user_id = u.id) is_promoter
+        FROM user_account u WHERE ${w.sql} LIMIT 10`, w.args)
+      return { rows: rows.map((r) => ({ id: r.id, nickname: r.nickname, frozen: Number(r.status) === 0, mobile: maskMobile(r.mobile_enc), isPromoter: !!r.is_promoter })) }
+    }
+    const conds = [], args = []
+    if (/^\d+$/.test(kw) && kw.length <= 9) { conds.push('u.id = ?'); args.push(Number(kw)) }
+    else { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%') }
+    const rows = await q(`SELECT u.id, u.nickname, u.status, u.mobile_enc,
+      EXISTS (SELECT 1 FROM promoter p WHERE p.user_id = u.id) is_promoter
+      FROM user_account u WHERE ${conds.join(' AND ')} ORDER BY u.id DESC LIMIT 10`, args)
+    return { rows: rows.map((r) => ({ id: r.id, nickname: r.nickname, frozen: Number(r.status) === 0, mobile: maskMobile(r.mobile_enc), isPromoter: !!r.is_promoter })) }
+  },
+
+  // ---- T05 扩展：批量打标签（先预览数量/范围并逐笔反馈，不含高风险动作）----
+  'POST /admin/users/bulk-tags': async (req) => {
+    const a = await requireAdmin(req, 'user.manage')
+    const { userIds, tag, note } = req.body || {}
+    const tagStr = String(tag || '').trim()
+    let words = []
+    try { words = await cfgArr('user.ops_tags') } catch { words = [] }
+    if (!words.includes(tagStr)) throw new BizError(1001, '标签不在词表中：可在参数中心 user.ops_tags 维护词表')
+    const ids = Array.isArray(userIds) ? userIds.map(Number).filter(Number.isInteger) : []
+    if (!ids.length || ids.length > 100) throw new BizError(1001, '请选择 1–100 个用户')
+    const noteStr = String(note || '').trim() || null
+    const results = []
+    for (const uid of ids) {
+      try {
+        const u = await one('SELECT id FROM user_account WHERE id = ?', [uid])
+        if (!u) { results.push({ userId: uid, ok: false, reason: '用户不存在' }); continue }
+        if (await one('SELECT id FROM user_ops_tag WHERE user_id = ? AND tag = ?', [uid, tagStr])) { results.push({ userId: uid, ok: false, reason: '已有该标签' }); continue }
+        await tx(async (c) => {
+          await c.ins('INSERT INTO user_ops_tag (user_id, tag, note, created_by) VALUES (?,?,?,?)', [uid, tagStr, noteStr, 'admin:' + a.name])
+          await audit(c, 'admin:' + a.name, 'user', 'tag-add', 'user-' + uid, null, { tag: tagStr, note: noteStr, bulk: true })
+        })
+        results.push({ userId: uid, ok: true })
+      } catch (e) { results.push({ userId: uid, ok: false, reason: e.message }) }
+    }
+    return { total: ids.length, ok: results.filter((r) => r.ok).length, fail: results.filter((r) => !r.ok).length, results }
   },
 }

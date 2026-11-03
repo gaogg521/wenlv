@@ -1,0 +1,19 @@
+{
+  "task": "批次F-4：T08 用户搜索选择器 + T05 批量打标签",
+  "date": "2026-11-04",
+  "branch": "feat/f4-selectors-and-guards",
+  "environment": { "service": "http://127.0.0.1:18092/admin-ui", "db": "wanderlust_qa_batchf_20261104 (隔离库，V1–V49，seed:scenario)", "jwt": "devsecret", "payMode": "MOCK" },
+  "apiTests": {
+    "npmTest": "213 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2）",
+    "newSuite": "api/test/admin-userpicker-bulktag.mjs 2 项：选择器（昵称/ID/手机号盲索引、脱敏回显、冻结与已有资格标记、越权拒绝）/批量打标签（词表校验、逐笔结果含成功+已存在+不存在、越权拒绝、审计留痕）"
+  },
+  "uiChecks": [
+    { "step": "运营 → 推广服务商 → 开通推广资格：弹窗为搜索选择器（昵称/ID/手机号），候选显示脱敏手机号与『已是推广商』『已冻结』标记，点选后确认开通", "result": "通过（AC-02/O-03）", "evidence": "01-promoter-user-picker.png" }
+  ],
+  "boundaries": [
+    "user-picker 手机号检索走盲索引，响应只含脱敏值（红线 11）",
+    "批量打标签上限 100 人、只含标签动作（不含冻结/打款等高风险）",
+    "T09 主数据版本化未在本批（团期名额约束/领取后不可删/结算快照等约束此前批次已覆盖；系统性版本字段仍待做）"
+  ]
+}
