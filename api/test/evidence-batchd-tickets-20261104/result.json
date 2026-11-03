@@ -1,0 +1,26 @@
+{
+  "task": "批次D：T04 订单售后工单 + 未支付取消",
+  "date": "2026-11-04",
+  "branch": "feat/batch-d-aftersales",
+  "environment": {
+    "service": "http://127.0.0.1:18090/admin-ui",
+    "db": "wanderlust_qa_batchd_20261104 (隔离库，V1–V46，seed:scenario)",
+    "jwt": "devsecret",
+    "payMode": "MOCK"
+  },
+  "apiTests": {
+    "npmTest": "202 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2，含 cross-end 45 项回归）",
+    "newSuite": "api/test/admin-tickets.mjs 5 项：发起校验与城市边界/全生命周期与时间线不可改写/队列契约与越权/并发认领只一人成功/未支付取消（名额释放+旅豆退回+事件留痕+越权拒绝+已支付拒绝+取消后迟到支付回调被状态机拒绝且无支付入账）"
+  },
+  "uiChecks": [
+    { "step": "订单履约 → 售后工单：KPI（待认领/处理中/已解决）+ 状态页签服务端计数 + 队列分页", "result": "通过（截图含测试残留的 2 条城市发起单，演示队列展示，已另行清理）", "evidence": "01-tickets-empty-queue.png" },
+    { "step": "订单管理 → 已核销订单 详情抽屉 → 发起售后 → 选类别/优先级/说明 → 创建成功 toast『工单 AS2026110336078 已创建，等待客服认领』", "result": "通过", "evidence": "02-create-from-order-drawer.png" },
+    { "step": "工单队列 → 认领（模态确认）→ 责任人=admin:超级管理员 → 办结（结论必填）→ toast『工单已办结，状态: 已解决』，KPI 已解决 1/0，行操作变为 关闭/重开", "result": "通过", "evidence": "03-claim-resolve-done.png" }
+  ],
+  "boundaries": [
+    "改期/换团按交接文档要求另立 PR（本批只含工单与未支付取消）",
+    "工单不联动资金动作（退款仍走订单退款流程）；财务角色当前可读工单队列，等待财务步骤的专门处理列入后续",
+    "取消未支付依赖状态机：支付回调先到则取消失败（2002），不会出现已付款却无订单"
+  ]
+}

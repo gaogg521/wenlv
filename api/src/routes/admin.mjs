@@ -291,6 +291,7 @@ const admin = {
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id WHERE o.order_no = ?`, [req.params.no])
     if (!o) throw new BizError(2003, '订单不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可查看本城订单')
+    const tickets = await q('SELECT id, ticket_no, category, status, assignee, created_at FROM aftersales_ticket WHERE order_no = ? ORDER BY id DESC LIMIT 10', [o.order_no]).catch(() => [])
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
     const pay = await one('SELECT wx_trans_no, status, amount, callback_at FROM payment WHERE order_id = ?', [o.id])
@@ -298,7 +299,7 @@ const admin = {
     // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
     const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
     const serviceRecords = await q("SELECT actor, action, after_val, created_at FROM audit_log WHERE module = 'order' AND biz_ref = ? AND action IN ('contact-update','service-note') ORDER BY id DESC LIMIT 30", [o.order_no])
-    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote, serviceRecords }
+    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote, serviceRecords, tickets }
   },
 
   // 客服只修正履约联系人，不更改订单归属、交易金额、出行人或团期。
