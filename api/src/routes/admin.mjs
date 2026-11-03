@@ -898,6 +898,7 @@ const admin = {
       await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'entry-' + e.id, { status: 2 },
         { task: t.id, status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, cash: passed ? cash : 0, reason: reason || null })
       return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash } : { rejected: true, backTo: '创作中' }
+      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
     })
   },
   // 现金加奖：待打款列表 / 登记打款（财务；流水号唯一，防重复登记）

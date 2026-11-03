@@ -1,0 +1,23 @@
+{
+  "task": "批次F-3：T07 审核工作队列",
+  "date": "2026-11-04",
+  "branch": "feat/f3-review-queue",
+  "environment": { "service": "http://127.0.0.1:18092/admin-ui", "db": "wanderlust_qa_batchf_20261104 (隔离库，V1–V49，seed:scenario)", "jwt": "devsecret", "payMode": "MOCK" },
+  "apiTests": {
+    "npmTest": "212 文件语法 + 全部离线套件通过",
+    "test:db": "连续两遍全绿（NPM_EXIT=0×2）",
+    "newSuite": "api/test/admin-reviewqueue.mjs 3 项：队列聚合与角色城市边界/认领互斥与释放/判定完成自动释放"
+  },
+  "uiChecks": [
+    { "step": "review 登录 → 内容运营 → 审核队列：四类区块（独立笔记/约稿投稿/举报/申诉）+ 认领/释放/前往操作", "result": "通过", "evidence": "01-review-queue.png" }
+  ],
+  "fixesDuringVerification": [
+    "review_claim 唯一键含已释放行导致重复认领报 UNIQUE 冲突 → 改 upsert（ON DUPLICATE KEY UPDATE released_at=NULL）",
+    "四个判定端点（content/verdict、task-entries/verdict、report verdict、appeal verdict）加自动释放钩子"
+  ],
+  "boundaries": [
+    "队列只做待办发现与认领协调，判定走各队列原接口（不改既有审核判定逻辑）",
+    "批量审批未实现（T07 后续项）",
+    "城市账号按关联线路城市过滤队列；举报/申诉的城市过滤用 m.city_code"
+  ]
+}

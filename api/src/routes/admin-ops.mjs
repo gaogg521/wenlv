@@ -221,6 +221,7 @@ const adminEco = {
         WHERE id = ? AND status IN (0,1)`, [st, passed ? null : reason, st, req.params.id])
       if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
       await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
+      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [req.params.id])
       return { status: st }
     })
   },

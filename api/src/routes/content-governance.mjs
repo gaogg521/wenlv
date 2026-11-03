@@ -97,9 +97,10 @@ export const contentGovernance={
       const n=await locked(c,r.note_id,a),rpt=await c.one('SELECT * FROM content_report WHERE id=? FOR UPDATE',[req.params.id])
       scope(a,rpt.city_code,n.city_code)
       if(Number(rpt.status)!==0)throw new BizError(2002,'举报已处理，请刷新')
-      if(action==='takedown')return {moderationId:await remove(c,n,a,reason),status:2}
+      if(action==='takedown'){await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL",[rpt.id]);return {moderationId:await remove(c,n,a,reason),status:2}}
       await c.upd('UPDATE content_report SET status=1,resolution=?,actor=?,resolved_at=NOW(3) WHERE id=?',[reason,'admin:'+a.name,rpt.id])
       await audit(c,'admin:'+a.name,'content','report-dismiss','report-'+rpt.id,null,{reason})
+      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL", [rpt.id])
       return {status:1}
     })
   },
@@ -120,6 +121,7 @@ export const contentGovernance={
       await c.upd('UPDATE content_appeal SET status=?,resolution=?,actor=?,resolved_at=NOW(3) WHERE id=?',[status,reason,'admin:'+a.name,appeal.id])
       if(status===1)await c.upd('UPDATE content_note SET status=2,moderation_id=NULL,published_at=COALESCE(published_at,NOW(3)) WHERE id=?',[n.id])
       await audit(c,'admin:'+a.name,'content','appeal-'+action,'note-'+n.id,{status:4},{status:status===1?2:4,appealId:appeal.id,reason})
+      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'appeal' AND item_id = ? AND released_at IS NULL", [appeal.id])
       return {status}
     })
   },
