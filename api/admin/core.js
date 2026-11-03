@@ -32,7 +32,7 @@ const ICONS = {
 const NAV = [
   ['经营总览', [['dash', '经营概览', 'dash']]],
   ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
-  ['订单履约', [['orders', '订单管理', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
+  ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag']]],
   ['内容运营', [['contentdash', '内容看板', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
   ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
@@ -134,7 +134,7 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit','cocreate'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
+  const access = { ops: ['users','dash','orders','tickets','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit','cocreate'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')

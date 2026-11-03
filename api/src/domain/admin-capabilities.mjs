@@ -16,6 +16,8 @@ export const ADMIN_ACTIONS = {
   'coProfit.void': { roles: ['super'], label: '仅超级管理员' },
   // T02：后台账号生命周期仅超管
   'account.manage': { roles: ['super'], label: '仅超级管理员' },
+  // T04：售后工单办理（认领/转派/办结/关闭/重开）=平台客服；城市账号可发起与补充材料
+  'ticket.manage': { roles: ['super', 'ops'], label: '超级管理员或运营' },
   // T00：导出按报表类型定角色；城市账号一律不放导出（AC-06 导出不越界）
   'export.orders': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.products': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
