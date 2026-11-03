@@ -1,6 +1,7 @@
 // 定时任务进程（生产与 node src/index.mjs 并行跑：node src/jobs.mjs / PM2 apps 里加一项）
 // 周期（总方案 §7.5）：关单每分钟 · 完成订单每小时 · 佣金到期每日 02:00 · 周结算每周一 01:00
 import { q, one } from './db.mjs'
+import { cfgNum } from './config.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
 import * as member from './domain/member.mjs'
@@ -65,7 +66,7 @@ async function tickSettlement() {
 
 /** 豆过期（滚动 12 个月 FIFO）：回收超期豆（负向分录 biz=6） */
 export async function tickExpire() {
-  const months = 12
+  const months = await cfgNum('bean.expire_months') // 有效期走参数中心（此前写死 12）
   const rows = await q(`SELECT l.account_id, a.user_id, SUM(l.amount) amt FROM bean_ledger l
     JOIN bean_account a ON a.id = l.account_id
     WHERE l.direction = 1 AND l.biz_type IN (1,2,3) AND l.created_at < NOW() - INTERVAL ? MONTH

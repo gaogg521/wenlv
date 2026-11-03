@@ -1,6 +1,5 @@
 const api = require('../../../utils/api')
 
-const ORDER = ['journey', 'explore', 'creator', 'growth', 'special']
 const PASS_STATUS = { 1: '待使用', 2: '已核销' }
 // 兜底词表：接口不可用时用这套，保证页面只出现「可信记录 / 校验码」口径的用语
 const LEX_FALLBACK = {
@@ -25,10 +24,10 @@ Page({
         }))
       }
       const ownedCount = (d.badges || []).filter((b) => b.owned).length
-      // 勋章墙按类别分组；组内同系列相邻、按阶数从低到高
-      const groups = ORDER.map((key) => {
-        const items = (d.badges || []).filter((b) => b.category === key).sort((x, y) => String(x.series).localeCompare(String(y.series)) || (x.tier - y.tier) || (x.order - y.order))
-        return { key, label: items.length ? items[0].categoryLabel : '', items, got: items.filter((b) => b.owned).length }
+      // 勋章墙按类别分组（分组顺序与名称由服务端给出）；组内同系列相邻、按阶数从低到高
+      const groups = (d.groups || []).map((g) => {
+        const items = (d.badges || []).filter((b) => b.category === g.key).sort((x, y) => String(x.series).localeCompare(String(y.series)) || (x.tier - y.tier) || (x.order - y.order))
+        return { key: g.key, label: g.label, items, got: items.filter((b) => b.owned).length }
       }).filter((g) => g.items.length)
       this.setData({ d, ownedCount, groups, lex: Object.assign({}, LEX_FALLBACK, lex || {}), loadTxt: '' })
     } catch (e) { this.setData({ loadTxt: e.msg || '暂时无法加载，请稍后重试' }) }
@@ -37,7 +36,7 @@ Page({
     const b = this.data.d.badges.find((x) => Number(x.id) === Number(e.currentTarget.dataset.id))
     if (!b) return
     const plain = String(b.description || '').replace(/<[^>]+>/g, '').trim()
-    const lines = [plain, b.ruleDesc ? '获得方式：' + b.ruleDesc : '', !b.owned && b.progress ? '当前进度 ' + b.progress.cur + '/' + b.progress.need : '', b.owned ? '获得于 ' + String(b.granted_at).slice(0, 10) + (b.expireAt ? '，有效至 ' + b.expireAt : '') : '尚未获得']
+    const lines = [plain, b.ruleDesc ? '获得方式：' + b.ruleDesc : '', !b.owned && b.progress ? '当前进度 ' + b.progress.cur + '/' + b.progress.need : '', b.proof ? '封存编号 ' + b.proof.code + (b.proof.sealed ? '（已封存）' : '（封存中）') : '', b.owned ? '获得于 ' + String(b.granted_at).slice(0, 10) + (b.expireAt ? '，有效至 ' + b.expireAt : '') : '尚未获得']
     wx.showModal({ title: b.name + ' · ' + b.rarityLabel, content: lines.filter(Boolean).join('\n'), showCancel: false, confirmText: '知道了' })
   },
 })

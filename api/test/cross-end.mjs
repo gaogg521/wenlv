@@ -653,7 +653,50 @@ await t('勋章墙：每枚勋章有类别 / 系列 / 阶数和默认图形；�
   assert.equal((await raw('/badge-art/preview.svg?icon_key=compass&rarity=legend&category=explore')).status, 200)
   // 后台勋章页：每枚都有图形与分类
   const defs = ok(await call('GET', '/admin/web3/badges', null, A)).defs
-  assert.ok(defs.length >= 18); assert.ok(defs.every((d) => d.profile))
+  assert.ok(defs.length >= 35, '预置 35 枚（V40 + V41）'); assert.ok(defs.every((d) => d.profile))
+})
+await t('徽章分种类：9 类分组；在城市完成出行点亮城市徽章与国家印章；未开放国家不露出；订单封存后点亮可信勋章并带封存编号；规则缺城市 / 国家的徽章被拒', async () => {
+  const u = await login('mock-xend-kinds-' + stamp)
+  const idn0 = ok(await call('GET', '/c/identity', null, u.token))
+  assert.deepEqual(idn0.groups.map((g) => g.key), ['level', 'member', 'city', 'country', 'trusted', 'journey', 'explore', 'creator', 'special'])
+  assert.equal(idn0.groups.find((g) => g.key === 'trusted').label, '可信勋章', '小程序里叫「可信勋章」，不出现链相关词')
+  const cats = new Set(idn0.badges.map((b) => b.category)); for (const c of ['level', 'member', 'city', 'country', 'trusted']) assert.ok(cats.has(c), '勋章墙缺类别 ' + c)
+  assert.ok(!idn0.badges.some((b) => b.name === '日本印记'), '没有对应城市的国家印章不在勋章墙露出')
+  const cityBadge = idn0.badges.find((b) => b.category === 'city' && b.cityCode === String(sess.city_code) && b.progress && b.progress.need === 1)
+  assert.ok(cityBadge && !cityBadge.owned, `城市 ${sess.city_code} 应有 1 次到访的城市徽章`)
+  assert.equal(idn0.badges.find((b) => b.name === '中国印记').owned, false)
+  // 在该城市完成一单 → 城市徽章 + 国家印章点亮（订单完成时自动评估）
+  const od = await finishOrder(u.token)
+  const idn1 = ok(await call('GET', '/c/identity', null, u.token))
+  assert.ok(idn1.badges.find((b) => b.id === cityBadge.id).owned, '在该城市完成出行 → 城市徽章点亮')
+  assert.ok(idn1.badges.find((b) => b.name === '中国印记').owned, '境内出行 → 「中国印记」点亮')
+  assert.equal(idn1.badges.find((b) => b.name === '首单封存').owned, false, '订单还没被打包封存，可信勋章不点亮')
+  assert.deepEqual(idn1.badges.find((b) => b.name === '首单封存').progress, { cur: 0, need: 1, pct: 0 })
+  // 订单存证打包后 → 可信勋章点亮，带封存编号（= 这次发放的存证记录校验码前 8 位）
+  ok(await call('POST', '/admin/system/jobs/attest-pack/run', {}, A))
+  const idn2 = ok(await call('GET', '/c/identity', null, u.token))
+  const tb = idn2.badges.find((b) => b.name === '首单封存'); assert.ok(tb.owned, '订单封存后点亮「首单封存」')
+  assert.match(tb.proof.code, /^[0-9A-F]{8}$/)
+  const ev = await one(`SELECT payload_hash FROM attest_event WHERE biz_type = 'badge' AND biz_ref = ?`, ['badge-' + u.user.id + '-' + tb.id])
+  assert.equal(tb.proof.code, String(ev.payload_hash).slice(0, 8).toUpperCase(), '封存编号 = 存证记录的校验码')
+  assert.ok(od.orderNo)
+  // 后台：徽章列表带已锚定数；规则缺城市 / 国家的徽章被拒
+  assert.ok(ok(await call('GET', '/admin/web3/badges', null, A)).defs.every((d) => d.anchored != null))
+  const bad = (v) => call('POST', '/admin/entities/badge', { values: { name: '跨端校验' + stamp, icon_key: 'star', threshold: 1, ...v } }, A)
+  assert.notEqual((await bad({ rule_type: 'city_visit' })).code, 0, '城市到访必须选城市')
+  assert.notEqual((await bad({ rule_type: 'country_visit', country_code: '日本' })).code, 0, '国家到访必须填两位国家代码')
+})
+await t('旅豆页数据：本月获得 / 使用与账本一致、折合金额、30 天内到期不超过余额、旅豆币图可取；会员等级徽章图公开可取', async () => {
+  const acc = ok(await call('GET', '/c/bean/account', null, C))
+  const mo = await one(`SELECT COALESCE(SUM(CASE WHEN l.direction = 1 AND l.biz_type IN (1,2,3,5) THEN l.amount END), 0) inc,
+    COALESCE(SUM(CASE WHEN l.direction = 2 AND l.biz_type IN (4,6,7) THEN l.amount END), 0) outc
+    FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ? AND l.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`, [buyer.user.id])
+  assert.equal(acc.monthIn, Number(mo.inc)); assert.equal(acc.monthOut, Number(mo.outc))
+  assert.equal(acc.yuan, Math.floor(acc.balance / 10 * 10) / 10, '100 豆 = ¥10')
+  assert.ok(acc.expiringSoon >= 0 && acc.expiringSoon <= acc.balance)
+  const coin = await fetch(new URL(acc.coinArt).pathname.replace(/^/, BASE)); assert.equal(coin.status, 200); assert.match(coin.headers.get('content-type'), /image\/svg\+xml/)
+  const me = ok(await call('GET', '/c/me', null, C)); assert.ok(me.level.art && me.level.levels.every((l) => l.art))
+  for (const l of me.level.levels) assert.equal((await fetch(BASE + new URL(l.art).pathname + new URL(l.art).search)).status, 200)
 })
 await t('景点数据：景点下的线路，景点页的数字 = 该线路自己的商品数据；A 的景点页能看到这条线路', async () => {
   const sc = ok(await call('POST', '/admin/scenics', { name: '跨端景点' + stamp, cityCode: sess.city_code }, A)); const scId = sc.id

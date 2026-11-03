@@ -1,48 +1,58 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
-<view class="hero">
-  <view class="sub2" style="position:relative">我的旅豆（消费返豆 {{bean.orderRatePct}}%）</view>
-  <view class="bean-num" wx:if="{{bean}}">{{bean.balance}}</view>
-  <view class="sub2" wx:if="{{bean}}" style="position:relative">100 豆可抵 ¥10</view>
-  <view class="hero-chip" wx:if="{{bean}}"><view class="dot"></view>下单时自动抵扣 · 单笔上限 {{bean.deductMaxPct}}%</view>
+
+<view class="bn-hero">
+  <view class="bn-top">
+    <view>
+      <view class="bn-label">我的旅豆</view>
+      <view class="bn-num">{{bean ? bean.balance : '--'}}</view>
+      <view class="bn-sub" wx:if="{{bean}}">约可抵 ¥{{bean.yuan}} · 100 豆抵 ¥10</view>
+    </view>
+    <image class="bn-coin" wx:if="{{bean.coinArt}}" src="{{bean.coinArt}}" mode="aspectFit" />
+  </view>
+  <view class="bn-chips" wx:if="{{bean}}">
+    <view class="bn-chip"><view class="bn-cv">+{{bean.monthIn}}</view><view class="bn-cl">本月获得</view></view>
+    <view class="bn-chip"><view class="bn-cv">−{{bean.monthOut}}</view><view class="bn-cl">本月使用</view></view>
+    <view class="bn-chip {{bean.expiringSoon > 0 ? 'warn' : ''}}"><view class="bn-cv">{{bean.expiringSoon}}</view><view class="bn-cl">30 天内到期</view></view>
+  </view>
 </view>
 
-<view class="bean-rules fade-up" wx:if="{{bean}}">
-  <view class="bean-rule"><view class="bi">🎯</view><view class="bv">返 {{bean.orderRatePct}}%</view><view class="bl">消费即返豆</view></view>
-  <view class="bean-rule"><view class="bi">⏳</view><view class="bv">{{bean.expireMonths}} 个月</view><view class="bl">滚动有效期</view></view>
-  <view class="bean-rule"><view class="bi">🚫</view><view class="bv">不可转</view><view class="bl">不可购买</view></view>
-</view>
-
-<view class="card fade-up" wx:if="{{bean}}">
-  <view class="kv"><text>获取方式</text><text class="v">消费返豆 / 任务奖励 / 内容奖励</text></view>
-  <view class="kv"><text>抵扣标准</text><text class="v">100 旅豆可抵 ¥10</text></view>
-  <view class="kv"><text>单笔抵扣上限</text><text class="v">订单金额 {{bean.deductMaxPct}}%</text></view>
-  <view class="kv"><text>有效期</text><text class="v">滚动 {{bean.expireMonths}} 个月</text></view>
-  <view class="kv"><text>转账/购买</text><text class="v">不支持</text></view>
+<view class="bn-rules fade-up" wx:if="{{bean}}">
+  <view class="bn-rule"><text class="bn-rv">消费返 {{bean.orderRatePct}}%</text><text class="bn-rl">完成订单后到账</text></view>
+  <view class="bn-rule"><text class="bn-rv">{{bean.expireMonths}} 个月</text><text class="bn-rl">滚动有效</text></view>
+  <view class="bn-rule"><text class="bn-rv">抵扣 ≤{{bean.deductMaxPct}}%</text><text class="bn-rl">单笔订单上限</text></view>
 </view>
 
 <view class="card fade-up" wx:if="{{beanIntro}}"><rich-text class="rich-p" nodes="{{beanIntro}}"></rich-text></view>
 
-<view class="sec-title">会员等级 <text class="more">成长值随真实消费累积</text></view>
-<view class="card fade-up" wx:if="{{bean && levels.length}}">
-  <view class="lv-bar dark"><view class="lv-fill" style="width:{{levelPct}}%"></view></view>
-  <view class="muted2" style="margin:10rpx 0 6rpx">{{levelHint}}</view>
-  <view class="lv-row" wx:for="{{levels}}" wx:key="lv">
-    <view class="lv-badge {{level >= item.lv ? 'on' : ''}}">Lv.{{item.lv}}</view>
-    <view style="flex:1"><text style="font-weight:600;font-size:25rpx">{{item.name}}</text>
-      <text class="muted2" style="margin-left:12rpx">{{item.need}}</text>
-      <view class="muted2" wx:if="{{item.perkText}}" style="margin-top:4rpx">{{item.perkText}}</view></view>
+<view class="sec-title" wx:if="{{levels.length}}">会员等级 <text class="more">成长值随真实消费累积</text></view>
+<view class="card fade-up bn-level" wx:if="{{levels.length}}">
+  <view class="bn-lv-top">
+    <image class="bn-crest" src="{{levelArt}}" mode="aspectFit" />
+    <view class="bn-lv-info">
+      <view class="bn-lv-name">{{levelName}}</view>
+      <view class="bn-lv-hint">{{levelHint}}</view>
+      <view class="lv-bar dark"><view class="lv-fill" style="width:{{levelPct}}%"></view></view>
+    </view>
+  </view>
+  <view class="bn-lv-row {{level >= item.lv ? 'on' : ''}}" wx:for="{{levels}}" wx:key="lv">
+    <image class="bn-lv-ico" src="{{item.art}}" mode="aspectFit" />
+    <view class="bn-lv-txt">
+      <view><text class="bn-lv-n">{{item.name}}</text><text class="muted2" style="margin-left:12rpx">{{item.need}}</text></view>
+      <view class="muted2" wx:if="{{item.perkText}}">{{item.perkText}}</view>
+    </view>
     <text wx:if="{{level === item.lv}}" class="tag" style="margin:0">当前</text>
   </view>
 </view>
 
 <view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">最近收支 · 每笔可查</text></view>
 <view class="card fade-up" wx:if="{{ledger.length}}">
-  <view class="kv" wx:for="{{ledger}}" wx:key="tx_no">
-    <view>
-      <view style="font-weight:600;font-size:25rpx">{{bizName[item.biz_type] || item.biz_type}}</view>
-      <view class="muted2" style="margin-top:4rpx">{{item.created_at}}</view>
+  <view class="bn-led" wx:for="{{ledger}}" wx:key="tx_no">
+    <view class="bn-ico {{item.direction === 1 ? 'in' : 'out'}}">{{glyph[item.biz_type] || '豆'}}</view>
+    <view class="bn-led-txt">
+      <view class="bn-led-n">{{bizName[item.biz_type] || item.biz_type}}</view>
+      <view class="muted2">{{item.created_at}}</view>
     </view>
-    <text class="v" style="color:{{item.direction === 1 ? 'var(--green)' : 'var(--red)'}}">{{item.direction === 1 ? '+' : '−'}}{{item.amount}}</text>
+    <text class="bn-led-amt {{item.direction === 1 ? 'in' : 'out'}}">{{item.direction === 1 ? '+' : '−'}}{{item.amount}}</text>
   </view>
 </view>
 <view class="note">{{bean ? bean.rule : '加载中…'}}</view>

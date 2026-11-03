@@ -277,7 +277,15 @@ const c = {
     requireUser(req)
     const bal = await bean.balance(requireUser(req).uid)
     const rate = Math.round(await cfgNum('bean.order_rate') * 100), cap = Math.round(await cfgNum('bean.deduct_max_pct') * 100), months = await cfgNum('bean.expire_months')
+    const uid = requireUser(req).uid
+    const mo = await one(`SELECT COALESCE(SUM(CASE WHEN l.direction = 1 AND l.biz_type IN (1,2,3,5) THEN l.amount END), 0) inc,
+      COALESCE(SUM(CASE WHEN l.direction = 2 AND l.biz_type IN (4,6,7) THEN l.amount END), 0) outc
+      FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ? AND l.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`, [uid])
+    // 30 天内将到期：入账满 (有效期 - 1) 个月的发放量，上限为当前余额（与过期任务同口径的估算）
+    const ex = await one(`SELECT COALESCE(SUM(l.amount), 0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE a.user_id = ? AND l.direction = 1 AND l.biz_type IN (1,2,3) AND l.created_at < NOW() - INTERVAL ? MONTH + INTERVAL 30 DAY`, [uid, months])
     return { balance: bal, orderRatePct: rate, deductMaxPct: cap, expireMonths: months,
+      monthIn: Number(mo.inc), monthOut: Number(mo.outc), expiringSoon: Math.min(Number(bal), Number(ex.s)), yuan: Math.floor(Number(bal) / 10 * 10) / 10, coinArt: apiImg('/badge-art/bean.svg', req),
       rule: `消费返豆 ${rate}% · 100 豆可抵 10 元 · 单笔抵扣上限 ${cap}% · 滚动 ${months} 个月有效 · 不可转让不可购买` }
   },
 
@@ -293,7 +301,7 @@ const c = {
     const acc = await one('SELECT * FROM user_account WHERE id = ?', [u.uid])
     return {
       id: acc.id, nickname: acc.nickname, avatarUrl: acc.avatar_url, memberLevel: acc.member_level, growth: acc.growth_value,
-      level: await member.progress(u.uid),
+      level: withLevelArt(await member.progress(u.uid), req),
       levelThresholds: (await member.levels()).map((l) => l.min),
       bean: await bean.balance(u.uid),
       passes: await count('SELECT COUNT(*) c FROM travel_pass WHERE user_id = ?', [u.uid]),
@@ -301,7 +309,7 @@ const c = {
   },
 
   // 会员等级：当前等级 / 距下一级进度 / 全部等级与权益（来自参数中心，三个页面共用）
-  'GET /c/member': async (req) => member.progress(requireUser(req).uid),
+  'GET /c/member': async (req) => withLevelArt(await member.progress(requireUser(req).uid), req),
 
   // 头像昵称填写能力（官方组件）：昵称过机审；头像走 base64 上传
   'POST /c/me/profile': async (req) => {
@@ -658,6 +666,11 @@ const cPhraseKyc = {
 }
 
 // 用户侧数字身份（小程序 A「我的数字身份」页：Travel ID = 凭证+徽章+存证流水）
+const withLevelArt = (lvl, req) => {
+  lvl.art = apiImg('/badge-art/level/' + lvl.lv + '.svg', req)
+  lvl.levels = lvl.levels.map((l) => ({ ...l, art: apiImg('/badge-art/level/' + l.lv + '.svg' + (l.lv <= lvl.lv ? '' : '?state=off'), req) }))
+  return lvl
+}
 const cIdentity = {
   'GET /c/identity': async (req) => {
     const u = requireUser(req)
@@ -669,27 +682,36 @@ const cIdentity = {
     const mtr = await badgeDomain.metrics(u.uid)
     const defs = await q('SELECT * FROM badge')
     const owned = await q('SELECT badge_id, MAX(granted_at) granted_at FROM user_badge WHERE user_id = ? GROUP BY badge_id', [u.uid])
-    const badges = defs.map((b) => {
+    // 城市 / 国家徽章只显示"开放中"的：城市有在售线路、国家下有已映射的城市（未开放的不在勋章墙露出，除非已获得）
+    const openCities = new Set((await q('SELECT DISTINCT city_code FROM tour_product')).map((r) => String(r.city_code)))
+    const openCountries = new Set(['CN', ...Object.values(await badgeDomain.cityCountryMap()).map((x) => String(x).toUpperCase())])
+    // 封存编号：每次发放都会进可信记录，打包后即"已封存"；编号取该条记录的校验码前 8 位
+    const refs = owned.map((o) => 'badge-' + u.uid + '-' + o.badge_id)
+    const evs = refs.length ? await q(`SELECT biz_ref, payload_hash, status FROM attest_event WHERE biz_type = 'badge' AND biz_ref IN (${refs.map(() => '?').join(',')})`, refs) : []
+    const badges = (await Promise.all(defs.map(async (b) => {
       const pp = entities.publicProfile('badge', b, (x) => apiImg(x, req))
       const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
       const days = Number(pp.valid_days) || 0
       const expireAt = got && days ? new Date(new Date(String(got.granted_at).replace(' ', 'T') + '+08:00').getTime() + days * 86400000).toISOString().slice(0, 10) : null
-      const cat = badgeArt.CATEGORIES[pp.category] ? pp.category : 'special'
+      const cat0 = pp.category === 'growth' ? 'level' : pp.category
+      const cat = badgeArt.CATEGORIES[cat0] ? cat0 : 'special'
+      if (!got && ((cat === 'city' && !openCities.has(String(pp.city_code))) || (cat === 'country' && !openCountries.has(String(pp.country_code || '').toUpperCase())))) return null
+      const ev = got ? evs.find((e) => e.biz_ref === 'badge-' + u.uid + '-' + b.id) : null
       const art = apiImg('/badge-art/' + b.id + '.svg?state=' + (got ? 'on' : 'off'), req)
       return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, art, category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label, series: pp.series || '', tier: Number(pp.tier) || 0,
-        progress: got ? null : badgeDomain.progressOf(b, mtr), rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
+        progress: got ? null : await badgeDomain.progressOf(u.uid, b, mtr), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1 } : null, cityCode: pp.city_code || null, countryCode: pp.country_code || null, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
         color: pp.color || null, description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0,
         owned: !!got, granted_at: got ? got.granted_at : null, expireAt, expired: !!(expireAt && expireAt < bizDay()) }
-    }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
+    }))).filter(Boolean).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
     const myOrders = await q('SELECT order_no FROM orders WHERE user_id = ?', [u.uid])
     const attestations = []
     for (const o of myOrders.slice(0, 10)) {
       const e = await one("SELECT payload_hash, status, created_at FROM attest_event WHERE biz_type = 'order' AND biz_ref = ? ORDER BY version_no DESC, id DESC LIMIT 1", [o.order_no]) // 同一订单有支付(30)与完成(50)两个版本，取最新
       if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
-    const lvl = await member.progress(u.uid)
+    const lvl = withLevelArt(await member.progress(u.uid), req)
     return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, levelName: lvl.name, growth: lvl.points, joinedAt: acc.created_at, level: lvl },
-      passes, badges, fresh, attestations,
+      passes, badges, fresh, attestations, groups: badgeArt.CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })),
       statement: '消费与权益的可信记录，作为贡献分与会员成长的依据' }
   },
   // 数字身份凭证（VC-JWT）：用户可取走、可出示、他方可验。微信内不展示字样（D6），由 B/G 端与生态 H5 使用

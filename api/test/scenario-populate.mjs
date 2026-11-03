@@ -33,13 +33,13 @@ async function main() {
     await q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')
-  // 清库会连「出厂数据」一起删掉：补回 V30 小程序装修默认行与 V40 预置勋章（两份迁移都是幂等的），
+  // 清库会连「出厂数据」一起删掉：补回 V30 小程序装修默认行与 V40、V41 预置勋章（迁移都是幂等的），
   // 否则灌完演示数据后 entity-engine 会缺 site_config、勋章墙是空的
   {
     const mysql = (await import('mysql2/promise')).default
     const c = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root',
       password: process.env.DB_PASS || 'root', database: process.env.DB_NAME, multipleStatements: true, charset: 'utf8mb4_0900_ai_ci' })
-    for (const m of ['V30__site_config.sql', 'V40__member_levels_badge_set.sql']) await c.query(fs.readFileSync(new URL('../db/migration/' + m, import.meta.url), 'utf8'))
+    for (const m of ['V30__site_config.sql', 'V40__member_levels_badge_set.sql', 'V41__badge_kinds_city_country_trusted.sql']) await c.query(fs.readFileSync(new URL('../db/migration/' + m, import.meta.url), 'utf8'))
     await c.end()
   }
   await q('SET FOREIGN_KEY_CHECKS = 1')
