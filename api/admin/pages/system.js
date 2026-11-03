@@ -67,14 +67,20 @@ async function cfgRollback(k) {
 /* ============ 风控 / 审计 ============ */
 async function risk() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/risk')
+  // T03/T10：服务端分页 + 处理状态筛选
+  window.__riskQ = window.__riskQ || { page: 1, handled: '' }
+  const data = await api('GET', '/admin/risk?' + new URLSearchParams({ page: window.__riskQ.page, handled: window.__riskQ.handled }).toString())
+  const rows = data.rows
+  const rkPages = Math.max(1, Math.ceil(data.total / data.pageSize))
   $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>风控事件</h2><span class="muted">核销重放 / 设备聚集 / 退款滥用 / 佣金异常</span></div>
+    <div class="cfg-tabs">${[['', '全部'], [0, '未处理'], [1, '已处理']].map(([v, n]) => `<button class="cfg-tab ${String(window.__riskQ.handled) === String(v) ? 'on' : ''}" onclick="window.__riskQ.handled='${v}';window.__riskQ.page=1;risk()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>类型</th><th>级别</th><th>详情</th><th>时间</th><th>状态</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td><span class="pill off">${esc(r.kind)}</span></td>
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
       <td><code>${esc(String(r.detail).slice(0, 60))}</code></td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
-      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">标记已处理</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无风控事件 🎉')}
+      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">标记已处理</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(window.__riskQ.handled !== '' ? '没有符合条件的风控事件。' : '暂无风控事件 🎉')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${rkPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__riskQ.page--;risk()">上一页</button> <button class="btn ghost sm" ${data.page >= rkPages ? 'disabled' : ''} onclick="window.__riskQ.page++;risk()">下一页</button></div></div>
   </div>`
 }
 async function audit() {

@@ -144,7 +144,7 @@ try {
     const w2 = (await q('INSERT INTO promoter_withdraw (promoter_id, amount, proposer_note) VALUES (?,?,?)', [U1.id, 8000, 'test-freeze'])).insertId
     created.withdraw.push(w1, w2)
     ok(await call('POST', `/admin/users/${U1.id}/status`, { status: 0, reason: '测试冻结暂停提现' }, A))
-    const list = ok(await call('GET', '/admin/withdrawals', null, A))
+    const list = ok(await call('GET', '/admin/withdrawals', null, A)).rows // T03：提现列表改分页契约
     assert.equal(Number(list.find((w) => w.id === w1).user_status), 0, '列表应带出冻结状态')
     const blocked = await call('POST', `/admin/withdrawals/${w1}/verdict`, { pass: true, payRef: 'TESTREF0001' }, A)
     assert.notEqual(blocked.code, 0); assert.match(blocked.msg, /冻结/)

@@ -68,13 +68,13 @@ async function main() {
   ok(pList.every((x) => x.city_code === '310118'), '城市合伙人景区列表全部为本城（行级隔离）')
 
   // ---- 创作者池（V23）----
-  const crList = await api('GET', '/admin/creators', null, admin)
+  const crList = (await api('GET', '/admin/creators', null, admin)).rows
   const aKai = crList.find((x) => x.nickname === '江南拍客阿凯')
   ok(!!aKai && aKai.creator_tag === 'signed' && aKai.published_count >= 2 && aKai.task_done >= 1, '创作者池含签约创作者且产出聚合正确')
   const momo = crList.find((x) => x.nickname === 'momo酱在路上')
   ok(!!momo && momo.creator_tag === 'none', '无标签但有内容的用户自动入池')
   await api('PUT', '/admin/creators/' + momo.id + '/tag', { tag: 'signed' }, admin)
-  ok((await api('GET', '/admin/creators', null, admin)).find((x) => x.id === momo.id)?.creator_tag === 'signed', '创作者标签可更新')
+  ok((await api('GET', '/admin/creators', null, admin)).rows.find((x) => x.id === momo.id)?.creator_tag === 'signed', '创作者标签可更新')
   const badTag = await api('PUT', '/admin/creators/' + momo.id + '/tag', { tag: 'vip' }, admin, true)
   ok(badTag.code !== 0, '非法标签被拒')
   const forbidTag = await api('PUT', '/admin/creators/1/tag', { tag: 'star' }, partner, true)
