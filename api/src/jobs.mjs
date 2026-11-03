@@ -17,11 +17,8 @@ export async function completeOrder(orderNo) {
     await c.upd('UPDATE orders SET completed_at = NOW(3) WHERE order_no = ?', [orderNo])
     return '观察期结束·返豆+计佣'
   })
-  const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
-  if (budget) {
-    const rebate = await bean.rebateOf(Number(o.amount_pay))
-    if (rebate > 0) await bean.grant(Number(o.user_id), rebate, bean.BIZ.REBATE, orderNo, budget.id)
-  }
+  // 返豆：账号冻结时不发，记为待补发，解冻后补发
+  await bean.rebateOrder({ ...o, order_no: orderNo })
   const amt = Number(o.amount_pay)
   await q('UPDATE user_account SET growth_value = growth_value + ? WHERE id = ?', [amt, o.user_id])
   const th = [0, 2000, 10000, 50000]

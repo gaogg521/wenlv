@@ -5,6 +5,7 @@ import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
 import { partnerPerformance } from './partner-performance.mjs'
+import * as bean from '../domain/bean.mjs'
 
 const N = (v) => Number(v || 0)
 const maskName = (s) => (s ? String(s).slice(0, 1) + '*'.repeat(Math.max(1, String(s).length - 1)) : '')
@@ -212,13 +213,17 @@ export const people = {
     const reason = String(req.body.reason || '').trim()
     if (![0, 1].includes(st)) throw new BizError(1001, '状态只能是正常或冻结')
     if (st === 0 && reason.length < 4) throw new BizError(1001, '冻结需要填写原因（至少 4 个字）')
-    return tx(async (c) => {
+    const id = await tx(async (c) => {
       const u = await c.one('SELECT id, status FROM user_account WHERE id = ? FOR UPDATE', [req.params.id])
       if (!u) throw new BizError(1004, '用户不存在')
       await c.upd('UPDATE user_account SET status = ? WHERE id = ?', [st, u.id])
       await audit(c, 'admin:' + a.name, 'user', st ? 'unfreeze' : 'freeze', 'user-' + u.id, { status: N(u.status) }, { status: st, reason: reason || null })
-      return { status: st }
+      return Number(u.id)
     })
+    if (!st) return { status: st }
+    // 解冻：补发冻结期间待补发的订单返豆。失败不影响解冻本身（订单保留待补发标记，下次解冻再补）
+    try { return { status: st, beanRebatesReleased: await bean.releaseDeferredRebates(id) } }
+    catch (e) { return { status: st, beanRebatesReleased: 0, beanRebateError: e.message } }
   },
   'POST /admin/users/:id/risk': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'risk'])

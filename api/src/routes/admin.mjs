@@ -717,6 +717,8 @@ const admin = {
       if (passed) {
         const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
         if (!budget) throw new BizError(5002, '缺少可用奖励预算，投稿保持审核中')
+        // 红线 12：冻结账号暂停发放旅豆奖励；投稿保持审核中，解冻后再审核
+        if (Number(t.reward_beans) > 0 && await promo.isUserFrozen(e.user_id)) throw new BizError(6001, '该用户账号已冻结，暂停发放旅豆奖励。投稿保持审核中，请解冻后再审核')
         await bean.grant(Number(e.user_id), Number(t.reward_beans), bean.BIZ.TASK, t.task_no + '-E' + e.id, budget.id, cc)
         // 奖励按通过时的任务设置快照；有现金加奖的进入"待打款"，由财务登记打款流水
         await cc.upd('UPDATE content_task_entry SET status=3, finished_at=NOW(3), reward_beans=?, cash_reward=?, cash_status=? WHERE id=?',
@@ -803,8 +805,7 @@ const admin = {
     // 返豆 + 佣金 + 成长值 + 存证（同一动作位，生产在 beanWorker）
     const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
     if (budget && Number(o.amount_pay) > 0) {
-      const rebate = await bean.rebateOf(Number(o.amount_pay))
-      if (rebate > 0) await bean.grant(Number(o.user_id), rebate, bean.BIZ.REBATE, orderNo, budget.id)
+      await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
       const amt = Number(o.amount_pay)
       await q('UPDATE user_account SET growth_value = growth_value + ? WHERE id = ?', [amt, o.user_id])
       const th = [0, 2000, 10000, 50000]
