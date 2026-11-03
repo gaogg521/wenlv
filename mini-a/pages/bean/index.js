@@ -6,16 +6,19 @@ Page({
   onShow() {
     this.setData({ error: '' })
     siteData.get().then((s) => this.setData({ beanIntro: s.bean_intro || '' }))
-    api.getBean().then(bean => this.setData({ bean })).catch(e => this.setData({ bean: null, error: e.msg || '加载失败' }))
-    // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）
-    api.getMe().then((m) => {
-      const lv = m.level || {}
-      this.setData({
-        level: m.memberLevel || 1, levelPct: lv.pct || 0, levelName: lv.name || '', levelArt: lv.art || '',
-        levelHint: lv.next ? '成长值 ' + Number(lv.points).toLocaleString() + '，再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 升级「' + lv.next.name + '」' : '成长值 ' + Number(lv.points || 0).toLocaleString() + '，已是最高等级',
-        levels: (lv.levels || []).map((l) => ({ ...l, need: l.points ? '成长值 ' + Number(l.points).toLocaleString() : '注册即享', perkText: (l.perks || []).join(' · ') })),
-      })
-    }).catch(() => {})
-    api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: ledger.slice(0, 20) })).catch(() => {})
+    api.getBean().then(bean => this.setData({ bean }))
+      .catch(() => { this.setData({ bean: api.FALLBACK.bean }); wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' }) })
+    // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）；后端不可达时用演示会员
+    api.getMe().then((m) => this.fillMember(m)).catch(() => this.fillMember(api.FALLBACK.member))
+    api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: (ledger || []).slice(0, 20) }))
+      .catch(() => this.setData({ ledger: api.FALLBACK.ledger }))
+  },
+  fillMember(m) {
+    const lv = (m && m.level) || {}
+    this.setData({
+      level: (m && m.memberLevel) || 1, levelPct: lv.pct || 0, levelName: lv.name || '', levelArt: lv.art || '',
+      levelHint: lv.next ? '成长值 ' + Number(lv.points).toLocaleString() + '，再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 升级「' + lv.next.name + '」' : '成长值 ' + Number(lv.points || 0).toLocaleString() + '，已是最高等级',
+      levels: (lv.levels || []).map((l) => ({ ...l, need: l.points ? '成长值 ' + Number(l.points).toLocaleString() : '注册即享', perkText: (l.perks || []).join(' · ') })),
+    })
   }
 })

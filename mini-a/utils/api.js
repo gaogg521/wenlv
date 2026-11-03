@@ -66,6 +66,35 @@ const FALLBACK = {
     { k: 'all', n: '全部' }, { k: 'yoga', n: '瑜伽之旅' }, { k: 'sister', n: '姐姐系列' },
     { k: 'script', n: '剧本闯关' }, { k: 'family', n: '亲子主题' }, { k: 'red', n: '红色文旅' },
   ],
+  // ===== 以下为「后端不可达」时的演示数据集（真机演示/断网兜底）=====
+  bean: { balance: 1268, totalIn: 3268, totalOut: 2000, expiring: 0, expiringDate: '' },
+  member: {
+    nickname: '旅友 3288', memberLevel: 2, avatarUrl: '',
+    level: { name: '旅行家', pct: 64, art: '', points: 3268, next: { name: '城市探索官', gapPoints: 1732 } },
+  },
+  ledger: [
+    { tx_no: 'T2026110101', direction: 1, biz_type: 1, amount: 298, created_at: '2026-11-01 14:26' },
+    { tx_no: 'T2026103001', direction: 0, biz_type: 4, amount: 68, created_at: '2026-10-30 10:12' },
+    { tx_no: 'T2026102801', direction: 1, biz_type: 1, amount: 688, created_at: '2026-10-28 18:03' },
+    { tx_no: 'T2026102601', direction: 1, biz_type: 2, amount: 200, created_at: '2026-10-26 09:41' },
+  ],
+  orders: [
+    { order_no: 'WL20261101001', title: '朱家角剧本游 · 江南谜案', status: 30, days_desc: '1天 · 上海·青浦', qty: 1, amount_pay: 29800, created_at: '2026-11-01 14:26' },
+    { order_no: 'WL20261028002', title: '安吉瑜伽谷 · 2天1夜', status: 40, days_desc: '2天1夜 · 湖州·安吉', qty: 2, amount_pay: 137600, created_at: '2026-10-28 09:15' },
+  ],
+  identity: {
+    profile: { nickname: '旅友 3288', memberLevel: 2, levelName: '旅行家', growth: 3268 },
+    passes: [
+      { id: 1, name: '朱家角剧本游 · 通行凭证', status: 2, statusText: '已核销' },
+      { id: 2, name: '安吉瑜伽谷 · 山野通行', status: 1, statusText: '待使用' },
+    ],
+    attestations: [
+      { orderNo: 'WL20261028002', hash: '0x8f2c…a91d', anchored: true },
+      { orderNo: 'WL20261101001', hash: '0x3e71…c04b', anchored: true },
+    ],
+  },
+  notes: [],
+  promoter: { promoter: false, scene: '', customers: [] },
 }
 
 async function getTours(cat) {

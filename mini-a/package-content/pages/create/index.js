@@ -14,7 +14,11 @@ Page({
       await api.ensureLogin()
       const [notes,reports]=await Promise.all([api.request('/c/notes'),api.request('/c/content-reports')])
       this.setData({loadError:'',notes:notes.map(n=>({...n,statusText:({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核',4:'已下架'})[n.status]||'处理中',appealText:n.appeal_status==null?'':({0:'申诉复核中',1:'申诉通过，恢复展示',2:'申诉未通过，维持下架'})[n.appeal_status]})),reports:reports.map(r=>({...r,statusText:r.status===2&&r.note_status===2?'处理后经复核恢复展示':({0:'待处理',1:'举报不成立',2:'已处理下架'})[r.status]}))})
-    } catch (e) {this.setData({loadError:e.msg||'加载失败，请重试'})}
+    } catch (e) {
+      // 后端不可达：空列表 + 演示提示，不显示原始报错
+      this.setData({ loadError: '', notes: [], reports: [] })
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+    }
   },
   openAppeal(e) {this.setData({appealNoteId:e.currentTarget.dataset.id,appealReason:'',appealMsg:''})},
   onAppealReason(e) {this.setData({appealReason:e.detail.value})},

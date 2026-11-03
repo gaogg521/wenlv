@@ -17,7 +17,11 @@ Page({
         withdrawnYuan: yuan(ov0.withdrawn),
       }) : ov0
       this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers })
-    } catch (e) { wx.showToast({ title: e.msg || '加载失败', icon: 'none' }) }
+    } catch (e) {
+      // 后端不可达：按"未开通推广资格"状态渲染（页面本身有该状态的完整文案），并提示演示模式
+      this.setData({ ov: null, scene: null, customers: [] })
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+    }
   },
   switchSeg(e) { this.setData({ seg: e.currentTarget.dataset.k }) },
   // 推广者把小程序转发给好友 → 好友进入即带归因 scene（首触唯一，成交计佣）

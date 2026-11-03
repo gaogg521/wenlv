@@ -30,7 +30,11 @@ Page({
         return { key: g.key, label: g.label, items, got: items.filter((b) => b.owned).length }
       }).filter((g) => g.items.length)
       this.setData({ d, ownedCount, groups, lex: Object.assign({}, LEX_FALLBACK, lex || {}), loadTxt: '' })
-    } catch (e) { this.setData({ loadTxt: e.msg || '暂时无法加载，请稍后重试' }) }
+    } catch (e) {
+      // 后端不可达：用演示身份渲染（真机演示/断网兜底），不再只显示错误文案
+      this.setData({ d: api.FALLBACK.identity, groups: [], ownedCount: 0, lex: LEX_FALLBACK, loadTxt: '' })
+      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+    }
   },
   showBadge(e) {
     const b = this.data.d.badges.find((x) => Number(x.id) === Number(e.currentTarget.dataset.id))

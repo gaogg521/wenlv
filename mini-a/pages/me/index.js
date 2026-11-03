@@ -39,11 +39,12 @@ Page({
   },
   // 等级名与升级进度来自服务端（参数中心「会员等级体系」），页面里不写死
   loadMe() {
-    return api.getMe().then((m) => {
-      const lv = m.level || {}
-      const hint = lv.next ? '再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 成长值升级「' + lv.next.name + '」' : '已是最高等级'
-      this.setData({ avatarUrl: m.avatarUrl || '', initial: String(m.nickname || '旅').trim().slice(0, 1) || '旅', user: { nickname: m.nickname, levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
-    }).catch(() => {})
+    return api.getMe().then((m) => this.fillMe(m)).catch(() => this.fillMe(api.FALLBACK.member))
+  },
+  fillMe(m) {
+    const lv = (m && m.level) || {}
+    const hint = lv.next ? '再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 成长值升级「' + lv.next.name + '」' : '已是最高等级'
+    this.setData({ avatarUrl: (m && m.avatarUrl) || '', initial: String((m && m.nickname) || '旅').trim().slice(0, 1) || '旅', user: { nickname: (m && m.nickname) || '旅友', levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
   },
   async login() {
     try {

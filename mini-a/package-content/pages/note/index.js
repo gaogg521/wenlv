@@ -9,7 +9,7 @@ Page({
       await api.ensureLogin()
       const n = await api.request('/c/notes/' + this.id)
       this.setData({ n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
-    } catch (e) { this.setData({ n: null, loadTxt: e.msg || '笔记不存在或未发布' }) }
+    } catch (e) { this.setData({ n: null, loadTxt: '内容暂未加载（演示模式）' }) }
   },
   toggleReport() { this.setData({reporting:!this.data.reporting,reportMsg:''}) },
   onReportReason(e) { this.setData({reportReason:e.detail.value}) },
