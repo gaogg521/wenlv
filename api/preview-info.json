@@ -1,0 +1,31 @@
+{
+  "size": {
+    "total": 1930669,
+    "packages": [
+      {
+        "name": "TOTAL",
+        "size": 1930669
+      },
+      {
+        "name": "main",
+        "size": 1848774
+      },
+      {
+        "name": "/package-content/",
+        "size": 26115
+      },
+      {
+        "name": "/package-order/",
+        "size": 18737
+      },
+      {
+        "name": "/package-promo/",
+        "size": 5269
+      },
+      {
+        "name": "/package-tour/",
+        "size": 31774
+      }
+    ]
+  }
+}
