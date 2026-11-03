@@ -285,7 +285,7 @@ const c = {
     const ex = await one(`SELECT COALESCE(SUM(l.amount), 0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
       WHERE a.user_id = ? AND l.direction = 1 AND l.biz_type IN (1,2,3) AND l.created_at < NOW() - INTERVAL ? MONTH + INTERVAL 30 DAY`, [uid, months])
     return { balance: bal, orderRatePct: rate, deductMaxPct: cap, expireMonths: months,
-      monthIn: Number(mo.inc), monthOut: Number(mo.outc), expiringSoon: Math.min(Number(bal), Number(ex.s)), yuan: Math.floor(Number(bal) / 10 * 10) / 10, coinArt: apiImg('/badge-art/bean.svg', req),
+      monthIn: Number(mo.inc), monthOut: Number(mo.outc), expiringSoon: Math.min(Number(bal), Number(ex.s)), yuan: Math.floor(Number(bal) / 10 * 10) / 10, coinArt: apiImg('/badge-art/bean.png', req),
       rule: `消费返豆 ${rate}% · 100 豆可抵 10 元 · 单笔抵扣上限 ${cap}% · 滚动 ${months} 个月有效 · 不可转让不可购买` }
   },
 
@@ -667,8 +667,8 @@ const cPhraseKyc = {
 
 // 用户侧数字身份（小程序 A「我的数字身份」页：Travel ID = 凭证+徽章+存证流水）
 const withLevelArt = (lvl, req) => {
-  lvl.art = apiImg('/badge-art/level/' + lvl.lv + '.svg', req)
-  lvl.levels = lvl.levels.map((l) => ({ ...l, art: apiImg('/badge-art/level/' + l.lv + '.svg' + (l.lv <= lvl.lv ? '' : '?state=off'), req) }))
+  lvl.art = apiImg('/badge-art/level/' + lvl.lv + '.png', req)
+  lvl.levels = lvl.levels.map((l) => ({ ...l, art: apiImg('/badge-art/level/' + l.lv + '.png' + (l.lv <= lvl.lv ? '' : '?state=off'), req) }))
   return lvl
 }
 const cIdentity = {
@@ -697,7 +697,7 @@ const cIdentity = {
       const cat = badgeArt.CATEGORIES[cat0] ? cat0 : 'special'
       if (!got && ((cat === 'city' && !openCities.has(String(pp.city_code))) || (cat === 'country' && !openCountries.has(String(pp.country_code || '').toUpperCase())))) return null
       const ev = got ? evs.find((e) => e.biz_ref === 'badge-' + u.uid + '-' + b.id) : null
-      const art = apiImg('/badge-art/' + b.id + '.svg?state=' + (got ? 'on' : 'off'), req)
+      const art = apiImg('/badge-art/' + b.id + '.png?state=' + (got ? 'on' : 'off'), req)
       return { id: b.id, name: b.name, icon_key: b.icon_key, iconImg: pp.icon_img || null, art, category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label, series: pp.series || '', tier: Number(pp.tier) || 0,
         progress: got ? null : await badgeDomain.progressOf(u.uid, b, mtr), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1 } : null, cityCode: pp.city_code || null, countryCode: pp.country_code || null, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通',
         color: pp.color || null, description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0,

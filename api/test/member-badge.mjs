@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { parseLevels, levelFor, DEFAULT_LEVELS } from '../src/domain/member.mjs'
-import { renderBadgeSvg, renderBeanSvg, CATEGORIES, CATEGORY_ORDER, RARITIES, ICON_KEYS } from '../src/domain/badge-art.mjs'
+import { renderBadgeSvg, renderBeanSvg, serveBadgeArt, CATEGORIES, CATEGORY_ORDER, RARITIES, ICON_KEYS } from '../src/domain/badge-art.mjs'
 import { DEFAULTS } from '../src/config.mjs'
 import { findBanned } from '../src/domain/wording.mjs'
 
@@ -77,6 +77,18 @@ t('系列阶数画小圆点（有系列才画）；主题色覆盖点缀色；�
   assert.ok((renderBadgeSvg({ ...base, rarity: 'legend' }).match(/<path d="M\d+ \d+ L/g) || []).length > (renderBadgeSvg(base).match(/<path d="M\d+ \d+ L/g) || []).length, '传说多出光点')
 })
 
+console.log('\n== PNG 输出 ==')
+await (async () => {
+  const png = await serveBadgeArt('/badge-art/preview.png', new URLSearchParams('category=city&icon_key=bridge&rarity=rare'))
+  const big = await serveBadgeArt('/badge-art/level/3.png', new URLSearchParams('size=512'))
+  const off = await serveBadgeArt('/badge-art/bean.png', new URLSearchParams())
+  const isPng = (b) => Buffer.isBuffer(b) && b.subarray(1, 4).toString() === 'PNG'
+  t('同一路径把 .svg 换成 .png 得到 PNG（没装 resvg 时回退为 SVG 字符串）；size 生效；不存在的返回空', () => {
+    if (typeof png === 'string') { assert.ok(png.startsWith('<svg') && big.startsWith('<svg') && off.startsWith('<svg'), '回退为 SVG'); return }
+    assert.ok(isPng(png) && isPng(big) && isPng(off))
+    assert.equal(big.readUInt32BE(16), 512, '宽度 512'); assert.equal(png.readUInt32BE(16), 256, '默认宽度 256')
+  })
+})()
 console.log('\n== 分种类设计 ==')
 t('分类与顺序：9 类，勋章墙顺序固定，小程序用语里没有链相关词，后台叫「链上勋章」', () => {
   assert.equal(CATEGORY_ORDER.length, 9); assert.deepEqual([...CATEGORY_ORDER].sort(), Object.keys(CATEGORIES).sort())
@@ -89,9 +101,10 @@ t('会员等级：1~4 级材质不同、指定图标优先、未指定时按等�
   assert.notEqual(renderBadgeSvg({ category: 'level', tier: 1 }), renderBadgeSvg({ category: 'level', tier: 1, icon_key: 'crown' }), '指定图标优先')
   assert.equal(renderBadgeSvg({ category: 'growth', tier: 2 }), renderBadgeSvg({ category: 'level', tier: 2 }))
 })
-t('国家印章带国家代码（非法代码显示 XX）；城市是朱红印章，未获得灰阶', () => {
-  assert.ok(renderBadgeSvg({ category: 'country', country_code: 'jp', icon_key: 'plane' }).includes('>JP</text>'))
-  assert.ok(renderBadgeSvg({ category: 'country', country_code: '日本' }).includes('>XX</text>'))
+t('国家印章的国家代码用矢量字形画（不依赖字体）：不同代码不同图，大小写等价，非法代码显示 XX；城市是朱红印章，未获得灰阶', () => {
+  const c = (code) => renderBadgeSvg({ category: 'country', country_code: code, icon_key: 'plane' })
+  assert.ok(!c('JP').includes('<text'), '不用 SVG 文字')
+  assert.notEqual(c('JP'), c('TH')); assert.equal(c('jp'), c('JP')); assert.equal(c('日本'), c('XX')); assert.equal(c('x'), c('XX'))
   assert.ok(renderBadgeSvg({ category: 'city', icon_key: 'bridge', rarity: 'rare' }).includes('#b42a19'), '朱红')
   assert.ok(!renderBadgeSvg({ category: 'city', icon_key: 'bridge' }, false).includes('#b42a19'))
 })

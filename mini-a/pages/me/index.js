@@ -42,7 +42,7 @@ Page({
     return api.getMe().then((m) => {
       const lv = m.level || {}
       const hint = lv.next ? '再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 成长值升级「' + lv.next.name + '」' : '已是最高等级'
-      this.setData({ avatarUrl: m.avatarUrl || '', user: { nickname: m.nickname, levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
+      this.setData({ avatarUrl: m.avatarUrl || '', initial: String(m.nickname || '旅').trim().slice(0, 1) || '旅', user: { nickname: m.nickname, levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
     }).catch(() => {})
   },
   async login() {

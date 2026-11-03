@@ -644,11 +644,14 @@ await t('勋章墙：每枚勋章有类别 / 系列 / 阶数和默认图形；�
   assert.deepEqual(['旅途常客', '资深旅人', '传奇旅者'].map((n) => idn.badges.find((b) => b.name === n).tier), [2, 3, 4], '系列阶数递增')
   // 图形接口：不带登录也能取；类型 / 状态区别 / 不存在返回 404
   const raw = async (p) => fetch(BASE + p)
-  const au = new URL(always.art); assert.equal(au.searchParams.get('state'), 'off', '未获得的图形地址带 state=off')
+  const au = new URL(always.art); assert.equal(au.searchParams.get('state'), 'off', '未获得的图形地址带 state=off'); assert.ok(au.pathname.endsWith('.png'), '小程序拿到的是 PNG 地址')
   const on = await raw(au.pathname + '?state=on'), off = await raw(au.pathname + au.search)
-  assert.equal(on.status, 200); assert.match(on.headers.get('content-type'), /image\/svg\+xml/)
-  const [svgOn, svgOff] = [await on.text(), await off.text()]
-  assert.ok(svgOn.startsWith('<svg') && svgOff.startsWith('<svg') && svgOn !== svgOff, '获得 / 未获得是两张不同的图')
+  assert.equal(on.status, 200)
+  const [bOn, bOff] = [Buffer.from(await on.arrayBuffer()), Buffer.from(await off.arrayBuffer())]
+  const pngOk = /image\/png/.test(on.headers.get('content-type'))
+  if (pngOk) assert.equal(bOn.subarray(1, 4).toString(), 'PNG'); else assert.match(on.headers.get('content-type'), /image\/svg\+xml/, '没有转换能力时回退为 SVG')
+  assert.ok(!bOn.equals(bOff), '获得 / 未获得是两张不同的图')
+  const sv = await raw(au.pathname.replace(/\.png$/, '.svg') + '?state=on'); assert.match(sv.headers.get('content-type'), /image\/svg\+xml/, '.svg 地址仍然是 SVG（后台预览用）')
   assert.equal((await raw('/badge-art/99999999.svg')).status, 404)
   assert.equal((await raw('/badge-art/preview.svg?icon_key=compass&rarity=legend&category=explore')).status, 200)
   // 后台勋章页：每枚都有图形与分类
@@ -694,7 +697,7 @@ await t('旅豆页数据：本月获得 / 使用与账本一致、折合金额�
   assert.equal(acc.monthIn, Number(mo.inc)); assert.equal(acc.monthOut, Number(mo.outc))
   assert.equal(acc.yuan, Math.floor(acc.balance / 10 * 10) / 10, '100 豆 = ¥10')
   assert.ok(acc.expiringSoon >= 0 && acc.expiringSoon <= acc.balance)
-  const coin = await fetch(new URL(acc.coinArt).pathname.replace(/^/, BASE)); assert.equal(coin.status, 200); assert.match(coin.headers.get('content-type'), /image\/svg\+xml/)
+  const coin = await fetch(new URL(acc.coinArt).pathname.replace(/^/, BASE)); assert.equal(coin.status, 200); assert.match(coin.headers.get('content-type'), /image\/(png|svg\+xml)/)
   const me = ok(await call('GET', '/c/me', null, C)); assert.ok(me.level.art && me.level.levels.every((l) => l.art))
   for (const l of me.level.levels) assert.equal((await fetch(BASE + new URL(l.art).pathname + new URL(l.art).search)).status, 200)
 })
