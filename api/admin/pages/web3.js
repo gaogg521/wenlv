@@ -154,6 +154,13 @@ function copyVc() {
   navigator.clipboard?.writeText(t).then(() => toast('已复制')).catch(() => toast('复制失败，请手动选择', true))
 }
 
+/** 复制任意文本（哈希太长，靠手选容易漏字符；证据类数字必须能整串带走） */
+function copyText(t) {
+  const s = String(t || '')
+  if (!s) return toast('没有可复制的内容', true)
+  navigator.clipboard?.writeText(s).then(() => toast('已复制 ' + (s.length > 16 ? s.slice(0, 10) + '…' : s))).catch(() => toast('复制失败，请手动选择', true))
+}
+
 function openVerifyVc() {
   const t = window.__vcLast || ''
   window.open(t ? '/vc?jwt=' + encodeURIComponent(t) : '/vc', '_blank')
@@ -315,14 +322,17 @@ function blockNodeHTML(b) {
   const root8 = String(b.merkle_root).slice(0, 8)
   const tone = st === 0 ? 'gray' : st === 3 ? 'red' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
   const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
-  return `<div class="${cls}" id="bnode-${b.id}" tabindex="0" onclick="openBlock(${b.id})"
+  // role=button + 键盘可达：只靠鼠标的人能点，只用键盘的人也得能开（无障碍不是装饰）
+  return `<div class="${cls}" id="bnode-${b.id}" role="button" tabindex="0"
+    aria-label="区块 ${Number(b.seq)}${dayClose ? ' 账本日终' : ''}，业务日 ${esc(String(b.biz_date).slice(0, 10))}，${Number(b.leaf_count)} 条事件，点击查看批内事件"
+    onclick="openBlock(${b.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBlock(${b.id})}"
     onmouseenter="chainTip(event, 'b', ${b.id})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'b', ${b.id})" onblur="chainTipHide()">
     ${cube3d(tone, { pulse: st === 5 })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
     <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
     <div class="blk-line">根 <code class="dk">${root8}…</code></div>
-    <div class="blk-line">${BLOCK_ST[st] || ''}</div>
+    <div class="blk-line">${BLOCK_ST[st] || ''} <span class="node-open">查看批内事件 ›</span></div>
   </div>`
 }
 /* ---- 区块悬停信息卡：先用列表里已有的批次字段即时显示，事件构成按需拉取并缓存 ---- */
@@ -425,9 +435,11 @@ async function web3dash() {
   })
   if (Number(pendingN) > 0) {
     nodes.push(blockLinkHTML(batches.length ? Number(batches[batches.length - 1].is_day_close) === 1 : false, false))
-    nodes.push(`<div class="chain-node ghost">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
+    nodes.push(`<div class="chain-node ghost" role="presentation" aria-disabled="true"
+      title="待打包队列：还没出根，所以点不开。到「存证中心」点「① 打包」出根后，这里才会变成可点的区块">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
       <div class="blk-title" style="opacity:.75">下一区块</div>
-      <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div></div>`)
+      <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div>
+      <div class="blk-line"><span class="node-lock">待打包 · 暂不可点</span></div></div>`)
   }
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
   $('#app').innerHTML = `
@@ -482,6 +494,9 @@ async function web3dash() {
     </tbody></table>
   </div>`
   if (window.__flowShown && window.__flowData) renderFlow(window.__flowData)
+  // 刷新后把用户正看着的区块/步骤原样恢复：自动刷新不该把人的操作抹掉
+  if (window.__openBlockId != null) openBlock(window.__openBlockId, { silent: true })
+  else if (window.__openFlowStep != null) openFlowStep(window.__openFlowStep, { silent: true })
   chainTimerSetup()
 }
 function chainTimerSetup() {
@@ -492,12 +507,17 @@ function chainTimerSetup() {
     web3dash()
   }, 30000)
 }
-async function openBlock(id) {
+async function openBlock(id, opt = {}) {
+  // 记住展开的是哪一块：链路视图每 30 秒自动刷新会整体重画 #app，不记住的话
+  // 用户点开的事件表在下一次刷新时被抹掉 —— 体感就是"点了没反应 / 点完就消失"
+  window.__openBlockId = id
+  window.__openFlowStep = undefined
   document.querySelectorAll('.chain-node.active').forEach((n) => n.classList.remove('active'))
   const el = document.getElementById('bnode-' + id)
   if (el) el.classList.add('active')
   const box = document.getElementById('blockDetail')
-  box.innerHTML = `<div class="card">${skel(3)}</div>`
+  if (!box) return
+  if (!opt.silent) box.innerHTML = `<div class="card">${skel(3)}</div>`
   const demo = !!window.__demoChain && id >= 900
   let b, evs = []
   if (demo) {
@@ -510,13 +530,14 @@ async function openBlock(id) {
   }
   const BST = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>', '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定重试</span>', '<span class="pill s70">人工处理</span>']
   box.innerHTML = `
-  <div class="card">
+  <div class="card block-detail-card">
     <div class="card-head"><h3>区块 #${b.seq} · 批内事件（${Number(b.leaf_count)}${demo ? '，演示取前 10' : ''}）</h3>
-      <span class="muted">${Number(b.is_day_close) ? '旅豆账本日终封存批 · ' : ''}打包于 ${esc(String(b.biz_date).slice(0, 10))}${demo ? ' · 演示数据' : ''}</span></div>
+      <span class="muted">${Number(b.is_day_close) ? '旅豆账本日终封存批 · ' : ''}打包于 ${esc(String(b.biz_date).slice(0, 10))}${demo ? ' · 演示数据' : ''}<button class="btn ghost sm" style="margin-left:8px" onclick="closeBlock()">收起</button></span></div>
     <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
-      <span>Merkle 根 <code>${esc(b.merkle_root)}</code></span>
-      <span>前根 <code>${b.prev_root ? esc(b.prev_root) : '—（链起点）'}</code></span>
-      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code></span>` : ''}
+      <span>Merkle 根 <code>${esc(b.merkle_root)}</code><button class="copy-chip" title="复制完整根" onclick="copyText('${esc(b.merkle_root)}')">复制</button></span>
+      <span>前根 ${b.prev_root ? `<code>${esc(b.prev_root)}</code><button class="copy-chip" title="复制前根" onclick="copyText('${esc(b.prev_root)}')">复制</button>` : '<code>—（链起点）</code>'}</span>
+      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code><button class="copy-chip" title="复制交易哈希" onclick="copyText('${esc(b.chain_tx_ref)}')">复制</button></span>` : ''}
+      ${b.chain_block ? `<span>链上块高 <code>${esc(b.chain_block)}</code></span>` : ''}
       ${b.anchored_at ? `<span>锚定时间 ${esc(String(b.anchored_at).slice(0, 19))}</span>` : ''}
       <span>尝试 ${Number(b.attempt) || 0} 次</span>
       ${!demo && Number(b.is_day_close) ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/bean-day/${esc(String(b.biz_date).slice(0, 10))}">封存证明 PDF</a>
@@ -531,7 +552,14 @@ async function openBlock(id) {
         : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline('${esc(e.biz_type)}','${esc(e.biz_ref)}',${e.id})">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
     </tbody></table>
   </div>`
-  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  // block:'start' 才保证用户真的“看见”结果；nearest 在很多情况下等于不滚动
+  if (!opt.silent) box.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+function closeBlock() {
+  window.__openBlockId = undefined
+  document.querySelectorAll('.chain-node.active').forEach((n) => n.classList.remove('active'))
+  const box = document.getElementById('blockDetail')
+  if (box) box.innerHTML = ''
 }
 async function verifyEventInline(bizType, bizRef, id) {
   const r = await api('GET', '/admin/attest/verify?bizType=' + encodeURIComponent(bizType) + '&bizRef=' + encodeURIComponent(bizRef))
@@ -542,12 +570,16 @@ async function verifyEventInline(bizType, bizRef, id) {
 const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>', '<span class="dpill ok">已锚定</span>']
 function flowStepHTML(s, i) {
   const e = s.ev
-  if (!e) return `<div class="chain-node ghost" style="width:150px">
+  if (!e) return `<div class="chain-node ghost" style="width:150px" aria-disabled="true"
+    title="这一步还没入存证队列，所以点不开；业务发生后会自动出现在这里">
     ${cube3d('gray', { ghost: true, sm: true, label: '待产生' })}
-    <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div></div>`
+    <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div>
+    <div class="blk-line"><span class="node-lock">待产生 · 暂不可点</span></div></div>`
   const st = Number(e.status)
   const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
-  return `<div class="chain-node" style="width:150px" id="fnode-${i}" tabindex="0" onclick="openFlowStep(${i})"
+  return `<div class="chain-node" style="width:150px" id="fnode-${i}" role="button" tabindex="0"
+    aria-label="第 ${i + 1} 步 ${esc(s.label || '')}，点击查看本步证明"
+    onclick="openFlowStep(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFlowStep(${i})}"
     onmouseenter="chainTip(event, 'f', ${i})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'f', ${i})" onblur="chainTipHide()">
     ${cube3d(tone, { sm: true })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
@@ -583,7 +615,10 @@ async function loadFlow() {
   if (!no) return toast('请输入订单号', true)
   try {
     renderFlow(await api('GET', '/admin/attest/flow/' + encodeURIComponent(no)))
-  } catch (e) { toast(e.message, true) }
+  } catch (e) {
+    // 后端口径是"订单不存在"，运营看不出是单号错了还是系统坏了 → 补上下文
+    toast(/订单不存在|1004/.test(e.message) ? `没找到订单 ${no}：核对单号，或点「演示完整流程」看形态` : e.message, true)
+  }
 }
 function loadFlowDemo() {
   const mk = (no, label, hint, seq, t, st) => ({ no, label, hint, ev: { biz_type: label, biz_ref: no, version_no: 1, status: st, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: '17d5a93e04fb8c629f4c1a2b7de50863' } })
@@ -601,9 +636,11 @@ function loadFlowDemo() {
     refunds: [],
   })
 }
-function openFlowStep(i) {
+function openFlowStep(i, opt = {}) {
   const d = window.__flowData
   if (!d) return
+  window.__openFlowStep = i
+  window.__openBlockId = undefined
   document.querySelectorAll('.chain-node.active').forEach((n) => n.classList.remove('active'))
   const el = document.getElementById('fnode-' + i)
   if (el) el.classList.add('active')
@@ -624,7 +661,7 @@ function openFlowStep(i) {
       <span>版本 v${Number(e.version_no ?? 1)}</span>
       <span>${BST[Number(e.status)] || ''}</span>
       <span>所在批次 ${e.seq != null ? '#' + e.seq : '待打包'}</span>
-      <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code></span>
+      <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code>${e.merkle_root ? `<button class="copy-chip" title="复制完整根" onclick="copyText('${esc(e.merkle_root)}')">复制</button>` : ''}</span>
       <span>payload 指纹 <code>${esc(String(e.payload_hash).slice(0, 16))}…</code></span>
       <span>时间 ${esc(String(e.created_at).slice(0, 19))}</span>
     </div>
@@ -634,7 +671,7 @@ function openFlowStep(i) {
       <span class="muted">六步与业务同事务写入 · 小时级打包 · 上链只有哈希指纹+时间戳</span>
     </div>
   </div>`
-  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  if (!opt.silent) box.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function pointassets() {
