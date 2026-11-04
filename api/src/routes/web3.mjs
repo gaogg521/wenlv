@@ -28,6 +28,27 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
+// 链上锚定信息的"人话版"：把上链原文拆成四要素，并当场验签。
+// 没有原文（v1 早期批次）就如实说没有，不编造主体与签名。
+async function describeChainOf(e, anchored) {
+  if (!anchored) return null
+  const m = await import('../infra/chain/antchain-open.mjs')
+  const desc = m.describeContent(e.chain_content)
+  const base = {
+    provider: e.chain_provider || null,
+    txRef: e.chain_tx_ref, block: e.chain_block,
+    anchoredAt: e.anchored_at || null,
+    tsMs: e.chain_ts_ms || desc.tsMs || null,
+    tsIso: e.chain_ts_ms ? new Date(Number(e.chain_ts_ms)).toISOString() : (desc.tsIso || null),
+  }
+  if (desc.version === 2) {
+    const v = m.verifyContentV2(e.chain_content)
+    return { ...base, ...desc, signatureVerified: v.ok, signatureNote: v.ok ? '签名可被平台公钥验证' : v.reason }
+  }
+  return { ...base, ...desc, signatureVerified: null,
+    signatureNote: desc.version === 1 ? '早期批次未含签名（v1）' : '没有留存上链原文，无法验签' }
+}
+
 // ---------- 存证中心 / 公开验证 / 用户数字身份 ----------
 const web3 = {
   // 后台：存证批次与队列总览
@@ -54,7 +75,8 @@ const web3 = {
   // 单号验证（后台+开放页共用逻辑）：返回可离线重算的 inclusion proof
   async _verify(bizType, bizRef) {
     const e = await one(`SELECT e.*, b.merkle_root, b.prev_root, b.chain_tx_ref, b.chain_block, b.anchored_at,
-        b.seq, b.leaf_count, b.is_day_close, b.merkle_version, b.status AS batch_status
+        b.seq, b.leaf_count, b.is_day_close, b.merkle_version, b.status AS batch_status,
+        b.chain_provider, b.chain_content, b.chain_ts_ms
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
       WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     if (!e) return { found: false }
@@ -72,6 +94,9 @@ const web3 = {
       proofValid, batchSeq: e.seq, isDayClose: !!Number(e.is_day_close),
       chainRef: anchored ? e.chain_tx_ref : null, chainBlock: anchored ? e.chain_block : null,
       anchoredAt: anchored ? e.anchored_at : null,
+      // 链上锚定信息（方案 §7.6 四要素）：交易哈希 + 块高 + 时间戳 + 主体标识 + 签名
+      // 不给齐这四项，"输入订单号→链上锚定信息+本地哈希比对"就只是半个验证
+      chain: await describeChainOf(e, anchored),
       note: anchored ? '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根，再到链上核对该根'
         : (Number(e.batch_status) === 5 ? '已提交上链·等待确认：确认数达标前不视为已锚定'
         : (Number(e.status) === 1 ? '已打包·待锚定：根已生成，链凭据到位后补锚' : '已入队待打包（小时级批次）')),
