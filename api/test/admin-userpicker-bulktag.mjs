@@ -45,6 +45,10 @@ try {
   })
 
   await test('T05 批量打标签：词表校验/逐笔结果（成功+已存在+不存在）/越权', async () => {
+    // V-10：批量打标页面闭环的词表来源接口（与 bulk-tags 同权限、同词表）
+    const words = ok(await call('ops', 'GET', '/admin/user-ops/tag-words'))
+    assert.ok(Array.isArray(words.words) && words.words.includes('高价值用户'), '词表接口返回词表且含夹具标签')
+    assert.equal((await call('finance', 'GET', '/admin/user-ops/tag-words')).code, 1003, '无 user.manage 角色拒绝')
     assert.equal((await call('ops', 'POST', '/admin/users/bulk-tags', { userIds: [u1.insertId], tag: '词表外', note: 'x' })).code, 1001)
     assert.equal((await call('finance', 'POST', '/admin/users/bulk-tags', { userIds: [u1.insertId], tag: '高价值用户', note: 'x' })).code, 1003)
     const r = ok(await call('ops', 'POST', '/admin/users/bulk-tags', { userIds: [u1.insertId, u2.insertId, 999999], tag: '高价值用户', note: stamp + ' 批量打标' }))

@@ -38,6 +38,16 @@ async function users() {
     api('GET', '/admin/users/stats'),
     api('GET', `/admin/users?seg=${encodeURIComponent(Q.seg)}&kw=${encodeURIComponent(Q.kw)}&sort=${encodeURIComponent(Q.sort)}&page=${Q.page}`)])
   const sg = st.segments, pages = Math.max(1, Math.ceil(list.total / list.size))
+  // V-10：批量打标页面闭环——选择状态跨页保留（全局 Set），本页可见行记录在 __userPageIds 供全选
+  window.__userSel = window.__userSel || new Set()
+  window.__userPageIds = list.rows.map((u) => Number(u.id))
+  const canBulkTag = adminCan('user.manage')
+  const allChecked = canBulkTag && window.__userPageIds.length > 0 && window.__userPageIds.every((id) => window.__userSel.has(id))
+  const selHead = canBulkTag ? `<th style="width:36px"><input type="checkbox" aria-label="全选本页" ${allChecked ? 'checked' : ''} onchange="userSelAll(this.checked)"></th>` : ''
+  const selBar = canBulkTag ? `<div class="row" style="margin:10px 0 0;align-items:center" id="userSelBar">
+    <span class="td-sub">已选 <b id="userSelCount">${window.__userSel.size}</b> 人（选择跨页保留，单次最多 100 人）</span>
+    <button class="btn primary sm" onclick="bulkTagModal()">批量打标</button>
+    <button class="btn ghost sm" onclick="userSelClear()">清除选择</button></div>` : ''
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
     <div class="kpi go" ${dxKey} title="查看全部用户" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">👥</div><div><div class="l">注册用户</div><div class="v">${st.total.toLocaleString()}</div><div class="s">今日 +${st.today} · 近 7 日 +${sg.new7}</div></div></div>
@@ -60,8 +70,10 @@ async function users() {
       <button class="btn primary" type="submit">查询</button>
       ${Q.kw || Q.seg ? `<button class="btn ghost" type="button" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()">重置</button>` : ''}</form>
     <div class="cfg-tabs">${USER_SEGS.map(([v, n]) => `<button type="button" class="cfg-tab ${Q.seg === v ? 'on' : ''}" onclick="window.__userQ.seg='${v}';window.__userQ.page=1;users()">${n}${v ? ' ' + (sg[v] ?? '') : ''}</button>`).join('')}</div>
-    ${list.rows.length ? `<table><thead><tr><th>用户</th><th>注册时间</th><th>等级 / 成长值</th><th>订单</th><th>消费金额</th><th>最近下单</th><th>旅豆</th><th>身份</th><th>状态 / 管理</th></tr></thead><tbody>
+    ${selBar}
+    ${list.rows.length ? `<table><thead><tr>${selHead}<th>用户</th><th>注册时间</th><th>等级 / 成长值</th><th>订单</th><th>消费金额</th><th>最近下单</th><th>旅豆</th><th>身份</th><th>状态 / 管理</th></tr></thead><tbody>
     ${list.rows.map((u) => `<tr class="click-row" onclick="userProfile(${u.id})">
+      ${canBulkTag ? `<td><input type="checkbox" aria-label="选择用户 ${u.id}" ${window.__userSel.has(Number(u.id)) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="userSel(${Number(u.id)}, this.checked)"></td>` : ''}
       <td><div class="puser">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}<div><div class="td-main">${esc(u.nickname || '未命名')}</div><div class="td-sub">ID ${u.id}${PN(u.has_mobile) ? ' · 已绑手机' : ''}</div></div></div></td>
       <td class="td-sub">${dt(u.created_at, 10)}</td>
       <td>${LEVEL_CN[u.member_level] || 'Lv' + u.member_level}<div class="td-sub">${PN(u.growth_value)}</div></td>
@@ -75,6 +87,55 @@ async function users() {
       <button class="btn ghost sm" ${list.page >= pages ? 'disabled' : ''} onclick="window.__userQ.page++;users()">下一页</button></div></div>`
     : emptyBox('没有符合条件的用户')}
   </div>`
+}
+
+// ---- V-10：批量打标页面闭环（选择 → 预览范围 → 确认 → 逐笔结果）----
+window.userSel = (id, on) => {
+  if (on) window.__userSel.add(id)
+  else window.__userSel.delete(id)
+  const cnt = document.querySelector('#userSelCount')
+  if (cnt) cnt.textContent = window.__userSel.size
+}
+window.userSelAll = (on) => {
+  for (const id of (window.__userPageIds || [])) { if (on) window.__userSel.add(id); else window.__userSel.delete(id) }
+  users()
+}
+window.userSelClear = () => { window.__userSel = new Set(); users() }
+
+window.bulkTagModal = async () => {
+  if (!window.__userSel.size) return toast('请先勾选要打标的用户', true)
+  if (window.__userSel.size > 100) return toast('单次最多 100 人，当前已选 ' + window.__userSel.size + ' 人', true)
+  let words = []
+  try { words = (await api('GET', '/admin/user-ops/tag-words')).words } catch (e) { return toast(e.message, true) }
+  if (!words.length) return toast('词表为空：请先在参数中心 user.ops_tags 维护标签词表', true)
+  const ids = [...window.__userSel]
+  const preview = ids.slice(0, 10).join(', ') + (ids.length > 10 ? ' … 共 ' + ids.length + ' 人' : '')
+  modal('批量打标 · 范围预览', `
+    <p class="td-sub">将对以下用户打标（共 <b>${ids.length}</b> 人，单次上限 100）：ID ${esc(preview)}</p>
+    <div class="field"><label>标签 *（词表：参数中心 user.ops_tags）</label><select id="bulkTagSel" class="inp" style="width:220px">${words.map((w) => `<option>${esc(w)}</option>`).join('')}</select></div>
+    <div class="field"><label>打标说明（可选，逐笔进审计）</label><input id="bulkTagNote" class="inp" maxlength="200" placeholder="选填"></div>
+    <p class="td-sub">已拥有该标签的用户会逐笔提示「已有该标签」，不会重复写入；已注销/不存在的 ID 逐笔报「用户不存在」。</p>
+    <div id="bulkTagErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="bulkTagSubmit()">确认打标 ${ids.length} 人</button>`)
+}
+window.bulkTagSubmit = async () => {
+  const tag = ($('#bulkTagSel')?.value || '').trim()
+  if (!tag) { $('#bulkTagErr').textContent = '请选择标签'; return }
+  const ids = [...window.__userSel]
+  const btn = event?.target; if (btn) btn.disabled = true
+  try {
+    const r = await api('POST', '/admin/users/bulk-tags', { userIds: ids, tag, note: ($('#bulkTagNote')?.value || '').trim() })
+    window.__userSel = new Set()
+    modal('批量打标结果 · ' + esc(tag), `
+      <p>完成：<span class="pill ok">成功 ${r.ok}</span> <span class="pill ${r.fail ? 's70' : 'off'}">失败 ${r.fail}</span> / 共 ${r.total}</p>
+      <div class="rv-box" style="max-height:320px;overflow:auto"><div class="rv-h">逐笔结果</div>
+      ${r.results.map((x) => `<div style="margin:4px 0">用户 #${x.userId}：${x.ok ? '<span class="pill ok">成功</span>' : '<span class="pill s70">' + esc(x.reason || '失败') + '</span>'}</div>`).join('')}</div>
+      <p class="td-sub">打标与说明逐笔进入审计日志（action=tag-add, bulk=true）；可在用户画像中查看与移除。</p>`,
+      `<button class="btn primary" onclick="closeModal();users()">完成</button>`)
+  } catch (e) {
+    if (btn) btn.disabled = false
+    $('#bulkTagErr').textContent = e.message
+  }
 }
 
 async function userProfile(id) {

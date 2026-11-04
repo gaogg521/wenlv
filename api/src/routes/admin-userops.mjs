@@ -219,6 +219,14 @@ export const adminUserOps = {
   },
 
   // ---- T05 扩展：批量打标签（先预览数量/范围并逐笔反馈，不含高风险动作）----
+  // 批量打标词表（V-10：运营页面批量打标的选择源；与 bulk-tags 同一权限与词表口径）。
+  // 注意路由前缀不能挂在 /admin/users/* 下——routes.mjs 里 people 的 GET /admin/users/:id 先注册会截胡
+  'GET /admin/user-ops/tag-words': async (req) => {
+    await requireAdmin(req, 'user.manage')
+    let words = []
+    try { words = await cfgArr('user.ops_tags') } catch { words = [] }
+    return { words }
+  },
   'POST /admin/users/bulk-tags': async (req) => {
     const a = await requireAdmin(req, 'user.manage')
     const { userIds, tag, note } = req.body || {}
