@@ -46,9 +46,10 @@ export const otpauthUri = (secret, account) => `otpauth://totp/${encodeURICompon
 // 通道所需凭据：集成中心的展示与这里的"是否已配置"判断共用同一份清单
 export const SMS_KEYS = ['SMS_TENCENT_SECRET_ID', 'SMS_TENCENT_SECRET_KEY', 'SMS_TENCENT_SDKAPPID', 'SMS_TENCENT_SIGN', 'SMS_TENCENT_TEMPLATE_ID']
 export const SMTP_KEYS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM']
-// 真实发送器是否已接入。目前 sendSmsReal / sendEmailReal 仍是空壳：凭据配了也发不出去，必须如实走 MOCK，
-// 不能假装已发送（此前配了凭据反而会因空壳报错被吞掉，验证码静默丢失）。接入后把对应项改为 true。
-const REAL_SENDER = { sms: false, email: false }
+// 真实发送器（C-06/C-07）：sendSmsReal=腾讯云短信 API v3（TC3-HMAC-SHA256），sendEmailReal=最小 SMTP 客户端。
+// 两者都实现了，但只有凭据齐全（configured）才会走真实通道；没配凭据照旧 MOCK（验证码只在安全中心可见）。
+// 失败必须抛错给调用方（sendCode 转成"验证码发送失败：…"），绝不静默成功；密钥/验证码不进日志。
+const REAL_SENDER = { sms: true, email: true }
 let _det = null, _detAt = 0
 async function detect() {
   if (_det && Date.now() - _detAt < 10_000) return _det
@@ -60,13 +61,27 @@ async function detect() {
   return _det
 }
 
-async function sendSmsReal(mobile, code) {
-  // 腾讯云 SMS 骨架（凭据到位后启用；签名算法同支付通道 RSA→HMAC 按云 API v3）
-  throw new Error('SMS real channel not configured')
+async function sendSmsReal(mobile, code, s) {
+  const { sendSms } = await import('./sms-tencent.mjs')
+  return sendSms({
+    secretId: s.SMS_TENCENT_SECRET_ID || process.env.SMS_TENCENT_SECRET_ID,
+    secretKey: s.SMS_TENCENT_SECRET_KEY || process.env.SMS_TENCENT_SECRET_KEY,
+    sdkAppId: s.SMS_TENCENT_SDKAPPID || process.env.SMS_TENCENT_SDKAPPID,
+    signName: s.SMS_TENCENT_SIGN || process.env.SMS_TENCENT_SIGN,
+    templateId: s.SMS_TENCENT_TEMPLATE_ID || process.env.SMS_TENCENT_TEMPLATE_ID,
+    mobile, code,
+  })
 }
-async function sendEmailReal(email, code) {
-  // SMTP（生产建议装 nodemailer：transporter.sendMail）
-  throw new Error('SMTP not configured')
+async function sendEmailReal(email, code, s) {
+  const { sendMail } = await import('./smtp.mjs')
+  return sendMail({
+    host: s.SMTP_HOST || process.env.SMTP_HOST,
+    port: s.SMTP_PORT || process.env.SMTP_PORT,
+    user: s.SMTP_USER || process.env.SMTP_USER,
+    pass: s.SMTP_PASS || process.env.SMTP_PASS,
+    from: s.SMTP_FROM || process.env.SMTP_FROM,
+    to: email, code,
+  })
 }
 
 /** 通道状态（后台账号 / 安全中心 / 运维控制台展示用）：configured=凭据齐全，deliverable=真能发出去 */
@@ -87,11 +102,12 @@ export async function sendCode(target, channel, purpose = 'login') {
   if (Number(daily.c) >= 10) throw new Error('今日发送次数已达上限')
   const code = String(Math.floor(100000 + Math.random() * 900000))
   await q(`INSERT INTO mfa_code (target, channel, code, expires_at, purpose) VALUES (?,?,?,NOW(3) + INTERVAL 5 MINUTE,?)`, [target, channel, code, purpose])
+  const d = await detect()
   const st = await channelStatus()
   const real = (channel === 'sms' ? st.sms : st.email).deliverable
   if (real) {
     // 真实通道发送失败要让调用方看见，不再静默吞掉（否则用户一直等不到验证码）
-    try { await (channel === 'sms' ? sendSmsReal : sendEmailReal)(target, code) } catch (e) { throw new Error('验证码发送失败：' + e.message) }
+    try { await (channel === 'sms' ? sendSmsReal : sendEmailReal)(target, code, d.s) } catch (e) { throw new Error('验证码发送失败：' + e.message) }
   } else if (channel === 'sms') console.log(`[sms:MOCK] ${target} 验证码 ${code}（5 分钟有效，后台安全中心可见）`)
   else console.log(`[email:MOCK] ${target} 验证码 ${code}（5 分钟有效，后台安全中心可见）`)
   return { sent: true, mock: !real }
