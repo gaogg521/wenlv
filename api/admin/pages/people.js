@@ -40,10 +40,10 @@ async function users() {
   const sg = st.segments, pages = Math.max(1, Math.ceil(list.total / list.size))
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-    <div class="kpi"><div class="ico">👥</div><div><div class="l">注册用户</div><div class="v">${st.total.toLocaleString()}</div><div class="s">今日 +${st.today} · 近 7 日 +${sg.new7}</div></div></div>
-    <div class="kpi"><div class="ico">🛒</div><div><div class="l">下单转化</div><div class="v">${pct(st.conversion)}</div><div class="s">下单用户 ${sg.buyer} 人</div></div></div>
-    <div class="kpi"><div class="ico">🔁</div><div><div class="l">复购率</div><div class="v">${pct(st.repeatRate)}</div><div class="s">复购 ${sg.repeat} 人 · 沉睡 ${sg.sleeping} 人</div></div></div>
-    <div class="kpi"><div class="ico">💳</div><div><div class="l">人均消费</div><div class="v">${fen(st.arpu)}</div><div class="s">按下单用户计</div></div></div>
+    <div class="kpi go" ${dxKey} title="查看全部用户" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">👥</div><div><div class="l">注册用户</div><div class="v">${st.total.toLocaleString()}</div><div class="s">今日 +${st.today} · 近 7 日 +${sg.new7}</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：下单用户" onclick="window.__userQ={seg:'buyer',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">🛒</div><div><div class="l">下单转化</div><div class="v">${pct(st.conversion)}</div><div class="s">下单用户 ${sg.buyer} 人</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：复购用户" onclick="window.__userQ={seg:'repeat',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">🔁</div><div><div class="l">复购率</div><div class="v">${pct(st.repeatRate)}</div><div class="s">复购 ${sg.repeat} 人 · 沉睡 ${sg.sleeping} 人</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：下单用户，按消费金额排序" onclick="window.__userQ={seg:'buyer',kw:'',sort:'gmv',page:1};users()"><i class="go-arrow">↗</i><div class="ico">💳</div><div><div class="l">人均消费</div><div class="v">${fen(st.arpu)}</div><div class="s">按下单用户计</div></div></div>
   </div>
   <div class="people-grid">
     <div class="card"><div class="card-head"><h2>近 14 日新增注册</h2></div>${dayBars(st.signups, { label: '新增注册' })}</div>

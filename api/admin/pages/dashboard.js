@@ -106,6 +106,8 @@ function dxChartClick(ev) { // 点趋势图里某一天/月/今日，看对应�
   else if (D.unit === 'month') { const [y, m] = d.split('-').map(Number); from = d + '-01'; to = d + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0') }
   dxGo('orders', { paidFrom: from, paidTo: to, status: DX_ALL_PAID })
 }
+// 卡片里「3 / 2」这类并排的数：各自是一个状态筛选链接（卡片本身不整体可点，避免歧义）
+const dxNumGo = (n, js, tip) => `<button type="button" class="inl-go num-go" title="${tip}" onclick="${js}">${n}</button>`
 const dxKey = 'role="link" tabindex="0" onkeydown="if(event.key===\'Enter\')this.click()"' // 可点击的非 button 元素：键盘也能进
 
 /* ---------- 趋势图（GMV 曲线 + 订单柱 + 上一周期虚线，悬停出提示） ---------- */

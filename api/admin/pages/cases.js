@@ -18,9 +18,9 @@ async function cases() {
   const canManage = adminCan('case.manage')
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdecec">🧷</div><div><div class="l">待研判 / 处理中</div><div class="v">${Number(counts[0] || 0)} / ${Number(counts[1] || 0)}</div><div class="s">研判受理后开始处理</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">📨</div><div><div class="l">待补材料 / 待协查</div><div class="v">${Number(counts[2] || 0)} / ${Number(counts[3] || 0)}</div><div class="s">城市账号可补充本城反馈</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e3f6ec">⚖️</div><div><div class="l">待复核 / 已关闭</div><div class="v">${Number(counts[4] || 0)} / ${Number(counts[5] || 0)}</div><div class="s">复核人≠责任人 · 结论必填</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#fdecec">🧷</div><div><div class="l">待研判 / 处理中</div><div class="v">${dxNumGo(Number(counts[0] || 0), "window.__rcQ={page:1,status:'0',kw:''};cases()", "筛选：待研判")} / ${dxNumGo(Number(counts[1] || 0), "window.__rcQ={page:1,status:'1',kw:''};cases()", "筛选：处理中")}</div><div class="s">研判受理后开始处理</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📨</div><div><div class="l">待补材料 / 待协查</div><div class="v">${dxNumGo(Number(counts[2] || 0), "window.__rcQ={page:1,status:'2',kw:''};cases()", "筛选：待补材料")} / ${dxNumGo(Number(counts[3] || 0), "window.__rcQ={page:1,status:'3',kw:''};cases()", "筛选：待协查")}</div><div class="s">城市账号可补充本城反馈</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">⚖️</div><div><div class="l">待复核 / 已关闭</div><div class="v">${dxNumGo(Number(counts[4] || 0), "window.__rcQ={page:1,status:'4',kw:''};cases()", "筛选：待复核")} / ${dxNumGo(Number(counts[5] || 0), "window.__rcQ={page:1,status:'5',kw:''};cases()", "筛选：已关闭")}</div><div class="s">复核人≠责任人 · 结论必填</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>风险案件</h2><span class="muted">事件升级为可办理案件：处置动作引用冻结/解冻，解冻与结案分离，复核后才算关闭</span></div>

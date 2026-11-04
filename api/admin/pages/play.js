@@ -68,18 +68,20 @@ async function rateov() {
 window.saveRate = () => entityEditor('rateov', $('#roProd').value, { onSaved: () => rateov() })
 async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/kyc')
+  const all = await api('GET', '/admin/kyc')
+  window.__kycSt = window.__kycSt ?? '' // 卡片点击后只看某一状态
+  const list = window.__kycSt === '' ? all : all.filter((x) => String(x.status) === window.__kycSt)
   const st = { 0: '<span class="pill warn">待审</span>', 1: '<span class="pill ok">已通过</span>', 2: '<span class="pill s70">已驳回</span>' }
-  const pending = list.filter((x) => x.status === 0).length
-  const passed = list.filter((x) => x.status === 1).length
+  const pending = all.filter((x) => x.status === 0).length
+  const passed = all.filter((x) => x.status === 1).length
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${list.filter((x) => x.status === 2).length}</div><div class="s">资料不符</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看待审" onclick="window.__kycSt='0';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看已通过" onclick="window.__kycSt='1';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看已驳回" onclick="window.__kycSt='2';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${all.filter((x) => x.status === 2).length}</div><div class="s">资料不符</div></div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>实名认证审核</h2><span class="muted">身份证号加密落库 · 仅展示脱敏号</span></div>
+    <div class="card-head"><h2>实名认证审核</h2><span class="muted">身份证号加密落库 · 仅展示脱敏号</span>${window.__kycSt !== '' ? `<span class="src-chip">仅看：${['待审', '已通过', '已驳回'][window.__kycSt]}</span><button class="btn ghost sm" onclick="window.__kycSt='';kyc()">显示全部</button>` : ''}</div>
     ${list.length ? `<table><thead><tr><th>用户</th><th>姓名</th><th>证件号（脱敏）</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td>${esc(x.nickname || ('用户' + x.user_id))}</td><td>${esc(x.real_name)}</td><td class="num">${esc(x.id_no_mask)}</td>
       <td>${st[x.status] || x.status}</td><td class="td-sub">${String(x.created_at).slice(0, 16)}</td>
