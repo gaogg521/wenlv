@@ -81,6 +81,13 @@ export function contentOf({ root, prevRoot, bizDate }) {
   return ['wl-anchor/1', String(root), String(prevRoot || '0'.repeat(64)), dateNum(bizDate)].join('|')
 }
 
+/** v1 原文解析（wl-anchor/1|root|prevRoot|bizDate）：确认时的行一致性比对用 */
+export function parseContentV1(s) {
+  const parts = String(s || '').split('|')
+  if (parts.length !== 4 || parts[0] !== 'wl-anchor/1') return null
+  return { version: 1, root: parts[1], prevRoot: parts[2], bizDate: parts[3] }
+}
+
 // ===== v2：按方案 §7.6「上链的只有 哈希指纹 + 时间戳 + 主体标识 + 签名」=====
 // 实测（2026-11-04，真实链）：content 2000 字符内正常；4000 字符会"返回 success 但链上查无此交易"。
 // v2 完整格式约 690 字符（主体 8 + 链 8 + 类型 + 两个 64 位根 + 13 位毫秒 + 512 位签名），留足余量。
@@ -297,6 +304,19 @@ export default {
     if (r.content !== expected) {
       throw hard('CONTENT_MISMATCH', 'antchain-open 链上内容与批次不一致：该根此前已用其它内容（前根/业务日）上过链，'
         + '同一 orderId 的重复提交会被服务端丢弃并返回首次那笔，需人工核对后再决定是否换根重提')
+    }
+    // 链上原文里的业务字段必须与批次当前行一致：提交后批次行的根/前根被改动（库内篡改或脏写）
+    // 重试必然重演 → 转人工，不能照旧置为已锚定（确认语义：交易内容"确实是这枚根"）。
+    // v1 原文带业务日一并比对；v2 原文只有根/前根（ts 是提交时刻，不是业务日）
+    const onChainV2 = parseContentV2(r.content)
+    const onChain = onChainV2 || parseContentV1(r.content)
+    if (onChain) {
+      const fieldsBad = onChain.root !== String(root) || String(onChain.prevRoot || '') !== String(prevRoot || '0'.repeat(64))
+        || (!onChainV2 && Number(onChain.bizDate) !== Number(dateNum(bizDate)))
+      if (fieldsBad) {
+        throw hard('CONTENT_MISMATCH', 'antchain-open 链上内容与批次不一致（根/前根）：批次在提交后被改动，'
+          + '同一根重提也会重演不一致，需人工核对决定是否换根重提')
+      }
     }
     // v2 还要验签：链上那串里的签名，必须真的是平台私钥对"这串内容"的签名
     const v2 = parseContentV2(r.content)

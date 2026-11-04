@@ -164,6 +164,29 @@ try {
     assert.equal((await call(tok('ops'), 'POST', '/admin/role-modules', { role: 'ops', moduleKey: 'audit', on: true, reason: '越权原因测试四字' })).code, 1003)
   })
 
+  await test('C-05 直调抽测：前端隐藏的模块接口非授权角色一律 1003（20 个超管模块代表路由）', async () => {
+    const hidden = [
+      ['GET', '/admin/security/accounts'], ['GET', '/admin/security/channels'], ['GET', '/admin/security/recent-codes'],
+      ['GET', '/admin/accounts'], ['GET', '/admin/role-modules'],
+      ['GET', '/admin/config'], ['GET', '/admin/config/history'], ['GET', '/admin/features'],
+      ['GET', '/admin/integrations'], ['GET', '/admin/system/overview'], ['GET', '/admin/system/logs'],
+      ['GET', '/admin/web3/point-assets'], ['GET', '/admin/web3/badges'], ['GET', '/admin/web3/wallets'],
+      ['GET', '/admin/web3/chain'], ['GET', '/admin/web3/assets'], ['GET', '/admin/web3/vc'],
+      ['GET', '/admin/chain/hub'], ['GET', '/admin/attest/center'], ['GET', '/admin/creators'],
+    ]
+    // 每条代表路由：四个业务角色 + 无绑城市账号都要 1003；super 要 0
+    for (const [method, path] of hidden) {
+      for (const role of ['ops', 'finance', 'review', 'risk']) {
+        const r = await call(tok(role), method, path)
+        assert.equal(r.code, 1003, `${role} 直调 ${path} 应 1003，实际 ${r.code} ${r.msg || ''}`)
+      }
+      const cityR = await call(jwtSign({ end: 'admin', role: 'city_partner', name: '直调-无城' }), method, path)
+      assert.equal(cityR.code, 1003, `无城城市账号直调 ${path} 应 1003`)
+      const s = await call(superTok, method, path)
+      assert.equal(s.code, 0, `super 直调 ${path} 应可用：${s.msg || ''}`)
+    }
+  })
+
   console.log(`\n${passed} 项批次 C/D（C-04 基线 + C-05 可配置授权）回归通过`)
 } finally {
   for (const id of made.admins) {

@@ -28,8 +28,10 @@ async function api(method, path, body, token) {
 
 async function main() {
   // ===== 环境准备（唯一不走 HTTP 的一步：清场 + 保证管理员在） =====
+  // 系统配置/权限矩阵表不参与清场：rule_config（参数中心）、admin_role_module/admin_user_module（C-04/C-05
+  // 权限种子与授权）、bean_global_cap、schema_migration——清了它们，角色默认矩阵就成了空集（未知角色语义）
   await q('SET FOREIGN_KEY_CHECKS = 0')
-  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','schema_migration')")) {
+  for (const t of await q("SELECT table_name tn FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name NOT IN ('rule_config','bean_global_cap','admin_user','schema_migration','admin_role_module','admin_user_module')")) {
     await q('TRUNCATE TABLE `' + t.tn + '`')
   }
   await q('UPDATE bean_global_cap SET issued_sum = 0 WHERE id = 1')

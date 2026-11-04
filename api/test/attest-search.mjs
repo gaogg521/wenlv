@@ -3,7 +3,7 @@
 import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/attest-search.mjs')
 import assert from 'node:assert/strict'
-import { q, one } from '../src/db.mjs'
+import { q, one, closeDb } from '../src/db.mjs'
 
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b == null ? undefined : JSON.stringify(b) })).json()
@@ -76,5 +76,7 @@ await t('查不到时返回空结果 + 能力说明（不报 500，也不假装�
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 
-// 数据库连接池不会自己退出；显式收尾，避免测试套件挂住
-process.exit(process.exitCode || 0)
+// 数据库连接池不会自己退出，closeDb 收尾后自然退出——直接 process.exit 会在 Windows 上
+// 触发 libuv 句柄断言、退出码变 127，把 test:db 的 && 链打断（其他套件都这样收尾）
+await closeDb().catch(() => {})
+process.exitCode = process.exitCode || 0
