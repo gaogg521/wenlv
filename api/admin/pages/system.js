@@ -216,23 +216,39 @@ async function security() {
   const codes = await api('GET', '/admin/security/recent-codes')
   const chn = await api('GET', '/admin/security/channels')
   window.__mfaAfter = security // 绑定/停用完成后刷新的页面（从后台账号页进入时会改成 accounts）
+  const MODE_CARDS = [
+    ['off', '关闭', '所有账号登录都不要求两步验证（已绑定的也不再询问）'],
+    ['optional', '可选模式', '已绑定 MFA 的账号登录需两步验证；未绑定的不要求'],
+    ['required', '强制模式', '所有账号（除豁免）登录都要求两步验证；未绑定的进入绑定引导'],
+  ]
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>验证方式与通道</h2><span class="muted">全局策略：${({ off: '关闭', optional: '可选（绑定即启用）', required: '强制' })[chn.mode] || esc(chn.mode)}</span></div>
+    <div class="card-head"><h2>登录二次认证（全局策略）</h2><button class="btn ghost sm" onclick="go('accounts')">去后台账号管理 →</button></div>
+    <p class="td-sub">当前生效：<b>${({ off: '关闭', optional: '可选模式', required: '强制模式' })[chn.mode] || esc(chn.mode)}</b> · 全局策略是敏感参数，切换需另一位超级管理员在「参数中心 → 参数审批」复核后生效</p>
+    ${chn.pendingReview ? `<p class="td-sub" style="color:var(--red)">⏳ 待复核提案：${({ off: '关闭', optional: '可选模式', required: '强制模式' })[chn.pendingReview.newValue] || esc(chn.pendingReview.newValue)}（提案人 ${esc(chn.pendingReview.proposer)}）——请另一位超级管理员到参数中心处理</p>` : ''}
+    <div class="row" style="margin:10px 0;align-items:stretch">${MODE_CARDS.map(([v, n, d]) => `
+      <div class="card" style="flex:1;margin:0;${chn.mode === v ? 'border:2px solid var(--brand);' : ''}cursor:pointer" onclick="mfaModeSet('${v}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mfaModeSet('${v}')">
+        <b>${n}</b> ${chn.mode === v ? '<span class="pill ok">当前</span>' : ''}<div class="td-sub" style="margin-top:6px">${d}</div>
+      </div>`).join('')}</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>验证方式与通道</h2><span class="muted">单账号豁免/强制在「后台账号 → 验证方式」或下表操作</span></div>
     ${mfaChannelPanel(chn)}
   </div>
   <div class="card">
-    <div class="card-head"><h2>安全中心 · MFA</h2><span class="muted">TOTP / 短信 / 邮箱三通道 · 全局策略走参数中心 admin.mfa.mode（off/optional/required）</span></div>
-    <table><thead><tr><th>账号</th><th>角色</th><th>MFA</th><th>通道</th><th>手机/邮箱</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
+    <div class="card-head"><h2>安全中心 · MFA</h2><span class="muted">TOTP / 短信 / 邮箱三通道 · 单账号强制 &gt; 豁免 &gt; 全局策略</span></div>
+    <table><thead><tr><th>账号</th><th>角色</th><th>MFA 状态</th><th>手机/邮箱</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
     ${accounts.map((a2) => `<tr><td class="td-main">${esc(a2.display_name || a2.username)}<div class="td-sub">${esc(a2.username)}</div></td>
       <td>${esc(a2.role)}</td>
-      <td>${Number(a2.mfa_enabled) ? '<span class="pill ok">已启用</span>' : '<span class="pill off">未启用</span>'}</td>
-      <td>${Number(a2.mfa_enabled) ? esc(a2.mfa_channel) : '—'}</td>
+      <td>${Number(a2.mfa_enabled) ? '<span class="pill ok">已绑定 · ' + esc(a2.mfa_channel) + '</span>' : '<span class="pill off">未绑定</span>'}
+        ${Number(a2.mfa_force) ? '<span class="pill s70">单账号强制</span>' : ''}${Number(a2.mfa_exempt) ? '<span class="pill s40">豁免</span>' : ''}</td>
       <td class="td-sub">${esc(a2.mobile || a2.email || '—')}</td>
       <td class="td-sub">${esc(String(a2.last_login_at || '').slice(5, 16))}</td>
       <td><button class="btn ghost sm" onclick="mfaSetup(${a2.id}, '${esc(a2.username)}')">开 TOTP</button>
           <button class="btn ghost sm" onclick="bindContact(${a2.id}, 'sms')">绑手机</button>
           <button class="btn ghost sm" onclick="bindContact(${a2.id}, 'email')">绑邮箱</button>
+          <button class="btn ghost sm" onclick="mfaFlagsHere(${a2.id}, { exempt: ${Number(a2.mfa_exempt) ? 0 : 1} })">${Number(a2.mfa_exempt) ? '取消豁免' : '设为豁免'}</button>
+          <button class="btn ghost sm" onclick="mfaFlagsHere(${a2.id}, { force: ${Number(a2.mfa_force) ? 0 : 1} })">${Number(a2.mfa_force) ? '取消单账号强制' : '单账号强制'}</button>
           ${Number(a2.mfa_enabled) ? `<button class="btn danger sm" onclick="mfaDisable(${a2.id})">停用</button>` : ''}</td></tr>`).join('')}
     </tbody></table>
   </div>
@@ -247,6 +263,34 @@ async function security() {
 // 通道状态：TOTP 恒可用；短信/邮箱 = 凭据 + 发送器两层，缺哪层就如实说哪层
 const mfaChanState = (c) => c.deliverable ? '<span class="pill ok">● 可用</span>'
   : c.configured ? '<span class="pill warn">● 凭据已配置，发送器尚未接入</span>' : '<span class="pill warn">● 未配置</span>'
+// C-02：全局三档切换（D-02：admin.mfa.mode 是敏感参数——提交提案，第二人复核后生效，不直接改）
+window.mfaModeSet = (mode) => {
+  const names = { off: '关闭', optional: '可选模式', required: '强制模式' }
+  const impacts = {
+    off: '切换后：所有账号登录不再要求两步验证；已绑定的也不再询问。',
+    optional: '切换后：已绑定 MFA 的账号登录需两步验证；未绑定的不要求。',
+    required: '切换后：所有账号（除豁免）登录都要求两步验证；未绑定的登录时进入绑定引导。',
+  }
+  modal('切换全局 MFA 策略 · ' + names[mode], `
+    <p>${impacts[mode]}</p>
+    <div class="field"><label>变更原因（进入参数审批记录）</label><input id="mfaModeReason" maxlength="200" placeholder="例如：安全整改要求全员两步验证"></div>
+    <p class="td-sub">全局 MFA 策略是敏感参数：提交后需<b>另一位超级管理员</b>在「参数中心 → 参数审批」通过才生效；策略生效后各账号按「单账号强制 &gt; 豁免 &gt; 全局策略」执行。</p>
+    <div id="mfaModeErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="mfaModeSubmit('${mode}')">提交策略变更提案</button>`)
+}
+window.mfaModeSubmit = async (mode) => {
+  try {
+    const r = await api('POST', '/admin/security/mfa-mode', { mode, reason: ($('#mfaModeReason').value || '').trim() })
+    modal('提案已提交', `<p>${esc(r.note)}</p>`, `<button class="btn primary" onclick="closeModal();security()">知道了</button>`)
+  } catch (e) { $('#mfaModeErr').textContent = e.message }
+}
+// 安全中心内的单账号豁免/强制（与账号页共用同一接口；完成后刷新本页）
+window.mfaFlagsHere = async (id, patch) => {
+  try {
+    const r = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
+    toast(r.note || '已调整'); security()
+  } catch (e) { toast(e.message, true) }
+}
 function mfaChannelPanel(chn) {
   const row = (name, hint, state, go) => `<tr><td class="td-main" style="width:180px">${name}</td><td>${state}</td><td class="td-sub">${hint}</td><td style="text-align:right">${go || ''}</td></tr>`
   const cfgBtn = `<button class="btn ghost sm" onclick="closeModal();go('integrations')">去集成中心配置 →</button>`

@@ -140,19 +140,38 @@ const admin = {
     const { username, password } = req.body
     const u = await one('SELECT * FROM admin_user WHERE username = ? AND status = 1', [username || ''])
     if (!u || !verifyPassword(password || '', u.password_hash)) throw new BizError(1002, '账号或密码错误')
-    // MFA：全局策略（admin.mfa.mode: off/optional（默认，用户绑定即启用）/required）+ 用户绑定
+    // MFA（C-02/C-03）：单账号强制 > 单账号豁免 > 全局策略（admin.mfa.mode: off/optional/required）。
+    // 全局策略是敏感参数，变更走参数中心双人复核（安全中心三档卡片提交提案，不由本接口直接改）。
     const mfaMode = String((await cfgAll())['admin.mfa.mode'] || '"optional"')
     const bound = Number(u.mfa_enabled) === 1 && (u.mfa_channel === 'totp' ? u.mfa_secret : (u.mfa_channel === 'sms' ? u.mobile : u.email))
-    const need = mfaMode.includes('required') ? true : (mfaMode.includes('optional') && !!bound)
+    const need = Number(u.mfa_force) === 1 ? true
+      : Number(u.mfa_exempt) === 1 ? false
+        : mfaMode.includes('required') ? true : (mfaMode.includes('optional') && !!bound)
     if (need) {
       const ch = bound ? u.mfa_channel : (u.mobile ? 'sms' : u.email ? 'email' : 'totp')
       if (!bound && ch === 'sms' && u.mobile) await import('../infra/mfa.mjs').then((m) => m.sendCode(u.mobile, 'sms'))
+      // C-03：需要 MFA 但未绑定时进入绑定引导——challenge 是受限临时凭证（end=mfa，不能调任何后台业务接口），先绑定再验证
       return { mfaRequired: true, challenge: jwtSign({ uid: u.id, end: 'mfa', ch, exp2: Date.now() + 5 * 60_000 }, 300),
-        channel: ch, target: ch === 'sms' ? String(u.mobile || '').replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : (ch === 'email' ? String(u.email || '').replace(/^(.).*(@.*)$/, '$1***$2') : null) }
+        channel: ch, mfaSetupRequired: !bound,
+        target: ch === 'sms' ? String(u.mobile || '').replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : (ch === 'email' ? String(u.email || '').replace(/^(.).*(@.*)$/, '$1***$2') : null) }
     }
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
     return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
       user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
+  },
+
+  // C-03：强制绑定引导——在「登录受限态」（challenge，非通行令牌）下生成 TOTP 密钥；验证通过前拿不到后台会话
+  'POST /admin/login/mfa/setup': async (req) => {
+    const { challenge } = req.body
+    const { jwtVerify } = await import('../auth.mjs')
+    const p = jwtVerify(challenge || '')
+    if (!p || p.end !== 'mfa' || Date.now() > p.exp2) throw new BizError(1002, '验证会话已过期，请重新登录')
+    const mfa = await import('../infra/mfa.mjs')
+    const secret = mfa.newTotpSecret()
+    await q('UPDATE admin_user SET mfa_secret = ?, mfa_channel = ?, mfa_enabled = 1 WHERE id = ?', [secret, 'totp', p.uid])
+    await tx(async (c) => audit(c, 'admin:uid-' + p.uid, 'security', 'mfa-setup', 'user-' + p.uid, null, { channel: 'totp', via: 'login-guided' }))
+    const u = await one('SELECT username FROM admin_user WHERE id = ?', [p.uid])
+    return { secret, uri: mfa.otpauthUri(secret, u.username), current: mfa.totpNow(secret) }
   },
 
   // 第二步：TOTP / 短信 / 邮箱验证码（challenge 5 分钟有效）
@@ -180,7 +199,7 @@ const admin = {
   // ===== 安全中心（系统工作区）：绑定 MFA / 发送测试 / 最近验证码（MOCK 通道演示用）=====
   'GET /admin/security/accounts': async (req) => {
     await requireAdmin(req, ['super'])
-    return await q('SELECT id, username, role, display_name, mfa_enabled, mfa_channel, mobile, email, last_login_at, status FROM admin_user ORDER BY id')
+    return await q('SELECT id, username, role, display_name, mfa_enabled, mfa_channel, mobile, email, mfa_exempt, mfa_force, last_login_at, status FROM admin_user ORDER BY id')
   },
   'POST /admin/security/mfa/setup': async (req) => {
     const a = await requireAdmin(req, ['super'])
@@ -214,7 +233,29 @@ const admin = {
   'GET /admin/security/channels': async (req) => {
     await requireAdmin(req, ['super'])
     const mfa = await import('../infra/mfa.mjs')
-    return { ...(await mfa.channelStatus()), mode: String((await cfgAll())['admin.mfa.mode'] || 'optional').replace(/"/g, '') }
+    // C-02：全局三档是敏感参数（rule_config.sensitive=1）——变更需第二人复核；这里带出待复核提案供页面展示
+    const pending = await one("SELECT id, new_value, proposer, created_at FROM config_history WHERE cfg_key = 'admin.mfa.mode' AND status = 0 ORDER BY id DESC LIMIT 1")
+    return { ...(await mfa.channelStatus()),
+      mode: String((await cfgAll())['admin.mfa.mode'] || 'optional').replace(/"/g, ''),
+      pendingReview: pending ? { id: pending.id, newValue: String(pending.new_value).replace(/"/g, ''), proposer: pending.proposer } : null }
+  },
+  // C-02 / D-02：全局 MFA 三档走敏感参数双人复核（admin.mfa.mode sensitive=1），此处只提交提案，
+  // 由另一位超管在参数中心「参数审批」通过后才生效（approve 内 loadConfig(true) 热刷新）
+  'POST /admin/security/mfa-mode': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const mode = String(req.body?.mode || '')
+    if (!['off', 'optional', 'required'].includes(mode)) throw new BizError(1001, 'MFA 策略只能是 off / optional / required')
+    const old = String((await cfgAll())['admin.mfa.mode'] || 'optional').replace(/"/g, '')
+    if (old === mode) throw new BizError(2002, '当前策略已经是「' + ({ off: '关闭', optional: '可选', required: '强制' })[mode] + '」，无需变更')
+    const dup = await one("SELECT id FROM config_history WHERE cfg_key = 'admin.mfa.mode' AND status = 0 ORDER BY id DESC LIMIT 1")
+    if (dup) throw new BizError(2002, '已有一笔待复核的策略变更提案，请先让另一位超级管理员处理')
+    const id = await tx(async (c) => {
+      const hid = await c.ins('INSERT INTO config_history (cfg_key, old_value, new_value, proposer, status, reason) VALUES (?,CAST(? AS JSON),CAST(? AS JSON),?,0,?)',
+        ['admin.mfa.mode', JSON.stringify(old), JSON.stringify(mode), 'admin:' + a.name, String(req.body?.reason || '').trim() || '安全中心三档卡片提交'])
+      await audit(c, 'admin:' + a.name, 'security', 'mfa-mode-proposal', 'admin.mfa.mode', old, mode)
+      return hid
+    })
+    return { submitted: true, historyId: id, pendingReview: true, note: '全局 MFA 策略是敏感参数：需另一位超级管理员在「参数中心 → 参数审批」通过后生效，生效后按新策略处理未绑定账号' }
   },
   'GET /admin/security/recent-codes': async (req) => {
     await requireAdmin(req, ['super'])

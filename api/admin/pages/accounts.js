@@ -11,38 +11,85 @@ async function accounts() {
   const rows = await api('GET', '/admin/accounts')
   const active = rows.filter((r) => Number(r.status) === 1)
   const cityAccounts = rows.filter((r) => r.role === 'city_partner')
+  const MFA_CH_CN = { totp: '验证器 App', sms: '短信', email: '邮箱' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
     <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🧑‍💼</div><div><div class="l">有效账号</div><div class="v">${active.length}/${rows.length}</div><div class="s">停用后旧会话立即失效</div></div></div>
     <div class="kpi"><div class="ico" style="background:#e8effd">🏙</div><div><div class="l">城市合伙人账号</div><div class="v">${cityAccounts.length}</div><div class="s">必绑城市 · 只看本城</div></div></div>
-    <div class="kpi go" ${dxKey} title="去安全中心管理 MFA" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">绑定/重置在安全中心留痕</div></div></div>
+    <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 停用恢复 / 重置密码与 MFA · 全部操作留审计</span></div>
+    <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 验证方式（MFA）/ 停用恢复 / 重置密码 · 全部操作留审计</span></div>
     <div class="row"><button class="btn primary sm" onclick="accountCreateModal()">＋ 新建账号</button>
       <span class="muted">初始密码只显示一次；不得在列表或聊天中长期展示明文密码</span></div>
-    ${rows.length ? `<table><thead><tr><th>账号</th><th>角色</th><th>城市范围</th><th>状态</th><th>MFA</th><th>最近登录</th><th>备注</th><th>操作</th></tr></thead><tbody>
+    ${rows.length ? `<table><thead><tr><th>账号</th><th>角色</th><th>城市范围</th><th>MFA</th><th>启用</th><th>最近登录</th><th>备注</th><th>操作</th></tr></thead><tbody>
     ${rows.map((u) => {
       const self = Number(u.id) === Number(ME?.uid)
+      const lastSuper = u.role === 'super' && rows.filter((r) => r.role === 'super' && Number(r.status) === 1).length <= 1
       const ops = []
+      ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${esc(u.username)}')">验证方式</button>`)
       ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${esc(u.display_name)}', '${esc(u.note || '')}')">资料</button>`)
       if (!self) {
         ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${esc(u.username)}', '${u.role}', '${esc(u.scope_city || '')}')">角色/城市</button>`)
-        ops.push(Number(u.status) === 1
-          ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${esc(u.username)}')">停用</button>`
-          : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${esc(u.username)}')">恢复</button>`)
         ops.push(`<button class="btn ghost sm" onclick="accountResetPwd(${u.id}, '${esc(u.username)}')">重置密码</button>`)
         if (Number(u.mfa_enabled) === 1) ops.push(`<button class="btn ghost sm" onclick="accountMfaReset(${u.id}, '${esc(u.username)}')">重置MFA</button>`)
+        // 内置 admin 或最后一个有效超管：停用入口置灰并给原因，不是「看着能点实际不能点」
+        if (u.username === 'admin' || lastSuper) ops.push('<span class="td-sub" title="内置管理员或最后一个有效超管，不能停用">停用🔒</span>')
+        else ops.push(Number(u.status) === 1
+          ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${esc(u.username)}')">停用</button>`
+          : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${esc(u.username)}')">恢复</button>`)
       } else ops.push('<span class="td-sub">本人</span>')
-      return `<tr><td><div class="td-main">${esc(u.display_name)}${self ? ' <span class="pill ok">本人</span>' : ''}</div><div class="td-sub">${esc(u.username)} · #${u.id}</div></td>
+      const mfaCell = Number(u.mfa_enabled) === 1
+        ? '<span class="pill ok">已绑定</span><div class="td-sub">' + (MFA_CH_CN[u.mfa_channel] || esc(u.mfa_channel || '')) + '</div>'
+        : '<span class="td-sub">未绑定</span>'
+      const flagCell = (Number(u.mfa_force) === 1 ? ' <span class="pill s70">单账号强制</span>' : '') + (Number(u.mfa_exempt) === 1 ? ' <span class="pill s40">豁免</span>' : '')
+      return `<tr><td><div class="td-main">${esc(u.display_name)}${self ? ' <span class="pill ok">本人</span>' : ''}${u.role === 'super' ? ' <span class="pill warn">超管</span>' : ''}</div><div class="td-sub">${esc(u.username)} · #${u.id}</div></td>
         <td><span class="pill ${u.role === 'super' ? 'warn' : 's60'}">${ACCOUNT_ROLE_CN[u.role] || esc(u.role)}</span>${Number(u.must_change_pwd) === 1 ? '<div><span class="pill warn">待改密</span></div>' : ''}</td>
         <td>${u.role === 'city_partner' ? esc(cityLabelAccounts(u.scope_city)) + ' <span class="td-sub">' + esc(u.scope_city || '') + '</span>' : '<span class="td-sub">全域</span>'}</td>
-        <td>${Number(u.status) === 1 ? '<span class="pill ok">有效</span>' : '<span class="pill off">停用</span>'}</td>
-        <td>${Number(u.mfa_enabled) === 1 ? '<span class="pill ok">已绑定</span><div class="td-sub">' + esc(u.mfa_channel || '') + '</div>' : '<span class="td-sub">未绑定</span>'}</td>
+        <td>${mfaCell}${flagCell}</td>
+        <td><span class="pill ${Number(u.status) === 1 ? 'ok' : 'off'}">${Number(u.status) === 1 ? '有效' : '停用'}</span></td>
         <td class="td-sub">${esc(String(u.last_login_at || '').slice(0, 16).replace('T', ' ') || '从未登录')}</td>
         <td class="td-sub" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.note || '—')}</td>
         <td><div class="td-actions">${ops.join('')}</div></td></tr>` }).join('')}</tbody></table>`
     : emptyBox('暂无账号')}</div>`
+}
+
+// C-01：验证方式弹窗——不离开本页完成绑定 TOTP / 绑手机 / 绑邮箱 / 重置 / 停用，以及豁免与单账号强制；
+// 复用安全中心的三通道组件（mfaSetup / bindContact / mfaDisable / mfaChannelPanel），不复制逻辑
+window.accountMfaDialog = async (id, username) => {
+  const rows = await api('GET', '/admin/accounts')
+  const u = rows.find((r) => Number(r.id) === Number(id))
+  if (!u) return toast('账号不存在', true)
+  const chn = await api('GET', '/admin/security/channels')
+  window.__mfaAfter = accounts // 绑定/停用完成后回到账号页（system.js 的组件读这个变量）
+  const chCn = { totp: '验证器 App', sms: '短信验证码', email: '邮箱验证码' }
+  modal('验证方式 · ' + username, `
+    <p>当前状态：<b>${Number(u.mfa_enabled) === 1 ? '已绑定 · ' + (chCn[u.mfa_channel] || esc(u.mfa_channel)) : '未绑定'}</b>
+      ${Number(u.mfa_force) === 1 ? ' <span class="pill s70">单账号强制</span>' : ''}${Number(u.mfa_exempt) === 1 ? ' <span class="pill s40">豁免</span>' : ''}</p>
+    <div class="row" style="margin:10px 0">
+      <button class="btn primary sm" onclick="mfaSetup(${id}, '${esc(username)}')">绑定验证器 App（推荐）</button>
+      <button class="btn ghost sm" onclick="bindContact(${id}, 'sms')">绑定手机</button>
+      <button class="btn ghost sm" onclick="bindContact(${id}, 'email')">绑定邮箱</button>
+      ${Number(u.mfa_enabled) === 1 ? `<button class="btn danger sm" onclick="accountMfaReset(${id}, '${esc(username)}')">重置 MFA</button>` : ''}
+    </div>
+    ${mfaChannelPanel(chn)}
+    <div class="rv-box" style="margin-top:12px"><div class="rv-h">策略调整（单账号）</div>
+      <p class="td-sub">优先级：单账号强制 &gt; 豁免 &gt; 全局策略。调整后该账号旧会话立即失效，需重新登录。</p>
+      <div class="row" style="margin:6px 0">
+        <button class="btn ghost sm" onclick="accountMfaFlags(${id}, { force: ${Number(u.mfa_force) === 1 ? 0 : 1} })">${Number(u.mfa_force) === 1 ? '取消单账号强制' : '设为单账号强制'}</button>
+        <button class="btn ghost sm" onclick="accountMfaFlags(${id}, { exempt: ${Number(u.mfa_exempt) === 1 ? 0 : 1} })">${Number(u.mfa_exempt) === 1 ? '取消豁免' : '设为豁免'}</button>
+      </div>
+      <p class="td-sub">需要 MFA 但未绑定的账号登录时进入绑定引导（受限临时凭证，不能办理业务）；全局三档在安全中心调整（敏感参数，需第二人复核）。</p>
+    </div>`,
+    `<button class="btn ghost" onclick="closeModal()">关闭</button>`)
+}
+// C-03：豁免 / 单账号强制（写审计、旧会话失效）；完成后刷新账号页
+window.accountMfaFlags = async (id, patch) => {
+  try {
+    const r = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
+    toast(r.note || '已调整')
+    closeModal(); accounts()
+  } catch (e) { toast(e.message, true) }
 }
 
 window.accountCreateModal = () => {
