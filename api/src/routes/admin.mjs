@@ -38,6 +38,60 @@ import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_T
 // 直接 String() 会把数组变成 "[object Object]"（此前审批、回滚任何 JSON 数组类参数都会报错）
 const jsonText = (v) => JSON.stringify(v)
 
+// ---------- 经营驾驶舱：统一统计周期 ----------
+// 所有"随周期"的模块（KPI / 趋势 / TOP5 / 漏斗 / 小程序访问）共用这一个周期解析，口径只在这里定义一次。
+// 周期按自然日对齐：[from, to] 含首尾；对比周期 = 紧邻其前、天数相同的一段。今日（1 天）按小时出趋势。
+const DASH_RANGE = { today: 1, '7d': 7, '30d': 30, '1y': 365 }
+const DASH_RANGE_CN = { today: '今日', '7d': '近 7 天', '30d': '近 30 天', '1y': '近一年' }
+const ymdAdd = (ymd, n) => { const t = new Date(ymd + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10) }
+const ymdDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000)
+async function dashPeriod(req) {
+  const rq = String(req.query.range || 'today')
+  const today = (await one("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') d")).d
+  const dateChk = (v) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) !== v) throw new BizError(1001, '日期格式应为 YYYY-MM-DD')
+    return v
+  }
+  let from, to = today
+  if (DASH_RANGE[rq]) from = ymdAdd(today, 1 - DASH_RANGE[rq])
+  else if (rq === 'custom') {
+    if (!req.query.from || !req.query.to) throw new BizError(1001, '自定义范围需要 from 与 to 日期')
+    from = dateChk(String(req.query.from)); to = dateChk(String(req.query.to))
+    if (from > to) throw new BizError(1001, 'from 不能晚于 to')
+    if (ymdDiff(from, to) > 730) throw new BizError(1001, '自定义范围最长 2 年')
+  } else throw new BizError(1001, '统计范围无效（today/7d/30d/1y/custom）')
+  const days = ymdDiff(from, to) + 1
+  const prevTo = ymdAdd(from, -1), prevFrom = ymdAdd(prevTo, 1 - days)
+  const unit = days === 1 ? 'hour' : days > 45 ? 'month' : 'day'
+  // 日期均为上面校验/推算出的 YYYY-MM-DD，可安全内联；半开区间便于走索引
+  const between = (col, f = from, t = to) => `${col} >= '${f}' AND ${col} < '${ymdAdd(t, 1)}'`
+  return { range: rq, label: DASH_RANGE_CN[rq] || (from + ' ~ ' + to), from, to, days, prevFrom, prevTo, unit, between }
+}
+/** 趋势序列：按周期粒度（小时/天/月）分组并补齐零值，保证横轴完整 */
+async function dashTrend(per, from, to, cityWhere) {
+  const fmt = per.unit === 'hour' ? 'HOUR(o.paid_at)' : per.unit === 'month' ? "DATE_FORMAT(o.paid_at, '%Y-%m')" : "DATE_FORMAT(o.paid_at, '%Y-%m-%d')"
+  const rows = await q(`SELECT ${fmt} k, COUNT(*) c, COALESCE(SUM(o.amount_pay),0) gmv FROM orders o
+    WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at', from, to)} ${cityWhere} GROUP BY k ORDER BY k`)
+  const by = Object.fromEntries(rows.map((r) => [String(r.k), r]))
+  const pt = (key, date) => { const h = by[key]; return { date, orders: h ? Number(h.c) : 0, gmv: fen2yuan(h ? h.gmv : 0) } }
+  const out = []
+  if (per.unit === 'hour') {
+    for (let h = 0; h < 24; h++) out.push(pt(String(h), String(h).padStart(2, '0') + ':00'))
+  } else if (per.unit === 'month') {
+    const [fy, fm] = from.split('-').map(Number), [ty, tm] = to.split('-').map(Number)
+    const total = Math.min(24, (ty - fy) * 12 + (tm - fm) + 1)
+    for (let i = total - 1; i >= 0; i--) {
+      const idx = ty * 12 + (tm - 1) - i
+      const key = Math.floor(idx / 12) + '-' + String((idx % 12) + 1).padStart(2, '0')
+      out.push(pt(key, key))
+    }
+  } else {
+    for (let i = 0; i < ymdDiff(from, to) + 1; i++) { const d = ymdAdd(from, i); out.push(pt(d, d)) }
+  }
+  return out
+}
+const pct1 = (n, d) => (Number(d) ? ((Number(n) / Number(d)) * 100).toFixed(1) + '%' : '—')
+
 // T00：有城市列的实体种类；城市账号读取按城市行级隔离，其余种类对城市账号默认拒绝
 const ENTITY_CITY_KINDS = ['product', 'merchant', 'scenic', 'supplier']
 
@@ -134,85 +188,40 @@ const admin = {
     return await q('SELECT target, channel, code, purpose, expires_at, used_at, created_at FROM mfa_code ORDER BY id DESC LIMIT 10')
   },
 
+  // 经营驾驶舱：随周期的经营指标。周期解析见 dashPeriod；城市合伙人严格本城口径（§数据边界）
+  // 口径：已支付以上（20/30/40/50）订单按支付时间；对比周期 = 紧邻其前、天数相同的一段
   'GET /admin/dash/kpi': async (req) => {
     const a = await requireAdmin(req)
-    const sc = a.scopeCity // 城市合伙人：严格本城口径（数据边界 §数据边界）
+    const sc = a.scopeCity
     const cityWhere = sc ? 'AND o.city_code = ' + Number(sc) : ''
-    // 统计范围可选：today/7d/30d/1y/custom(from,to)——不再写死只统计当天；口径=已支付以上按支付时间
-    const RANGE = { today: 1, '7d': 7, '30d': 30, '1y': 365 }
-    const rq = String(req.query.range || 'today')
-    const dateChk = (v) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, '日期格式应为 YYYY-MM-DD'); return v }
-    let rangeFrom = null, rangeTo = null, rangeLabel = '今日'
-    if (RANGE[rq]) rangeFrom = RANGE[rq]
-    else if (rq === 'custom') {
-      if (!req.query.from || !req.query.to) throw new BizError(1001, '自定义范围需要 from 与 to 日期')
-      rangeFrom = dateChk(req.query.from); rangeTo = dateChk(req.query.to)
-      if (rangeFrom > rangeTo) throw new BizError(1001, 'from 不能晚于 to')
-      rangeLabel = rangeFrom + ' ~ ' + rangeTo
-    } else throw new BizError(1001, '统计范围无效（today/7d/30d/1y/custom）')
-    const rangeWhere = rq === 'today' ? 'AND DATE(o.paid_at) = CURDATE()'
-      : rq === 'custom' ? `AND DATE(o.paid_at) BETWEEN '${rangeFrom}' AND '${rangeTo}'`
-      : `AND o.paid_at >= NOW() - INTERVAL ${rangeFrom} DAY AND o.paid_at < CURDATE() + INTERVAL 1 DAY`
-    const t = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders o
-      WHERE o.status IN (20,30,40,50) ${rangeWhere} ${cityWhere}`)
-    // 核销率 = 已核销凭证 ÷ 已签发且未冲正的凭证（累计，同一批凭证）。旧口径是"今日核销次数 ÷ 今日新签发数"，
-    // 昨天出的票今天核销会让比率超过 100%，分子分母也不是同一批凭证
-    const verified = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
-      WHERE tp.status = 2 ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
-    const issuedPass = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
-      WHERE tp.status IN (1, 2) ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
+    const per = await dashPeriod(req)
+    const agg = (f, t) => one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv, COUNT(DISTINCT user_id) payers FROM orders o
+      WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at', f, t)} ${cityWhere}`)
+    const [cur, prev, trend] = await Promise.all([
+      agg(per.from, per.to), agg(per.prevFrom, per.prevTo), dashTrend(per, per.from, per.to, cityWhere),
+    ])
+    // 上一周期同粒度趋势（叠加虚线对比）；按月粒度时周期长度不等，不叠加
+    const trendPrev = per.unit === 'month' ? [] : await dashTrend(per, per.prevFrom, per.prevTo, cityWhere)
+    // 以下两项是"此刻"的存量，不随周期变化
     const budget = sc ? null : await one('SELECT SUM(total) t, SUM(granted) g FROM bean_budget WHERE status = 1')
     const alerts = sc ? 0 : await count('SELECT COUNT(*) c FROM risk_event WHERE handled = 0')
-    // 趋势：范围 ≤45 天按天聚合；更长范围按月聚合（一年看 12 根柱）
-    const long = rq === '1y' || (rq === 'custom' && (new Date(rangeTo) - new Date(rangeFrom)) / 86400000 > 45)
-    const tw = rq === 'today' ? 'AND o.paid_at >= NOW() - INTERVAL 7 DAY'
-      : rq === 'custom' ? `AND DATE(o.paid_at) BETWEEN '${rangeFrom}' AND '${rangeTo}'`
-      : rangeWhere
-    const fmt = long ? "DATE_FORMAT(o.paid_at, '%Y-%m')" : 'DATE(o.paid_at)'
-    const raw = await q(`SELECT ${fmt} d, COUNT(*) c, SUM(o.amount_pay) gmv FROM orders o
-      WHERE o.status IN (20,30,40,50) ${tw} ${cityWhere} GROUP BY d ORDER BY d`)
-    // 补齐零值区间（图表完整 X 轴，避免孤点）：天粒度逐日、月粒度逐月
-    const byKey = Object.fromEntries(raw.map((w) => [String(w.d), w]))
-    const series = []
-    if (long) {
-      const startD = rq === 'custom' ? new Date(rangeFrom + 'T00:00:00') : new Date(Date.now() - 365 * 86400000)
-      const endD = rq === 'custom' ? new Date(rangeTo + 'T00:00:00') : new Date()
-      const months = Math.min(24, Math.max(1, Math.round((endD - startD) / (30 * 86400000)) + 1))
-      const cur = new Date(startD.getFullYear(), startD.getMonth(), 1)
-      for (let i = 0; i < months; i++) {
-        const key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0')
-        const hit = byKey[key]
-        series.push({ d: key, c: hit ? Number(hit.c) : 0, gmv: hit ? Number(hit.gmv) : 0 })
-        cur.setMonth(cur.getMonth() + 1)
-        if (cur > endD) break
-      }
-    } else {
-      const span = rq === 'custom' ? Math.min(Math.round((new Date(rangeTo) - new Date(rangeFrom)) / 86400000) + 1, 92) : (RANGE[rq] || 7)
-      for (let i = span - 1; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
-        const hit = byKey[d]
-        series.push({ d, c: hit ? Number(hit.c) : 0, gmv: hit ? Number(hit.gmv) : 0 })
-      }
-    }
-    // 今日口径始终保留（兼容旧前端与"今日"卡片）；范围口径按查询参数返回
-    const today = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders o
-      WHERE o.status IN (20,30,40,50) AND DATE(o.paid_at) = CURDATE() ${cityWhere}`)
     return {
-      range: rq, rangeLabel,
-      rangeFrom: rq === 'custom' ? rangeFrom : null, rangeTo: rq === 'custom' ? rangeTo : null,
-      ordersInRange: Number(t.c), gmvInRange: fen2yuan(t.gmv),
-      ordersToday: Number(today.c), gmvToday: fen2yuan(today.gmv),
-      verifyRate: issuedPass ? ((verified / issuedPass) * 100).toFixed(1) + '%' : '—',
+      range: per.range, rangeLabel: per.label, from: per.from, to: per.to, days: per.days, unit: per.unit,
+      prevFrom: per.prevFrom, prevTo: per.prevTo,
+      orders: Number(cur.c), gmv: fen2yuan(cur.gmv), payers: Number(cur.payers),
+      prev: { orders: Number(prev.c), gmv: fen2yuan(prev.gmv), payers: Number(prev.payers) },
+      trend, trendPrev,
       budgetUsage: budget && budget.t ? ((Number(budget.g) / Number(budget.t)) * 100).toFixed(1) + '%' : '—',
-      alerts, trend: series.map(w => ({ date: w.d, orders: Number(w.c), gmv: fen2yuan(w.gmv) })),
+      alerts,
       scopeCity: a.scopeCity || null,
       globalScope: !a.scopeCity,
     }
   },
 
-  // 看板三件套（低垂果实 #6）：待办聚合 / 热门主题游 TOP5 / 活动转化漏斗
+  // 看板洞察：待办聚合（实时）+ 热门主题游 / 转化漏斗 / 订单构成（随周期，与 dash/kpi 同一周期）
   'GET /admin/dash/insights': async (req) => {
     const a = await requireAdmin(req)
+    const per = await dashPeriod(req)
     // 城市合伙人只看本城（与 dash/kpi 同口径）。提现 / 离线冲突 / 笔记 / 约稿是全局队列，城市账号按 0 处理；旅豆预算是全局的，城市账号不展示使用率
     const sc = a.scopeCity
     const oc = sc ? ' AND o.city_code = ' + Number(sc) : ''
@@ -222,17 +231,25 @@ const admin = {
     const pendingNotes = sc ? zero : await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
     const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant m WHERE m.status = 0" + (sc ? ' AND m.city_code = ' + Number(sc) : ''))
     const pendingTasks = sc ? zero : await one('SELECT COUNT(*) c FROM content_task_entry WHERE status = 2')
+    // 热门主题游：周期内已支付（与 GMV 同口径）
     const topTours = await q(`SELECT p.id, p.title, COUNT(o.id) orders, COALESCE(SUM(o.amount_pay),0) gmv
       FROM orders o JOIN tour_product p ON p.id = o.product_id
-      WHERE o.status >= 20 ${oc} GROUP BY p.id, p.title ORDER BY orders DESC LIMIT 5`)
-    const allOrders = await one(`SELECT COUNT(*) c FROM orders o WHERE 1=1 ${oc}`)
-    const paidOrders = await one(`SELECT COUNT(*) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc}`)
-    const uniqUsers = await one(`SELECT COUNT(DISTINCT o.user_id) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc}`)
-    const rebuyUsers = await one(`SELECT SUM(c > 1) c FROM (SELECT COUNT(*) c FROM orders o WHERE o.status >= 20 AND o.status <> 90 ${oc} GROUP BY o.user_id) t`)
+      WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}
+      GROUP BY p.id, p.title ORDER BY orders DESC, gmv DESC LIMIT 5`)
+    // 转化漏斗：周期内下单的这一批订单走到哪一步（下单 → 已支付 → 已核销）。
+    // 以订单状态机为准：20 已支付 / 30 已确认 / 40 已核销 / 50 已完成 / 60 退款中 / 70 已退款 / 90 已关闭；
+    // 已支付 = 20~70（含后续退款，退款也是付过款的），已核销 = 40/50
+    const created = await one(`SELECT COUNT(*) c, COALESCE(SUM(o.status BETWEEN 20 AND 70), 0) paid, COALESCE(SUM(o.status IN (40,50)), 0) verified
+      FROM orders o WHERE ${per.between('o.created_at')} ${oc}`)
+    // 复购：周期内支付过 ≥2 单的用户 ÷ 周期内支付用户
+    const rb = await one(`SELECT COUNT(*) payers, COALESCE(SUM(c > 1), 0) rebuy FROM (
+      SELECT o.user_id, COUNT(*) c FROM orders o WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc} GROUP BY o.user_id) t`)
+    const statusMix = await q(`SELECT o.status s, COUNT(*) c FROM orders o WHERE ${per.between('o.created_at')} ${oc} GROUP BY o.status`)
+    // 旅豆使用率是累计存量（累计抵扣 ÷ 累计发放），不随周期；仅总部可见
     const beanFlow = sc ? null : await bean.flow()
-    const total = Number(allOrders.c) || 0
-    const paid = Number(paidOrders.c) || 0
+    const nCreated = Number(created.c) || 0, nPaid = Number(created.paid) || 0, nVerified = Number(created.verified) || 0
     return {
+      period: { range: per.range, label: per.label, from: per.from, to: per.to, days: per.days },
       pending: {
         withdrawals: Number(pendingWithdrawals.c) || 0,
         conflicts: Number(pendingConflicts.c) || 0,
@@ -241,10 +258,13 @@ const admin = {
         tasks: Number(pendingTasks.c) || 0,
       },
       topTours,
+      statusMix: statusMix.map((r) => ({ status: Number(r.s), count: Number(r.c) })),
       funnel: {
-        payRate: total ? Math.round(paid / total * 100) + '%' : '—',
-        verifyRate: '—', // 核销完成率在 dash/kpi 已有，这里保留占位
-        rebuyRate: (Number(uniqUsers.c) && Number(rebuyUsers.c)) ? Math.round(Number(rebuyUsers.c) / Number(uniqUsers.c) * 100) + '%' : '0%',
+        created: nCreated, paid: nPaid, verified: nVerified,
+        payRate: pct1(nPaid, nCreated),
+        verifyRate: pct1(nVerified, nPaid),
+        payers: Number(rb.payers) || 0, rebuyUsers: Number(rb.rebuy) || 0,
+        rebuyRate: pct1(rb.rebuy, rb.payers),
         beanUseRate: !beanFlow ? '—' : (beanFlow.granted ? Math.round(beanFlow.consumed / beanFlow.granted * 100) + '%' : '0%'),
       },
     }
