@@ -131,7 +131,8 @@ async function products() {
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="productProfile(${p.id})">数据</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
-          ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}</td>
+          ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>`
 }
@@ -300,4 +301,36 @@ window.rescheduleExec = async (id, orderNo) => {
 }
 window.rescheduleCancel = async (id, orderNo) => {
   try { await api('POST', `/admin/reschedules/${id}/cancel`); toast('已撤回'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
+}
+
+// ===== R-01：商品关键变更历史（版本簿只增不改；恢复=写一条新版本把旧值带回来）=====
+const VER_FIELD_CN = { price_from: '起售价', title: '线路标题', bean_gift: '完成赠豆', status: '状态', supplier_id: '供应商', scenic_id: '景区', city_code: '城市', profile: '扩展资料' }
+window.productVersions = async (pid) => {
+  const d = await api('GET', `/admin/master-versions?kind=product&refId=${pid}`)
+  drawer('变更历史 · 商品 #' + pid, `
+    ${d.rows.length ? `<table><thead><tr><th>版本</th><th>变更字段</th><th>变化</th><th>操作人 / 时间</th><th>操作</th></tr></thead><tbody>
+    ${d.rows.map((v) => {
+      const snap = typeof v.snapshot === 'string' ? JSON.parse(v.snapshot) : v.snapshot
+      const fields = (snap.changedFields || []).map((k) => VER_FIELD_CN[k] || k).join('、')
+      const diff = (snap.changedFields || []).map((k) => `<div class="td-sub">${esc(VER_FIELD_CN[k] || k)}：${esc(String(snap.before?.[k] ?? '—'))} → <b>${esc(String(snap.after?.[k] ?? '—'))}</b></div>`).join('')
+      const restorable = (snap.changedFields || []).some((k) => ['price_from', 'title', 'bean_gift', 'status', 'supplier_id', 'scenic_id'].includes(k))
+      return `<tr><td class="num">v${v.versionNo}${snap.restoredFrom ? '<div class="td-sub">恢复自 v' + snap.restoredFrom + '</div>' : ''}</td>
+      <td class="td-sub">${esc(fields || '—')}</td><td>${diff || '—'}</td>
+      <td class="td-sub">${esc(v.changedBy)}<br>${esc(String(v.createdAt).slice(5, 16).replace('T', ' '))}${v.reason ? '<br>' + esc(v.reason) : ''}</td>
+      <td>${ME?.role === 'super' && restorable ? `<button class="btn ghost sm" onclick="versionRestore(${pid}, ${v.versionNo}, '${esc(String(snap.after?.price_from ?? ''))}')">恢复此版本</button>` : '<span class="td-sub">仅超管可恢复</span>'}</td></tr>`
+    }).join('')}</tbody></table>` : emptyBox('暂无关键变更记录——价格/状态/归属等关键变更会自动留版本')}
+    <p class="td-sub">版本簿只增不改；「恢复此版本」会写一条新版本把该版本的值带回来（金额为存储口径：分），价格变化同步上链留痕。</p>`)
+}
+window.versionRestore = (pid, versionNo, price) => {
+  modal('恢复版本 v' + versionNo + ' · 商品 #' + pid, `
+    <p>将把该版本执行后的值恢复为当前值（同价/同状态则仅记录恢复动作）。</p>
+    <div class="field"><label>恢复原因 *（4–200 字，进入审计与版本簿）</label><input id="vrReason" maxlength="200" placeholder="例如：误改价格，恢复至审批过的版本"></div>
+    <div id="vrErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="versionRestoreSubmit(${pid}, ${versionNo})">确认恢复</button>`)
+}
+window.versionRestoreSubmit = async (pid, versionNo) => {
+  try {
+    await api('POST', '/admin/master-versions/restore', { kind: 'product', refId: pid, versionNo, reason: ($('#vrReason').value || '').trim() })
+    closeModal(); toast('已恢复并写入新版本'); productVersions(pid)
+  } catch (e) { $('#vrErr').textContent = e.message }
 }
