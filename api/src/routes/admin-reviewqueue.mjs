@@ -6,7 +6,7 @@
 // V-05：认领前校验目标存在、仍在待审、（城市账号）属于本城；认领资格与各判定端点角色一致。
 // V-07：待办总数独立计数，返回前 20 条只是"显示窗口"，页面不再把窗口当全部。
 import { q, one, tx, BizError } from '../db.mjs'
-import { requireAdmin } from './_shared.mjs'
+import { requireAdmin, audit } from './_shared.mjs'
 
 const KINDS = ['note', 'task_entry', 'report', 'appeal']
 const KIND_CN = { note: '独立笔记审核', task_entry: '约稿投稿审核', report: '举报处理', appeal: '作者申诉' }
@@ -122,5 +122,66 @@ export const adminReviewQueue = {
     const n = await q('UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = ? AND item_id = ? AND released_at IS NULL AND (claimed_uid = ? OR (claimed_uid IS NULL AND claimed_by = ?))',
       [kind, itemId, a.uid ?? -1, 'admin:' + a.name])
     return { released: n.affectedRows > 0 }
+  },
+
+  // ===== R-03：批量审批（先逐笔预检列异常，再逐笔执行给逐笔结果；并发判定事务防重复发奖）=====
+  // 支持两类"相同可核验条件"的批量：note 全部通过 / report 全部不成立。task_entry 与 appeal 不进批量
+  // （约稿要逐条确认审核标准、申诉要看材料），不做"一键过所有作品"。
+  'POST /admin/review-queue/batch-verdict': async (req) => {
+    const a = await staffOf(req)
+    const { kind, itemIds, action, reason } = req.body || {}
+    if (!['note', 'report'].includes(kind)) throw new BizError(1001, '批量审批仅支持独立笔记（通过）与举报（不成立）')
+    const wantPass = kind === 'note'
+    if (action !== (wantPass ? 'pass' : 'dismiss')) throw new BizError(1001, wantPass ? '笔记批量只支持通过' : '举报批量只支持不成立')
+    if (!wantPass && String(reason || '').trim().length < 4) throw new BizError(1001, '请填写 4–300 字的统一处理意见')
+    const ids = Array.isArray(itemIds) ? [...new Set(itemIds.map(Number).filter(Number.isSafeInteger))] : []
+    if (!ids.length || ids.length > 50) throw new BizError(1001, '请选择 1–50 条待办')
+    // 与单笔判定端点同角色：note 通过=super/review（note.review）；report 不成立=staff()（含本城城市账号）
+    if (kind === 'note' && !['super', 'review'].includes(a.role)) throw new BizError(1003, '笔记批量通过仅限超级管理员/审核员')
+    if (kind === 'report' && a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    // 逐笔预检（只读）：状态、城市，列异常清单
+    const precheck = []
+    for (const id of ids) {
+      try {
+        const row = await one(`SELECT * FROM (${PENDING_SQL[kind]}) t WHERE t.item_id = ?`, [id])
+        if (!row) throw new BizError(2002, '已不在待审状态')
+        if (a.scopeCity && String(row.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '非本城待办')
+        precheck.push({ id, ok: true })
+      } catch (e) { precheck.push({ id, ok: false, reason: e.message }) }
+    }
+    const eligible = precheck.filter((p) => p.ok).map((p) => p.id)
+    // 逐笔执行：复用各判定端点同一事务语义（笔记通过/举报不成立），逐笔给结果
+    const results = []
+    for (const id of eligible) {
+      try {
+        if (kind === 'note') {
+          await tx(async (c) => {
+            const n = await c.upd(`UPDATE content_note SET status = 2, reject_reason = NULL, published_at = NOW(3) WHERE id = ? AND status IN (0,1)`, [id])
+            if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
+            await audit(c, 'admin:' + a.name, 'content', 'approve', 'note-' + id, null, { status: 2, batch: true })
+            await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [id])
+            const cityRow = await c.one('SELECT p.city_code city FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=?', [id])
+            const attestDomain = await import('../domain/attest.mjs')
+            await attestDomain.attest('content_review', 'note-' + id, { noteId: id, result: 'pass', cityCode: cityRow?.city || null, batch: true }, c)
+          })
+          results.push({ id, ok: true })
+        } else {
+          await tx(async (c) => {
+            const n = await c.upd("UPDATE content_report SET status = 1, resolution = ?, actor = ?, resolved_at = NOW(3) WHERE id = ? AND status = 0", [String(reason).trim(), 'admin:' + a.name, id])
+            if (n !== 1) throw new BizError(2002, '该举报已处理，请刷新')
+            await audit(c, 'admin:' + a.name, 'content', 'report-dismiss', 'report-' + id, null, { reason: String(reason).trim(), batch: true })
+            await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL", [id])
+          })
+          results.push({ id, ok: true })
+        }
+      } catch (e) { results.push({ id, ok: false, reason: e.message }) }
+    }
+    return {
+      total: ids.length,
+      precheckFailed: precheck.filter((p) => !p.ok).map((p) => ({ id: p.id, reason: p.reason })),
+      ok: results.filter((r) => r.ok).length,
+      fail: results.filter((r) => !r.ok).length,
+      results,
+    }
   },
 }

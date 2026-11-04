@@ -432,10 +432,23 @@ const adminEdit = {
 // ---------- 旧后台评估吸收：暗号/逐品佣金/KYC/共创（治理后台专用，词汇走 Web3 口径） ----------
 const adminNew = {
   // 暗号管理（产品级一对）：剧本游"入戏"凭证
+  // R-05：暗号列表服务端分页 + 关键字；?unconfigured=1 返回未配置产品（供「为线路配置暗号」下拉）
   'GET /admin/phrases': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT p.id, p.title, p.phrase_user, p.phrase_merchant, p.channel FROM tour_product p
-      WHERE p.phrase_user IS NOT NULL ORDER BY p.id DESC`)
+    if (req.query.unconfigured != null) {
+      const rows = await q(`SELECT p.id, p.title FROM tour_product p WHERE p.phrase_user IS NULL AND p.status = 1 ORDER BY p.id DESC LIMIT 100`)
+      return { rows, total: rows.length }
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = ['p.phrase_user IS NOT NULL'], args = []
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('p.title LIKE ?'); args.push('%' + kw + '%') }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const total = Number((await one(`SELECT COUNT(*) n FROM tour_product p ${W}`, args)).n)
+    const rows = await q(`SELECT p.id, p.title, p.phrase_user, p.phrase_merchant, p.channel FROM tour_product p ${W} ORDER BY p.id DESC LIMIT ? OFFSET ?`,
+      [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters: kw ? { kw } : {} }
   },
   'POST /admin/phrases/:pid': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -445,13 +458,23 @@ const adminNew = {
     return { saved: true }
   },
 
-  // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
+  // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶。
+  // R-05：服务端分页 + 关键字；需要全量（如共创页下拉）显式传 pageSize 上限 500
   'GET /admin/rate-overrides': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from,
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(500, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = ['p.promo_rate_bp IS NOT NULL'], args = []
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('p.title LIKE ?'); args.push('%' + kw + '%') }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const total = Number((await one(`SELECT COUNT(*) n FROM tour_product p ${W}`, args)).n)
+    const avgBp = Number((await one(`SELECT AVG(p.promo_rate_bp) a FROM tour_product p ${W}`, args)).a) || 0
+    const rows = await q(`SELECT p.id, p.title, p.promo_rate_bp, p.price_from,
         JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_start')) rate_start, JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_end')) rate_end,
         JSON_UNQUOTE(JSON_EXTRACT(p.profile, '$.rate_reason')) rate_reason
-      FROM tour_product p WHERE p.promo_rate_bp IS NOT NULL ORDER BY p.id DESC`)
+      FROM tour_product p ${W} ORDER BY p.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, avgBp, filters: kw ? { kw } : {} }
   },
   'POST /admin/rate-overrides/:pid': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
