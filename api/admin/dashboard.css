@@ -219,3 +219,6 @@
   .dx-donut { flex-direction: column; align-items: stretch; } .dx-donut svg { align-self: center; }
 }
 @media (prefers-reduced-motion: reduce) { .dx-tag.live i { animation: none; } .dx-fn-bar { transition: none; } }
+
+/* 官方 Logo 图标（img 版本）适配 */
+img.brand-symbol{border:0;background:transparent;border-radius:50
