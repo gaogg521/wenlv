@@ -303,6 +303,39 @@ const c = {
     return rows
   },
 
+  // 隐私授权（逐项可撤回）：签署即入存证 —— 这是"用户知不知道规则"唯一拿得出手的证据
+  'GET /c/consent': async (req) => {
+    const u = requireUser(req)
+    const rows = await q('SELECT scene, granted, granted_at, revoked_at FROM user_privacy_consent WHERE user_id = ?', [u.uid])
+    // cfg() 对未注册的键会抛错（配置中心要求显式声明），这里用兜底读取，避免因为"没配版本号"整个接口 500
+    const cfgOr = async (k, d) => { try { return (await cfg(k)) || d } catch { return d } }
+    return {
+      versions: { terms: await cfgOr('legal.terms_version', '2026.11'), privacy: await cfgOr('legal.privacy_version', '2026.11') },
+      items: rows.map((r) => ({ scene: r.scene, granted: Number(r.granted) === 1, grantedAt: r.granted_at, revokedAt: r.revoked_at })),
+    }
+  },
+  'POST /c/consent': async (req) => {
+    const u = requireUser(req)
+    const scene = String(req.body.scene || '').trim()
+    const granted = req.body.granted === true || req.body.granted === 1 || req.body.granted === '1'
+    // scene 是自由字符串的话，"同意过什么"就无从核对 → 只允许白名单
+    const ALLOWED = ['privacy', 'terms', 'location', 'marketing']
+    if (!ALLOWED.includes(scene)) throw new BizError(1001, '未知的授权项：' + scene + '（可用：' + ALLOWED.join('/') + '）')
+    const cfgOr = async (k, d) => { try { return (await cfg(k)) || d } catch { return d } }
+    const version = String(req.body.version || await cfgOr('legal.' + scene + '_version', await cfgOr('legal.privacy_version', '2026.11')))
+    await q(`INSERT INTO user_privacy_consent (user_id, scene, granted, granted_at, revoked_at)
+      VALUES (?,?,?,NOW(3),NULL)
+      ON DUPLICATE KEY UPDATE granted = VALUES(granted),
+        granted_at = IF(VALUES(granted) = 1, NOW(3), granted_at),
+        revoked_at = IF(VALUES(granted) = 0, NOW(3), NULL)`, [u.uid, scene, granted ? 1 : 0])
+    // 版本进 biz_ref：换一版规则重签就是一片新叶子，不会把旧同意覆盖掉
+    // version_no 区分"同意(1)/撤回(2)"：同一版本的同意与撤回各留一片叶子，撤回不会被幂等键吞掉
+    await attestDomain.attest('consent', `consent-${u.uid}-${scene}-${version}`, {
+      userId: Number(u.uid), scene, granted, version,
+    }, null, granted ? 1 : 2)
+    return { scene, granted, version }
+  },
+
   'GET /c/me': async (req) => {
     const u = requireUser(req)
     const acc = await one('SELECT * FROM user_account WHERE id = ?', [u.uid])
