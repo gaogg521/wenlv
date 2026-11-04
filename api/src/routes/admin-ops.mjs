@@ -240,6 +240,10 @@ const adminEco = {
       await cc.upd('UPDATE merchant SET status = 1, approved_at = NOW(3) WHERE id = ?', [m.id])
       if (m.applicant_user_id) await cc.q('INSERT INTO merchant_staff (merchant_id,user_id,role) VALUES (?,?,3) ON DUPLICATE KEY UPDATE role=3,status=1', [m.id, m.applicant_user_id])
       await audit(cc, 'admin:' + a.name, 'merchant', 'approve', 'merchant-' + m.id, { status: 0 }, { status: 1, owner: m.applicant_user_id })
+      // R-01：商户准入状态变化入版本簿（关键归属/准入字段）
+      const vseq = await cc.one('SELECT COALESCE(MAX(version_no), 0) v FROM master_data_version WHERE kind = ? AND ref_id = ?', ['merchant', m.id])
+      await cc.q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
+        ['merchant', m.id, Number(vseq.v) + 1, JSON.stringify({ before: { status: 0 }, after: { status: 1, owner: m.applicant_user_id || null }, changedFields: ['status'] }), 'admin:' + a.name, '进件审核通过'])
       // 主体准入入存证：一家商户什么时候被谁放进平台，是责任链的起点
       await attestDomain.attest('merchant_join', 'merchant-' + m.id, {
         merchantId: Number(m.id), applicantUserId: m.applicant_user_id ? Number(m.applicant_user_id) : null,

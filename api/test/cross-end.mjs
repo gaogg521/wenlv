@@ -393,7 +393,7 @@ await t('暗号核销：后台设置 → A 只看到上半句（下半句不下�
   const prev = await one('SELECT phrase_user, phrase_merchant FROM tour_product WHERE id = ?', [sess.product_id])
   ok(await call('POST', `/admin/phrases/${sess.product_id}`, { userPhrase: up, merchantPhrase: down }, A))
   try {
-    assert.ok(ok(await call('GET', '/admin/phrases', null, A)).some((p) => Number(p.id) === sess.product_id && p.phrase_user === up))
+    assert.ok(ok(await call('GET', '/admin/phrases?pageSize=100', null, A)).rows.some((p) => Number(p.id) === sess.product_id && p.phrase_user === up))
     const a = ok(await call('GET', `/c/orders/${ph.orderNo}/phrase`, null, C))
     assert.equal(a.enabled, true); assert.equal(a.userPhrase, up); assert.ok(!JSON.stringify(a).includes(down), 'A 端不应拿到下半句')
     const bad = ok(await call('POST', '/m/verify/phrase', { phrase: '不对的暗号', orderNo: ph.orderNo }, B)); assert.equal(bad.ok, false)

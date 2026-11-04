@@ -814,6 +814,10 @@ export async function save(kind, input, ctx, tx) {
 
   const row = creating ? null : await one(`SELECT * FROM ${sc.table} WHERE ${sc.idCol} = ?`, [ctx.id])
   if (!creating && !row) throw new BizError(1004, `${sc.label}不存在`)
+  // R-01：乐观锁——请求带 expectedVersion（编辑器打开时的版本）与当前不一致 → 拒绝，防两人互相覆盖
+  if (!creating && ctx.expectedVersion != null && row.updated_version != null && Number(row.updated_version) !== Number(ctx.expectedVersion)) {
+    throw new BizError(2002, `该${sc.label}刚被他人修改（当前版本 v${row.updated_version}），请刷新后基于最新内容再编辑`)
+  }
   const before = row ? readValues(kind, row) : {}
 
   // 1) 逐字段规范化；新建时缺省值生效
@@ -878,8 +882,18 @@ export async function save(kind, input, ctx, tx) {
       await ctx.audit(c, sc.auditModule, creating ? 'create' : 'update', `${kind}-${id}`,
         creating ? null : Object.fromEntries(changed.map((k) => [k, mask(k, before[k])])),
         Object.fromEntries(changed.map((k) => [k, mask(k, vals[k])])))
+      // R-01：product/merchant 关键变更入版本簿（同一事务、只增不改；乐观锁版本号随编辑递增）
+      if (['product', 'merchant'].includes(kind) && row && row.updated_version != null) {
+        await c.upd(`UPDATE ${sc.table} SET updated_version = updated_version + 1 WHERE ${sc.idCol} = ?`, [id])
+        const vseq = await c.one('SELECT COALESCE(MAX(version_no), 0) v FROM master_data_version WHERE kind = ? AND ref_id = ?', [kind, id])
+        await c.q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
+          [kind, id, Number(vseq.v) + 1,
+            // 前后值统一存"存储口径"（金额=分）——before 来自 readValues 是展示口径，要转回去
+            JSON.stringify({ before: Object.fromEntries(changed.map((k) => [k, mask(k, toStore(allFields(sc).find((f) => f.k === k), before[k]))])), after: Object.fromEntries(changed.map((k) => [k, mask(k, vals[k])])), changedFields: changed }),
+            'admin:' + (ctx.admin.name || ''), ctx.versionReason || null])
+      }
     }
-    return { id, changed }
+    return { id, changed, version: row && row.updated_version != null ? Number(row.updated_version) + 1 : undefined }
   })
 }
 

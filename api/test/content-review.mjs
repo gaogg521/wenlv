@@ -108,7 +108,7 @@ try {
     ok(await call('POST', `/admin/task-entries/${e2}/verdict`, { pass: true, rules: [true, true] }, A))
     const rows = ok(await call('GET', `/admin/content-tasks/${task.id}/entries`, null, A))
     assert.deepEqual(rows.map((x) => Number(x.status)).sort(), [3, 3])
-    const lt = ok(await call('GET', '/admin/content-tasks', null, A)).find((x) => x.id === task.id)
+    const lt = ok(await call('GET', '/admin/content-tasks/' + task.id, null, A))
     assert.equal(Number(lt.passed), 2); assert.equal(Number(lt.cash_pending), 2)
   })
 

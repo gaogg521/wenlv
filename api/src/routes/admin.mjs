@@ -123,6 +123,18 @@ async function attestProductChange(productId, before, after, kind) {
   }
 }
 
+// R-01：主数据关键变更版本（只增不改）。历史回退=写一条新版本恢复旧值，绝不 UPDATE 历史
+async function recordMasterVersion(kind, refId, snapshot, changedBy, reason) {
+  try {
+    const seq = await one('SELECT COALESCE(MAX(version_no), 0) v FROM master_data_version WHERE kind = ? AND ref_id = ?', [kind, refId])
+    await q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
+      [kind, refId, Number(seq.v) + 1, JSON.stringify(snapshot), changedBy, reason || null])
+  } catch (e) {
+    // 并发同刻撞版本号：审计与 attest 已留痕，版本簿少一条不影响交易依据（低频人工操作）
+    console.error('[master-version]', kind, refId, e.message)
+  }
+}
+
 // U-04/R-05 配套：订单筛选条件构建（search 与按筛选导出共用同一套语义；手机号走盲索引不回显）
 async function orderFiltersOf(req, a) {
   const date = (v, label) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, label + '格式应为 YYYY-MM-DD'); return v }
@@ -534,8 +546,12 @@ const admin = {
   // 编辑商品内容（P0 宣传力：行程/费用包含/亮点/集合点/安全告知）
   'PUT /admin/products/:id': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
-    const p = await one('SELECT rich_desc, price_from, status, title FROM tour_product WHERE id = ?', [req.params.id])
+    const p = await one('SELECT rich_desc, price_from, status, title, bean_gift, supplier_id, scenic_id, updated_version FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
+    // R-01：乐观锁——前端带上打开编辑器时的版本号，期间被人改过就拒绝（2002），刷新后基于最新版本再改
+    if (req.body.expectedVersion != null && Number(req.body.expectedVersion) !== Number(p.updated_version)) {
+      throw new BizError(2002, '该商品刚被他人修改（当前版本 v' + p.updated_version + '），请刷新后基于最新内容再编辑')
+    }
     const old = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
     const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, excludes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
@@ -547,14 +563,22 @@ const admin = {
     const r = await q(`UPDATE tour_product SET title = COALESCE(?, title), subtitle = COALESCE(?, subtitle),
       days_desc = COALESCE(?, days_desc), price_from = COALESCE(?, price_from), bean_gift = COALESCE(?, bean_gift),
       status = COALESCE(?, status), supplier_id = COALESCE(?, supplier_id), scenic_id = COALESCE(?, scenic_id),
-      rich_desc = ?, meeting_point = ?, safety_note = ? WHERE id = ?`,
+      rich_desc = ?, meeting_point = ?, safety_note = ?, updated_version = updated_version + 1 WHERE id = ?`,
       [title ?? null, subtitle ?? null, daysDesc ?? null, priceFrom != null ? Number(priceFrom) : null,
         beanGift != null ? Number(beanGift) : null, status ?? null, supplierId ?? null, scenicId ?? null,
         JSON.stringify(rich), meetingPoint ?? null, safetyNote ?? null, req.params.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'product', 'update', 'product-' + req.params.id, JSON.stringify(rich), null))
     // 价格与在售状态是交易依据：改了必须留痕。链上只放指纹，金额明细留在库里
     await attestProductChange(req.params.id, { price: p.price_from, status: p.status }, { price: priceFrom, status }, 'edit')
-    return { updated: r.affectedRows > 0 }
+    // R-01：关键字段（价格/状态/归属/名称/赠豆）变更入版本历史（只增不改）
+    const after = { title: title ?? p.title, priceFrom: priceFrom != null ? Number(priceFrom) : p.price_from, beanGift: beanGift != null ? Number(beanGift) : p.bean_gift,
+      status: status ?? p.status, supplierId: supplierId ?? p.supplier_id, scenicId: scenicId ?? p.scenic_id }
+    const before = { title: p.title, priceFrom: p.price_from, beanGift: p.bean_gift, status: p.status, supplierId: p.supplier_id, scenicId: p.scenic_id }
+    const changed = Object.keys(before).filter((k) => String(before[k]) !== String(after[k]))
+    if (changed.length) {
+      await recordMasterVersion('product', req.params.id, { before, after, changedFields: changed }, 'admin:' + a.name, req.body.versionReason)
+    }
+    return { updated: r.affectedRows > 0, version: Number(p.updated_version) + 1 }
   },
 
   // 商品图集：base64 上传（≤9 张，白名单扩展名，2MB 内）→ /uploads 静态
@@ -602,6 +626,16 @@ const admin = {
     await tx(async (c) => audit(c, 'admin:' + a.name, 'product', 'image-del', 'product-' + req.params.id, null, { idx }))
     return { images: imgs }
   },
+  // R-01：版本历史查询（super/ops/finance 只读）
+  'GET /admin/master-versions': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    const kind = String(req.query.kind || '').trim()
+    const refId = Number(req.query.refId || 0)
+    if (!['product', 'merchant'].includes(kind) || !refId) throw new BizError(1001, '请指定 kind（product/merchant）与 refId')
+    const rows = await q('SELECT id, kind, ref_id refId, version_no versionNo, snapshot, changed_by changedBy, reason, created_at createdAt FROM master_data_version WHERE kind = ? AND ref_id = ? ORDER BY version_no DESC LIMIT 100', [kind, refId])
+    return { kind, refId, rows }
+  },
+
   'POST /admin/products/:id/status': async (req) => {
     const a = await requireAdmin(req, 'product.status')
     if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
@@ -615,8 +649,11 @@ const admin = {
       if (issues.length) throw new BizError(1001, '发布前请补齐：' + issues.join('；'))
     }
     const before = await one('SELECT status, price_from FROM tour_product WHERE id = ?', [req.params.id])
-    await q('UPDATE tour_product SET status = ? WHERE id = ?', [Number(req.body.status), req.params.id])
+    await q('UPDATE tour_product SET status = ?, updated_version = updated_version + 1 WHERE id = ?', [Number(req.body.status), req.params.id])
     await attestProductChange(req.params.id, { price: before && before.price_from, status: before && before.status }, { status: req.body.status }, 'publish')
+    await recordMasterVersion('product', req.params.id,
+      { before: { status: before && before.status }, after: { status: Number(req.body.status) }, changedFields: ['status'] },
+      'admin:' + a.name, '上下架')
     return { ok: true }
   },
   'GET /admin/products/:id/sessions': async (req) => {
@@ -666,7 +703,8 @@ const admin = {
       if (String(row.city_code ?? '') !== String(a.scopeCity)) throw new BizError(1003, '仅可查看本城主体资料')
     }
     const values = entities.readValues(req.params.kind, row)
-    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values) }
+    // R-01：乐观锁版本随详情下发，编辑器保存时带回（期间被人改过 → 2002）
+    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values), version: row.updated_version != null ? Number(row.updated_version) : undefined }
   },
   // 列表页用：一次取回某类实体全部的扩展资料完整度（不返回资料本身）
   'GET /admin/entities/:kind': async (req) => {
@@ -684,6 +722,7 @@ const admin = {
   'PUT /admin/entities/:kind/:id': async (req) => {
     const a = await requireAdmin(req)
     return entities.save(req.params.kind, req.body.values || {}, { admin: a, id: req.params.id,
+      expectedVersion: req.body.expectedVersion, versionReason: req.body.versionReason,
       audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
   },
 

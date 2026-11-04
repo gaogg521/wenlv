@@ -231,7 +231,7 @@
       const [schema, data] = await Promise.all([api('GET', '/admin/entity-schemas/' + kind), id ? api('GET', `/admin/entities/${kind}/${id}`) : Promise.resolve(null)])
       const values = data ? data.values : Object.fromEntries(schema.sections.flatMap((s) => s.fields).map((f) => [f.k, f.dflt ?? (opts.defaults || {})[f.k] ?? null]))
       Object.assign(values, id ? {} : (opts.defaults || {}))
-      st = { kind, id, schema, values, dirty: false, opts }
+      st = { kind, id, schema, values, dirty: false, opts, version: data && data.version != null ? Number(data.version) : undefined }
       render()
     } catch (e) { closeEditor(true); toast(e.message, true) }
   }
@@ -294,9 +294,10 @@
     try {
       const values = collect()
       const r = st.id
-        ? await api('PUT', `/admin/entities/${st.kind}/${st.id}`, { values })
+        ? await api('PUT', `/admin/entities/${st.kind}/${st.id}`, { values, expectedVersion: st.version })
         : await api('POST', `/admin/entities/${st.kind}`, { values, parentId: st.opts.parentId })
       st.dirty = false
+      if (r.version != null) st.version = Number(r.version) // 乐观锁版本随保存递增，继续编辑不误报冲突
       toast(st.id ? (r.changed.length ? `已保存 ${r.changed.length} 处修改` : '没有需要保存的修改') : `${st.schema.label}已创建`)
       const cb = st.opts.onSaved
       closeEditor(true)
