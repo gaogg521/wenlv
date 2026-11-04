@@ -10,6 +10,8 @@ async function orderDrawer(no) {
       ${adminCan('order.refund') && [20,30,40].includes(Number(o.status)) ? `<button class="btn danger sm" onclick="refundOrder('${esc(o.order_no)}')">处理退款</button>` : ''}
       ${Number(o.status) === 10 && adminCan('order.service') ? `<button class="btn danger sm" onclick="cancelUnpaidOrder('${esc(o.order_no)}')">取消未支付订单</button>` : ''}
       ${adminCan('ticket.manage') || adminCan('order.service') ? `<button class="btn ghost sm" onclick="ticketCreateModal('${esc(o.order_no)}')">发起售后</button>` : ''}
+      ${['super','ops'].includes(ME?.role) && [20,30].includes(Number(o.status)) ? `<button class="btn primary sm" onclick="rescheduleModal('${esc(o.order_no)}')">改期 / 换团</button>` : ''}
+      ${['super','ops'].includes(ME?.role) ? `<button class="btn ghost sm" onclick="rescheduleDrawer('${esc(o.order_no)}')">改期记录</button>` : ''}
     </div>
     ${(o.tickets?.length) ? `<h3 style="margin:16px 0 8px">售后工单</h3><table>
       ${o.tickets.map((t) => `<tr><td class="num">${esc(t.ticket_no)}</td><td>${TICKET_CAT[t.category] || esc(t.category)}<div class="td-sub">${esc(t.assignee || '待认领')}</div></td>
@@ -224,4 +226,78 @@ async function savePaymentReceipt(id) {
     await api('POST', '/admin/settlements/' + id + '/payment', { paymentRef: $('#receiptRef').value.trim(), note: $('#receiptNote').value.trim() })
     closeModal(); toast('回单已登记，可在审计日志追溯'); settlements()
   } catch (e) { $('#receiptError').textContent = e.message }
+}
+
+// ===== R-02：改期 / 换团（申请 → 审批 → 执行；价差与旅豆抵扣显式化，资金边界如实）=====
+window.rescheduleModal = async (orderNo) => {
+  const o = await api('GET', '/admin/orders/' + orderNo)
+  const sess = await api('GET', '/admin/products/' + o.product_id + '/sessions')
+  const others = (sess.sessions || sess || []).filter((s) => Number(s.id) !== Number(o.session_id) && Number(s.status) === 1 && Number(s.quota) - Number(s.booked) >= Number(o.qty))
+  const cur = (sess.sessions || sess || []).find((s) => Number(s.id) === Number(o.session_id))
+  if (!others.length) return toast('没有可换的目标团期（需同商品、在售且名额足够）', true)
+  modal('改期 / 换团 · ' + orderNo, `
+    <p class="td-sub">当前团期：${cur ? esc(String(cur.depart_date).slice(0, 10)) : o.session_id} · ${Number(o.qty)} 人 · 订单金额 ${fen(o.amount_pay)}</p>
+    <div class="field"><label>目标团期 *（同商品、在售、名额足够）</label>
+      <select id="rsTo" class="inp" onchange="rescheduleDiff(${o.product_id})">${others.map((s) => `<option value="${s.id}" data-price="${s.price_adult}">${esc(String(s.depart_date).slice(0, 10))} · 剩 ${Number(s.quota) - Number(s.booked)} 位 · ¥${(Number(s.price_adult) / 100).toFixed(0)}</option>`).join('')}</select></div>
+    <p class="td-sub" id="rsDiff">价差以选择后计算为准。</p>
+    <div class="field"><label>游客旅豆抵扣补款（分，选填；不超过需补款价差）</label><input id="rsBean" type="number" min="0" value="0"></div>
+    <div class="field"><label>改期原因 *（4–300 字，进入审计与时间线）</label><input id="rsReason" maxlength="300" placeholder="例如：游客临时行程变化，申请换至下周同款团期"></div>
+    <p class="td-sub">流程：提交申请 → 另一位超级管理员审批 → 执行换团（执行时再校验名额与订单状态）。需补款/应退差在执行后如实登记，走财务流程，不在系统内虚构到账。</p>
+    <div id="rsErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="rescheduleSubmit('${esc(orderNo)}')">提交申请</button>`)
+  rescheduleDiff(o.product_id, o.qty)
+}
+window.rescheduleDiff = (productId) => {
+  const sel = document.getElementById('rsTo')
+  if (!sel) return
+  const opt = sel.options[sel.selectedIndex]
+  void productId
+  document.getElementById('rsDiff').textContent = '所选团期单价：¥' + (Number(opt?.dataset.price || 0) / 100).toFixed(0) + '——价差以提交时服务端计算为准（正=需补款，负=应退差）。'
+}
+window.rescheduleSubmit = async (orderNo) => {
+  try {
+    const r = await api('POST', '/admin/orders/' + orderNo + '/reschedule', {
+      toSessionId: Number(document.getElementById('rsTo').value),
+      reason: ($('#rsReason').value || '').trim(),
+      diffBean: Number(document.getElementById('rsBean').value) || 0,
+    })
+    closeModal(); toast('申请 ' + r.reqNo + ' 已提交（' + r.note + '），待另一位超级管理员审批'); orderDrawer(orderNo)
+  } catch (e) { $('#rsErr').textContent = e.message }
+}
+const RS_ST_PILL = { 0: '<span class="pill warn">待审批</span>', 1: '<span class="pill s20">待执行</span>', 2: '<span class="pill off">已驳回</span>', 3: '<span class="pill ok">已执行</span>', 4: '<span class="pill off">已撤回</span>', 5: '<span class="pill s70">执行失败</span>' }
+window.rescheduleDrawer = async (orderNo) => {
+  const d = await api('GET', '/admin/reschedules?kw=' + encodeURIComponent(orderNo) + '&pageSize=20')
+  drawer('改期记录 · ' + esc(orderNo), `
+    ${d.rows.length ? `<table><thead><tr><th>申请号</th><th>换至</th><th>价差 / 旅豆抵扣</th><th>状态</th><th>申请人 / 审批</th><th>操作</th></tr></thead><tbody>
+    ${d.rows.map((r) => `<tr><td class="num td-sub">${esc(r.req_no)}</td>
+      <td class="td-sub">${esc(r.product_title || '')}<br>团期 #${r.to_session_id}</td>
+      <td class="num">${r.price_diff > 0 ? '补 ' + fen(r.price_diff) : r.price_diff < 0 ? '退 ' + fen(-r.price_diff) : '同价'}${Number(r.diff_bean) ? '<br><span class="td-sub">旅豆抵 ' + fen(r.diff_bean) + '</span>' : ''}</td>
+      <td>${RS_ST_PILL[r.status] || r.status}${r.exec_note ? '<div class="td-sub">' + esc(r.exec_note) + '</div>' : ''}</td>
+      <td class="td-sub">${esc(r.applicant || '')}${r.approver ? '<br>审批：' + esc(r.approver) : ''}</td>
+      <td><div class="td-actions">
+        ${Number(r.status) === 0 && ME?.role === 'super' && r.applicant !== 'admin:' + (ME?.displayName || ME?.username || '') ? `<button class="btn primary sm" onclick="rescheduleVerdict(${r.id}, 1, '${esc(orderNo)}')">通过</button><button class="btn danger sm" onclick="rescheduleVerdict(${r.id}, 0, '${esc(orderNo)}')">驳回</button>` : ''}
+        ${Number(r.status) === 0 && (r.applicant === 'admin:' + (ME?.displayName || ME?.username || '') || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${esc(orderNo)}')">撤回</button>` : ''}
+        ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${esc(orderNo)}')">执行换团</button>` : ''}
+      </div></td></tr>`).join('')}</tbody></table>` : emptyBox('该订单暂无改期申请')}
+    <p class="td-sub">执行时服务端会再次校验订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
+}
+window.rescheduleVerdict = async (id, pass, orderNo) => {
+  modal(pass ? '通过改期申请' : '驳回改期申请', `
+    <p class="td-sub">${pass ? '通过后进入「待执行」，执行时再校验名额与订单状态；审批人不能与申请人相同。' : '驳回后申请终态；如需再改请重新发起申请。'}</p>
+    <div class="field"><label>审批意见（选填，进入审计）</label><input id="rsVerdictNote" maxlength="300"></div>
+    <div id="rsVerdictErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${pass ? 'primary' : 'danger'}" onclick="rescheduleVerdictSubmit(${id}, ${pass ? 1 : 0}, '${esc(orderNo)}')">确认${pass ? '通过' : '驳回'}</button>`)
+}
+window.rescheduleVerdictSubmit = async (id, pass, orderNo) => {
+  try {
+    const r = await api('POST', `/admin/reschedules/${id}/verdict`, { pass: pass === 1, note: ($('#rsVerdictNote').value || '').trim() })
+    closeModal(); toast(r.note || '已处理'); rescheduleDrawer(orderNo)
+  } catch (e) { $('#rsVerdictErr').textContent = e.message }
+}
+window.rescheduleExec = async (id, orderNo) => {
+  if (!confirm('执行换团会转移名额并按价差调整订单金额（旅豆抵扣同时扣减）；失败会整体回滚。确定执行？')) return
+  try { const r = await api('POST', `/admin/reschedules/${id}/execute`); toast(r.status === 3 ? '已执行换团' : '已处理'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
+}
+window.rescheduleCancel = async (id, orderNo) => {
+  try { await api('POST', `/admin/reschedules/${id}/cancel`); toast('已撤回'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
 }
