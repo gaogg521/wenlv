@@ -415,6 +415,136 @@ const admin = {
       ORDER BY o.id DESC LIMIT 100`, sc.params)).map(publicOrderPhone)
   },
 
+  // ===== R-02：改期 / 换团（申请 → 审批 → 执行；申请-审批分离，审批人≠申请人）=====
+  // 资金边界（如实）：价差随执行调整订单台账金额；旅豆抵扣真实扣减；真实补款/退差走财务线下或
+  // 既有退款流程登记，不虚构到账。已核销/退款中/已完成不走普通改期。
+  'POST /admin/orders/:id/reschedule': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const { toSessionId, reason, diffBean } = req.body || {}
+    const why = String(reason || '').trim()
+    if (why.length < 4 || why.length > 300) throw new BizError(1001, '请填写 4–300 字改期原因')
+    const o = await one('SELECT * FROM orders WHERE id = ?', [req.params.id])
+    if (!o) throw new BizError(1004, '订单不存在')
+    if (a.scopeCity && String(o.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '仅可办理本城订单')
+    if (![20, 30].includes(Number(o.status))) throw new BizError(2002, '仅「已支付 / 已确认」订单可改期；已核销、退款中或已完成的订单请走对应流程')
+    if (await one('SELECT id FROM order_reschedule WHERE order_id = ? AND status IN (0, 1)', [o.id])) throw new BizError(2002, '该订单已有在途改期申请，请先处理')
+    const to = await one('SELECT s.*, p.title product_title FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [Number(toSessionId)])
+    if (!to || Number(to.product_id) !== Number(o.product_id) || Number(to.status) !== 1) throw new BizError(1001, '目标团期无效或不可报名')
+    if (Number(to.id) === Number(o.session_id)) throw new BizError(1001, '目标团期与当前团期相同')
+    const from = await one('SELECT * FROM tour_session WHERE id = ?', [o.session_id])
+    if (!from) throw new BizError(1004, '原团期不存在')
+    if (Number(to.booked) + Number(o.qty) > Number(to.quota)) throw new BizError(2001, '目标团期名额不足（剩 ' + (Number(to.quota) - Number(to.booked)) + '）')
+    const priceDiff = (Number(to.price_adult) - Number(from.price_adult)) * Number(o.qty)
+    const bean = Number(diffBean) || 0
+    if (bean < 0 || (priceDiff > 0 && bean > priceDiff)) throw new BizError(1001, '旅豆抵扣额不能超过需补款价差')
+    if (bean > 0) {
+      const acct = await one('SELECT a.balance FROM bean_account a WHERE a.user_id = ?', [o.user_id])
+      if (!acct || Number(acct.balance) < bean) throw new BizError(1001, '游客旅豆余额不足以抵扣 ' + bean + ' 分差价')
+    }
+    const reqNo = 'RS' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + String(Date.now() % 100000).padStart(5, '0') + String(Math.floor(Math.random() * 90) + 10)
+    const id = await tx(async (c) => {
+      const rid = await c.ins(`INSERT INTO order_reschedule (req_no, order_id, order_no, from_session_id, to_session_id, qty, price_diff, diff_bean, reason, applicant)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [reqNo, o.id, o.order_no, o.session_id, to.id, Number(o.qty), priceDiff, bean, why, 'admin:' + a.name])
+      await audit(c, 'admin:' + a.name, 'order', 'reschedule-apply', 'reschedule-' + rid,
+        { orderNo: o.order_no, fromSession: o.session_id }, { toSession: to.id, priceDiff, diffBean: bean, reason: why })
+      return rid
+    })
+    return { id, reqNo, priceDiff, note: priceDiff > 0 ? '需游客补款 ' + fen2yuan(priceDiff) + (bean ? '（旅豆抵扣 ' + fen2yuan(bean) + '）' : '') : (priceDiff < 0 ? '应退差 ' + fen2yuan(-priceDiff) : '同价换团') }
+  },
+
+  'GET /admin/reschedules': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'finance'])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = [], args = [], filters = {}
+    if (a.scopeCity) { conds.push('o.city_code = ?'); args.push(a.scopeCity) }
+    const st = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (st != null && [0, 1, 2, 3, 4, 5].includes(st)) { conds.push('r.status = ?'); args.push(st); filters.status = st }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('(r.order_no LIKE ? OR r.req_no LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const from = `FROM order_reschedule r JOIN orders o ON o.id = r.order_id ${W}`
+    const total = Number((await one(`SELECT COUNT(*) n ${from}`, args)).n)
+    const rows = await q(`SELECT r.*, p.title product_title, o.status order_status ${from}
+      JOIN tour_product p ON p.id = o.product_id ORDER BY r.id DESC LIMIT ? OFFSET ?`,
+      [...args, pageSize, (page - 1) * pageSize])
+    const RS_ST = { 0: '待审批', 1: '待执行', 2: '已驳回', 3: '已执行', 4: '已撤回', 5: '执行失败' }
+    return { rows: rows.map((r) => ({ ...r, statusCn: RS_ST[r.status] })), total, page, pageSize, filters }
+  },
+
+  'POST /admin/reschedules/:id/verdict': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const pass = req.body.pass === true
+    const note = String(req.body.note || '').trim()
+    const r = await one('SELECT * FROM order_reschedule WHERE id = ? FOR UPDATE', [req.params.id])
+    if (!r) throw new BizError(1004, '改期申请不存在')
+    if (Number(r.status) !== 0) throw new BizError(2002, '该申请已处理，请刷新')
+    if (r.applicant === 'admin:' + a.name) throw new BizError(1003, '双人复核：审批人不能与申请人相同')
+    await tx(async (c) => {
+      await c.q('UPDATE order_reschedule SET status = ?, approver = ?, approve_note = ? WHERE id = ? AND status = 0',
+        [pass ? 1 : 2, 'admin:' + a.name, note || null, r.id])
+      await audit(c, 'admin:' + a.name, 'order', pass ? 'reschedule-approve' : 'reschedule-reject', 'reschedule-' + r.id,
+        { status: 0 }, { status: pass ? 1 : 2, note: note || null })
+    })
+    return { status: pass ? 1 : 2, note: pass ? '已通过，可执行换团（执行时再校验名额与订单状态）' : '已驳回' }
+  },
+
+  'POST /admin/reschedules/:id/execute': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const r = await one('SELECT * FROM order_reschedule WHERE id = ?', [req.params.id])
+    if (!r) throw new BizError(1004, '改期申请不存在')
+    if (Number(r.status) !== 1) throw new BizError(2002, '仅「待执行」申请可执行')
+    try {
+      await tx(async (c) => {
+        const o = await c.one('SELECT * FROM orders WHERE id = ? FOR UPDATE', [r.order_id])
+        if (!o || ![20, 30].includes(Number(o.status))) throw new BizError(2002, '订单状态已变化（已核销/退款中/关闭），不能改期，请驳回或登记失败')
+        const to = await c.one('SELECT * FROM tour_session WHERE id = ? FOR UPDATE', [r.to_session_id])
+        if (!to || Number(to.status) !== 1) throw new BizError(2001, '目标团期已不可报名，执行失败')
+        const moved = await c.upd('UPDATE tour_session SET booked = booked - ? WHERE id = ? AND booked >= ?', [r.qty, r.from_session_id, r.qty])
+        if (moved !== 1) throw new BizError(2002, '原团期在途数据异常（在册人数不足），请人工核对后登记失败')
+        const add = await c.upd('UPDATE tour_session SET booked = booked + ? WHERE id = ? AND booked + ? <= quota', [r.qty, r.to_session_id, r.qty])
+        if (add !== 1) throw new BizError(2001, '目标团期名额已被占满，执行失败')
+        const newGoods = Number(o.amount_goods) + Number(r.price_diff)
+        const newPay = Number(o.amount_pay) + Number(r.price_diff) - Number(r.diff_bean)
+        await c.q('UPDATE orders SET session_id = ?, amount_goods = ?, amount_pay = ?, version = version + 1 WHERE id = ?',
+          [r.to_session_id, newGoods, newPay, o.id])
+        if (Number(r.diff_bean) > 0) {
+          const bean = await import('../domain/bean.mjs')
+          await bean.deduct(Number(o.user_id), Number(r.diff_bean), bean.BIZ.DEDUCT, r.req_no, c)
+        }
+        await c.q(`INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,?,?,?)`,
+          [o.id, Number(o.status), Number(o.status), 'admin:' + a.name,
+            JSON.stringify(`改期换团：${r.from_session_id} → ${r.to_session_id}（${r.req_no}，价差 ${r.price_diff} 分，旅豆抵扣 ${r.diff_bean} 分）`)])
+        await audit(c, 'admin:' + a.name, 'order', 'reschedule-execute', 'reschedule-' + r.id,
+          { status: 1 }, { status: 3, orderNo: r.order_no, fromSession: r.from_session_id, toSession: r.to_session_id, priceDiff: r.price_diff, diffBean: r.diff_bean })
+        await c.q('UPDATE order_reschedule SET status = 3, executed_at = NOW(3), exec_note = ? WHERE id = ?',
+          [Number(r.price_diff) > 0 ? '待补款 ' + fen2yuan(r.price_diff) + '（走财务登记，未虚构到账）' : (Number(r.price_diff) < 0 ? '应退差 ' + fen2yuan(-r.price_diff) + '（走既有退款流程）' : '同价换团完成'), r.id])
+      })
+      return { status: 3 }
+    } catch (e) {
+      // 执行失败整体回滚后登记失败态（不占在途唯一键），人工核对后可重新发起申请
+      if (e && e.code) {
+        await q('UPDATE order_reschedule SET status = 5, exec_note = ? WHERE id = ?', [String(e.message).slice(0, 300), r.id])
+      }
+      throw e
+    }
+  },
+
+  'POST /admin/reschedules/:id/cancel': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const r = await one('SELECT * FROM order_reschedule WHERE id = ?', [req.params.id])
+    if (!r) throw new BizError(1004, '改期申请不存在')
+    if (Number(r.status) !== 0) throw new BizError(2002, '仅待审批申请可撤回')
+    if (r.applicant !== 'admin:' + a.name && a.role !== 'super') throw new BizError(1003, '仅申请人或超级管理员可撤回')
+    await tx(async (c) => {
+      await c.q('UPDATE order_reschedule SET status = 4 WHERE id = ? AND status = 0', [r.id])
+      await audit(c, 'admin:' + a.name, 'order', 'reschedule-cancel', 'reschedule-' + r.id, { status: 0 }, { status: 4 })
+    })
+    return { status: 4 }
+  },
+
   // ===== T03：订单服务端全量检索（老单可查）=====
   // 契约：{ rows, total, page, pageSize, statusCounts, countsScope, filters }。
   // statusCounts 是"其他筛选保持不变、去掉状态筛选"的各状态计数（口径见 countsScope），不是当前页行数。
