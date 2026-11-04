@@ -8,6 +8,55 @@ const cityLabelAccounts = (code) => { const hit = CITY_DICT_ACCOUNTS.find(([c]) 
 
 async function accounts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
+  if (window.__accTab === 'rolematrix') return roleMatrixTab()
+  return accountsList()
+}
+
+// C-05：角色默认权限矩阵（行=模块，列=角色；super 恒全部不可编辑；城市不可授予名单联动禁用）
+async function roleMatrixTab() {
+  const d = await api('GET', '/admin/role-modules')
+  const groups = [...new Set(d.modules.map((m) => m.group))]
+  const cell = (m, role) => {
+    const on = (d.byRole[role] || []).includes(m.key)
+    const cityLocked = role === 'city_partner' && d.cityDeny.includes(m.key)
+    return `<td><input type="checkbox" role-cb data-role="${role}" data-modkey="${esc(m.key)}" ${on ? 'checked' : ''} ${cityLocked ? 'disabled title="城市账号不可被授予该模块"' : ''} onchange="roleModuleToggle(this)"></td>`
+  }
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>角色默认权限</h2><span class="muted">勾选 = 该角色默认可见/可办；变更后该角色全部有效账号旧会话失效，重新登录生效 · 城市不可授予的模块已禁用</span></div>
+    ${tabBar('rolematrix')}
+    <p class="td-sub">超级管理员恒为全部模块，不在矩阵内。账号可在「账号」页逐个「权限」三态调整（继承 / 额外授予 / 额外收回）。</p>
+    ${groups.map((g) => `<div style="margin:12px 0"><b>${esc(g)}</b><table><thead><tr><th>模块</th>${d.roles.map((r) => `<th>${ACCOUNT_ROLE_CN[r] || esc(r)}</th>`).join('')}</tr></thead><tbody>
+      ${d.modules.filter((m) => m.group === g).map((m) => `<tr><td>${esc(m.name)} <code class="td-sub">${esc(m.key)}</code></td>${d.roles.map((r) => cell(m, r)).join('')}</tr>`).join('')}
+    </tbody></table></div>`).join('')}
+  </div>`
+}
+window.roleModuleToggle = (cb) => {
+  const { role, modkey } = cb.dataset
+  const on = cb.checked
+  const label = cb.closest('tr')?.querySelector('td')?.textContent.trim() || modkey
+  cb.checked = !on // 确认后再落真实状态
+  modal((on ? '授予' : '收回') + '角色默认模块 · ' + label, `
+    <p>${on ? '该角色所有账号将<b>新增</b>此模块的默认可见/可办。' : '该角色所有账号将<b>失去</b>此模块（未单独授予者）；已有旧会话立即失效。'}</p>
+    <div class="field"><label>变更原因 *（4–200 字，进入审计）</label><input id="rmReason" maxlength="200"></div>
+    <div id="rmErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="roleModuleSubmit('${role}','${esc(modkey)}',${on ? 1 : 0})">确认${on ? '授予' : '收回'}</button>`)
+}
+window.roleModuleSubmit = async (role, moduleKey, on) => {
+  const reason = ($('#rmReason').value || '').trim()
+  if (reason.length < 4 || reason.length > 200) { $('#rmErr').textContent = '请填写 4–200 字变更原因'; return }
+  try {
+    const r = await api('POST', '/admin/role-modules', { role, moduleKey, on: !!on, reason })
+    closeModal(); toast(r.note || '角色默认已更新'); roleMatrixTab()
+  } catch (e) { $('#rmErr').textContent = e.message }
+}
+function tabBar(active) {
+  return `<div class="cfg-tabs" style="margin-bottom:12px">
+    <button class="cfg-tab ${active === 'list' ? 'on' : ''}" onclick="window.__accTab='list';accounts()">账号</button>
+    <button class="cfg-tab ${active === 'rolematrix' ? 'on' : ''}" onclick="window.__accTab='rolematrix';accounts()">角色默认权限</button></div>`
+}
+
+async function accountsList() {
   const rows = await api('GET', '/admin/accounts')
   const active = rows.filter((r) => Number(r.status) === 1)
   const cityAccounts = rows.filter((r) => r.role === 'city_partner')
@@ -19,7 +68,8 @@ async function accounts() {
     <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 验证方式（MFA）/ 停用恢复 / 重置密码 · 全部操作留审计</span></div>
+    <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 权限 / 验证方式（MFA）/ 停用恢复 / 重置密码 · 全部操作留审计</span></div>
+    ${tabBar('list')}
     <div class="row"><button class="btn primary sm" onclick="accountCreateModal()">＋ 新建账号</button>
       <span class="muted">初始密码只显示一次；不得在列表或聊天中长期展示明文密码</span></div>
     ${rows.length ? `<table><thead><tr><th>账号</th><th>角色</th><th>城市范围</th><th>MFA</th><th>启用</th><th>最近登录</th><th>备注</th><th>操作</th></tr></thead><tbody>
@@ -28,6 +78,7 @@ async function accounts() {
       const lastSuper = u.role === 'super' && rows.filter((r) => r.role === 'super' && Number(r.status) === 1).length <= 1
       const ops = []
       ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${esc(u.username)}')">验证方式</button>`)
+      if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountPermModal(${u.id}, '${esc(u.username)}')">权限</button>`)
       ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${esc(u.display_name)}', '${esc(u.note || '')}')">资料</button>`)
       if (!self) {
         ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${esc(u.username)}', '${u.role}', '${esc(u.scope_city || '')}')">角色/城市</button>`)
@@ -90,6 +141,52 @@ window.accountMfaFlags = async (id, patch) => {
     toast(r.note || '已调整')
     closeModal(); accounts()
   } catch (e) { toast(e.message, true) }
+}
+
+// ===== C-05：账号权限三态弹窗（继承 / 额外授予 / 额外收回）=====
+window.accountPermModal = async (id, username) => {
+  const d = await api('GET', `/admin/accounts/${id}/modules`)
+  const eff = new Set(d.effective)
+  const stateOf = (k) => {
+    const g = d.grants.find((x) => x.module_key === k)
+    return g ? g.effect : 'inherit'
+  }
+  const groups = [...new Set(d.modules.map((m) => m.group))]
+  const sel = (k, m) => {
+    const cur = stateOf(k)
+    const isCityDeny = d.role === 'city_partner' && d.cityDeny.includes(k)
+    const has = eff.has(k)
+    return `<tr><td style="width:46%">${esc(m.name)} <code class="td-sub">${esc(k)}</code>${isCityDeny ? ' <span class="pill off">城市不可授予</span>' : ''}</td>
+      <td>${has ? '<span class="pill ok">有效</span>' : '<span class="pill off">无</span>'}</td>
+      <td><select class="inp" data-modkey="${esc(k)}" data-orig="${cur}" style="width:120px" ${isCityDeny ? 'title="城市账号不可被授予该模块"' : ''}>
+        <option value="inherit" ${cur === 'inherit' ? 'selected' : ''}>继承角色</option>
+        <option value="allow" ${cur === 'allow' ? 'selected' : ''} ${isCityDeny ? 'disabled' : ''}>额外授予</option>
+        <option value="deny" ${cur === 'deny' ? 'selected' : ''}>额外收回</option>
+      </select></td></tr>`
+  }
+  modal('模块权限 · ' + username + ` <span class="td-sub">（角色：${ACCOUNT_ROLE_CN[d.role] || esc(d.role)}）</span>`, `
+    <p class="td-sub">有效模块 = 角色默认 ∪ 额外授予 − 额外收回。保存后该账号旧会话立即失效，重新登录按新集合显示；城市账号不可被授予系统级/资金敏感模块；资金动作、双人复核、城市行级隔离等细粒度约束不受模块授权影响。</p>
+    <details open><summary class="nav-group">按分组设置</summary>
+    ${groups.map((g) => `<div style="margin:10px 0"><b>${esc(g)}</b><table>${d.modules.filter((m) => m.group === g).map((m) => sel(m.key, m)).join('')}</table></div>`).join('')}
+    </details>
+    <div class="field" style="margin-top:10px"><label>授权/收回原因 *（4–200 字，进入审计）</label><input id="apReason" maxlength="200" placeholder="例如：临时协助风控核查"></div>
+    <div id="apErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountPermSubmit(${id}, '${esc(username)}')">保存权限</button>`)
+}
+window.accountPermSubmit = async (id, username) => {
+  const reason = ($('#apReason').value || '').trim()
+  if (reason.length < 4 || reason.length > 200) { $('#apErr').textContent = '请填写 4–200 字授权原因'; return }
+  const grants = []
+  document.querySelectorAll('select[data-modkey]').forEach((s) => {
+    if (s.value !== 'inherit') grants.push({ moduleKey: s.dataset.modkey, effect: s.value })
+    else if (s.dataset.orig && s.dataset.orig !== 'inherit') grants.push({ moduleKey: s.dataset.modkey, effect: null })
+  })
+  void username
+  if (!grants.length) { $('#apErr').textContent = '没有需要保存的调整（全部为继承）'; return }
+  try {
+    const r = await api('POST', `/admin/accounts/${id}/modules`, { grants, reason })
+    closeModal(); toast(r.note || '权限已保存'); accounts()
+  } catch (e) { $('#apErr').textContent = e.message }
 }
 
 window.accountCreateModal = () => {

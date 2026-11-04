@@ -6,6 +6,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { routes } from './routes.mjs'
 import { q, one, count } from './db.mjs'
+import { matchRouteModule } from './domain/admin-modules.mjs'
+import { requireModule } from './routes/_shared.mjs'
 import { hashPassword } from './auth.mjs'
 import { isLive } from './domain/wxpay.mjs'
 import { serveBadgeArt } from './domain/badge-art.mjs'
@@ -123,6 +125,9 @@ const server = http.createServer(async (req, res) => {
   const query = Object.fromEntries(url.searchParams)
 
   try {
+    // C-05/D-06：命中 ROUTE_MODULES 显式映射的路由统一跑模块强制校验（与路由内既有角色校验取交集，不放松）
+    const rm = matchRouteModule(req.method, pathname)
+    if (rm) await requireModule({ headers: req.headers, method: req.method, url: req.url }, rm.module)
     const data = await handler({ headers: req.headers, method: req.method, url: req.url, body, query, params, rawBody }, res)
     // handler 已自行写出响应（PDF / 文件流）：不能再套 JSON 信封
     if (res.writableEnded || res.headersSent) return
