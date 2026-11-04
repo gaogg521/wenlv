@@ -197,10 +197,13 @@ const web3 = {
     if (u) {
       user = { id: Number(u.id), nickname: u.nickname, did: u.did_ref || null, memberLevel: u.member_level, status: Number(u.status) }
       // 该用户名下的订单事件，以及旅豆/凭证类事件
+      // 一个人的完整生命周期：订单 / 凭证 / 旅豆 / 徽章 / 实名 / DID 签发 / 提现，全部按主体归集
       pushEvents(await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
         WHERE e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = ?)
            OR e.biz_ref IN (SELECT CONCAT('pass-', id) FROM travel_pass WHERE user_id = ?)
-        ORDER BY e.id DESC LIMIT 100`, [u.id, u.id]))
+           OR CAST(JSON_UNQUOTE(JSON_EXTRACT(e.canonical, '$.userId')) AS UNSIGNED) = ?
+           OR CAST(JSON_UNQUOTE(JSON_EXTRACT(e.canonical, '$.promoterUserId')) AS UNSIGNED) = ?
+        ORDER BY e.id DESC LIMIT 200`, [u.id, u.id, u.id, u.id]))
     }
 
     // 4) 批次：#12 / batch:12 / 数字

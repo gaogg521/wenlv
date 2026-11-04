@@ -225,6 +225,10 @@ const adminEco = {
       if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
       await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
       await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [req.params.id])
+      // 审核结论入存证：内容是平台对外承诺的一部分，"谁在什么时候放行/驳回"必须可追溯
+      await attestDomain.attest('content_review', 'note-' + req.params.id, {
+        noteId: Number(req.params.id), result: passed ? 'pass' : 'reject', cityCode: row?.city_code || null,
+      }, c)
       return { status: st }
     })
   },
@@ -236,6 +240,11 @@ const adminEco = {
       await cc.upd('UPDATE merchant SET status = 1, approved_at = NOW(3) WHERE id = ?', [m.id])
       if (m.applicant_user_id) await cc.q('INSERT INTO merchant_staff (merchant_id,user_id,role) VALUES (?,?,3) ON DUPLICATE KEY UPDATE role=3,status=1', [m.id, m.applicant_user_id])
       await audit(cc, 'admin:' + a.name, 'merchant', 'approve', 'merchant-' + m.id, { status: 0 }, { status: 1, owner: m.applicant_user_id })
+      // 主体准入入存证：一家商户什么时候被谁放进平台，是责任链的起点
+      await attestDomain.attest('merchant_join', 'merchant-' + m.id, {
+        merchantId: Number(m.id), applicantUserId: m.applicant_user_id ? Number(m.applicant_user_id) : null,
+        cityCode: m.city_code || null, by: 'admin:' + a.name,
+      }, cc)
       return { approved: true }
     })
   },
@@ -468,6 +477,11 @@ const adminNew = {
     const n = await q('UPDATE kyc_application SET status = ?, reject_note = ?, reviewed_by = ?, reviewed_at = NOW(3) WHERE id = ? AND status = 0',
       [st, action === 'reject' ? String(note || '').slice(0, 120) : null, a.uid || 0, req.params.id])
     if (!n.affectedRows) throw new BizError(1004, '申请不存在或已处理')
+    // 实名结论入存证：不存证件号（只存结论与主体），链上更是只有一个哈希
+    const k = await one('SELECT user_id FROM kyc_application WHERE id = ?', [req.params.id])
+    if (k) await attestDomain.attest('kyc', 'kyc-' + req.params.id, {
+      userId: Number(k.user_id), result: action === 'pass' ? 'pass' : 'reject',
+    })
     return { resolved: action }
   },
 
@@ -685,6 +699,11 @@ const adminFin = {
     await q('UPDATE promoter_withdraw SET status = ?, reviewed_by = ?, reviewed_at = NOW(3), pay_ref = ? WHERE id = ?',
       [st, 'admin:' + a.name, finalRef, w.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'withdraw', passed ? 'pay' : 'reject', 'wd-' + w.id, { status: 0 }, { status: st, amount: w.amount }))
+    // 资金出账入存证：金额进 canonical（只在库里），链上只有哈希；外部流水号只放哈希，不落明文
+    await attestDomain.attest('withdraw', 'wd-' + w.id, {
+      promoterUserId: Number(w.promoter_id), amountFen: Number(w.amount), result: passed ? 'paid' : 'rejected',
+      payRefHash: finalRef ? crypto.createHash('sha256').update(finalRef).digest('hex') : null,
+    })
     return { status: st }
   },
 }
