@@ -252,8 +252,8 @@ async function security() {
     <div class="card-head"><h2>安全中心 · MFA</h2><span class="muted">TOTP / 短信 / 邮箱三通道 · 单账号强制 &gt; 豁免 &gt; 全局策略</span></div>
     <table><thead><tr><th>账号</th><th>角色</th><th>MFA 状态</th><th>手机/邮箱</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
     ${accounts.map((a2) => `<tr><td class="td-main">${esc(a2.display_name || a2.username)}<div class="td-sub">${esc(a2.username)}</div></td>
-      <td>${esc(a2.role)}</td>
-      <td>${Number(a2.mfa_enabled) ? '<span class="pill ok">已绑定 · ' + esc(a2.mfa_channel) + '</span>' : '<span class="pill off">未绑定</span>'}
+      <td>${ACCOUNT_ROLE_CN[a2.role] || esc(a2.role)}</td>
+      <td>${Number(a2.mfa_enabled) ? '<span class="pill ok">已绑定 · ' + (({ totp: '验证器 App', sms: '短信', email: '邮箱' })[a2.mfa_channel] || esc(a2.mfa_channel)) + '</span>' : '<span class="pill off">未绑定</span>'}
         ${Number(a2.mfa_force) ? '<span class="pill s70">单账号强制</span>' : ''}${Number(a2.mfa_exempt) ? '<span class="pill s40">豁免</span>' : ''}</td>
       <td class="td-sub">${esc(a2.mobile || a2.email || '—')}</td>
       <td class="td-sub">${esc(String(a2.last_login_at || '').slice(5, 16))}</td>

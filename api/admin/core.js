@@ -34,7 +34,10 @@ const ICONS = {
 let NAV = []
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
-  refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行' }
+  refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行',
+  // C-08：生命周期/整改新增事件类型中文化（未登记类型仍显示原码，语义不变）
+  kyc: '实名认证通过', merchant_join: '商户准入', content_review: '内容审核结论', withdraw: '提现申请',
+  did_issue: '数字身份签发', consent: '协议签署', commission: '佣金计提', co_profit: '共创分润计提', product_change: '商品价格/状态变更' }
 /** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]） */
 function auditDiff(before, after) {
   const obj = (v) => { if (v == null) return {}; if (typeof v === 'string') { try { return JSON.parse(v) } catch { return { value: v } } } return v }
