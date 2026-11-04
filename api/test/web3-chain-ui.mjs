@@ -42,6 +42,8 @@ ctx.toast = noop
 ctx.$ = () => fakeEl()
 ctx.api = () => Promise.resolve({})
 ctx.go = noop
+ctx.bizTag = (t) => String(t || '')
+ctx.BIZ_CN = {}
 ctx.skel = () => ''
 ctx.globalThis = ctx
 vm.createContext(ctx)
@@ -110,6 +112,40 @@ await t('证据数字可整串复制（哈希 64 位手选必漏字符）', () =
 
 await t('订单号错了要给人话，不是把后端「订单不存在」原样甩出来', () => {
   assert.match(code, /没找到订单 \$\{no\}/)
+})
+
+await t('存证检索：一个入口能吃订单号/批次/哈希/根/凭证/手机号/用户ID/DID，不是只有订单号', () => {
+  const html = ctx.web3dashSource || ''
+  assert.match(code, /id="attestQ"[\s\S]{0,200}批次 #12/, '检索框没提批次')
+  assert.match(code, /交易哈希/, '检索框没提交易哈希')
+  for (const k of ['手机号', '用户ID', 'DID', '凭证']) assert.ok(code.includes(k), '缺少可查类型：' + k)
+  assert.match(code, /function attestSearch\(/, '缺少检索实现')
+  assert.match(code, /\/admin\/attest\/search\?q=/, '没有调用检索接口')
+})
+
+await t('检索结果按「对象 / 批次 / 事件」三类展示，且批次可直接打开批内事件', () => {
+  const r = {
+    q: 'batch:3', matched: ['批次'], chain: { label: '蚂蚁链开放联盟联盟链' },
+    order: { orderNo: 'WL1', status: 30, productName: '朱家角', amountPay: 39800 },
+    user: { id: 7, nickname: '陈姐', did: 'did:cn:wl:ABC', memberLevel: 2, status: 1 },
+    pass: null,
+    batches: [{ id: 9, seq: 3, biz_date: '2026-11-04', leaf_count: 20, status: 2, merkle_root: 'f'.repeat(64), chain_tx_ref: 'e'.repeat(64), chain_block: '185034002', is_day_close: 0 }],
+    events: [{ id: 1, biz_type: 'order', biz_ref: 'WL1', version_no: 50, status: 2, payload_hash: 'a'.repeat(64), created_at: '2026-11-04 10:00:00', batch_id: 9, seq: 3 }],
+    capability: { canSearch: ['订单号', '批次 #N'], noContract: '当前链走内置存证（DEPOSIT），没有合约地址可查' },
+  }
+  const html = ctx.attestResultHtml(r)
+  assert.match(html, /命中的批次（1）/, '缺批次分区')
+  assert.match(html, /命中的存证事件（1）/, '缺事件分区')
+  assert.match(html, /openBlock\(9\)/, '批次不可点开')
+  assert.match(html, /did:cn:wl:ABC/, '用户命中时没给出 DID（链上标识）')
+  assert.match(html, /copyText\('eeee/, '交易哈希无复制入口')
+  assert.match(html, /没有合约地址可查/, '没说明"合约地址查不到"这件事')
+})
+
+await t('查不到时给空态 + 可查类型清单，不是一片空白', () => {
+  const html = ctx.attestResultHtml({ q: 'zzz', matched: [], batches: [], events: [], capability: { canSearch: ['订单号', '批次 #N', '手机号'], noContract: '' } })
+  assert.match(html, /没查到「zzz」/)
+  assert.match(html, /可查：/)
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

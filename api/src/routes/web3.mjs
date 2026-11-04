@@ -110,6 +110,114 @@ const web3 = {
     return { batch: b, events, chain: chain.chainStatus() }
   },
 
+  // 存证统一检索：一个入口吃多种标识，不用先知道"这是什么"再找对应页面
+  // 支持：订单号 / 批次（#12、batch:12、12）/ 交易哈希 / Merkle 根 / 载荷哈希 / 凭证号 / 旅豆流水 / 结算单 / 手机号 / 用户ID / DID
+  // 说明：本方案走链上内置存证（DEPOSIT），链上标识就是交易哈希与根，没有合约地址可查；上了合约才有合约地址与合约方法查询
+  'GET /admin/attest/search': async (req) => {
+    await requireAdmin(req)
+    const raw = String(req.query.q || '').trim()
+    if (!raw) throw new BizError(1001, '请输入要查的内容：订单号 / 批次 #N / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户 ID / DID')
+    const s = raw.replace(/^#/, '').trim()
+    const HEX64 = /^[0-9a-f]{64}$/i
+    const BCOLS = 'b.id, b.seq, b.biz_date, b.merkle_root, b.prev_root, b.leaf_count, b.status, b.chain_provider, b.chain_tx_ref, b.chain_block, b.anchored_at, b.is_day_close'
+    const ECOL = `e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, e.batch_id,
+      b.seq, b.merkle_root, b.status AS batch_status, b.chain_tx_ref, b.chain_block`
+
+    const kinds = []
+    const batches = new Map()
+    const events = []
+    const pushBatch = (b) => { if (b && !batches.has(b.id)) batches.set(b.id, b) }
+    const pushEvents = (rows) => { for (const r of rows) { events.push(r); if (r.batch_id) pushBatch({ id: r.batch_id, seq: r.seq, merkle_root: r.merkle_root, status: r.batch_status, chain_tx_ref: r.chain_tx_ref, chain_block: r.chain_block }) } }
+
+    let order = null, user = null, pass1 = null
+
+    // 1) 64 位十六进制：交易哈希 / Merkle 根 / 前根 / 载荷指纹
+    if (HEX64.test(s)) {
+      const h = s.toLowerCase()
+      for (const b of await q(`SELECT ${BCOLS} FROM attest_batch b WHERE b.chain_tx_ref = ? OR b.merkle_root = ? OR b.prev_root = ?`, [h, h, h])) {
+        pushBatch(b); kinds.push(b.chain_tx_ref === h ? '交易哈希' : b.merkle_root === h ? 'Merkle 根' : '前根')
+      }
+      const byHash = await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id WHERE e.payload_hash = ? LIMIT 50`, [h])
+      if (byHash.length) { pushEvents(byHash); kinds.push('载荷哈希') }
+    }
+
+    // 2) 订单号（WL 开头或库里真存在）
+    const o = await one('SELECT o.*, p.title product_name FROM orders o LEFT JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ?', [s])
+    if (o) {
+      kinds.push('订单号')
+      order = { orderNo: o.order_no, status: Number(o.status), productName: o.product_name, amountPay: o.amount_pay, userId: Number(o.user_id), createdAt: o.created_at }
+      pushEvents(await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+        WHERE e.biz_ref = ? OR e.biz_ref LIKE ? ORDER BY e.id`, [s, s + '-%']))
+    }
+
+    // 3) 用户：手机号 / user:123 / 纯数字 / DID
+    const uidMatch = s.match(/^(?:user|uid|u)[:#]?(\d+)$/i) || (/^\d{1,9}$/.test(s) ? [s, s] : null)
+    const draw = s.match(/^did:cn:wl:/i) ? s : null
+    let u
+    if (/^1\d{10}$/.test(s)) {
+      const { whereMobile } = await import('../infra/mobile.mjs')
+      const m = whereMobile(s, 'u')
+      u = await one(`SELECT u.id, u.nickname, u.did_ref, u.member_level, u.status FROM user_account u WHERE ${m.sql}`, m.args)
+      if (u) kinds.push('手机号')
+    } else if (draw) {
+      u = await one('SELECT id, nickname, did_ref, member_level, status FROM user_account WHERE did_ref = ?', [draw])
+      if (u) kinds.push('DID')
+    } else if (uidMatch) {
+      const id = Number(uidMatch[1])
+      u = await one('SELECT id, nickname, did_ref, member_level, status FROM user_account WHERE id = ?', [id])
+      // 纯数字既可能是用户 ID 也可能是批次序号/ID，两边都查，都命中就都返回
+      if (u && /^(user|uid|u)/i.test(s)) kinds.push('用户 ID')
+      else if (u) kinds.push('用户 ID（按数字匹配）')
+    }
+    if (u) {
+      user = { id: Number(u.id), nickname: u.nickname, did: u.did_ref || null, memberLevel: u.member_level, status: Number(u.status) }
+      // 该用户名下的订单事件，以及旅豆/凭证类事件
+      pushEvents(await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+        WHERE e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = ?)
+           OR e.biz_ref IN (SELECT CONCAT('pass-', id) FROM travel_pass WHERE user_id = ?)
+        ORDER BY e.id DESC LIMIT 100`, [u.id, u.id]))
+    }
+
+    // 4) 批次：#12 / batch:12 / 数字
+    const bm = s.match(/^(?:batch|b)[:#]?(\d+)$/i) || (/^\d{1,9}$/.test(s) ? [s, s] : null)
+    if (bm) {
+      const n = Number(bm[1])
+      for (const b of await q(`SELECT ${BCOLS} FROM attest_batch b WHERE b.id = ? OR b.seq = ?`, [n, n])) {
+        pushBatch(b); kinds.push('批次')
+        for (const e of await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id WHERE e.batch_id = ? ORDER BY e.leaf_index, e.id`, [b.id])) events.push(e)
+      }
+    }
+
+    // 5) 业务单号直查（凭证 / 旅豆流水 / 结算单 / 退款单 / 其它）
+    if (!HEX64.test(s) && s.length >= 3) {
+      const direct = await q(`SELECT ${ECOL} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+        WHERE e.biz_ref = ? OR e.biz_ref LIKE ? ORDER BY e.id DESC LIMIT 100`, [s, s + '-%'])
+      if (direct.length) { pushEvents(direct); kinds.push('业务单号') }
+      const p = await one('SELECT p.id, p.serial_no, p.status, p.order_id FROM travel_pass p WHERE CONCAT("pass-", p.id) = ? OR p.serial_no = ?', [s, s])
+      if (p) { kinds.push('凭证'); pass1 = { id: Number(p.id), serialNo: p.serial_no, status: Number(p.status), orderId: Number(p.order_id) } }
+    }
+
+    const chainInfo = chain.chainStatus()
+    return {
+      q: raw,
+      matched: [...new Set(kinds)],
+      order, user, pass: pass1,
+      batches: [...batches.values()].map((b) => ({
+        ...b,
+        chain: b.chain_tx_ref ? { provider: b.chain_provider || null, txRef: b.chain_tx_ref, block: b.chain_block || null } : null,
+      })),
+      events,
+      chain: { provider: chainInfo.provider, label: chainInfo.label, mode: chainInfo.mode },
+      // 让前端能直接说清"能查什么、不能查什么"
+      capability: {
+        canSearch: ['订单号', '批次 #N', '交易哈希', 'Merkle 根', '载荷哈希', '凭证号', '旅豆流水号', '结算单号', '手机号', '用户 ID', 'DID'],
+        noContract: chainInfo.capabilities?.assets === false || chainInfo.provider === 'antchainopen'
+          ? '当前链走内置存证（DEPOSIT），没有合约地址可查；链上标识就是交易哈希与 Merkle 根。若后续部署自有合约，才有合约地址与合约方法查询'
+          : '',
+      },
+    }
+  },
+
   // 单流程视角（一单六锚）：把一笔订单的存证事件按业务步骤串成链
   'GET /admin/attest/flow/:orderNo': async (req) => {
     await requireAdmin(req)
