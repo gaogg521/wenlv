@@ -45,7 +45,8 @@ const views = async () => {
   const po = ok(await call('GET', `/admin/products/${sess.product_id}/overview`, null, A)).kpi
   const uo = ok(await call('GET', `/admin/users/${buyer.user.id}`, null, A)).trade
   return {
-    bOrders: wb.todayOrders, bGmv: Math.round(Number(wb.todayGmv) * 100), wOrders: kpi.ordersToday, wGmv: Math.round(Number(kpi.gmvToday) * 100),
+    // 看板契约（v1.10 口径切换后）：dash/kpi 返回 orders / gmv（元），周期由 ?range= 决定，默认今日
+    bOrders: wb.todayOrders, bGmv: Math.round(Number(wb.todayGmv) * 100), wOrders: kpi.orders, wGmv: Math.round(Number(kpi.gmv) * 100),
     merchOrders: Number(mo.orders), merchGmv: Number(mo.gmv), prodOrders: Number(po.orders), prodGmv: Number(po.gmv),
     userPaid: Number(uo.paid), userGmv: Number(uo.gmv), pendingVerify: wb.pendingVerify, myVerified: wb.myVerified,
   }
@@ -105,11 +106,16 @@ await t('核销：A 出示动态码 → B 扫码成功；A 状态 40，B 记录 
   const again = ok(await call('POST', '/m/verify/scan', { payload: code.qr }, B)); assert.equal(again.ok, false, '同码重放必须被拒')
 })
 await t('核销率：后台看板的数字 = 数据库里 已核销凭证 ÷ 已签发未冲正凭证（不会超过 100%）', async () => {
-  const r = await one('SELECT SUM(status = 2) v, SUM(status IN (1,2)) i FROM travel_pass')
-  const expect = Number(r.i) ? (Number(r.v) / Number(r.i) * 100).toFixed(1) + '%' : '—'
-  const kpi = ok(await call('GET', '/admin/dash/kpi', null, A))
-  assert.equal(kpi.verifyRate, expect)
-  if (kpi.verifyRate !== '—') assert.ok(parseFloat(kpi.verifyRate) <= 100)
+  // 口径已在看板重构时改为「周期内创建的订单：已核销(40/50) ÷ 已支付(20~70)」，比率随 dash/insights 的漏斗给出。
+  // 断言两件事：① 分子分母与数据库同式；② 比率必须等于它自己的分子÷分母（铁律：比率要能指出分子分母）。
+  const ins = ok(await call('GET', '/admin/dash/insights', null, A)).funnel
+  const r = await one(`SELECT COALESCE(SUM(status BETWEEN 20 AND 70),0) paid, COALESCE(SUM(status IN (40,50)),0) verified
+    FROM orders WHERE DATE(created_at) = CURDATE()`)
+  assert.equal(ins.paid, Number(r.paid), '已支付（分母）应与库里一致')
+  assert.equal(ins.verified, Number(r.verified), '已核销（分子）应与库里一致')
+  const expect = Number(r.paid) ? (Number(r.verified) / Number(r.paid) * 100).toFixed(1) + '%' : '—'
+  assert.equal(ins.verifyRate, expect, '看板核销率必须等于自己的分子÷分母')
+  if (ins.verifyRate !== '—') assert.ok(parseFloat(ins.verifyRate) <= 100)
 })
 let rebate
 await t('完成→返豆：A 旅豆余额 +返豆，A 流水有该单一条，后台用户画像余额 = A 看到的余额', async () => {
@@ -251,7 +257,8 @@ await t('城市合伙人（310118）：看板与洞察都只含本城数据，�
   const other = await q("SELECT id, title FROM tour_product WHERE city_code <> '310118'")
   for (const p of other) assert.ok(!ins.topTours.some((x) => Number(x.id) === Number(p.id)), `洞察里出现了外城商品 ${p.title}`)
   const own = await one(`SELECT COUNT(*) n, COALESCE(SUM(amount_pay),0) g FROM orders o WHERE o.status IN (20,30,40,50) AND DATE(o.paid_at) = CURDATE() AND o.city_code = '310118'`)
-  assert.equal(kpi.ordersToday, Number(own.n)); assert.equal(Math.round(Number(kpi.gmvToday) * 100), Number(own.g))
+  assert.equal(kpi.orders, Number(own.n), '城看板订单数应等于本城今日已支付单数')
+  assert.equal(Math.round(Number(kpi.gmv) * 100), Number(own.g), '城看板 GMV 应等于本城今日已支付金额')
   assert.equal(ins.funnel.beanUseRate, '—', '旅豆预算是全局的，城市账号不展示使用率')
   const orders = ok(await call('GET', '/admin/orders', null, CITY))
   assert.ok(orders.every((o) => String(o.city_code) === '310118'), '城市账号订单列表不应含外城订单')

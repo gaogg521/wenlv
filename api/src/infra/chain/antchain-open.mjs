@@ -19,6 +19,13 @@
 //   · 免费版 TPS=1，本适配器串行发请求并留 1.1 秒间隔
 //   · DEPOSIT 没有交易回执（QUERYRECEIPT 返回 211），确认只能靠 QUERYTRANSACTION 核对内容
 //   · 开放联盟链是共享公开链：content 明文可见，只放 Merkle 根与业务日（铁律：不含个人信息）
+//
+// 2026-11-04 真机实测（真实凭据，非假服务）补充的三条，直接决定业务处置：
+//   · 同一 orderId 再提交 → 返回 success + **首次那笔的哈希**，新内容被静默丢弃（幂等是真的，但会"假成功"）
+//     ⇒ 同一根重试安全、不会双写；内容不符则是该根此前用别的内容上过链 → 必须转人工
+//   · gas 偏低（实测 10）→ 仍返回 success + 哈希，但链上查无此交易（404）
+//     ⇒ 只把 404 当"等出块"会让批次永久卡住；超过 ANTOPEN_WAIT_MAX_MS 判定为交易被丢弃并抛硬错误
+//   · orderId = 'wl_' + 根前 32 位（35 字符）可用
 import crypto from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { E } from './conf.mjs'
@@ -33,6 +40,8 @@ const env = () => ({
   bizid: E.ANTOPEN_BIZID || 'a00e36c5',
   gas: Number(E.ANTOPEN_GAS) > 0 ? Number(E.ANTOPEN_GAS) : 50000,
   gapMs: E.ANTOPEN_MIN_INTERVAL_MS != null && E.ANTOPEN_MIN_INTERVAL_MS !== '' ? Number(E.ANTOPEN_MIN_INTERVAL_MS) : 1100,
+  // 提交后多久还没在链上查到，就判定"这笔交易被丢掉了"（gas 不足/被丢弃都会返回成功+哈希但查无此交易）
+  waitMaxMs: Number(E.ANTOPEN_WAIT_MAX_MS) > 0 ? Number(E.ANTOPEN_WAIT_MAX_MS) : 10 * 60_000,
 })
 
 function missing() {
@@ -47,6 +56,8 @@ function missing() {
 
 const HASH64 = /^[0-9a-f]{64}$/i
 const dateNum = (d) => String(d || '').slice(0, 10).replaceAll('-', '')
+/** 重试不会改变结果的错误带上 code，域层据此转人工而不是白重试 5 次 */
+const hard = (code, msg) => Object.assign(new Error(msg), { code })
 /** 服务端报错可能回显请求路径里的令牌，凡是 24 位以上的字母数字串（64 位哈希除外）一律打码 */
 const scrub = (s) => String(s ?? '').replace(/[A-Za-z0-9]{24,}/g, (m) => (HASH64.test(m) ? m : '<redacted>')).slice(0, 160)
 
@@ -176,14 +187,32 @@ export default {
       content: typeof b64 === 'string' ? Buffer.from(b64, 'base64').toString('utf8') : null,
     }
   },
-  /** 终局确认：交易在块里、哈希一致、链上内容逐字等于本批次重算的内容。内容不一致是硬错误，不是"等一等" */
-  async confirm({ txRef, root, prevRoot, bizDate }) {
-    if (!root || !bizDate) throw new Error('antchain-open 确认需要批次根与业务日期')
+  /**
+   * 终局确认：交易在块里、哈希一致、链上内容逐字等于本批次重算的内容。
+   * 两类硬错误（重试不会变好，域层据此转人工）：
+   *   · 内容/哈希不一致 —— 实测：同一 orderId 再提交不同内容，服务端**返回 success + 首次那笔的哈希**，
+   *     新内容被静默丢弃。所以"内容不符"不是慢，是这笔根此前已用别的内容上过链，必须人看。
+   *   · 超时仍未上链 —— 实测：gas 偏低时接口仍返回 success + 哈希，但链上查无此交易（404）。
+   *     一直当"等待出块"会让批次永久停在待确认，对账上看不出来。
+   */
+  async confirm({ txRef, root, prevRoot, bizDate, submittedAt }) {
+    if (!root || !bizDate) throw hard('BAD_ARGS', 'antchain-open 确认需要批次根与业务日期')
     const r = await this.queryTransaction(txRef)
-    if (!r) return { final: false, reason: '等待出块', confirmations: 0 }
+    if (!r) {
+      const age = submittedAt ? Date.now() - new Date(submittedAt).getTime() : 0
+      const max = env().waitMaxMs
+      if (submittedAt && age > max) {
+        throw hard('NOT_ON_CHAIN', `antchain-open 提交 ${Math.round(age / 60000)} 分钟仍未上链（交易 ${txRef} 查无此笔），`
+          + '常见原因：gas 上限低于实际消耗或交易被丢弃；请核对燃料与 gas 后人工重提')
+      }
+      return { final: false, reason: '等待出块', confirmations: 0 }
+    }
     if (!Number.isSafeInteger(r.block) || r.block <= 0) return { final: false, reason: '等待出块', confirmations: 0 }
-    if (r.hash.toLowerCase() !== String(txRef).toLowerCase()) throw new Error('antchain-open 回查交易哈希不一致')
-    if (r.content !== contentOf({ root, prevRoot, bizDate })) throw new Error('antchain-open 链上内容与批次不一致')
+    if (r.hash.toLowerCase() !== String(txRef).toLowerCase()) throw hard('TX_HASH_MISMATCH', 'antchain-open 回查交易哈希不一致')
+    if (r.content !== contentOf({ root, prevRoot, bizDate })) {
+      throw hard('CONTENT_MISMATCH', 'antchain-open 链上内容与批次不一致：该根此前已用其它内容（前根/业务日）上过链，'
+        + '同一 orderId 的重复提交会被服务端丢弃并返回首次那笔，需人工核对后再决定是否换根重提')
+    }
     return { final: true, block: String(r.block), confirmations: 1 }
   },
   async queryByRoot() { return null },

@@ -189,6 +189,16 @@ async function markAnchored(batchId, txRef, block, confirmations, reused = false
   })
 }
 
+// 这些问题重试不会变好：同一笔会得到同一结果，白重试 5 次只是把问题藏起来 → 直接转人工
+const TERMINAL_CHAIN_ERR = new Set(['CONTENT_MISMATCH', 'TX_HASH_MISMATCH', 'NOT_ON_CHAIN'])
+
+async function markManual(b, e) {
+  await q('UPDATE attest_batch SET status = 4, last_err = ? WHERE id = ?', [String(e.message).slice(0, 255), b.id])
+  await q(`INSERT INTO risk_event (kind, severity, detail, handled) VALUES ('attest_manual_review', 2, ?, 0)`,
+    [JSON.stringify({ batchId: b.id, txRef: b.chain_tx_ref || null, code: e.code || null, err: String(e.message).slice(0, 200) })])
+  return { batchId: b.id, anchored: false, manual: true, status: 4, err: String(e.message) }
+}
+
 async function markFailed(b, e) {
   const attempt = Number(b.attempt || 0) + 1
   const status = attempt >= 5 ? 4 : 3
@@ -232,7 +242,7 @@ async function confirmRows(rows) {
   const out = []
   for (const b of rows) {
     try {
-      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date, provider: b.chain_provider })
+      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date, provider: b.chain_provider, submittedAt: b.submitted_at })
       if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
       else {
         await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',
@@ -240,6 +250,8 @@ async function confirmRows(rows) {
         out.push({ batchId: b.id, anchored: false, pending: true, confirmations: c.confirmations ?? null, reason: c.reason || null })
       }
     } catch (e) {
+      // 重试必然重演（内容不符 / 一直查无此交易）→ 停在这里等人看，不要耗光 5 次重试再报
+      if (TERMINAL_CHAIN_ERR.has(e.code)) { out.push(await markManual(b, e)); continue }
       // TBaaS 查询失败或记录不匹配不能证明原交易不存在；保留交易号以免重试造成重复提交。
       if (b.chain_provider === 'tbaas') {
         const reason = String(e.message || e).slice(0, 255)

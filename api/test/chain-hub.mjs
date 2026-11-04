@@ -170,6 +170,27 @@ try {
     const done = await one('SELECT status, chain_provider FROM attest_batch WHERE id = ?', [b.id])
     assert.equal(Number(done.status), 2); assert.equal(done.chain_provider, 'antchainopen')
   })
+  // 真机实测：同一 orderId 再提交不同内容，服务端返回 success + 首次那笔哈希，新内容被丢弃。
+  // 于是"链上内容 ≠ 批次内容"重试必然重演 → 必须一次转人工，不能耗光 5 次重试（否则台账上只是"失败"看不出根因）
+  await t('蚂蚁链：确认时链上内容与批次不一致 → 直接转人工（status=4 + 风险事件），不进重试', async () => {
+    ok(await call('POST', '/admin/chain/activate', { provider: 'antchainopen', confirm: 'antchainopen' }, A))
+    await warmSecrets()
+    const attest = await import('../src/domain/attest.mjs')
+    const b = await mkBatch()
+    await attest.anchorToChain(b.id)
+    const before = await one('SELECT status, attempt, chain_tx_ref FROM attest_batch WHERE id = ?', [b.id])
+    assert.equal(Number(before.status), 5)
+    // 模拟"这枚根此前已用别的内容上过链"：改掉批次的前根，链上内容自然对不上
+    await q('UPDATE attest_batch SET prev_root = ? WHERE id = ?', ['c'.repeat(64), b.id])
+    await attest.confirmPending()
+    const after = await one('SELECT status, attempt, last_err, chain_tx_ref FROM attest_batch WHERE id = ?', [b.id])
+    assert.equal(Number(after.status), 4, '不一致必须转人工');
+    assert.equal(Number(after.attempt), 0, '不该消耗重试次数')
+    assert.equal(after.chain_tx_ref, before.chain_tx_ref, '保留原交易号供人工核对')
+    assert.match(after.last_err, /链上内容与批次不一致/)
+    const ev = await one("SELECT COUNT(*) n FROM risk_event WHERE kind = 'attest_manual_review'")
+    assert.ok(Number(ev.n) >= 1, '要有风险事件，运维才看得见')
+  })
   await t('切换后旧链批次仍回原链核验，不被新链误确认', async () => {
     ok(await call('POST', '/admin/chain/activate', { provider: 'gateway', confirm: 'gateway' }, A))
     await warmSecrets()

@@ -48,7 +48,7 @@ const srv = http.createServer((req, res) => {
 })
 await new Promise((r) => srv.listen(0, '127.0.0.1', r))
 
-const KEYS = ['ANTOPEN_REST_URL', 'ANTOPEN_ACCESS_ID', 'ANTOPEN_ACCESS_KEY', 'ANTOPEN_ACCOUNT', 'ANTOPEN_KMS_ID', 'ANTOPEN_TENANT_ID', 'ANTOPEN_BIZID', 'ANTOPEN_GAS', 'ANTOPEN_MIN_INTERVAL_MS']
+const KEYS = ['ANTOPEN_REST_URL', 'ANTOPEN_ACCESS_ID', 'ANTOPEN_ACCESS_KEY', 'ANTOPEN_ACCOUNT', 'ANTOPEN_KMS_ID', 'ANTOPEN_TENANT_ID', 'ANTOPEN_BIZID', 'ANTOPEN_GAS', 'ANTOPEN_MIN_INTERVAL_MS', 'ANTOPEN_WAIT_MAX_MS']
 const reset = () => { for (const k of KEYS) delete process.env[k] }
 let n = 0
 const conf = (extra = {}) => { reset(); Object.assign(process.env, { ANTOPEN_REST_URL: `http://127.0.0.1:${srv.address().port}`, ANTOPEN_ACCESS_ID: 'ak-' + (++n), ANTOPEN_ACCESS_KEY: PEM, ANTOPEN_ACCOUNT: 'acct', ANTOPEN_KMS_ID: 'kms-id-1', ANTOPEN_TENANT_ID: 'TENANT1', ANTOPEN_MIN_INTERVAL_MS: '0', ...extra }) }
@@ -105,11 +105,22 @@ try {
     conf()
     const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' })
     st.txs.get(r.txRef).block = 9
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: 'e'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04' }), /链上内容与批次不一致/)
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: 'e'.repeat(64), bizDate: '2026-11-04' }), /链上内容与批次不一致/)
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: 'e'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04' }),
+      (e) => e.code === 'CONTENT_MISMATCH' && /链上内容与批次不一致/.test(e.message))
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: 'e'.repeat(64), bizDate: '2026-11-04' }),
+      (e) => e.code === 'CONTENT_MISMATCH')
     st.txs.get(r.txRef).hashOverride = '1'.repeat(64)
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' }), /哈希不一致/)
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' }),
+      (e) => e.code === 'TX_HASH_MISMATCH' && /哈希不一致/.test(e.message))
     await assert.rejects(() => antopen.confirm({ txRef: r.txRef }), /需要批次根与业务日期/)
+  })
+  // 实测：gas 偏低时接口返回 success + 哈希，但链上查无此交易。只当"等出块"会让批次永久卡在待确认。
+  await t('confirm：查无此交易且已超过等待上限 → 硬错误 NOT_ON_CHAIN（转人工），未超时仍是等待出块', async () => {
+    conf()
+    const args = { txRef: 'f'.repeat(64), root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' }
+    assert.equal((await antopen.confirm({ ...args, submittedAt: new Date().toISOString() })).reason, '等待出块')
+    await assert.rejects(() => antopen.confirm({ ...args, submittedAt: new Date(Date.now() - 11 * 60_000).toISOString() }),
+      (e) => e.code === 'NOT_ON_CHAIN' && /仍未上链/.test(e.message) && /gas/.test(e.message))
   })
   await t('token 过期(202)：刷新后重试一次成功；不会重复上链多笔', async () => {
     conf(); st.handshakes = 0; st.deposits.length = 0
