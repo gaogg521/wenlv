@@ -25,3 +25,7 @@ api/certs/
 # 密钥集中备忘（若被移入仓库，一律忽略）
 KEY.txt
 *KEY*.txt
+
+# 守护进程运行日志（不入库）
+api/daemon/keepalive.log
+api/server-cli.log
