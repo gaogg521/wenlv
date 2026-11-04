@@ -1,5 +1,6 @@
 // 审核工作队列（T07）：四类待办统一聚合 + 认领协调（不改判定逻辑，判定仍走各队列原接口）。
 // 认领 = "我在处理"；同一待办同时只允许一人认领，判定完成后自动释放；超时(≥48h)标红。
+// V-07：total 为独立计数——列表只显示前 20 条（显示窗口），超出时明确提示，不把窗口当全部待办。
 const RQ_KIND = { note: '独立笔记审核', task_entry: '约稿投稿审核', report: '举报处理', appeal: '作者申诉' }
 const RQ_ROUTE = { note: 'content', task_entry: 'tasks', report: 'contentcases', appeal: 'contentcases' }
 
@@ -13,11 +14,13 @@ async function reviewqueue() {
     <p class="td-sub">认领后请到对应栏目完成审核判定；判定完成后认领自动释放。本页只做待办发现与认领协调，不做审核判定。</p>
     ${d.queues.map((q) => `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-head"><h3>${esc(q.kindCn)} <span class="pill ${q.items.length ? 'warn' : 'off'}">${q.items.length} 待办</span></h3>
+      <div class="card-head"><h3>${esc(q.kindCn)} <span class="pill ${Number(q.total) ? 'warn' : 'off'}">共 ${Number(q.total).toLocaleString()} 待办</span></h3>
         <button class="btn ghost sm" onclick="go('${RQ_ROUTE[q.kind]}')">前往${esc(q.kindCn)} →</button></div>
+      ${q.truncated ? `<p class="td-sub" style="margin:4px 0 0">⚠ 待办共 ${Number(q.total).toLocaleString()} 条，本页按等待时长仅显示最早 ${q.items.length} 条，其余请到${esc(q.kindCn)}栏目按列表翻页处理。</p>` : ''}
       ${q.items.length ? `<table><thead><tr><th>ID</th><th>摘要</th><th>等待时长</th><th>认领状态</th><th>操作</th></tr></thead><tbody>
       ${q.items.map((it) => {
-        const mine = it.claimedBy === myName
+        // 本人判定优先按不可变 UID（旧数据无 uid 时回退名字快照）
+        const mine = it.claimedUid != null ? (ME?.uid != null && Number(it.claimedUid) === Number(ME.uid)) : it.claimedBy === myName
         return `<tr><td class="num">#${it.item_id}</td><td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.extra || '—')}</td>
         <td>${it.overdue ? '<span class="pill s70">' + it.waitingHours + 'h 超时</span>' : '<span class="pill ' + (it.waitingHours >= 24 ? 'warn' : 'off') + '">' + it.waitingHours + 'h</span>'}</td>
         <td>${it.claimedBy ? (mine ? '<span class="pill ok">本人处理中</span>' : '<span class="pill s40">' + esc(it.claimedBy.replace('admin:', '')) + '</span>') : '<span class="pill off">未认领</span>'}</td>

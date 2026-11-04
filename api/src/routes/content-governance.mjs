@@ -28,6 +28,9 @@ async function remove(c,n,a,reason) {
   const id=await c.ins('INSERT INTO content_moderation(note_id,city_code,reason,snapshot,actor) VALUES (?,?,?,?,?)',[n.id,n.city_code||null,reason,JSON.stringify({title:n.title,body:n.body}),actor])
   await c.upd('UPDATE content_note SET status=4,moderation_id=? WHERE id=?',[id,n.id])
   await c.q('UPDATE content_report SET status=2,moderation_id=?,resolution=?,actor=?,resolved_at=NOW(3) WHERE note_id=? AND status=0',[id,reason,actor,n.id])
+  // S-01：一次下架会批量完成该笔记的全部待处理举报——对应认领必须一并释放（只限本笔记、本次完成的
+  // 举报，r.status=2 是本事务刚完成的集合），直接下架与举报判定下架共用此释放，不再各自散落
+  await c.q("UPDATE review_claim rc JOIN content_report r ON r.id = rc.item_id SET rc.released_at = NOW(3) WHERE rc.queue_kind='report' AND rc.released_at IS NULL AND r.note_id = ? AND r.status = 2",[n.id])
   await audit(c,actor,'content','takedown','note-'+n.id,{status:n.status},{status:4,moderationId:id,reason})
   return id
 }
@@ -97,7 +100,8 @@ export const contentGovernance={
       const n=await locked(c,r.note_id,a),rpt=await c.one('SELECT * FROM content_report WHERE id=? FOR UPDATE',[req.params.id])
       scope(a,rpt.city_code,n.city_code)
       if(Number(rpt.status)!==0)throw new BizError(2002,'举报已处理，请刷新')
-      if(action==='takedown'){await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL",[rpt.id]);return {moderationId:await remove(c,n,a,reason),status:2}}
+      // 下架路径的认领释放统一由 remove() 批量处理（S-01：可能一次完成多条举报）
+      if(action==='takedown'){return {moderationId:await remove(c,n,a,reason),status:2}}
       await c.upd('UPDATE content_report SET status=1,resolution=?,actor=?,resolved_at=NOW(3) WHERE id=?',[reason,'admin:'+a.name,rpt.id])
       await audit(c,'admin:'+a.name,'content','report-dismiss','report-'+rpt.id,null,{reason})
       await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL", [rpt.id])

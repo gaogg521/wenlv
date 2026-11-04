@@ -1,12 +1,17 @@
 // T07（批次 F-3）：审核工作队列。四类待办（独立笔记 / 约稿投稿 / 举报 / 申诉）统一聚合视图 + 认领协调。
 // 认领不改既有判定逻辑——判定仍走各队列原接口（content/verdict、task-entries/verdict、content-cases/verdict）；
-// 认领只是"我在处理"的协调层：同一待办同时只允许一个有效认领，判定完成后自动释放。
+// 认领只是"我在处理"的协调层：同一待办同时只允许一个有效认领（V52 唯一键兜底），判定完成后自动释放。
+// V-04：取消对外"done"兜底清除——认领释放只发生在真实判定事务与本人主动释放，任何 staff 都不能
+//       无判定地清掉他人仍待审的认领。
+// V-05：认领前校验目标存在、仍在待审、（城市账号）属于本城；认领资格与各判定端点角色一致。
+// V-07：待办总数独立计数，返回前 20 条只是"显示窗口"，页面不再把窗口当全部。
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin } from './_shared.mjs'
 
 const KINDS = ['note', 'task_entry', 'report', 'appeal']
 const KIND_CN = { note: '独立笔记审核', task_entry: '约稿投稿审核', report: '举报处理', appeal: '作者申诉' }
-// 每类队列的"待审"来源 SQL（单条查询：返回 item_id, waiting_since, extra）
+const LIST_WINDOW = 20
+// 每类队列的"待审"来源 SQL（单条查询：返回 item_id, waiting_since, extra, city_code）
 const PENDING_SQL = {
   note: `SELECT n.id item_id, n.created_at waiting_since, u.nickname extra, p.city_code
     FROM content_note n JOIN user_account u ON u.id = n.user_id LEFT JOIN tour_product p ON p.id = n.related_product_id
@@ -23,13 +28,22 @@ const PENDING_SQL = {
     JOIN content_note n ON n.id = m.note_id LEFT JOIN tour_product p ON p.id = n.related_product_id
     WHERE ap.status = 0`,
 }
-// 各队列判定完成的释放条件（verdict 后自动释放）
-const DONE_SQL = {
-  note: `UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL`,
-  task_entry: `UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL`,
-  report: `UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'report' AND item_id = ? AND released_at IS NULL`,
-  appeal: `UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'appeal' AND item_id = ? AND released_at IS NULL`,
+// 认领资格 = 对应判定端点的角色（能判定才能认领，不允许认领自己无权判定的待办）
+const CLAIM_ROLES = {
+  note: ['super', 'review'],
+  task_entry: ['super', 'ops', 'review'],
+  report: ['super', 'ops', 'review', 'city_partner'],
+  appeal: ['super', 'ops', 'review', 'city_partner'],
 }
+const CLAIM_ROLE_CN = {
+  note: '独立笔记审核仅限超级管理员/审核员认领',
+  task_entry: '约稿投稿审核仅限超级管理员/运营/审核员认领',
+  report: '举报处理仅限超级管理员/运营/审核员/城市合伙人（本城）认领',
+  appeal: '申诉复核仅限超级管理员/运营/审核员/城市合伙人（本城）认领',
+}
+// 认领人身份比较：优先不可变 UID；存量行无 uid 时回退名字（真实登录令牌必带 uid）
+const claimIsMine = (row, a) =>
+  row.claimed_uid != null ? (a.uid != null && Number(row.claimed_uid) === Number(a.uid)) : row.claimed_by === 'admin:' + a.name
 
 async function staffOf(req) {
   const a = await requireAdmin(req, ['super', 'ops', 'review', 'city_partner'])
@@ -38,24 +52,27 @@ async function staffOf(req) {
 }
 
 export const adminReviewQueue = {
-  // 队列聚合：四类待办各取前 N 条（含等待时长），加各队列认领状态
+  // 队列聚合：四类待办各返回前 20 条（含等待时长与认领状态），total 为独立计数
   'GET /admin/review-queue': async (req) => {
     const a = await staffOf(req)
-    const cs = a.scopeCity ? ' AND p.city_code = ?' : ''
-    const args0 = a.scopeCity ? [a.scopeCity] : []
+    const citySql = a.scopeCity ? ' AND p.city_code = ?' : ''
+    const cityArgs = a.scopeCity ? [a.scopeCity] : []
     const queues = []
     for (const kind of KINDS) {
-      const sql = PENDING_SQL[kind] + (a.scopeCity ? ' AND p.city_code = ?' : '') + ' ORDER BY waiting_since ASC LIMIT 20'
-      const args = a.scopeCity ? [...args0] : []
-      const items = await q(sql, args)
-      const claims = await q(`SELECT rc.item_id, rc.claimed_by, rc.created_at FROM review_claim rc WHERE rc.queue_kind = ? AND rc.released_at IS NULL`, [kind])
+      const sqlAll = PENDING_SQL[kind] + citySql
+      const total = Number((await one(`SELECT COUNT(*) n FROM (${sqlAll}) t`, cityArgs)).n)
+      const items = await q(sqlAll + ' ORDER BY waiting_since ASC LIMIT ?', cityArgs.length ? [...cityArgs, LIST_WINDOW] : [LIST_WINDOW])
+      const claims = await q(`SELECT rc.item_id, rc.claimed_by, rc.claimed_uid, rc.created_at FROM review_claim rc WHERE rc.queue_kind = ? AND rc.released_at IS NULL`, [kind])
       const claimMap = Object.fromEntries(claims.map((c) => [Number(c.item_id), c]))
       queues.push({
         kind, kindCn: KIND_CN[kind],
-        total: items.length,
+        total,
+        window: LIST_WINDOW,
+        truncated: total > items.length,
         items: items.map((it) => ({
           ...it,
           claimedBy: claimMap[Number(it.item_id)]?.claimed_by || null,
+          claimedUid: claimMap[Number(it.item_id)]?.claimed_uid ?? null,
           claimedAt: claimMap[Number(it.item_id)]?.created_at || null,
           waitingHours: Math.round((Date.now() - new Date(it.waiting_since).getTime()) / 3600000 * 10) / 10,
         })).map((it) => ({ ...it, overdue: it.waitingHours >= 48 })),
@@ -64,40 +81,46 @@ export const adminReviewQueue = {
     return { queues }
   },
 
-  // 认领：同一待办同时只允许一个有效认领（不同人重复认领被拒）；判定完成后自动释放；释放后可重新认领（upsert）
+  // 认领：同一待办同时只允许一个有效认领（他人重复认领被拒；本人幂等）；判定完成后自动释放；释放后可重新认领
   'POST /admin/review-queue/:kind/:itemId/claim': async (req) => {
     const a = await staffOf(req)
     const { kind, itemId } = req.params
     if (!KINDS.includes(kind)) throw new BizError(1001, '队列类型无效')
+    // V-05：认领资格与判定端点角色一致——无判定权的角色不能占坑
+    if (!CLAIM_ROLES[kind].includes(a.role)) throw new BizError(1003, CLAIM_ROLE_CN[kind] + '；不能认领自己无权判定的待办')
+    // V-05：目标必须真实存在、仍在待审；城市账号只能认领本城待办
+    const target = await one(`SELECT * FROM (${PENDING_SQL[kind]}) t WHERE t.item_id = ?`, [itemId])
+    if (!target) throw new BizError(1004, '待办不存在或已不在待审状态，请刷新队列')
+    if (a.scopeCity && String(target.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '仅可认领本城待办')
     return tx(async (c) => {
-      const existing = await c.one('SELECT id, claimed_by, released_at FROM review_claim WHERE queue_kind = ? AND item_id = ? AND released_at IS NULL FOR UPDATE', [kind, itemId])
+      const existing = await c.one('SELECT id, claimed_by, claimed_uid, released_at FROM review_claim WHERE queue_kind = ? AND item_id = ? AND released_at IS NULL FOR UPDATE', [kind, itemId])
       if (existing) {
-        if (existing.claimed_by === 'admin:' + a.name) return { claimed: true, already: true, claimedBy: existing.claimed_by }
+        if (claimIsMine(existing, a)) return { claimed: true, already: true, claimedBy: existing.claimed_by }
         throw new BizError(2002, `该待办已被 ${existing.claimed_by} 认领，请处理其他待办或等待释放`)
       }
-      // upsert：同(队列,待办,人)的历史已释放行直接复活（released_at=NULL），避免 UNIQUE 冲突
-      await c.q(`INSERT INTO review_claim (queue_kind, item_id, claimed_by) VALUES (?,?,?)
-        ON DUPLICATE KEY UPDATE released_at = NULL, created_at = NOW(3)`, [kind, itemId, 'admin:' + a.name])
+      // 复活本人已释放行（优先按 uid；夹具令牌无 uid 按名字），避免 UNIQUE 冲突；名字快照不改写
+      const revived = a.uid != null
+        ? await c.q('UPDATE review_claim SET released_at = NULL, created_at = NOW(3) WHERE queue_kind = ? AND item_id = ? AND claimed_uid = ? AND released_at IS NOT NULL', [kind, itemId, a.uid])
+        : await c.q('UPDATE review_claim SET released_at = NULL, created_at = NOW(3) WHERE queue_kind = ? AND item_id = ? AND claimed_by = ? AND released_at IS NOT NULL', [kind, itemId, 'admin:' + a.name])
+      if (!revived.affectedRows) {
+        try {
+          await c.q('INSERT INTO review_claim (queue_kind, item_id, claimed_by, claimed_uid) VALUES (?,?,?,?)', [kind, itemId, 'admin:' + a.name, a.uid ?? null])
+        } catch (e) {
+          if (e && (e.code === 'ER_DUP_ENTRY' || e.errno === 1062)) throw new BizError(2002, '该待办刚被他人认领，请刷新队列')
+          throw e
+        }
+      }
       return { claimed: true, claimedBy: 'admin:' + a.name }
     })
   },
 
-  // 释放（手动放弃）
+  // 释放（手动放弃）：只能释放本人的认领（V-04：不存在"任一 staff 清除他人认领"的入口）
   'POST /admin/review-queue/:kind/:itemId/release': async (req) => {
     const a = await staffOf(req)
     const { kind, itemId } = req.params
     if (!KINDS.includes(kind)) throw new BizError(1001, '队列类型无效')
-    const n = await q('UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = ? AND item_id = ? AND claimed_by = ? AND released_at IS NULL',
-      [kind, itemId, 'admin:' + a.name])
+    const n = await q('UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = ? AND item_id = ? AND released_at IS NULL AND (claimed_uid = ? OR (claimed_uid IS NULL AND claimed_by = ?))',
+      [kind, itemId, a.uid ?? -1, 'admin:' + a.name])
     return { released: n.affectedRows > 0 }
-  },
-
-  // 判定完成后自动释放（由 content/verdict 等判定接口在事务内调用；此处提供独立释放入口兜底）
-  'POST /admin/review-queue/:kind/:itemId/done': async (req) => {
-    await staffOf(req)
-    const { kind, itemId } = req.params
-    if (!KINDS.includes(kind) || !DONE_SQL[kind]) throw new BizError(1001, '队列类型无效')
-    await q(DONE_SQL[kind], [itemId])
-    return { released: true }
   },
 }

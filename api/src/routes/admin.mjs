@@ -997,8 +997,10 @@ const admin = {
           JSON.stringify({ auto, rules: reqs.review_rules.map((r, i) => ({ rule: r, ok: confirmed[i] === true })) }), 'admin:' + a.name])
       await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'entry-' + e.id, { status: 2 },
         { task: t.id, status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, cash: passed ? cash : 0, reason: reason || null })
+      // V-06：判定事务内释放认领（原语句在 return 之后不可达、且误用外层变量 c）——通过/驳回都要释放，
+      // 否则作者重投后残留旧认领占坑
+      await cc.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
       return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash } : { rejected: true, backTo: '创作中' }
-      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
     })
   },
   // 现金加奖：待打款列表 / 登记打款（财务；流水号唯一，防重复登记）
