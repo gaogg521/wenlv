@@ -331,9 +331,10 @@ const admin = {
     if (departDate) { date(departDate, '出发日期'); addCond('o.session_id IN (SELECT id FROM tour_session WHERE depart_date = ?)', departDate); filters.departDate = departDate }
     const baseWhere = conds.map((c) => c.sql).join(' AND ')
     const baseArgs = conds.flatMap((c) => c.args)
-    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
-    if (status != null && ![10, 20, 30, 40, 50, 60, 70, 90].includes(status)) throw new BizError(1001, '订单状态无效')
-    const mainConds = status != null ? [...conds, { sql: 'o.status = ?', args: [status] }] : conds
+    // status 支持逗号多值（如驾驶舱"已支付以上"= 20,30,40,50）；单值行为不变
+    const statusList = req.query.status == null || req.query.status === '' ? [] : String(req.query.status).split(',').map(Number)
+    if (statusList.some((s) => ![10, 20, 30, 40, 50, 60, 70, 90].includes(s))) throw new BizError(1001, '订单状态无效')
+    const mainConds = statusList.length ? [...conds, { sql: `o.status IN (${statusList.map(() => '?').join(',')})`, args: statusList }] : conds
     const W = mainConds.length ? 'WHERE ' + mainConds.map((c) => c.sql).join(' AND ') : ''
     const mainArgs = mainConds.flatMap((c) => c.args)
     const from = `FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id`

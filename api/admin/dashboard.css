@@ -173,6 +173,26 @@
 .dx-ph p { font-size: 13.5px; font-weight: 600; margin: 2px 0 0; }
 .dx-ph span { font-size: 12px; color: var(--mut); line-height: 1.7; max-width: 250px; }
 
+/* ---- 可点击元素（下钻链接）：只有带 .go 的才有手型 / 悬停反馈 ---- */
+.dx .go { cursor: pointer; }
+.dx .go:focus-visible, .dx-link:focus-visible { outline: 2px solid #ce8053; outline-offset: 2px; }
+.dx-kpi.go { transition: .18s; }
+.dx-kpi.go:hover { transform: translateY(-2px); box-shadow: 0 14px 30px #3a2e1f14; border-color: #e8c7a1; }
+.dx-arrow { position: absolute; right: 14px; top: 12px; z-index: 1; font-size: 14px; color: #cfc5b3; transition: .15s; }
+.dx-kpi.go:hover .dx-arrow { color: var(--coral); transform: translate(2px, -2px); }
+.dx-top li.go { padding: 8px 10px; margin: -8px -10px; border-radius: 12px; transition: .15s; }
+.dx-top li.go:hover { background: #fff7ee; }
+.dx-fn-row.go:hover .dx-fn-bar { filter: brightness(1.07); transform: translateX(3px); }
+.dx-donut li.go { padding: 3px 6px; margin: -3px -6px; border-radius: 8px; transition: .15s; }
+.dx-donut li.go:hover { background: #fff7ee; }
+.dx-donut circle.go:hover { opacity: .82; }
+.dx-link { margin-left: 4px; padding: 3px 11px; border-radius: 999px; background: #ffffff1a; color: #ffd9b8; font-size: 12px; font-weight: 600; cursor: pointer; transition: .15s; }
+.dx-link:hover { background: #ffffff2e; }
+.dx-tip .foot { margin-top: 5px; padding-top: 6px; border-top: 1px solid #ffffff24; color: #ffb27a; font-size: 11px; }
+/* 订单页：来自经营概览的筛选标签（订单页不在 .dx 内，故不加作用域） */
+.src-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 14px; padding: 9px 12px; border-radius: 10px; background: #fff7ee; border: 1px solid #f2d3b2; }
+.src-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #fff; color: #b44c28; border: 1px solid #f2d3b2; }
+
 /* ---- 响应式 ---- */
 @media (max-width: 1360px) { .dx .dx-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dx-hero-main { gap: 36px; } }
 @media (max-width: 1280px) { .dx-live-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .dx-sep { display: none; } .dx-row.r-three { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dx-row.r-three > :last-child { grid-column: 1 / -1; } }
