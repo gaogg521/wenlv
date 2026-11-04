@@ -65,6 +65,35 @@ async function cfgRollback(k) {
 
 
 /* ============ 风控 / 审计 ============ */
+// 风控事件：库里存的是英文代码，页面上先看中文名与一句话说明，原始代码退到小字（便于排查 / 对日志）
+const RISK_KIND_CN = {
+  device_cluster: ['设备聚集', '同一设备短时间内登录或切换多个账号'],
+  verify_replay: ['核销码异常重放', '核销码被暴力枚举或重复使用'],
+  refund_abuse: ['退款滥用', '短时间内频繁下单后申请退款'],
+  commission_anomaly: ['佣金异常', '推广佣金出现自购、刷单等嫌疑'],
+  anchor_fail: ['存证锚定失败', '链上回执校验失败，需人工核对'],
+  attest_anchor_failed: ['存证锚定失败', '批次多次重试仍未能上链锚定'],
+  attest_reconcile_failed: ['存证对账不一致', '六条不变式对账有未通过的检查项'],
+}
+const RISK_KEY_CN = { reason: '原因', batchId: '批次', attempt: '重试次数', err: '错误信息', name: '检查项', ok: '是否通过', msg: '说明', message: '说明', userId: '用户', orderNo: '订单号', count: '次数' }
+const riskKindHtml = (k) => RISK_KIND_CN[k]
+  ? `<span class="pill off">${RISK_KIND_CN[k][0]}</span><div class="td-sub">${RISK_KIND_CN[k][1]}</div><div class="td-sub" style="opacity:.55">${esc(k)}</div>`
+  : `<span class="pill off">${esc(k)}</span><div class="td-sub">未登记的类型</div>`
+function riskDetailHtml(raw) { // detail 是 JSON：先给原因，其余字段按「名称：值」列出
+  let d = raw
+  if (typeof d === 'string') { try { d = JSON.parse(d) } catch { return `<span>${esc(d.slice(0, 80))}</span>` } }
+  if (d == null || d === '') return '<span class="td-sub">—</span>'
+  const val = (v) => v === true ? '是' : v === false ? '否' : typeof v === 'object' ? esc(JSON.stringify(v).slice(0, 60)) : esc(String(v).slice(0, 80))
+  const one = (o) => {
+    if (o == null || typeof o !== 'object') return esc(String(o))
+    const rest = Object.entries(o).filter(([k]) => k !== 'reason' && k !== 'demo')
+    return (o.reason ? `<div>${esc(String(o.reason))}</div>` : '')
+      + (rest.length ? `<div class="td-sub">${rest.map(([k, v]) => `${esc(RISK_KEY_CN[k] || k)}：${val(v)}`).join(' · ')}</div>` : '')
+      + (o.demo ? '<span class="pill off">演示数据</span>' : '')
+  }
+  if (Array.isArray(d)) return d.length ? d.slice(0, 3).map(one).join('<div style="border-top:1px dashed #eee;margin:5px 0"></div>') + (d.length > 3 ? `<div class="td-sub">… 共 ${d.length} 项</div>` : '') : '<span class="td-sub">—</span>'
+  return one(d)
+}
 async function risk() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   // T03/T10：服务端分页 + 处理状态筛选
@@ -75,9 +104,9 @@ async function risk() {
   $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>风控事件</h2><span class="muted">核销重放 / 设备聚集 / 退款滥用 / 佣金异常</span></div>
     <div class="cfg-tabs">${[['', '全部'], [0, '未处理'], [1, '已处理']].map(([v, n]) => `<button class="cfg-tab ${String(window.__riskQ.handled) === String(v) ? 'on' : ''}" onclick="window.__riskQ.handled='${v}';window.__riskQ.page=1;risk()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>类型</th><th>级别</th><th>详情</th><th>时间</th><th>状态</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td><span class="pill off">${esc(r.kind)}</span></td>
+    ${rows.map((r) => `<tr><td>${riskKindHtml(r.kind)}</td>
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
-      <td><code>${esc(String(r.detail).slice(0, 60))}</code></td>
+      <td>${riskDetailHtml(r.detail)}</td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
       <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(window.__riskQ.handled !== '' ? '没有符合条件的风控事件。' : '暂无风控事件 🎉')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${rkPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__riskQ.page--;risk()">上一页</button> <button class="btn ghost sm" ${data.page >= rkPages ? 'disabled' : ''} onclick="window.__riskQ.page++;risk()">下一页</button></div></div>
@@ -111,6 +140,7 @@ async function system() {
       <div class="kpi"><div class="ico" style="background:${o.ledger.perOk ? '#e3f6ec' : '#fdecec'}">⚖️</div><div><div class="l">账本试算</div><div class="v" style="font-size:18px">${o.ledger.credit}</div><div class="s">${sp(o.ledger.perOk && o.ledger.globalOk, '借贷平衡', '不平衡P0')}</div></div></div>
       <div class="kpi go" ${dxKey} title="查看待支付订单" onclick="dxGo('orders',{status:'10'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">🧯</div><div><div class="l">滞留待付</div><div class="v" style="font-size:18px">${o.ordersHealth.stuckWaitPay30m}</div><div class="s">超30分钟未付</div></div></div>
     </div>
+    ${o.mfaChannels ? `<div class="row" style="margin-top:6px"><span class="muted">验证码通道</span> 短信 ${mfaChanState(o.mfaChannels.sms)} 邮箱 ${mfaChanState(o.mfaChannels.email)} <button class="btn ghost sm" onclick="go('integrations')">去配置 →</button></div>` : ''}
     <div class="row" style="margin-top:6px"><span class="muted">服务运行 ${Math.floor(o.service.uptimeSec / 60)} 分钟 · Node ${esc(o.service.node)} · 支付通道 ${esc(o.service.payMode)} · ${o.tables} 张表 · 幂等键 ${o.idempotencyKeys}</span></div>
     ${o.secrets ? `<div class="row" style="margin-top:4px"><span class="muted">凭据主密钥：${o.secrets.keySource === 'env' ? '<span class="pill ok">SECRETS_KEY</span>' : '<span class="pill warn">由 JWT_SECRET 派生</span> 生产环境请运行 <code>node scripts/secrets-key.mjs current</code> 并设为 SECRETS_KEY'} · 已存 ${o.secrets.stored} 条${o.secrets.undecryptable.length ? ` · <span class="pill err">${o.secrets.undecryptable.length} 条无法解密：${o.secrets.undecryptable.map(esc).join('、')}</span>` : ''}</span></div>` : ''}
   </div>
@@ -184,7 +214,13 @@ async function security() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const accounts = await api('GET', '/admin/security/accounts')
   const codes = await api('GET', '/admin/security/recent-codes')
+  const chn = await api('GET', '/admin/security/channels')
+  window.__mfaAfter = security // 绑定/停用完成后刷新的页面（从后台账号页进入时会改成 accounts）
   $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>验证方式与通道</h2><span class="muted">全局策略：${({ off: '关闭', optional: '可选（绑定即启用）', required: '强制' })[chn.mode] || esc(chn.mode)}</span></div>
+    ${mfaChannelPanel(chn)}
+  </div>
   <div class="card">
     <div class="card-head"><h2>安全中心 · MFA</h2><span class="muted">TOTP / 短信 / 邮箱三通道 · 全局策略走参数中心 admin.mfa.mode（off/optional/required）</span></div>
     <table><thead><tr><th>账号</th><th>角色</th><th>MFA</th><th>通道</th><th>手机/邮箱</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
@@ -208,6 +244,18 @@ async function security() {
       <td class="td-sub">${esc(String(c3.created_at).slice(5, 19))}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无验证码记录')}
   </div>`
 }
+// 通道状态：TOTP 恒可用；短信/邮箱 = 凭据 + 发送器两层，缺哪层就如实说哪层
+const mfaChanState = (c) => c.deliverable ? '<span class="pill ok">● 可用</span>'
+  : c.configured ? '<span class="pill warn">● 凭据已配置，发送器尚未接入</span>' : '<span class="pill warn">● 未配置</span>'
+function mfaChannelPanel(chn) {
+  const row = (name, hint, state, go) => `<tr><td class="td-main" style="width:180px">${name}</td><td>${state}</td><td class="td-sub">${hint}</td><td style="text-align:right">${go || ''}</td></tr>`
+  const cfgBtn = `<button class="btn ghost sm" onclick="closeModal();go('integrations')">去集成中心配置 →</button>`
+  return `<table><tbody>
+    ${row('验证器 App（TOTP）', 'Microsoft / Google Authenticator 等，无需任何配置', mfaChanState(chn.totp), '')}
+    ${row('短信验证码', chn.sms.deliverable ? '验证码会真实发送到手机' : '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）', mfaChanState(chn.sms), chn.sms.deliverable ? '' : cfgBtn)}
+    ${row('邮箱验证码', chn.email.deliverable ? '验证码会真实发送到邮箱' : '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）', mfaChanState(chn.email), chn.email.deliverable ? '' : cfgBtn)}
+  </tbody></table>${(chn.sms.configured && !chn.sms.deliverable) || (chn.email.configured && !chn.email.deliverable) ? '<p class="td-sub" style="margin-top:8px">⚠ 凭据已保存，但系统里真实的短信 / 邮件发送程序还没有接入，所以暂时仍不会真实发出；接入前请优先使用验证器 App。</p>' : ''}`
+}
 async function mfaSetup(userId, username) {
   const r = await api('POST', '/admin/security/mfa/setup', { userId })
   modal('开启 TOTP · ' + username, `
@@ -217,16 +265,29 @@ async function mfaSetup(userId, username) {
     <div class="card" style="background:#f0faf7;margin-top:14px">
       <p><b>演示直通码：${r.current}</b>（30 秒轮换，免装 App 即可体验两步登录）</p>
     </div>`,
-    `<button class="btn primary" onclick="closeModal();toast('TOTP 已绑定，该账号下次登录需两步验证')">我已录入了</button>`)
+    `<button class="btn primary" onclick="closeModal();toast('TOTP 已绑定，该账号下次登录需两步验证');(window.__mfaAfter || security)()">我已录入了</button>`)
 }
-async function bindContact(userId, channel) {
-  const target = prompt(channel === 'sms' ? '输入手机号（MOCK 通道，验证码在安全中心可见）：' : '输入邮箱：')
-  if (!target) return
-  try { const r = await api('POST', '/admin/security/bind-contact', { userId, channel, target }); toast('已绑定并发送测试验证码' + (r.mock ? '（MOCK）' : '')); security() } catch (e) { toast(e.message, true) }
+function bindContact(userId, channel) {
+  const sms = channel === 'sms'
+  modal(sms ? '绑定手机（短信验证码）' : '绑定邮箱（邮箱验证码）', `
+    <div class="field"><label>${sms ? '手机号（11 位）' : '邮箱地址'}</label><input id="bcTarget" ${sms ? 'inputmode="numeric" maxlength="11" placeholder="13800000000"' : 'type="email" placeholder="name@company.com"'} autocomplete="off"></div>
+    <p class="muted">绑定后会立即发一条测试验证码；该账号之后登录需要输入验证码。</p>
+    <div id="bcErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="bindContactSubmit(${userId},'${channel}')">绑定并发送测试码</button>`)
+  document.getElementById('bcTarget').focus()
+}
+async function bindContactSubmit(userId, channel) {
+  const target = document.getElementById('bcTarget').value.trim(), err = document.getElementById('bcErr')
+  if (!(channel === 'sms' ? /^1d{10}$/.test(target) : /^[^s@]+@[^s@]+.[^s@]+$/.test(target))) { err.textContent = channel === 'sms' ? '请输入 11 位手机号' : '请输入正确的邮箱地址'; return }
+  try {
+    const r = await api('POST', '/admin/security/bind-contact', { userId, channel, target })
+    closeModal(); toast(r.mock ? '已绑定。验证码未真实发出（通道未接入），请到安全中心「最近验证码」查看测试码' : '已绑定并发送测试验证码')
+    ;(window.__mfaAfter || security)()
+  } catch (e) { err.textContent = e.message }
 }
 async function mfaDisable(userId) {
   if (!confirm('确认停用该账号 MFA？')) return
-  try { await api('POST', '/admin/security/mfa/disable', { userId }); security() } catch (e) { toast(e.message, true) }
+  try { await api('POST', '/admin/security/mfa/disable', { userId }); (window.__mfaAfter || security)() } catch (e) { toast(e.message, true) }
 }
 
 
@@ -245,19 +306,26 @@ async function integrations() {
         ${ch.ready ? '<span class="pill ok">● 已配置（生产模式）</span>' : '<span class="pill warn">● 未配置（MOCK 联调）</span>'}
       </div>
       <table>${ch.fields.map((f) => `<tr>
-        <td style="width:280px"><code>${esc(f.key)}</code></td>
+        <td style="width:340px">${f.label ? `<div>${esc(f.label)}</div><code class="td-sub">${esc(f.key)}</code>` : `<code>${esc(f.key)}</code>`}</td>
         <td>${f.stored ? `<span class="pill ok">${esc(f.stored)}</span>` : f.envFallback ? '<span class="pill s20">来自 .env</span>' : '<span class="pill off">未设置</span>'}</td>
         <td style="text-align:right">
-          <button class="btn ghost sm" onclick="setCred('${esc(f.key)}')">设置</button>
+          <button class="btn ghost sm" onclick="setCred('${esc(f.key)}', ${f.secret ? 'true' : 'false'})">设置</button>
           ${f.stored ? `<button class="btn danger sm" onclick="delCred('${esc(f.key)}')">清除</button>` : ''}
         </td></tr>`).join('')}</table>
     </div>`).join('')}
   </div>`
 }
-async function setCred(key) {
-  const val = prompt('输入 ' + key + ' 的值（保存后 AES-256-GCM 加密存储）：')
-  if (!val) return
-  try { await api('POST', '/admin/integrations/' + key, { value: val }); toast(key + ' 已保存，热生效'); integrations() } catch (e) { toast(e.message, true) }
+function setCred(key, secret) {
+  modal('设置 ' + key, `
+    <div class="field"><label>值（保存后 AES-256-GCM 加密存储，保存后不再显示明文）</label><input id="credVal" type="${secret ? 'password' : 'text'}" autocomplete="off" style="width:100%"></div>
+    <div id="credErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveCred('${key}')">保存</button>`)
+  document.getElementById('credVal').focus()
+}
+async function saveCred(key) {
+  const val = document.getElementById('credVal').value.trim()
+  if (!val) { document.getElementById('credErr').textContent = '请输入值'; return }
+  try { await api('POST', '/admin/integrations/' + key, { value: val }); closeModal(); toast(key + ' 已保存，热生效'); integrations() } catch (e) { document.getElementById('credErr').textContent = e.message }
 }
 async function delCred(key) {
   if (!confirm('清除 ' + key + '？（对应通道将回落到 MOCK 或 .env）')) return
