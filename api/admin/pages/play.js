@@ -110,13 +110,13 @@ async function cocreate() {
   const CO_ST = { 0: '<span class="pill warn">待打款</span>', 1: '<span class="pill ok">已结清</span>', 2: '<span class="pill s70">已作废</span>' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdf3e0">💰</div><div><div class="l">累计投资额</div><div class="v">¥${(totalInvest / 100).toLocaleString()}</div><div class="s">共创人投入</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e3f6ec">🏦</div><div><div class="l">应付分润</div><div class="v">¥${(totalDue / 100).toLocaleString()}</div><div class="s">结算期自动入账</div></div></div>
-    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">✅</div><div><div class="l">已登记打款</div><div class="v">¥${(totalPaid / 100).toLocaleString()}</div><div class="s">按真实回单累计</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#fdecec">⏳</div><div><div class="l">待打款 / 待复核</div><div class="v">¥${(pendingPay / 100).toLocaleString()}${pendingApprovals ? ' / ' + pendingApprovals + ' 笔' : ''}</div><div class="s">登记 ≠ 实际到账</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创人列表" onclick="document.getElementById('coList').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">💰</div><div><div class="l">累计投资额</div><div class="v">¥${(totalInvest / 100).toLocaleString()}</div><div class="s">共创人投入</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🏦</div><div><div class="l">应付分润</div><div class="v">¥${(totalDue / 100).toLocaleString()}</div><div class="s">结算期自动入账</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">✅</div><div><div class="l">已登记打款</div><div class="v">¥${(totalPaid / 100).toLocaleString()}</div><div class="s">按真实回单累计</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">⏳</div><div><div class="l">待打款 / 待复核</div><div class="v">¥${(pendingPay / 100).toLocaleString()}${pendingApprovals ? ' / ' + pendingApprovals + ' 笔' : ''}</div><div class="s">登记 ≠ 实际到账</div></div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
+    <div class="card-head" id="coList"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
     <div class="row"><button class="btn primary sm" onclick="entityEditor('cocreator', null, { onSaved: () => cocreate() })">＋ 登记共创人</button>
       <span class="muted">身份 · 投资与分润 · 协议与收款账户</span></div>
     ${list.length ? `<table><thead><tr><th>编号</th><th>产品</th><th>姓名</th><th>角色</th><th>投资额</th><th>分润比例</th><th>状态</th><th>操作</th></tr></thead><tbody>
@@ -128,7 +128,7 @@ async function cocreate() {
       <td><div class="td-actions"><button class="btn ghost sm" onclick="entityEditor('cocreator', ${x.id}, { onSaved: () => cocreate() })">资料</button>${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
     : emptyBox('暂无共创人——点「登记共创人」')}</div>
   <div class="card">
-    <div class="card-head"><h3>共创分润台账</h3><span class="muted">打款走唯一流水登记：${canPay ? '核对后登记真实回单' : '由财务或超级管理员登记打款，当前账号可核对进度'}</span></div>
+    <div class="card-head" id="coLedger"><h3>共创分润台账</h3><span class="muted">打款走唯一流水登记：${canPay ? '核对后登记真实回单' : '由财务或超级管理员登记打款，当前账号可核对进度'}</span></div>
     ${profits.length ? `<table><thead><tr><th>分润单</th><th>结算期</th><th>共创人</th><th>产品</th><th>应付</th><th>已付</th><th>状态</th><th>最近打款</th><th>操作</th></tr></thead><tbody>
     ${profits.map((x) => {
       const remaining = Number(x.amount) - Number(x.paid_amount)

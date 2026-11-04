@@ -63,11 +63,11 @@ async function tasks() {
   const frs = list.filter((t) => window.__taskSt === '' || (window.__taskSt === 'review' ? N(t.reviewing) > 0 : window.__taskSt === 'off' ? t.status === 4 : stateOf(t) === 'open'))
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico">📢</div><div><div class="l">招募中任务</div><div class="v" style="font-size:20px">${list.filter((t) => stateOf(t) === 'open').length}</div><div class="s">游客可在小程序领取</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：招募中的任务" onclick="window.__taskSt='open';tasks()"><i class="go-arrow">↗</i><div class="ico">📢</div><div><div class="l">招募中任务</div><div class="v" style="font-size:20px">${list.filter((t) => stateOf(t) === 'open').length}</div><div class="s">游客可在小程序领取</div></div></div>
     <div class="kpi"><div class="ico">✍️</div><div><div class="l">创作中</div><div class="v" style="font-size:20px">${sum('doing')}</div><div class="s">已领取未投稿 / 驳回待修改</div></div></div>
-    <div class="kpi"><div class="ico">🔎</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sum('reviewing')}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：有待审投稿的任务" onclick="window.__taskSt='review';tasks()"><i class="go-arrow">↗</i><div class="ico">🔎</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sum('reviewing')}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
     <div class="kpi"><div class="ico">✅</div><div><div class="l">已通过</div><div class="v" style="font-size:20px">${sum('passed')}</div><div class="s">旅豆已发放</div></div></div>
-    <div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="去现金加奖打款" onclick="go('taskcash')"><i class="go-arrow">↗</i><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>约稿任务</h2>
