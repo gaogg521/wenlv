@@ -80,6 +80,7 @@ const adminSys = {
     const tables = await count('SELECT COUNT(*) c FROM information_schema.tables WHERE table_schema = DATABASE()')
     const { secretsHealth } = await import('../infra/secrets.mjs')
     const secrets = await secretsHealth()
+    const mfaChannels = await (await import('../infra/mfa.mjs')).channelStatus()
     const fs = await import('node:fs')
     const path = await import('node:path')
     const migDir = path.join(import.meta.dirname, '..', '..', 'db', 'migration')
@@ -91,7 +92,7 @@ const adminSys = {
       attestQueue: { pending: Number(attest?.pending || 0), anchored: Number(attest?.anchored || 0), failed: Number(attest?.failed || 0) },
       payment: { total: Number(pay?.total || 0), ok: Number(pay?.ok || 0) },
       ordersHealth: { total: Number(orders?.total || 0), stuckWaitPay30m: Number(orders?.stuck10 || 0) },
-      ledger: tb, idempotencyKeys: idem, tables, migrations, secrets,
+      ledger: tb, idempotencyKeys: idem, tables, migrations, secrets, mfaChannels,
     }
   },
 

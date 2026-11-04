@@ -183,6 +183,12 @@ const admin = {
     await tx(async (c) => audit(c, 'admin:' + a.name, 'security', 'mfa-disable', 'user-' + req.body.userId, null, null))
     return { disabled: true }
   },
+  // 验证方式的通道状态：TOTP 恒可用；短信/邮箱需在集成中心配凭据，且发送器已接入才会真实送达（否则走 MOCK，验证码只在安全中心可见）
+  'GET /admin/security/channels': async (req) => {
+    await requireAdmin(req, ['super'])
+    const mfa = await import('../infra/mfa.mjs')
+    return { ...(await mfa.channelStatus()), mode: String((await cfgAll())['admin.mfa.mode'] || 'optional').replace(/"/g, '') }
+  },
   'GET /admin/security/recent-codes': async (req) => {
     await requireAdmin(req, ['super'])
     return await q('SELECT target, channel, code, purpose, expires_at, used_at, created_at FROM mfa_code ORDER BY id DESC LIMIT 10')
