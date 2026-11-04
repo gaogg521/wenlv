@@ -29,7 +29,8 @@ Page({
   },
   goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
-  data: { site: siteData.DEFAULT, kycOpen: false, kycStatus: -1, kycMask: '', kycNote: '', kycName: '', kycId: '', user: null, avatarUrl: '' },
+  data: { site: siteData.DEFAULT, kycOpen: false, kycStatus: -1, kycMask: '', kycNote: '', kycName: '', kycId: '', user: null, avatarUrl: '',
+    consentOpen: false, consents: [], consentVersions: {}, consentSavedAt: '' },
   goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + e.currentTarget.dataset.type }) },
   callService() { place.call(this.data.site.service_phone) },
   onShow() {
@@ -79,12 +80,48 @@ Page({
       wx.showToast({ title: '昵称已更新' })
     } catch (err) { wx.showToast({ title: err.msg || '昵称未通过校验', icon: 'none' }) }
   },
-  // 隐私协议：官方 wx.openPrivacyContract（平台已配置《用户隐私保护指引》后可用）
-  showPrivacy() {
-    if (wx.openPrivacyContract) {
-      wx.openPrivacyContract({ fail: () => wx.showToast({ title: '隐私协议待平台配置', icon: 'none' }) })
-    } else {
-      wx.showModal({ title: '设置与隐私', content: '我们仅收集提供服务所必需的信息，详见《用户隐私保护指引》（上线前在公众平台配置）。', showCancel: false })
+  // 隐私授权：逐项可开关，每次操作都落库留档（服务端有对应记录，可逐笔复核）
+  async showPrivacy() {
+    const open = !this.data.consentOpen
+    this.setData({ consentOpen: open })
+    if (!open) return
+    try {
+      const d = await api.request('/c/consent')
+      const SCENES = [
+        { scene: 'terms', label: '用户协议' },
+        { scene: 'privacy', label: '隐私政策' },
+        { scene: 'location', label: '位置信息（用于推荐附近行程）' },
+        { scene: 'marketing', label: '活动与优惠通知' },
+      ]
+      const items = (d.items || [])
+      this.setData({
+        consentVersions: d.versions || {},
+        consents: SCENES.map((x) => {
+          const hit = items.find((y) => y.scene === x.scene)
+          return { ...x, granted: !!(hit && hit.granted),
+            version: (d.versions && (d.versions[x.scene] || (x.scene === 'terms' ? d.versions.terms : d.versions.privacy))) || '' }
+        }),
+      })
+    } catch (e) {
+      wx.showToast({ title: e.msg || '加载失败，请稍后再试', icon: 'none' })
+    }
+  },
+  async consentToggle(e) {
+    const scene = e.currentTarget.dataset.scene
+    const granted = !!e.detail.value
+    try {
+      await api.request('/c/consent', 'POST', { scene, granted })
+      const now = new Date()
+      const pad = (n) => (n < 10 ? '0' + n : '' + n)
+      this.setData({
+        consentSavedAt: now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()),
+        consents: this.data.consents.map((x) => (x.scene === scene ? { ...x, granted } : x)),
+      })
+      wx.showToast({ title: granted ? '已同意并留档' : '已关闭', icon: 'none' })
+    } catch (err) {
+      // 失败就把开关拨回去，不能让界面显示成"已同意"而服务端没记录
+      this.setData({ consents: this.data.consents.map((x) => (x.scene === scene ? { ...x, granted: !granted } : x)) })
+      wx.showToast({ title: err.msg || '操作失败，请重试', icon: 'none' })
     }
   },
 })

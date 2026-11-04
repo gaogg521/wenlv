@@ -95,6 +95,33 @@ const pct1 = (n, d) => (Number(d) ? ((Number(n) / Number(d)) * 100).toFixed(1) +
 // T00：有城市列的实体种类；城市账号读取按城市行级隔离，其余种类对城市账号默认拒绝
 const ENTITY_CITY_KINDS = ['product', 'merchant', 'scenic', 'supplier']
 
+/**
+ * 商品改价 / 上下架留痕（价格是交易依据，改过就必须可追溯）。
+ * 只记"从什么变成什么"，金额明细留在库里，进树的只有哈希。
+ * version_no 用该商品的变更序号：第 1 次改价是 v1，第 2 次是 v2 —— 天然形成一条变更史。
+ * 代价：并发同刻改同一商品可能撞同一个版本号，靠 INSERT IGNORE 只留一条；
+ * 后台改价是低频人工动作，这个取舍可以接受，也避免用时间戳当业务键（铁律：biz_ref 不能随手拼）。
+ */
+async function attestProductChange(productId, before, after, kind) {
+  const pid = Number(productId)
+  const bPrice = before && before.price != null ? Number(before.price) : null
+  const aPrice = after && after.price != null ? Number(after.price) : null
+  const bStatus = before && before.status != null ? Number(before.status) : null
+  const aStatus = after && after.status != null ? Number(after.status) : null
+  const priceChanged = aPrice != null && aPrice !== bPrice
+  const statusChanged = aStatus != null && aStatus !== bStatus
+  if (!priceChanged && !statusChanged) return
+  try {
+    const seq = await one("SELECT COUNT(*) n FROM attest_event WHERE biz_type = 'product_change' AND biz_ref = ?", ['product-' + pid])
+    await attestDomain.attest('product_change', 'product-' + pid, {
+      productId: pid, kind, priceFrom: bPrice, priceTo: aPrice, statusFrom: bStatus, statusTo: aStatus,
+    }, null, Number(seq.n) + 1)
+  } catch (e) {
+    // 留痕失败不能让后台改价失败：链是审计锚点，业务照常（与本项目一贯口径一致）
+    console.error('[attest:product_change]', e.message)
+  }
+}
+
 const admin = {
   'GET /admin/capabilities': async (req) => {
     const a = await requireAdmin(req)
@@ -455,7 +482,7 @@ const admin = {
   // 编辑商品内容（P0 宣传力：行程/费用包含/亮点/集合点/安全告知）
   'PUT /admin/products/:id': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
-    const p = await one('SELECT rich_desc FROM tour_product WHERE id = ?', [req.params.id])
+    const p = await one('SELECT rich_desc, price_from, status, title FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     const old = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
     const { title, subtitle, daysDesc, priceFrom, beanGift, status, intro, includes, excludes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
@@ -473,6 +500,8 @@ const admin = {
         beanGift != null ? Number(beanGift) : null, status ?? null, supplierId ?? null, scenicId ?? null,
         JSON.stringify(rich), meetingPoint ?? null, safetyNote ?? null, req.params.id])
     await tx(async (c) => audit(c, 'admin:' + a.name, 'product', 'update', 'product-' + req.params.id, JSON.stringify(rich), null))
+    // 价格与在售状态是交易依据：改了必须留痕。链上只放指纹，金额明细留在库里
+    await attestProductChange(req.params.id, { price: p.price_from, status: p.status }, { price: priceFrom, status }, 'edit')
     return { updated: r.affectedRows > 0 }
   },
 
@@ -533,7 +562,9 @@ const admin = {
       if (!(await count('SELECT COUNT(*) c FROM tour_session WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked', [p.id]))) issues.push('可报名的未来团期')
       if (issues.length) throw new BizError(1001, '发布前请补齐：' + issues.join('；'))
     }
+    const before = await one('SELECT status, price_from FROM tour_product WHERE id = ?', [req.params.id])
     await q('UPDATE tour_product SET status = ? WHERE id = ?', [Number(req.body.status), req.params.id])
+    await attestProductChange(req.params.id, { price: before && before.price_from, status: before && before.status }, { status: req.body.status }, 'publish')
     return { ok: true }
   },
   'GET /admin/products/:id/sessions': async (req) => {
