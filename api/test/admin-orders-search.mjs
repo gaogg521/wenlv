@@ -144,7 +144,9 @@ try {
     const contentFiltered = ok(await call('ops', 'GET', '/admin/content?status=2&kw=' + encodeURIComponent('不存在的标题xyz')))
     assert.equal(contentFiltered.total, 0); assert.equal(contentFiltered.rows.length, 0)
     assert.equal((await call('finance', 'GET', '/admin/content')).code, 1003, '财务无内容列表')
-    const creators = ok(await call('ops', 'GET', '/admin/creators?kw=' + encodeURIComponent('不存在昵称abc')))
+    // 创作者池是超管模块（C-05 模块强制后 ops 直调 1003）——空结果断言改用 super
+    assert.equal((await call('ops', 'GET', '/admin/creators?kw=x')).code, 1003, 'ops 无创作者池模块')
+    const creators = ok(await call('super', 'GET', '/admin/creators?kw=' + encodeURIComponent('不存在昵称abc')))
     assert.equal(creators.total, 0); assert.ok(Array.isArray(creators.rows))
     const wd = ok(await call('finance', 'GET', '/admin/withdrawals?status=0'))
     assert.ok(Array.isArray(wd.rows) && typeof wd.total === 'number')
