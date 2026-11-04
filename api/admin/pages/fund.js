@@ -9,11 +9,11 @@ async function fund() {
     <div class="card-head"><h2>资金待办全景</h2><span class="muted">只读聚合 · 每条线保留各自账本与办理入口，点「去办理」下钻源业务</span></div>
     <p class="td-sub">⚠ ${esc(d.metricNote)}</p>
     <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
-    ${d.lines.map((l) => `<div class="kpi"><div class="ico" style="background:var(--brand-soft)">💰</div>
+    ${d.lines.map((l) => `<div class="kpi go" ${dxKey} title="去办理：${esc(l.label)}" onclick="go('${l.goto}')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">💰</div>
       <div><div class="l">${esc(l.label)} · 待办</div><div class="v">${yuan(l.pending.amount)}</div>
       <div class="s">${l.pending.count} 笔待办${l.paidCount != null ? ' · 已登记回单 ' + l.paidCount + ' 笔' : ''}</div>
       ${l.issues.length ? l.issues.map((x) => `<div style="color:var(--red);margin-top:4px">⚠ ${esc(x)}</div>`).join('') : '<div class="td-sub" style="color:var(--green)">无异常标记</div>'}
-      <div style="margin-top:8px"><button class="btn primary sm" onclick="go('${l.goto}')">去办理 →</button></div></div></div>`).join('')}
+      <div style="margin-top:8px"><button class="btn primary sm" onclick="event.stopPropagation();go('${l.goto}')">去办理 →</button></div></div></div>`).join('')}
     </div>
   </div>
   <div class="card">

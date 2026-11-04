@@ -24,7 +24,8 @@ function dayBars(rows, { key = 'n', fmt = (v) => v, days = 14, label = '' } = {}
       ${(i === peak && x.v) || i === days - 1 ? `<em>${esc(String(fmt(x.v)))}</em>` : ''}<i style="height:${Math.max(x.v ? 4 : 1, x.v / max * 100)}%"></i><span>${i % 3 === 0 || i === days - 1 ? x.d.slice(8) : ''}</span></div>`).join('')}</div>`
 }
 const kv = (k, v) => `<div class="pkv"><span>${k}</span><b>${v == null || v === '' ? '—' : v}</b></div>`
-const stat = (label, value, sub) => `<div class="pstat"><div class="l">${label}</div><div class="v">${value}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`
+// 第 4 参 go（可选）：点击动作的 JS 串；有则成为真链接（手型/悬停/↗/键盘可达），第 5 参是悬停提示
+const stat = (label, value, sub, go, tip) => `<div class="pstat${go ? ' go' : ''}"${go ? ` ${dxKey} title="${tip || ''}" onclick="${go}"` : ''}>${go ? '<i class="go-arrow">↗</i>' : ''}<div class="l">${label}</div><div class="v">${value}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`
 
 /* ============ 用户中心 ============ */
 const USER_SEGS = [['', '全部'], ['new7', '近 7 日新增'], ['buyer', '下单用户'], ['repeat', '复购用户'], ['sleeping', '沉睡（90 天未下单）'], ['creator', '创作者'], ['promoter', '推广服务商'], ['staff', '商户员工'], ['kyc', '已实名'], ['risk', '风险标记'], ['frozen', '已冻结']]

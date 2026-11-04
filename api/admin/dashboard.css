@@ -193,6 +193,16 @@
 .src-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 14px; padding: 9px 12px; border-radius: 10px; background: #fff7ee; border: 1px solid #f2d3b2; }
 .src-chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #fff; color: #b44c28; border: 1px solid #f2d3b2; }
 
+/* ---- 全站：可点击的 KPI / 统计卡（只有真链接才有手型、悬停与 ↗ 提示；不可点的卡片保持静态） ---- */
+.kpi.go, .pstat.go { position: relative; cursor: pointer; transition: .18s; }
+.kpi.go:hover, .pstat.go:hover { transform: translateY(-2px); box-shadow: 0 12px 28px #3a2e1f14; border-color: #e8c7a1; }
+.kpi.go:focus-visible, .pstat.go:focus-visible, .inl-go:focus-visible { outline: 2px solid #ce8053; outline-offset: 2px; }
+.go-arrow { position: absolute; right: 12px; top: 9px; font-size: 13px; font-style: normal; color: #cfc5b3; transition: .15s; }
+.kpi.go:hover .go-arrow, .pstat.go:hover .go-arrow { color: #d9622f; transform: translate(2px, -2px); }
+#dxLive, #coList, #coLedger, #cdTrade, #cdLikes { scroll-margin-top: 92px; } /* 页内定位别被吸顶顶栏盖住 */
+.inl-go { padding: 0; background: none; color: #b44c28; font-weight: 600; cursor: pointer; border-bottom: 1px dashed currentColor; }
+.inl-go:hover { color: #8a3a1a; }
+
 /* ---- 响应式 ---- */
 @media (max-width: 1360px) { .dx .dx-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dx-hero-main { gap: 36px; } }
 @media (max-width: 1280px) { .dx-live-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .dx-sep { display: none; } .dx-row.r-three { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dx-row.r-three > :last-child { grid-column: 1 / -1; } }
