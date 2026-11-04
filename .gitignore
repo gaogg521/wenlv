@@ -21,3 +21,7 @@ api/.env
 # 上传私钥与证书（绝不入库）
 api/certs/
 *.key
+
+# 密钥集中备忘（若被移入仓库，一律忽略）
+KEY.txt
+*KEY*.txt
