@@ -144,9 +144,11 @@ const server = http.createServer(async (req, res) => {
 
 bootstrap().then(async () => {
   // 服务监听所有网卡（listen 未绑定具体地址）；启动日志列出真实局域网地址，避免只印 127.0.0.1 造成"定死本机"的误解
-  const os = await import('node:os')
-  const lan = Object.values(os.networkInterfaces()).flat()
-    .filter((i) => i && i.family === 'IPv4' && !i.internal)
-    .map((i) => i.address)
-  for (const h of ['127.0.0.1', ...lan]) console.log(`[wanderlust-api] http://${h}:${PORT}  管理后台: http://${h}:${PORT}/admin-ui  支付通道: ${isLive() ? '微信支付V3(生产)' : 'MOCK(联调)'}`)
+  server.listen(PORT, async () => {
+    const os = await import('node:os')
+    const lan = Object.values(os.networkInterfaces()).flat()
+      .filter((i) => i && i.family === 'IPv4' && !i.internal)
+      .map((i) => i.address)
+    for (const h of ['127.0.0.1', ...lan]) console.log(`[wanderlust-api] http://${h}:${PORT}  管理后台: http://${h}:${PORT}/admin-ui  支付通道: ${isLive() ? '微信支付V3(生产)' : 'MOCK(联调)'}`)
+  })
 }).catch((e) => { console.error('[boot failed]', e.message); process.exit(1) })
