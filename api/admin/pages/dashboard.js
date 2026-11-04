@@ -160,10 +160,11 @@ function dxLive(k, ins) {
   const todos = [['merchants', '商户进件', 'store', P && P.merchants, '去审批'], ['withdrawals', '提现待审', 'wallet', P && P.withdrawals, '去复核'],
     ['conflicts', '核销异常', 'alert', P && P.conflicts, '去处理'], ['content', '内容待审', 'doc', P && P.notes, '去审核'], ['tasks', '约稿待审', 'pen', P && P.tasks, '去处理']]
   const total = P ? todos.reduce((s, t) => s + t[3], 0) : 0
+  const first = todos.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的
   const pool = k.globalScope ? parseFloat(k.budgetUsage) : NaN
   return `<section class="dx-card" id="dxLive">
     <div class="dx-hd"><h3>此刻待处理</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">当下的存量，不随统计周期变化</span>
-      <span class="dx-right"><span class="${total ? 'pill s10' : 'pill s50'}">${total ? '共 ' + total + ' 项待办' : '待办已清空'}</span></span></div>
+      <span class="dx-right">${first ? `<button class="pill s10 dx-pill-go" title="跳到第一个有待办的队列：${first[1]}" onclick="go('${first[0]}')">共 ${total} 项待办 · 去处理 →</button>` : `<span class="pill s50">${P ? '待办已清空' : '待办数据暂不可用'}</span>`}</span></div>
     <div class="dx-live-grid">
       ${todos.map(([key, l, ic, n, verb]) => `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`).join('')}
       <span class="dx-sep"></span>

@@ -77,6 +77,8 @@
 .dx-todo.has b { color: var(--coral-d); }
 .dx-todo.has .dx-todo-l i { background: #ffe6d0; color: var(--coral-d); }
 .dx-todo.has .dx-todo-go { color: var(--coral-d); font-weight: 600; }
+.dx-pill-go { cursor: pointer; border: 0; font-size: 12px; font-weight: 600; padding: 5px 14px; transition: .15s; }
+.dx-pill-go:hover { background: #ffe3c7; box-shadow: 0 4px 12px #c64e2826; transform: translateY(-1px); }
 .dx-stat b { color: var(--ink); }
 .dx-stat.red { --acc: var(--red); }
 .dx-stat.red.has { background: linear-gradient(160deg, #fff0ee, #fff); border-color: #f2c3be; }
