@@ -9,6 +9,7 @@
 // 边界：DID/VC 只在 B/G 端与生态对外场景使用；微信小程序内不出现"数字身份凭证"字样（D6 双层口径）。
 import crypto from 'node:crypto'
 import { q, one } from '../db.mjs'
+import { attest } from './attest.mjs'
 import { getSecret, setSecret } from '../infra/secrets.mjs'
 import * as member from './member.mjs'
 
@@ -144,6 +145,10 @@ export async function issue(userId, scope = 'travel', ttlDays = VC_TTL_DAYS) {
   const sig = crypto.sign(null, Buffer.from(signingInput), k.priv)
   const jwt = signingInput + '.' + b64u(sig)
 
+  // 凭证签发放进存证队列：证明"这份凭证是平台在某刻对某个 DID 签的"，不涉任何 PII
+  await attest('did_issue', 'vc-' + jti, {
+    userId: Number(userId), did, scope, jti, expiresAt: exp * 1000,
+  })
   await q(`INSERT INTO vc_issue (user_id, did, scope, jti, jwt_hash, claims, expires_at)
            VALUES (?,?,?,?,?,?,FROM_UNIXTIME(?))`,
     [Number(userId), did, scope, jti, crypto.createHash('sha256').update(jwt).digest('hex'),
