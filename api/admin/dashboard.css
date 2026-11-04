@@ -199,7 +199,9 @@
 .kpi.go:focus-visible, .pstat.go:focus-visible, .inl-go:focus-visible { outline: 2px solid #ce8053; outline-offset: 2px; }
 .go-arrow { position: absolute; right: 12px; top: 9px; font-size: 13px; font-style: normal; color: #cfc5b3; transition: .15s; }
 .kpi.go:hover .go-arrow, .pstat.go:hover .go-arrow { color: #d9622f; transform: translate(2px, -2px); }
-#dxLive, #coList, #coLedger, #cdTrade, #cdLikes { scroll-margin-top: 92px; } /* 页内定位别被吸顶顶栏盖住 */
+#dxLive, #coList, #coLedger, #cdTrade, #cdLikes, #sysJobs { scroll-margin-top: 92px; }
+.num-go { font: inherit; font-weight: 700; color: inherit; border-bottom: 2px dashed #d9622f66; }
+.num-go:hover { color: #b44c28; border-bottom-color: #b44c28; } /* 页内定位别被吸顶顶栏盖住 */
 .inl-go { padding: 0; background: none; color: #b44c28; font-weight: 600; cursor: pointer; border-bottom: 1px dashed currentColor; }
 .inl-go:hover { color: #8a3a1a; }
 
