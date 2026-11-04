@@ -39,6 +39,10 @@
       </form>
       <form class="glass-card" id="step2" style="display:none">
         <p class="form-eyebrow">账号安全验证</p><h2>再确认一下，是你本人</h2><p class="login-intro" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
+        <div id="mfaSetupRow" style="display:none">
+          <p class="login-intro" style="color:var(--brand)">首次启用：请先绑定验证方式，再输入动态码登录。此阶段只能完成绑定，不能进入后台。</p>
+          <button type="button" class="linklike" onclick="mfaGuidedSetup()">绑定验证器 App →</button>
+        </div>
         <div class="login-field"><label for="mfacode">验证码</label><input id="mfacode" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位动态码" autocomplete="one-time-code" required></div>
         <div id="lerr2" class="lerr" role="alert" aria-live="polite"></div>
         <button class="login-submit" type="submit">验证并登录 <span aria-hidden="true">↗</span></button>

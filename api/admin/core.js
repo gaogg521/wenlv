@@ -94,7 +94,10 @@ function login() {
       if (d.mfaRequired) {
         MFA_CHALLENGE = d.challenge
         const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
-        $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+        $('#mfaTip').textContent = d.mfaSetupRequired
+          ? '该账号要求两步验证但尚未绑定：请先绑定验证方式（此阶段不能进入后台办理业务）'
+          : (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+        $('#mfaSetupRow').style.display = d.mfaSetupRequired && d.channel === 'totp' ? 'block' : 'none'
         $('#step1').style.display = 'none'
         $('#step2').style.display = 'block'
         document.querySelector('#mfacode')?.focus()
@@ -102,7 +105,7 @@ function login() {
       }
       TOKEN = d.token; ME = d.user
       localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
-      boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
+      if (ME?.mustChangePassword) showForcedPwdChange(); else boot() // T02/U-02：临时密码先改密（接口层已锁定其他路由），改完重新登录才进入后台
     }).catch((e) => { $('#lerr').textContent = e.message })
   }
 async function mfaSubmit() {
@@ -112,11 +115,24 @@ async function mfaSubmit() {
     TOKEN = d.token; ME = d.user
     localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
     MFA_CHALLENGE = null
-    boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
+    if (ME?.mustChangePassword) showForcedPwdChange(); else boot() // T02/U-02：临时密码先改密（接口层已锁定其他路由），改完重新登录才进入后台
   } catch (e) { $('#lerr2').textContent = e.message }
 }
 async function mfaResend() {
   try { await api('POST', '/admin/login/mfa', { challenge: MFA_CHALLENGE, resend: true }); toast('验证码已重新发送') } catch (e) { toast(e.message, true) }
+}
+// C-03：登录受限态（challenge，非通行令牌）下的 TOTP 绑定引导——验证通过前拿不到后台会话
+window.mfaGuidedSetup = async () => {
+  try {
+    const r = await api('POST', '/admin/login/mfa/setup', { challenge: MFA_CHALLENGE })
+    modal('绑定验证器 App', `
+      <p>在验证器 App（Microsoft/Google Authenticator 等）中添加账户：</p>
+      <div class="row" style="margin:14px 0"><input readonly value="${esc(r.secret)}" style="width:100%"></div>
+      <p class="muted" style="word-break:break-all">otpauth URI：<code>${esc(r.uri)}</code></p>
+      <div class="card" style="background:#f0faf7;margin-top:14px"><p><b>当前动态码：${r.current}</b>（30 秒轮换；演示直通码，正式账号请以验证器 App 为准）</p></div>
+      <p class="td-sub">录入后回到本页输入 6 位动态码即可完成登录。</p>`,
+      `<button class="btn primary" onclick="closeModal()">我已录入，返回输入动态码</button>`)
+  } catch (e) { toast(e.message, true) }
 }
 function backToStep1() { $('#step2').style.display = 'none'; $('#step1').style.display = 'block'; MFA_CHALLENGE = null }
 function logout() { TOKEN = ''; ME = null; localStorage.clear(); location.reload() }

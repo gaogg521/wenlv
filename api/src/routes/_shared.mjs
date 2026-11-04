@@ -51,8 +51,16 @@ export async function requireAdmin(req, roles) {
   // 已登录会话在下一个请求即失效（不能只禁止下次登录）。
   // 不带 ver 的令牌只可能出自掌握 JWT_SECRET 的一方（测试夹具），不参与本校验。
   if (p.ver != null) {
-    const row = await one('SELECT status, token_epoch FROM admin_user WHERE id = ?', [p.uid])
+    const row = await one('SELECT status, token_epoch, must_change_pwd FROM admin_user WHERE id = ?', [p.uid])
     if (!row || Number(row.status) !== 1 || Number(row.token_epoch) !== Number(p.ver)) throw new BizError(1002, '登录已失效（账号被停用或权限已变更），请重新登录')
+    // U-02：must_change_pwd 不只是登录后弹窗——接口层强制：未改密前只允许本人改密接口，
+    // 防止绕过弹窗直接用会话令牌调后台接口办业务（改密成功后旧会话已 +epoch 失效，需重新登录）。
+    if (Number(row.must_change_pwd) === 1) {
+      const path = String(req.url || '').split('?')[0]
+      if (!(req.method === 'POST' && path === '/admin/account/password')) {
+        throw new BizError(1002, '请先修改临时密码后再操作后台')
+      }
+    }
   }
   if (roles && !roles.includes(p.role)) throw new BizError(1003, '权限不足（' + p.role + '）')
   return p // 含 scopeCity（城市合伙人行级隔离）：列表查询必须经 scopeFilter 注入

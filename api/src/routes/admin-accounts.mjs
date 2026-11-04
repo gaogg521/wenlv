@@ -23,7 +23,7 @@ const adminAccounts = {
   'GET /admin/accounts': async (req) => {
     await requireAdmin(req, ['super'])
     // 不下发 password_hash / mfa_secret（红线：密钥哈希不出接口）
-    return await q(`SELECT id, username, display_name, role, scope_city, status, note, mfa_enabled, mfa_channel,
+    return await q(`SELECT id, username, display_name, role, scope_city, status, note, mfa_enabled, mfa_channel, mfa_exempt, mfa_force,
         mobile, email, last_login_at, token_epoch, must_change_pwd, created_at
       FROM admin_user ORDER BY FIELD(role, 'super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly'), id`)
   },
@@ -116,6 +116,27 @@ const adminAccounts = {
       await audit(c, 'admin:' + a.name, 'account', 'password-reset', 'admin-' + u.id, null, { operator: 'admin:' + a.name, sessionsRevoked: true, mustChangePwd: true })
     })
     return { tempPassword: temp, note: '临时密码仅此一次显示，请线下安全渠道交付本人；本人下次登录后须立即修改。审计不记录密码。' }
+  },
+
+  // C-03：单账号 MFA 豁免 / 单账号强制（互不覆盖，force 优先于 exempt，页面明示优先级）；
+  // 变更即 token_epoch+1（被调整账号旧会话失效，按新状态重新登录）。最后一个有效超管不能被设为强制——
+  // 防止唯一超管卡死在绑定引导里锁死系统。
+  'POST /admin/accounts/:id/mfa-flags': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const u = await one('SELECT id, username, role, status, mfa_exempt, mfa_force FROM admin_user WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1004, '账号不存在')
+    if (Number(u.status) !== 1) throw new BizError(1001, '仅有效账号可调整 MFA 豁免/强制')
+    const exempt = req.body.exempt == null ? Number(u.mfa_exempt) : (req.body.exempt ? 1 : 0)
+    const force = req.body.force == null ? Number(u.mfa_force) : (req.body.force ? 1 : 0)
+    if (force && u.role === 'super' && (await activeSuperCount()) <= 1) {
+      throw new BizError(1001, '不能对最后一个有效超级管理员设置单账号强制（避免绑定引导期间锁死系统）')
+    }
+    await tx(async (c) => {
+      await c.q('UPDATE admin_user SET mfa_exempt = ?, mfa_force = ?, token_epoch = token_epoch + 1 WHERE id = ?', [exempt, force, u.id])
+      await audit(c, 'admin:' + a.name, 'account', 'mfa-flags', 'admin-' + u.id,
+        { exempt: Number(u.mfa_exempt), force: Number(u.mfa_force) }, { exempt, force, sessionsRevoked: true })
+    })
+    return { exempt, force, sessionsRevoked: true, note: force ? '该账号即使全局关闭策略也要求两步验证（优先于豁免）；未绑定时登录进入绑定引导' : (exempt ? '该账号即使全局强制策略也不要求两步验证' : '该账号按全局策略执行') }
   },
 
   // 重置 MFA：清除绑定（重置后按全局策略重新绑定）；全部会话失效
