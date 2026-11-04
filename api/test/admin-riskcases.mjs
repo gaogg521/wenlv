@@ -80,8 +80,36 @@ try {
     const d = ok(await call('risk', 'GET', `/admin/risk-cases/${id}`))
     const fr = d.records.filter((r) => r.action === 'freeze' || r.action === 'unfreeze')
     assert.equal(fr.length, 2, '冻结+解冻都写入案件时间线')
+    assert.ok(fr[0].note.includes('#' + uid), '时间线记录真实处置对象用户ID（V-08）：' + fr[0].note)
     assert.equal(Number(d.case.status), 1, '解冻后案件仍处理中（解冻≠结案）')
     assert.equal(Number((await one('SELECT status FROM user_account WHERE id = ?', [uid])).status), 1, '账号已恢复')
+  })
+
+  await test('V-01：责任人按不可变 UID 判定——同 UID 改显示名不能自结案；不同 UID 同名不误拒', async () => {
+    const ev = await q("INSERT INTO risk_event (user_id, kind, severity, detail) VALUES (?, 'refund_abuse', 2, ?)", [uid, JSON.stringify({ reason: stamp + ' V01' })])
+    created.events.push(ev.insertId)
+    const c = ok(await call('risk', 'POST', '/admin/risk-cases', { sourceType: 'risk_event', sourceId: ev.insertId, objectType: 'user', userId: uid, title: stamp + ' V01 双人复核', note: stamp + ' 立案研判说明' }))
+    created.cases.push(c.id)
+    const handlerTok = jwtSign({ end: 'admin', role: 'risk', uid: 90001, name: stamp + 'V01责任人' })
+    ok(await call(null, 'POST', `/admin/risk-cases/${c.id}/judge`, { note: stamp + ' 研判受理' }, handlerTok))
+    ok(await call(null, 'POST', `/admin/risk-cases/${c.id}/review`, { note: stamp + ' 提交复核' }, handlerTok))
+    // 同一 UID（90001）改显示名后重新登录（令牌里 name 变了）→ 仍必须拒绝
+    const renamed = await call(null, 'POST', `/admin/risk-cases/${c.id}/close`, { note: stamp + ' 改名后自结案尝试' }, jwtSign({ end: 'admin', role: 'super', uid: 90001, name: stamp + 'V01责任人改名后' }))
+    assert.equal(renamed.code, 1003, '同 UID 改显示名仍拒绝：' + renamed.msg)
+    // 不同 UID 但与责任人同名 → 不误拒，正常双人复核通过
+    const other = ok(await call(null, 'POST', `/admin/risk-cases/${c.id}/close`, { note: stamp + ' 复核通过：证据链完整' }, jwtSign({ end: 'admin', role: 'super', uid: 90002, name: stamp + 'V01责任人' })))
+    assert.equal(other.status, 5, '不同 UID 同名复核通过')
+    const d = ok(await call('risk', 'GET', `/admin/risk-cases/${c.id}`))
+    assert.equal(Number(d.case.reviewer_uid), 90002, '复核人 UID 落库')
+    // V-08 负向：未关联用户 / 已关闭案件都不能引用
+    const ghost = await q('INSERT INTO user_account (mini_a_openid, nickname) VALUES (?,?)', ['rcqa-ghost-' + stamp, stamp + '无关用户'])
+    created.users.push(ghost.insertId)
+    const r1 = await call('super', 'POST', `/admin/users/${ghost.insertId}/status`, { status: 0, reason: stamp + ' 冻结无关用户尝试', caseId: created.cases[1] })
+    assert.equal(r1.code, 1003, '未关联当前处置用户拒绝（案件仍开放）：' + r1.msg)
+    const r2 = await call('super', 'POST', `/admin/users/${ghost.insertId}/status`, { status: 0, reason: stamp + ' 引用已关闭案件尝试', caseId: c.id })
+    assert.equal(r2.code, 2002, '已关闭案件拒绝引用：' + r2.msg)
+    await q('DELETE FROM user_account WHERE id = ?', [ghost.insertId])
+    created.users.pop()
   })
 
   await test('队列契约与越权；并发结案只一人成功；旧 handle 必须带结论', async () => {

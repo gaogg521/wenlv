@@ -9,6 +9,11 @@ const FLOW = {
   judge: [0], need_info: [1], coordinate: [1], resume: [2, 3], review: [1], close: [4], reopen: [5], note: [0, 1, 2, 3, 4, 5],
 }
 const caseNo = () => 'RC' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + String(Date.now() % 100000).padStart(5, '0')
+// V-01：身份按不可变账号 UID 判定，显示名只是写入时的展示快照——同一账号改显示名不能再绕过双人复核，
+// 两个不同账号同名也不会互相误拒。存量行（uid 为 NULL）回退旧名字比较；案件已记录 UID 而请求令牌
+// 无 uid（仅测试夹具可能）时按同人处理拒绝结案——身份不可证实时不放行（fail-closed）。
+const isSelf = (storedUid, storedName, a) =>
+  storedUid != null ? (a.uid == null || Number(storedUid) === Number(a.uid)) : storedName === 'admin:' + a.name
 const rec = (c, caseId, actor, action, note, fromStatus, toStatus) =>
   c.q('INSERT INTO risk_case_record (case_id, actor, action, note, from_status, to_status) VALUES (?,?,?,?,?,?)',
     [caseId, actor, action, note || null, fromStatus, toStatus])
@@ -135,13 +140,13 @@ export const adminRiskCases = {
     return tx(async (c) => {
       const k = await c.one('SELECT * FROM risk_case WHERE id = ? FOR UPDATE', [kase.id])
       if (!FLOW[action].includes(Number(k.status))) throw new BizError(2002, `当前状态「${STATUS_CN[k.status]}」不能执行该动作，请刷新`)
-      if (action === 'close' && k.handler === 'admin:' + a.name) throw new BizError(1003, '双人复核：结案复核人不能与当前责任人相同')
+      if (action === 'close' && isSelf(k.handler_uid, k.handler, a)) throw new BizError(1003, '双人复核：结案复核人不能与当前责任人相同')
       const next = action === 'judge' ? 1 : action === 'need_info' ? 2 : action === 'coordinate' ? 3 : action === 'resume' ? 1 : action === 'review' ? 4 : action === 'close' ? 5 : action === 'reopen' ? 1 : Number(k.status)
       const sets = ['status = ?']
       const args = [next]
-      if (action === 'judge') { sets.push('handler = ?'); args.push('admin:' + a.name) }
-      if (action === 'close') { sets.push('reviewer = ?, conclusion = ?, closed_at = NOW(3)'); args.push('admin:' + a.name, note) }
-      if (action === 'reopen') { sets.push('closed_at = NULL, conclusion = NULL, reviewer = NULL, handler = ?'); args.push('admin:' + a.name) }
+      if (action === 'judge') { sets.push('handler = ?, handler_uid = ?'); args.push('admin:' + a.name, a.uid ?? null) }
+      if (action === 'close') { sets.push('reviewer = ?, reviewer_uid = ?, conclusion = ?, closed_at = NOW(3)'); args.push('admin:' + a.name, a.uid ?? null, note) }
+      if (action === 'reopen') { sets.push('closed_at = NULL, conclusion = NULL, reviewer = NULL, reviewer_uid = NULL, handler = ?, handler_uid = ?'); args.push('admin:' + a.name, a.uid ?? null) }
       await c.q(`UPDATE risk_case SET ${sets.join(', ')} WHERE id = ?`, [...args, k.id])
       await rec(c, k.id, 'admin:' + a.name, action, note, Number(k.status), next)
       await audit(c, 'admin:' + a.name, 'risk-case', action, 'case-' + k.id, { status: Number(k.status) }, { status: next, note: note || null })
