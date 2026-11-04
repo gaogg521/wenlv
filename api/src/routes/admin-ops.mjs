@@ -54,7 +54,9 @@ const adminSys = {
   // 小程序数据分析（官方 getDailyVisitTrend；未配置凭据=MOCK 曲线）
   'GET /admin/wxdata/visit-trend': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'city_partner'])
-    return await wxapi.getDailyVisitTrend(7)
+    // days 由驾驶舱按所选周期传入（微信按日产出，最长 30 天，当日数据次日可见）
+    const days = Math.min(30, Math.max(1, Number(req.query.days) || 7))
+    return await wxapi.getDailyVisitTrend(days)
   },
   'GET /admin/system/overview': async (req) => {
     await requireAdmin(req, ['super', 'sre', 'dev'])
