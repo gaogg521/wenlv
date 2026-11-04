@@ -69,19 +69,39 @@ export async function createCommission(orderNo) {
     await q(`INSERT INTO commission (order_id, promoter_id, base_amount, rate_bp, amount, status, payable_at)
       VALUES (?,?,?,?,?,0, NOW() + INTERVAL ? DAY)`, [o.id, a.promoter_id, base, rateBp, amount, await cfgNum('commission.settle_delay_days')])
     await q('UPDATE promoter SET valid_gmv_90d = valid_gmv_90d + ? WHERE user_id = ?', [base, a.promoter_id])
+    // 佣金计提入存证：钱的"怎么算出来的"必须留痕（费率、基数、金额、封顶后的结果）
+    await attest('commission', 'comm-' + o.id, {
+      orderId: Number(o.id), promoterUserId: Number(a.promoter_id),
+      baseAmountFen: Number(base), rateBp: Number(rateBp), amountFen: Number(amount), status: 0,
+    }, null, 1)
     return true
   } catch { return false }
 }
 
 export async function invalidateCommission(orderNo) {
   const o = await one('SELECT id FROM orders WHERE order_no = ?', [orderNo])
-  if (o) await q('UPDATE commission SET status = CASE WHEN status = 2 THEN 3 ELSE 4 END WHERE order_id = ?', [o.id])
+  if (!o) return
+  const c = await one('SELECT promoter_id, amount, status FROM commission WHERE order_id = ?', [o.id])
+  await q('UPDATE commission SET status = CASE WHEN status = 2 THEN 3 ELSE 4 END WHERE order_id = ?', [o.id])
+  // 扣回同样留痕：已经放行的钱被反向处置，是资金审计里最需要解释的一类
+  if (c) await attest('commission', 'comm-' + o.id, {
+    orderId: Number(o.id), promoterUserId: Number(c.promoter_id), amountFen: Number(c.amount),
+    result: Number(c.status) === 2 ? 'reversed_after_paid' : 'voided',
+  }, null, Number(c.status) === 2 ? 3 : 4)
 }
 
 /** 到期放行：推广员账号被冻结（user_account.status = 0）期间佣金照常累计但不放行，解冻后下一次放行再一并转为可提现 */
 export async function settleDue() {
+  // 先取出待放行明细再改状态：放行是"钱变成可提现"的那一刻，必须逐笔留痕
+  const due = await q(`SELECT c.order_id, c.promoter_id, c.amount FROM commission c JOIN user_account u ON u.id = c.promoter_id
+    WHERE c.status = 0 AND c.payable_at <= NOW(3) AND u.status = 1`)
   const r = await q(`UPDATE commission c JOIN user_account u ON u.id = c.promoter_id
     SET c.status = 1 WHERE c.status = 0 AND c.payable_at <= NOW(3) AND u.status = 1`)
+  for (const x of due) {
+    await attest('commission', 'comm-' + x.order_id, {
+      orderId: Number(x.order_id), promoterUserId: Number(x.promoter_id), amountFen: Number(x.amount), result: 'released',
+    }, null, 2)
+  }
   return r.affectedRows
 }
 
@@ -155,6 +175,13 @@ export async function generateSettlement(merchantId, period) {
         ON pg.product_id = cc.product_id
       WHERE cc.status = 1 AND cc.share_pct > 0`,
       [sid, period, retained, total, retained, total, sid])
+    // 共创分润逐笔留痕：资金商/商品商拿到的每一笔，基数与占比都要能复算
+    for (const cp of await c.q('SELECT co_creator_id, product_id, base_amount, amount FROM co_profit WHERE settlement_id = ?', [sid])) {
+      await attest('co_profit', `cprofit-${sid}-${cp.co_creator_id}`, {
+        settlementId: Number(sid), coCreatorId: Number(cp.co_creator_id), productId: Number(cp.product_id),
+        baseAmountFen: Number(cp.base_amount), amountFen: Number(cp.amount), period,
+      }, c)
+    }
     // 生成即锚定（同事务）：五口径恒等与手续费分成的快照一旦封存，事后无法悄悄改数
     await attest('settlement', 'settle-' + sid, {
       settlementId: Number(sid), merchantId: Number(merchantId), period,

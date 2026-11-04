@@ -180,6 +180,8 @@ export const people = {
     const u = await one('SELECT * FROM user_account WHERE id = ?', [id])
     if (!u) throw new BizError(1004, '用户不存在')
     const kyc = await one('SELECT real_name, id_no_mask, status, reject_note, reviewed_at, created_at FROM kyc_application WHERE user_id = ? ORDER BY id DESC LIMIT 1', [id])
+    // 隐私授权：同意了哪一项、什么版本、什么时候撤销 —— 逐项可撤回，且每次签署都有存证
+    const consents = await q('SELECT scene, granted, granted_at, revoked_at FROM user_privacy_consent WHERE user_id = ? ORDER BY scene', [id])
     const trade = await one(`SELECT COUNT(*) orders, SUM(status IN ${PAID}) paid, COALESCE(SUM(CASE WHEN status IN ${PAID} THEN amount_pay END), 0) gmv,
         SUM(status = 70) refunded, SUM(status = 50) completed, COALESCE(SUM(bean_deducted), 0) beans_used,
         MIN(created_at) first_at, MAX(created_at) last_at
@@ -209,6 +211,7 @@ export const people = {
         mobile: maskMobile(u.mobile_enc), bind: { miniA: !!u.mini_a_openid, miniB: !!u.mini_b_openid, unionid: !!u.unionid }, did: u.did_ref ? String(u.did_ref).slice(0, 24) + '…' : null,
       },
       kyc: kyc ? { ...kyc, real_name: maskName(kyc.real_name) } : null,
+      consents: consents.map((x) => ({ scene: x.scene, granted: Number(x.granted) === 1, grantedAt: x.granted_at, revokedAt: x.revoked_at })),
       trade: { ...trade, refund_amount: N(refundAmt.amt), refund_fee: N(refundAmt.fee), aov: N(trade.paid) ? Math.round(N(trade.gmv) / N(trade.paid)) : 0 },
       orders, favCities, beans: { balance: N(acct?.balance), lifetime: N(acct?.lifetime), ledger },
       content: { notes, recentNotes, tasks, badges }, promoter: promoter ? { ...promoter, commission } : null, staff, growth, ops,
