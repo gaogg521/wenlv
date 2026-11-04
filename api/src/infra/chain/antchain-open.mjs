@@ -105,6 +105,31 @@ export function parseContentV2(s) {
   return { tenant, bizid, kind, root, prevRoot, ts, sig }
 }
 
+/**
+ * 展示用：把上链原文拆成"人话四要素"，给验证接口/对外页直接渲染。
+ * 认不出格式就返回 {version:0}，绝不假装解析成功。
+ */
+export function describeContent(raw) {
+  const str = String(raw || '')
+  if (!str) return { version: 0, note: '该批次没有留存上链原文（v1 早期批次）' }
+  const v2 = parseContentV2(str)
+  if (v2) {
+    return {
+      version: 2, raw: str,
+      subject: { tenant: v2.tenant, chainId: v2.bizid, kind: v2.kind },
+      root: v2.root, prevRoot: v2.prevRoot,
+      tsMs: Number(v2.ts), tsIso: new Date(Number(v2.ts)).toISOString(),
+      signature: { algo: 'RSA-SHA256', value: v2.sig, length: v2.sig.length },
+    }
+  }
+  if (str.startsWith('wl-anchor/1|')) {
+    const [, , root, prevRoot, bizDate] = str.split('|')
+    return { version: 1, raw: str, subject: null, root, prevRoot, bizDate,
+      note: 'v1 早期格式：只有根/前根/业务日，没有主体标识与签名' }
+  }
+  return { version: 0, raw: str, note: '无法识别的上链原文格式' }
+}
+
 /** 用平台私钥对签名原文做 RSA-SHA256，返回 hex */
 export function signWith(privateKey, payload) {
   const key = typeof privateKey === 'string' || Buffer.isBuffer(privateKey) ? crypto.createPrivateKey(toPem(privateKey)) : privateKey
