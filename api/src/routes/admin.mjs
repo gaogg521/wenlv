@@ -7,6 +7,7 @@ import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
 import { maskApplyMobile, publicOrderPhone, sealMobile } from '../infra/mobile.mjs'
 import { ADMIN_ACTIONS } from '../domain/admin-capabilities.mjs'
+import { MODULES, effectiveModules } from '../domain/modules.mjs'
 import * as refund from '../domain/refund.mjs'
 import * as group from '../domain/group.mjs'
 import * as wxpay from '../domain/wxpay.mjs'
@@ -134,7 +135,9 @@ const admin = {
         actions[`entity.${kind}.${op}`] = { allowed: (op !== 'create' || !sc.noCreate) && roles.includes(a.role), reason: '当前角色不能' + (op === 'create' ? '新建' : '编辑') + sc.label }
       }
     }
-    return { role: a.role, scopeCity: a.scopeCity || null, actions }
+    // C-04：模块单一数据源——allModules 是唯一清单（key/中文名/分组/图标），modules 是该账号有效模块集合。
+    // 前端菜单不再写死 access 表；未知角色默认拒绝（空集合），readonly/sre/dev 不再缺省放行全菜单。
+    return { role: a.role, scopeCity: a.scopeCity || null, actions, modules: effectiveModules(a.role), allModules: MODULES }
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
