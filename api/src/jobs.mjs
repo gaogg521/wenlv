@@ -170,5 +170,28 @@ async function main() {
     await sleep(60_000)
   }
 }
+/**
+ * 进程内启动（JOBS_IN_API=1 时由 index.mjs 调用）。
+ * 为什么允许跑在 API 进程里：这台机器上注册单独的看护任务需要管理员权限（Access denied），
+ * 而 API 已经由计划任务看护 —— 借这条命把定时循环带上，才不会"我一退出事件就堆"。
+ * 多实例保护：MySQL 咨询锁。抢不到锁的进程静默退出循环，绝不双跑（双跑会重复打包/重复上链）。
+ */
+export async function startInApi() {
+  try {
+    const { one } = await import('./db.mjs')
+    const r = await one("SELECT GET_LOCK('wanderlust_jobs_loop', 0) AS ok")
+    if (Number(r && r.ok) !== 1) {
+      console.log('[jobs] 另一个实例已持有调度锁，本进程不跑定时循环')
+      return false
+    }
+    console.log('[jobs] 进程内调度已启动（持有 MySQL 咨询锁）')
+    await main()
+    return true
+  } catch (e) {
+    console.error('[jobs] 进程内调度启动失败：', e.message)
+    return false
+  }
+}
+
 const isDirect = process.argv[1] && process.argv[1].split('/').pop().split(String.fromCharCode(92)).pop() === 'jobs.mjs'
 if (isDirect) main()
