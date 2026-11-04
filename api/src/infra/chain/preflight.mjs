@@ -29,6 +29,12 @@ export const ASK = {
     '鲸探藏品：资质、内容审核、服务商接入的办理顺序与周期',
     '数字资产集合（CollectionId）如何申请、单个/批量发行上限',
   ],
+  antchainopen: [
+    '开放联盟链的租户 ID（tenantid）取自哪里（本账号实测为控制台地址 projectName 参数，文档示例 mytenant 不对）',
+    '托管账户是否已分配燃料（未分配一律返回 204 account config invalid）',
+    '免费版 TPS=1 / 燃料额度够不够批量补锚；生产是否升级专业版',
+    '开放联盟链是公开共享链：content 明文可见，是否允许只写 Merkle 根与业务日',
+  ],
   evm: [
     'relayer 的接口形状（当前按 POST {relayer}/tx，Bearer token）',
     '落根交易目标地址（EVM_ANCHOR_TO）与是否要求写合约事件',

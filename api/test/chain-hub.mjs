@@ -18,14 +18,31 @@ const A = ok(await call('POST', '/admin/login', { username: 'admin', password: p
 const FIN = ok(await call('POST', '/admin/login', { username: 'finance', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' })).token
 
 // ---------- 假服务 ----------
-const seen = { gwSig: null, gwBody: null }
+const seen = { gwSig: null, gwBody: null, antDeposit: null }
 let fiscoHead = 100
 const fiscoTx = new Map()
+// 蚂蚁链开放联盟链假服务：握手按公钥验签、DEPOSIT 记账、QUERYTRANSACTION 回查
+const { publicKey: antPub, privateKey: antKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
+const ANT_PEM = antKey.export({ type: 'pkcs8', format: 'pem' })
+const antTx = new Map()
 const srv = http.createServer((req, res) => {
   let body = ''
   req.on('data', (c) => (body += c))
   req.on('end', () => {
     const send = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)) }
+    if (req.url.startsWith('/ant/api/contract/')) {
+      const j = JSON.parse(body || '{}'); const p = req.url.slice(4)
+      if (p === '/api/contract/shakeHand') {
+        const good = crypto.verify('RSA-SHA256', Buffer.from(String(j.accessId) + String(j.time)), antPub, Buffer.from(String(j.secret), 'hex'))
+        return send(good ? { success: true, code: '200', data: 'tok-' + crypto.randomBytes(4).toString('hex') } : { success: false, code: '201', data: 'secret is not correct' })
+      }
+      if (p === '/api/contract/chainCallForBiz') { const h = crypto.createHash('sha256').update(String(j.orderId)).digest('hex'); antTx.set(h, j.content); seen.antDeposit = j; return send({ success: true, code: '200', data: h }) }
+      if (p === '/api/contract/chainCall') {
+        if (j.method === 'QUERYLASTBLOCK') return send({ success: true, code: '200', data: JSON.stringify({ block: { blockHeader: { number: 777 } } }) })
+        const c = antTx.get(j.hash)
+        return c == null ? send({ success: false, code: '404', data: '' }) : send({ success: true, code: '200', data: JSON.stringify({ blockNumber: 4242, hash: j.hash, transactionDO: { data: Buffer.from(c).toString('base64'), timestamp: 1 } }) })
+      }
+    }
     if (req.url === '/gw/health') return send({ code: 0 })
     if (req.url === '/gw/api/anchor') { seen.gwSig = req.headers['x-signature']; seen.gwBody = body; return send({ code: 0, data: { txId: 'GW' + crypto.randomBytes(8).toString('hex') } }) }
     if (req.url === '/WeBASE-Front/trans/handle') {
@@ -42,7 +59,8 @@ await new Promise((r) => srv.listen(0, r))
 const FAKE = 'http://127.0.0.1:' + srv.address().port
 const SECRET = 'gw-secret-' + Date.now()
 const touched = ['CHAIN_PROVIDER', 'GW_ENDPOINT', 'GW_SECRET', 'GW_APP_ID', 'GW_ANCHOR_PATH', 'GW_BODY_TEMPLATE', 'GW_TX_PATH', 'GW_OK_PATH', 'GW_OK_VALUE', 'GW_ASYNC', 'GW_SIGN_ALGO', 'GW_PROBE_PATH',
-  'GW_BLOCK_PATH', 'GW_RECEIPT_PATH', 'GW_FINAL_PATH', 'GW_FINAL_VALUE', 'FISCO_FRONT_URL', 'FISCO_USER', 'FISCO_CONTRACT_ADDRESS', 'EVM_NETWORK', 'EVM_RPC_URL']
+  'GW_BLOCK_PATH', 'GW_RECEIPT_PATH', 'GW_FINAL_PATH', 'GW_FINAL_VALUE', 'FISCO_FRONT_URL', 'FISCO_USER', 'FISCO_CONTRACT_ADDRESS', 'EVM_NETWORK', 'EVM_RPC_URL',
+  'ANTOPEN_REST_URL', 'ANTOPEN_ACCESS_ID', 'ANTOPEN_ACCESS_KEY', 'ANTOPEN_ACCOUNT', 'ANTOPEN_KMS_ID', 'ANTOPEN_TENANT_ID']
 const before = await one('SELECT COUNT(*) n FROM attest_batch WHERE status = 5')
 assert.equal(Number(before.n), 0, '库里已有待确认批次，拒绝运行')
 const mkBatch = async () => {
@@ -58,7 +76,7 @@ try {
   await t('目录包含联盟链（含 FISCO / 通用网关）与公链，网络与网关模板已预置', async () => {
     const h = ok(await call('GET', '/admin/chain/hub', null, A))
     const ids = h.providers.map((p) => p.id)
-    for (const id of ['chaingen', 'tbaas', 'antchain', 'fisco', 'gateway', 'evm']) assert.ok(ids.includes(id), id)
+    for (const id of ['chaingen', 'tbaas', 'antchain', 'antchainopen', 'fisco', 'gateway', 'evm']) assert.ok(ids.includes(id), id)
     assert.ok(h.networks.conflux && h.networks.polygon); assert.ok(h.gatewayPresets.chainmaker && h.gatewayPresets.bsn)
   })
   await t('非超管不能访问；不属于该链的配置项与非法地址被拒', async () => {
@@ -127,6 +145,30 @@ try {
     assert.equal(Number(r.status), 2); assert.equal(r.chain_provider, 'fisco')
     const tx = [...fiscoTx.values()].pop()
     assert.equal(tx.root, '0x' + b.root, '链上写入的是这枚根（bytes32）')
+  })
+  await t('蚂蚁链开放联盟链：私钥与托管 ID 加密保存不回显 → 自检/探测 → 提交 DEPOSIT → 回查内容就是这枚根才算已锚定', async () => {
+    ok(await call('POST', '/admin/chain/creds/antchainopen', { values: { ANTOPEN_REST_URL: FAKE + '/ant', ANTOPEN_ACCESS_ID: 'ak-hub', ANTOPEN_ACCESS_KEY: ANT_PEM,
+      ANTOPEN_ACCOUNT: 'acct-hub', ANTOPEN_KMS_ID: 'kms-hub-secret-1', ANTOPEN_TENANT_ID: 'TEN1' } }, A))
+    const h = ok(await call('GET', '/admin/chain/hub', null, A))
+    const keys = h.providers.find((p) => p.id === 'antchainopen').keys
+    for (const k of ['ANTOPEN_ACCESS_KEY', 'ANTOPEN_KMS_ID']) { const x = keys.find((y) => y.key === k); assert.equal(x.value, null, k); assert.equal(x.configured, true, k) }
+    assert.ok(!JSON.stringify(h).includes('kms-hub-secret-1') && !JSON.stringify(h).includes('BEGIN PRIVATE KEY'), '私钥与托管 ID 不得出现在任何响应里')
+    const raw = await one("SELECT enc_value FROM app_secret WHERE k = 'ANTOPEN_ACCESS_KEY'")
+    assert.ok(!Buffer.from(raw.enc_value).toString('utf8').includes('BEGIN PRIVATE KEY'), '库里是密文')
+    assert.equal(ok(await call('POST', '/admin/chain/selftest/antchainopen', {}, A)).ok, true)
+    const pr = ok(await call('POST', '/admin/chain/probe/antchainopen', {}, A)); assert.equal(pr.ok, true); assert.match(pr.detail, /当前块高 777/)
+    ok(await call('POST', '/admin/chain/activate', { provider: 'antchainopen', confirm: 'antchainopen' }, A))
+    await warmSecrets()
+    const attest = await import('../src/domain/attest.mjs')
+    const b = await mkBatch()
+    assert.equal((await attest.anchorToChain(b.id)).submitted, true)
+    const sub = await one('SELECT status, chain_provider, chain_tx_ref FROM attest_batch WHERE id = ?', [b.id])
+    assert.equal(Number(sub.status), 5); assert.equal(sub.chain_provider, 'antchainopen'); assert.match(sub.chain_tx_ref, /^[0-9a-f]{64}$/)
+    assert.equal(seen.antDeposit.method, 'DEPOSIT'); assert.equal(seen.antDeposit.tenantid, 'TEN1')
+    assert.ok(seen.antDeposit.content.includes(b.root), '链上内容含这枚根')
+    await attest.confirmPending()
+    const done = await one('SELECT status, chain_provider FROM attest_batch WHERE id = ?', [b.id])
+    assert.equal(Number(done.status), 2); assert.equal(done.chain_provider, 'antchainopen')
   })
   await t('切换后旧链批次仍回原链核验，不被新链误确认', async () => {
     ok(await call('POST', '/admin/chain/activate', { provider: 'gateway', confirm: 'gateway' }, A))
