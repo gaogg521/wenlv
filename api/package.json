@@ -7,7 +7,7 @@
     "start": "node src/index.mjs",
     "start:win": "node --env-file=.env src/index.mjs",
     "migrate": "node scripts/migrate.mjs",
-    "test": "node scripts/check-syntax.mjs && node test/import-paths.mjs && node test/web3-core.mjs && node test/refund-policy.mjs && node test/secrets-key.mjs && node test/wording-guard.mjs && node test/miniapp-map.mjs && node test/mobile.mjs && node test/member-badge.mjs && node test/tbaas.mjs && node test/antchain-open.mjs",
+    "test": "node scripts/check-syntax.mjs && node test/import-paths.mjs && node test/web3-core.mjs && node test/refund-policy.mjs && node test/secrets-key.mjs && node test/wording-guard.mjs && node test/miniapp-map.mjs && node test/mobile.mjs && node test/member-badge.mjs && node test/tbaas.mjs && node test/antchain-open.mjs && node test/web3-chain-ui.mjs",
     "test:db": "node test/tbaas.mjs && node test/web3-core.mjs && node test/web3-integrity.mjs && node test/refund-e2e.mjs && node test/entity-engine.mjs && node test/chain-hub.mjs && node test/business-rules.mjs && node test/content-review.mjs && node test/people.mjs && node test/mobile-freeze.mjs && node test/partners.mjs && node test/scenics.mjs && node test/content-dashboard.mjs && node test/partner-performance.mjs && node test/content-governance.mjs && node test/cross-end.mjs && node test/admin-operations.mjs && node test/admin-coprofit.mjs && node test/admin-accounts.mjs && node test/admin-orders-search.mjs && node test/admin-tickets.mjs && node test/admin-userops.mjs && node test/admin-riskcases.mjs && node test/admin-fundworkbench.mjs && node test/admin-reviewqueue.mjs && node test/admin-userpicker-bulktag.mjs",
     "test:chain": "node test/chain-e2e.mjs",
     "e2e": "node test/api-e2e.mjs",

@@ -198,7 +198,19 @@ tbody tr:last-child td { border-bottom: none; }
 .chain-node:hover { background: rgba(90,140,255,.08); }
 .chain-node.active { background: rgba(90,140,255,.14); outline: 1px solid rgba(127,176,255,.45); box-shadow: 0 0 18px rgba(96,165,250,.25); }
 .chain-node.branch { margin-top: 74px; }
-.chain-node.ghost { cursor: default; }
+.chain-node.ghost { cursor: not-allowed; }
+/* 可点性必须看得见：可点的给“查看…›”字样与焦点环，不可点的明说不可点 */
+.chain-node:not(.ghost):hover { background: rgba(90,140,255,.10); }
+.chain-node:not(.ghost):hover .node-open { opacity: 1; }
+.chain-node:focus-visible { outline: 2px solid #7fb0ff; outline-offset: 2px; }
+.node-open { display: inline-block; margin-left: 4px; font-size: 11px; color: #8fc4ff; opacity: 0; transition: .15s; }
+.node-lock { display: inline-block; margin-top: 2px; font-size: 10.5px; color: #93a3c9; opacity: .85; }
+.copy-chip { margin-left: 6px; padding: 0 6px; height: 20px; line-height: 18px; font-size: 11px;
+  border: 1px solid rgba(120,150,210,.45); border-radius: 6px; background: #fff; color: #4a5f8a; cursor: pointer; }
+.copy-chip:hover { border-color: #7fa8ff; color: #2a6bd6; }
+/* 展开的详情滚动到顶时不要被页头压住 */
+#blockDetail { scroll-margin-top: 88px; }
+.block-detail-card { border-left: 3px solid #7fb0ff; }
 /* ===== 3D 区块：线框立方体 + 内核 + 数据纹理 =====
    注意：任何 filter / opacity<1 / overflow:hidden 加在 .cube 或其 3D 祖先上都会把 preserve-3d 压平成一张平面，
    所以发光只放在不参与 3D 的 .cube-zone::before（光晕）与面自身的 box-shadow 上。 */
