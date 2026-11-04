@@ -134,7 +134,8 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  const access = { ops: ['users','dash','orders','tickets','entitlements','fund','reviewqueue','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements'], finance: ['dash','orders','fund','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks','reviewqueue'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
+  // V-09：城市合伙人增加「风控案件」入口（本城协查可达）；案件页仅显示本城案件与协查/补材料动作
+  const access = { ops: ['users','dash','orders','tickets','entitlements','fund','reviewqueue','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements','cases'], finance: ['dash','orders','fund','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks','reviewqueue'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')

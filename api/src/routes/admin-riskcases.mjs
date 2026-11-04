@@ -65,30 +65,44 @@ export const adminRiskCases = {
     const ttl = String(title || '').trim()
     if (!ttl || ttl.length > 120) throw new BizError(1001, '请填写 1–120 字案件标题')
     const sev = [1, 2, 3].includes(Number(severity)) ? Number(severity) : 2
+    // V-02：统一解析 userId/objectId——objectType=user 时两者必须指向同一真实对象（缺字段、冲突字段、
+    // 改 objectType 都不能绕过校验）；按解析出的真实对象做城市授权。
+    const uidN = Number(userId) || 0
+    const oidN = Number(objectId) || 0
+    const ot = String(objectType || 'user')
+    if (ot === 'user' && uidN && oidN && uidN !== oidN) throw new BizError(1001, '关联用户与对象不一致，请核对后重试')
     let city = null
-    if (Number(userId)) {
-      const u = await one('SELECT id FROM user_account WHERE id = ?', [Number(userId)])
-      if (!u) throw new BizError(1004, '关联用户不存在')
-    }
-    if (st === 'risk_event' && Number(sourceId)) {
-      const ev = await one('SELECT id, user_id, merchant_id FROM risk_event WHERE id = ?', [Number(sourceId)])
-      if (!ev) throw new BizError(1004, '来源风控事件不存在')
-    }
-    if (st === 'verify_conflict' && Number(sourceId)) {
-      const v = await one('SELECT id, merchant_id FROM verify_offline_conflict WHERE id = ?', [Number(sourceId)])
-      if (!v) throw new BizError(1004, '来源核销冲突不存在')
-    }
     if (a.scopeCity) {
-      // 城市账号：对象必须在本城（用户按下单城市、商户/事件按归属城市）
-      const oid = Number(objectId)
-      if (objectType === 'user' && oid) {
-        const u = await one('SELECT DISTINCT city_code FROM orders WHERE user_id = ? AND city_code = ? LIMIT 1', [oid, a.scopeCity])
+      // V-03：城市账号仅可发起本城协查（source=city）——不得借建案处置平台来源的风控事件/核销冲突
+      if (st !== 'city') throw new BizError(1001, '城市账号仅可发起本城协查（来源=城市协查）')
+      if (ot === 'user') {
+        const target = oidN || uidN
+        if (!target) throw new BizError(1001, '本城协查请填写关联用户')
+        const u = await one('SELECT DISTINCT city_code FROM orders WHERE user_id = ? AND city_code = ? LIMIT 1', [target, a.scopeCity])
         if (!u) throw new BizError(1003, '仅可对本城用户发起协查')
         city = a.scopeCity
-      } else city = a.scopeCity
-    } else if (Number(userId)) {
-      const uc = await one('SELECT city_code FROM orders WHERE user_id = ? AND city_code IS NOT NULL ORDER BY id DESC LIMIT 1', [Number(userId)])
-      city = uc ? uc.city_code : null
+      } else if (uidN) {
+        throw new BizError(1001, '关联用户仅支持「用户」对象类型')
+      } else {
+        city = a.scopeCity // 未指定对象的一般性协查请求
+      }
+    } else {
+      if (uidN) {
+        const u = await one('SELECT id FROM user_account WHERE id = ?', [uidN])
+        if (!u) throw new BizError(1004, '关联用户不存在')
+      }
+      if (st === 'risk_event' && Number(sourceId)) {
+        const ev = await one('SELECT id, user_id, merchant_id FROM risk_event WHERE id = ?', [Number(sourceId)])
+        if (!ev) throw new BizError(1004, '来源风控事件不存在')
+      }
+      if (st === 'verify_conflict' && Number(sourceId)) {
+        const v = await one('SELECT id, merchant_id FROM verify_offline_conflict WHERE id = ?', [Number(sourceId)])
+        if (!v) throw new BizError(1004, '来源核销冲突不存在')
+      }
+      if (uidN) {
+        const uc = await one('SELECT city_code FROM orders WHERE user_id = ? AND city_code IS NOT NULL ORDER BY id DESC LIMIT 1', [uidN])
+        city = uc ? uc.city_code : null
+      }
     }
     const id = await tx(async (c) => {
       const no = caseNo()
@@ -108,12 +122,20 @@ export const adminRiskCases = {
   },
 
   'GET /admin/risk-cases/:id': async (req) => {
-    const { kase } = await loadCase(req, req.params.id)
+    const { a, kase } = await loadCase(req, req.params.id)
     const records = await q('SELECT actor, action, note, from_status, to_status, created_at FROM risk_case_record WHERE case_id = ? ORDER BY id', [kase.id])
     let objectInfo = null
     if (kase.user_id) {
-      const u = await one('SELECT id, nickname, status, risk_flag FROM user_account WHERE id = ?', [kase.user_id])
-      if (u) objectInfo = { type: 'user', id: u.id, nickname: u.nickname, frozen: Number(u.status) === 0, riskFlag: Number(u.risk_flag) === 1 }
+      // V-02：城市账号只读取与本城有订单关联的账号信息；外城/无关联账号不泄露昵称、冻结与风险标记
+      let visible = true
+      if (a.scopeCity) {
+        const oc = await one('SELECT DISTINCT city_code FROM orders WHERE user_id = ? AND city_code = ? LIMIT 1', [kase.user_id, a.scopeCity])
+        visible = !!oc
+      }
+      if (visible) {
+        const u = await one('SELECT id, nickname, status, risk_flag FROM user_account WHERE id = ?', [kase.user_id])
+        if (u) objectInfo = { type: 'user', id: u.id, nickname: u.nickname, frozen: Number(u.status) === 0, riskFlag: Number(u.risk_flag) === 1 }
+      }
     }
     return { case: kase, statusCn: STATUS_CN[kase.status], records, objectInfo }
   },
