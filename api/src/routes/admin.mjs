@@ -138,8 +138,23 @@ const admin = {
     const a = await requireAdmin(req)
     const sc = a.scopeCity // 城市合伙人：严格本城口径（数据边界 §数据边界）
     const cityWhere = sc ? 'AND o.city_code = ' + Number(sc) : ''
+    // 统计范围可选：today/7d/30d/1y/custom(from,to)——不再写死只统计当天；口径=已支付以上按支付时间
+    const RANGE = { today: 1, '7d': 7, '30d': 30, '1y': 365 }
+    const rq = String(req.query.range || 'today')
+    const dateChk = (v) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, '日期格式应为 YYYY-MM-DD'); return v }
+    let rangeFrom = null, rangeTo = null, rangeLabel = '今日'
+    if (RANGE[rq]) rangeFrom = RANGE[rq]
+    else if (rq === 'custom') {
+      if (!req.query.from || !req.query.to) throw new BizError(1001, '自定义范围需要 from 与 to 日期')
+      rangeFrom = dateChk(req.query.from); rangeTo = dateChk(req.query.to)
+      if (rangeFrom > rangeTo) throw new BizError(1001, 'from 不能晚于 to')
+      rangeLabel = rangeFrom + ' ~ ' + rangeTo
+    } else throw new BizError(1001, '统计范围无效（today/7d/30d/1y/custom）')
+    const rangeWhere = rq === 'today' ? 'AND DATE(o.paid_at) = CURDATE()'
+      : rq === 'custom' ? `AND DATE(o.paid_at) BETWEEN '${rangeFrom}' AND '${rangeTo}'`
+      : `AND o.paid_at >= NOW() - INTERVAL ${rangeFrom} DAY AND o.paid_at < CURDATE() + INTERVAL 1 DAY`
     const t = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders o
-      WHERE o.status IN (20,30,40,50) AND DATE(o.paid_at) = CURDATE() ${cityWhere}`)
+      WHERE o.status IN (20,30,40,50) ${rangeWhere} ${cityWhere}`)
     // 核销率 = 已核销凭证 ÷ 已签发且未冲正的凭证（累计，同一批凭证）。旧口径是"今日核销次数 ÷ 今日新签发数"，
     // 昨天出的票今天核销会让比率超过 100%，分子分母也不是同一批凭证
     const verified = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
@@ -148,21 +163,48 @@ const admin = {
       WHERE tp.status IN (1, 2) ${sc ? 'AND o.city_code = ' + Number(sc) : ''}`)
     const budget = sc ? null : await one('SELECT SUM(total) t, SUM(granted) g FROM bean_budget WHERE status = 1')
     const alerts = sc ? 0 : await count('SELECT COUNT(*) c FROM risk_event WHERE handled = 0')
-    const weekRaw = await q(`SELECT DATE(o.paid_at) d, COUNT(*) c, SUM(o.amount_pay) gmv FROM orders o
-      WHERE o.status IN (20,30,40,50) AND o.paid_at >= NOW() - INTERVAL 7 DAY ${cityWhere} GROUP BY DATE(o.paid_at) ORDER BY d`)
-    // 补齐近 7 天零值（图表完整 X 轴，避免孤点）
-    const byDay = Object.fromEntries(weekRaw.map((w) => [String(w.d), w]))
-    const week = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
-      const hit = byDay[d]
-      week.push({ d, c: hit ? Number(hit.c) : 0, gmv: hit ? Number(hit.gmv) : 0 })
+    // 趋势：范围 ≤45 天按天聚合；更长范围按月聚合（一年看 12 根柱）
+    const long = rq === '1y' || (rq === 'custom' && (new Date(rangeTo) - new Date(rangeFrom)) / 86400000 > 45)
+    const tw = rq === 'today' ? 'AND o.paid_at >= NOW() - INTERVAL 7 DAY'
+      : rq === 'custom' ? `AND DATE(o.paid_at) BETWEEN '${rangeFrom}' AND '${rangeTo}'`
+      : rangeWhere
+    const fmt = long ? "DATE_FORMAT(o.paid_at, '%Y-%m')" : 'DATE(o.paid_at)'
+    const raw = await q(`SELECT ${fmt} d, COUNT(*) c, SUM(o.amount_pay) gmv FROM orders o
+      WHERE o.status IN (20,30,40,50) ${tw} ${cityWhere} GROUP BY d ORDER BY d`)
+    // 补齐零值区间（图表完整 X 轴，避免孤点）：天粒度逐日、月粒度逐月
+    const byKey = Object.fromEntries(raw.map((w) => [String(w.d), w]))
+    const series = []
+    if (long) {
+      const startD = rq === 'custom' ? new Date(rangeFrom + 'T00:00:00') : new Date(Date.now() - 365 * 86400000)
+      const endD = rq === 'custom' ? new Date(rangeTo + 'T00:00:00') : new Date()
+      const months = Math.min(24, Math.max(1, Math.round((endD - startD) / (30 * 86400000)) + 1))
+      const cur = new Date(startD.getFullYear(), startD.getMonth(), 1)
+      for (let i = 0; i < months; i++) {
+        const key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0')
+        const hit = byKey[key]
+        series.push({ d: key, c: hit ? Number(hit.c) : 0, gmv: hit ? Number(hit.gmv) : 0 })
+        cur.setMonth(cur.getMonth() + 1)
+        if (cur > endD) break
+      }
+    } else {
+      const span = rq === 'custom' ? Math.min(Math.round((new Date(rangeTo) - new Date(rangeFrom)) / 86400000) + 1, 92) : (RANGE[rq] || 7)
+      for (let i = span - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
+        const hit = byKey[d]
+        series.push({ d, c: hit ? Number(hit.c) : 0, gmv: hit ? Number(hit.gmv) : 0 })
+      }
     }
+    // 今日口径始终保留（兼容旧前端与"今日"卡片）；范围口径按查询参数返回
+    const today = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders o
+      WHERE o.status IN (20,30,40,50) AND DATE(o.paid_at) = CURDATE() ${cityWhere}`)
     return {
-      ordersToday: Number(t.c), gmvToday: fen2yuan(t.gmv),
+      range: rq, rangeLabel,
+      rangeFrom: rq === 'custom' ? rangeFrom : null, rangeTo: rq === 'custom' ? rangeTo : null,
+      ordersInRange: Number(t.c), gmvInRange: fen2yuan(t.gmv),
+      ordersToday: Number(today.c), gmvToday: fen2yuan(today.gmv),
       verifyRate: issuedPass ? ((verified / issuedPass) * 100).toFixed(1) + '%' : '—',
       budgetUsage: budget && budget.t ? ((Number(budget.g) / Number(budget.t)) * 100).toFixed(1) + '%' : '—',
-      alerts, trend: week.map(w => ({ date: w.d, orders: Number(w.c), gmv: fen2yuan(w.gmv) })),
+      alerts, trend: series.map(w => ({ date: w.d, orders: Number(w.c), gmv: fen2yuan(w.gmv) })),
       scopeCity: a.scopeCity || null,
       globalScope: !a.scopeCity,
     }

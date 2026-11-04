@@ -14,18 +14,23 @@ async function dash() {
   try {
   $('#app').innerHTML = `<div class="kpi-grid">${Array(6).fill('<div class="kpi"><div class="sk" style="width:44px;height:44px;border-radius:12px"></div><div style="flex:1"><div class="sk" style="height:12px;width:60%;margin-bottom:8px"></div><div class="sk" style="height:22px;width:40%"></div></div></div>').join('')}</div>
     <div class="card"><div class="sk" style="height:220px"></div></div>`
-  const k = await api('GET', '/admin/dash/kpi')
+  const R = window.__dashRange || (window.__dashRange = { range: 'today', from: '', to: '' })
+  const qs = new URLSearchParams({ range: R.range })
+  if (R.range === 'custom') { qs.set('from', R.from); qs.set('to', R.to) }
+  const k = await api('GET', '/admin/dash/kpi?' + qs.toString())
   const orders = await api('GET', '/admin/orders')
   const wxd = await api('GET', '/admin/wxdata/visit-trend').catch(() => ({ mock: true, list: [] }))
   const recent = orders.slice(0, 8)
   const cityTag = k.scopeCity ? `本城 ${k.scopeCity} 口径` : '全域口径'
+  const inRange = k.range === 'today'
+  const rangeCn = { today: '今日', '7d': '近 7 天', '30d': '近 30 天', '1y': '近一年' }[k.range] || (k.rangeLabel || '自定义')
   const kpis = [
-    ['gmv', 't-amber', '今日 GMV', '¥' + k.gmvToday, cityTag],
-    ['order', 't-blue', '今日订单', k.ordersToday, '含已支付以上状态'],
+    ['gmv', 't-amber', rangeCn + ' GMV', '¥' + Number(inRange ? k.gmvToday : k.gmvInRange).toLocaleString('zh-CN', { maximumFractionDigits: 2 }), cityTag + ' · 按支付时间'],
+    ['order', 't-blue', rangeCn + '订单', inRange ? k.ordersToday : k.ordersInRange, '已支付以上状态'],
     ['check', 't-green', '核销率（累计）', k.verifyRate, '已核销 / 已签发凭证'],
     ['bean', 't-gold', '预算池水位', k.globalScope ? k.budgetUsage : '—', k.globalScope ? '已发放 / 批次总额' : '全域科目 · 仅总部可见'],
     ['alert', 't-red', '待处理告警', k.globalScope ? k.alerts : '—', k.globalScope ? (k.alerts ? '需要关注' : '一切正常') : '全域风控 · 仅总部'],
-    ['trend', 't-violet', '7 日订单', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + '近一周'],
+    ['trend', 't-violet', rangeCn + '订单（趋势合计）', (k.trend || []).reduce((s, t) => s + t.orders, 0), (k.scopeCity ? '本城' : '全域') + ' · ' + (k.range === 'today' ? '近 7 天趋势' : (k.rangeLabel || '') + ' 趋势')],
   ]
   const trend = k.trend || []
   const maxG = Math.max(...trend.map((t) => Number(t.gmv)), 1)
@@ -43,7 +48,19 @@ async function dash() {
   $('#app').innerHTML = `
   <section class="dash-hero"><div><div class="dash-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
     <h2>${hello}</h2><p>${todoTotal ? `今天有 <b>${todoTotal}</b> 项待处理，建议先从下方待办开始。` : '待办已全部处理完毕，可以看看经营趋势。'}</p></div>
-    <div class="dash-hero-kpi"><span>近 7 日 GMV</span><b>¥${(k.trend || []).reduce((s, t) => s + Number(t.gmv || 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</b><small>${esc(cityTag)} · ${(k.trend || []).reduce((s, t) => s + t.orders, 0)} 单</small></div></section>
+    <div class="dash-hero-kpi"><span>${rangeCn} GMV</span><b>¥${(k.trend || []).reduce((s, t) => s + Number(t.gmv || 0), 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</b><small>${esc(cityTag)} · ${(k.trend || []).reduce((s, t) => s + t.orders, 0)} 单</small></div></section>
+  <div class="card" style="margin-bottom:16px"><div class="row" style="align-items:center;flex-wrap:wrap">
+    <b style="margin-right:8px">统计范围</b>
+    ${[['today','今日'],['7d','近 7 天'],['30d','近 30 天'],['1y','近一年']].map(function (p) {
+      return '<button class="cfg-tab ' + (k.range === p[0] ? 'on' : '') + '" onclick="window.__dashRange.range=\'' + p[0] + '\';window.__dashRange.from=\'\';window.__dashRange.to=\'\';dash()">' + p[1] + '</button>'
+    }).join('')}
+    <button class="cfg-tab ${k.range === 'custom' ? 'on' : ''}" onclick="var x=document.getElementById('dashCustom');x.style.display=x.style.display==='none'?'flex':'none'">自定义</button>
+    <span id="dashCustom" style="display:${k.range === 'custom' ? 'flex' : 'none'};gap:8px;align-items:center;margin-left:8px">
+      <input type="date" id="dashFrom" value="${window.__dashRange.from || ''}" class="inp" style="width:140px"> <span class="muted">~</span> <input type="date" id="dashTo" value="${window.__dashRange.to || ''}" class="inp" style="width:140px">
+      <button class="btn primary sm" onclick="window.__dashRange.from=document.getElementById('dashFrom').value;window.__dashRange.to=document.getElementById('dashTo').value;if(!window.__dashRange.from||!window.__dashRange.to)return toast('请选择起止日期',true);window.__dashRange.range='custom';dash()">应用</button>
+    </span>
+    <span class="muted" style="margin-left:auto">${esc(k.rangeLabel || rangeCn)} · 口径：已支付以上订单按支付时间</span>
+  </div></div>
   ${P_ ? `<div class="card todo-card"><div class="card-head"><h3>今日待办 <span class="muted">· ${cityTag}</span></h3>
       <span class="${todoTotal ? 'pill s10' : 'pill s50'}">${todoTotal ? '共 ' + todoTotal + ' 项待处理' : '全部处理完毕'}</span></div>
     <div class="todo-row">
