@@ -150,5 +150,10 @@ bootstrap().then(async () => {
       .filter((i) => i && i.family === 'IPv4' && !i.internal)
       .map((i) => i.address)
     for (const h of ['127.0.0.1', ...lan]) console.log(`[wanderlust-api] http://${h}:${PORT}  管理后台: http://${h}:${PORT}/admin-ui  支付通道: ${isLive() ? '微信支付V3(生产)' : 'MOCK(联调)'}`)
+    // 定时任务（存证打包/锚定/确认、关单、结算…）：JOBS_IN_API=1 时随 API 一起跑
+    // 这台机器注册独立计划任务需要管理员权限，借 API 的看护任务把调度带上；多实例靠 MySQL 咨询锁互斥
+    if (String(process.env.JOBS_IN_API || '') === '1') {
+      import('./jobs.mjs').then((m) => m.startInApi()).catch((e) => console.error('[jobs] 启动失败', e.message))
+    }
   })
 }).catch((e) => { console.error('[boot failed]', e.message); process.exit(1) })
