@@ -66,6 +66,23 @@ export async function requireAdmin(req, roles) {
   return p // 含 scopeCity（城市合伙人行级隔离）：列表查询必须经 scopeFilter 注入
 }
 
+/**
+ * C-05：模块级强制校验（后端唯一授权来源的前置闸）。D-06：由 ROUTE_MODULES 显式映射驱动，
+ * 在 index.mjs 对命中路由统一调用；与路由内既有角色/能力校验取交集（不放松）。
+ * 城市合伙人叠加不可授予名单（D-01）；无 uid 的测试夹具令牌按角色默认集合校验。
+ */
+export async function requireModule(req, moduleKey) {
+  const p = await requireAdmin(req)
+  const { CITY_DENY_MODULES } = await import('../domain/modules.mjs')
+  const { accountModules } = await import('../domain/admin-modules.mjs')
+  if (p.role === 'city_partner' && CITY_DENY_MODULES.includes(moduleKey)) {
+    throw new BizError(1003, '城市账号不可使用该模块（' + moduleKey + '）')
+  }
+  const set = await accountModules(p.uid, p.role)
+  if (!set.has(moduleKey)) throw new BizError(1003, '模块未授权（' + moduleKey + '），请联系超级管理员在「后台账号 → 权限」调整')
+  return p
+}
+
 /** 行级隔离：城市合伙人只能看自己城市；内部角色全量 */
 export function scopeFilter(admin, col = 'city_code') {
   const city = admin.scopeCity

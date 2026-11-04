@@ -151,6 +151,100 @@ const adminAccounts = {
     return { reset: true }
   },
 
+  // ===== C-05：账号级模块授权三态 =====
+  // 读取：角色默认 + 账号三态明细 + 当前有效集合（前端权限弹窗数据源）
+  'GET /admin/accounts/:id/modules': async (req) => {
+    await requireAdmin(req, ['super'])
+    const u = await one('SELECT id, username, role, status FROM admin_user WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1004, '账号不存在')
+    const mods = await import('../domain/modules.mjs')
+    const { accountModules } = await import('../domain/admin-modules.mjs')
+    const grants = await q('SELECT module_key, effect, reason, granted_by, granted_at FROM admin_user_module WHERE user_id = ? ORDER BY module_key', [u.id])
+    const eff = await accountModules(u.id, u.role)
+    return {
+      userId: u.id, username: u.username, role: u.role,
+      defaults: mods.ROLE_DEFAULT_MODULES[u.role] || [],
+      modules: mods.MODULES, effective: [...eff],
+      grants, cityDeny: mods.CITY_DENY_MODULES,
+    }
+  },
+
+  // 保存三态：grants=[{moduleKey, effect: 'allow'|'deny'|null}]（null=清除回到继承）；原因必填；
+  // 城市账号不可被授予 CITY_DENY_MODULES（D-01，requireModule 侧二次强制）；变更 epoch+1 踢旧会话；审计含前后有效集合
+  'POST /admin/accounts/:id/modules': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { grants, reason } = req.body || {}
+    const why = String(reason || '').trim()
+    if (why.length < 4 || why.length > 200) throw new BizError(1001, '请填写 4–200 字授权/收回原因（进入审计）')
+    const u = await one('SELECT id, username, role, status FROM admin_user WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1004, '账号不存在')
+    if (u.role === 'super') throw new BizError(1001, '超级管理员恒为全部模块，无需调整')
+    const mods = await import('../domain/modules.mjs')
+    const { accountModules, invalidateModuleCache } = await import('../domain/admin-modules.mjs')
+    const list = Array.isArray(grants) ? grants : []
+    if (!list.length) throw new BizError(1001, '请至少选择一项调整')
+    for (const g of list) {
+      if (!mods.MODULE_KEYS.includes(String(g.moduleKey))) throw new BizError(1001, '模块无效：' + g.moduleKey)
+      if (g.effect != null && !['allow', 'deny'].includes(g.effect)) throw new BizError(1001, 'effect 只能是 allow / deny / null（清除）')
+      if (g.effect === 'allow' && u.role === 'city_partner' && mods.CITY_DENY_MODULES.includes(g.moduleKey)) {
+        throw new BizError(1003, '城市账号不可被授予模块「' + g.moduleKey + '」（系统级/资金敏感模块不在可授予范围）')
+      }
+    }
+    const before = await accountModules(u.id, u.role)
+    await tx(async (c) => {
+      for (const g of list) {
+        if (g.effect == null) await c.q('DELETE FROM admin_user_module WHERE user_id = ? AND module_key = ?', [u.id, g.moduleKey])
+        else await c.q('INSERT INTO admin_user_module (user_id, module_key, effect, reason, granted_by) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE effect = VALUES(effect), reason = VALUES(reason), granted_by = VALUES(granted_by)',
+          [u.id, g.moduleKey, g.effect, why, 'admin:' + a.name])
+      }
+      await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE id = ?', [u.id])
+      const afterRows = await c.q('SELECT module_key, effect FROM admin_user_module WHERE user_id = ?', [u.id])
+      const after = new Set(mods.effectiveModules(u.role))
+      for (const r of afterRows) { if (r.effect === 'allow') after.add(r.module_key); else after.delete(r.module_key) }
+      await audit(c, 'admin:' + a.name, 'account', 'modules-grant', 'admin-' + u.id,
+        { modules: [...before].sort() }, { modules: [...after].sort(), reason: why, sessionsRevoked: true })
+    })
+    invalidateModuleCache(u.id)
+    const eff = await accountModules(u.id, u.role)
+    return { effective: [...eff], sessionsRevoked: true, note: '该账号旧会话已失效，重新登录后按新模块集合显示' }
+  },
+
+  // ===== C-05：角色默认矩阵（后台账号页「角色默认权限」Tab 数据源）=====
+  'GET /admin/role-modules': async (req) => {
+    await requireAdmin(req, ['super'])
+    const mods = await import('../domain/modules.mjs')
+    const rows = await q('SELECT role, module_key FROM admin_role_module')
+    const byRole = {}
+    for (const r of rows) (byRole[r.role] = byRole[r.role] || []).push(r.module_key)
+    return { roles: ['ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev'], modules: mods.MODULES, byRole, cityDeny: mods.CITY_DENY_MODULES }
+  },
+
+  // 改角色默认：影响该角色全部有效账号（epoch+1 下次登录生效）；城市不可授予名单同样约束；super 恒全部不可改
+  'POST /admin/role-modules': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { role, moduleKey, on, reason } = req.body || {}
+    const why = String(reason || '').trim()
+    if (why.length < 4 || why.length > 200) throw new BizError(1001, '请填写 4–200 字变更原因（进入审计）')
+    const mods = await import('../domain/modules.mjs')
+    if (!['ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev'].includes(role)) throw new BizError(1001, '角色无效（super 恒为全部，不可编辑）')
+    if (!mods.MODULE_KEYS.includes(String(moduleKey))) throw new BizError(1001, '模块无效：' + moduleKey)
+    if (on && role === 'city_partner' && mods.CITY_DENY_MODULES.includes(moduleKey)) {
+      throw new BizError(1003, '城市合伙人不可被授予模块「' + moduleKey + '」')
+    }
+    const before = Number((await one('SELECT COUNT(*) n FROM admin_role_module WHERE role = ? AND module_key = ?', [role, moduleKey])).n) > 0
+    await tx(async (c) => {
+      if (on) await c.q('INSERT IGNORE INTO admin_role_module (role, module_key, level, updated_by) VALUES (?,?,?,?)', [role, moduleKey, 'manage', 'admin:' + a.name])
+      else await c.q('DELETE FROM admin_role_module WHERE role = ? AND module_key = ?', [role, moduleKey])
+      // 影响该角色全部有效账号：旧会话失效（重新登录读到新集合），并清模块集合缓存
+      const r = await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE role = ? AND status = 1', [role])
+      await audit(c, 'admin:' + a.name, 'account', 'role-module', 'role-' + role,
+        { [moduleKey]: before ? 1 : 0 }, { [moduleKey]: on ? 1 : 0, reason: why, affectedAccounts: r.affectedRows })
+    })
+    const { invalidateModuleCache } = await import('../domain/admin-modules.mjs')
+    invalidateModuleCache(null)
+    return { role, moduleKey, on: !!on, note: '该角色全部有效账号的旧会话已失效，重新登录后按新默认集合显示' }
+  },
+
   // 本人改密：验旧密码，清 must_change_pwd；改完需重新登录（epoch+1 使旧会话失效）
   'POST /admin/account/password': async (req) => {
     const a = await requireAdmin(req)

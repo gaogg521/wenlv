@@ -135,9 +135,11 @@ const admin = {
         actions[`entity.${kind}.${op}`] = { allowed: (op !== 'create' || !sc.noCreate) && roles.includes(a.role), reason: '当前角色不能' + (op === 'create' ? '新建' : '编辑') + sc.label }
       }
     }
-    // C-04：模块单一数据源——allModules 是唯一清单（key/中文名/分组/图标），modules 是该账号有效模块集合。
+    // C-04/C-05：模块单一数据源——allModules 是唯一清单，modules 是该账号有效模块集合
+    // （角色默认经 V54 矩阵表，可在「后台账号 → 角色默认权限」调整；账号级三态叠加 admin_user_module）。
     // 前端菜单不再写死 access 表；未知角色默认拒绝（空集合），readonly/sre/dev 不再缺省放行全菜单。
-    return { role: a.role, scopeCity: a.scopeCity || null, actions, modules: effectiveModules(a.role), allModules: MODULES }
+    const { accountModules } = await import('../domain/admin-modules.mjs')
+    return { role: a.role, scopeCity: a.scopeCity || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES }
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
@@ -852,7 +854,9 @@ const admin = {
 
 
   'GET /admin/risk': async (req) => {
-    await requireAdmin(req, ['super', 'risk'])
+    // D-04：本路由已迁移到模块模型（ROUTE_MODULES→risk/view），角色硬编码移除；
+    // finance/risk 默认可见，其他角色经「后台账号 → 权限」额外授予后可见（正例），收回后 1003
+    await requireAdmin(req)
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
     const conds = [], args = [], filters = {}
