@@ -232,10 +232,16 @@ export const people = {
       await c.upd('UPDATE user_account SET status = ? WHERE id = ?', [st, u.id])
       await audit(c, 'admin:' + a.name, 'user', st ? 'unfreeze' : 'freeze', 'user-' + u.id, { status: N(u.status) }, { status: st, reason: reason || null })
       if (caseId) {
-        const k = await c.one('SELECT id, status FROM risk_case WHERE id = ? FOR UPDATE', [caseId])
+        // V-08：引用案件必须真实关联本次处置的用户、案件未关闭（已关闭须先重开）、城市账号只能引用本城案件；
+        // 时间线记录真实处置对象（用户 ID），不再只写一条无主语的 freeze。
+        const k = await c.one('SELECT id, status, user_id, object_type, object_id, city_code FROM risk_case WHERE id = ? FOR UPDATE', [caseId])
         if (!k) throw new BizError(1004, '引用的案件不存在')
+        if (Number(k.status) === 5) throw new BizError(2002, '引用的案件已关闭；如需继续处置请先重开案件')
+        const linked = Number(k.user_id) === Number(u.id) || (String(k.object_type) === 'user' && Number(k.object_id) === Number(u.id))
+        if (!linked) throw new BizError(1003, '引用的案件未关联当前处置用户，不能写入其时间线')
+        if (a.scopeCity && String(k.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '仅可引用本城案件')
         await c.q('INSERT INTO risk_case_record (case_id, actor, action, note, from_status, to_status) VALUES (?,?,?,?,?,?)',
-          [k.id, 'admin:' + a.name, st ? 'unfreeze' : 'freeze', reason || null, Number(k.status), Number(k.status)])
+          [k.id, 'admin:' + a.name, st ? 'unfreeze' : 'freeze', (st ? '解冻' : '冻结') + '用户 #' + u.id + (reason ? '：' + reason : ''), Number(k.status), Number(k.status)])
       }
       return Number(u.id)
     })

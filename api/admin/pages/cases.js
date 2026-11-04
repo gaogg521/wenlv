@@ -38,7 +38,9 @@ async function cases() {
           ops.push(`<button class="btn primary sm" onclick="caseAction(${k.id},'review')">提交复核</button>`)
         }
         if ([2, 3].includes(Number(k.status))) ops.push(`<button class="btn ghost sm" onclick="caseAction(${k.id},'resume')">恢复处理</button>`)
-        if (Number(k.status) === 4 && k.handler !== 'admin:' + (ME?.displayName || ME?.username || '')) ops.push(`<button class="btn primary sm" onclick="caseAction(${k.id},'close')">复核结案</button>`)
+        // V-01：本人判定按不可变 UID（旧数据只有名字快照时回退名字比较）
+        const isCaseMine = k.handler_uid != null ? (ME?.uid != null && Number(k.handler_uid) === Number(ME.uid)) : k.handler === 'admin:' + (ME?.displayName || ME?.username || '')
+        if (Number(k.status) === 4 && !isCaseMine) ops.push(`<button class="btn primary sm" onclick="caseAction(${k.id},'close')">复核结案</button>`)
         if (Number(k.status) === 5) ops.push(`<button class="btn ghost sm" onclick="caseAction(${k.id},'reopen')">重开</button>`)
       }
       return `<tr><td class="num">${esc(k.case_no)}</td>
