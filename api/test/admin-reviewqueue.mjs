@@ -170,7 +170,45 @@ try {
     assert.equal(still.length, 1, '无关待审认领不受影响')
   })
 
-  console.log(`\n${passed} 项审核工作队列（批次 F-3 + 批次 A 修复）回归通过`)
+  await test('R-03 批量审批：预检列异常、逐笔结果、角色与并发', async () => {
+    // note 批量通过：3 条待审（1 条先被处理制造预检异常）+ ops 无权
+    const b1 = await mkNote(1, stamp + ' 批量A1')
+    const b2 = await mkNote(1, stamp + ' 批量A2')
+    const b3 = await mkNote(2, stamp + ' 已处理不可批量')
+    created.notes.push(b1, b2, b3)
+    const rb = ok(await call('review', 'POST', '/admin/review-queue/batch-verdict', { kind: 'note', itemIds: [b1, b2, b3, 99999999], action: 'pass' }))
+    assert.equal(rb.ok, 2, '两条通过')
+    assert.equal(rb.fail, 0)
+    assert.equal(rb.precheckFailed.length, 2, '已处理 + 不存在进预检异常清单')
+    assert.ok(rb.precheckFailed.some((p) => Number(p.id) === b3 && /待审/.test(p.reason)), '预检异常带原因')
+    const statuses = await q('SELECT id, status FROM content_note WHERE id IN (?)', [[b1, b2]])
+    assert.ok(statuses.every((s) => Number(s.status) === 2), '批量通过后笔记已发布')
+    const claims = await q("SELECT id FROM review_claim WHERE queue_kind='note' AND item_id IN (?) AND released_at IS NULL", [[b1, b2]])
+    assert.equal(claims.length, 0, '批量通过释放认领')
+    // 角色边界：ops 不能批量通过笔记；report 批量必须有统一意见
+    assert.equal((await call('ops', 'POST', '/admin/review-queue/batch-verdict', { kind: 'note', itemIds: [b3], action: 'pass' })).code, 1003)
+    const rp = (await q("INSERT INTO content_report (note_id, user_id, city_code, reason) VALUES (?,?,?,'批量举报理由四字')", [b3, buyer.insertId, prod.city_code])).insertId
+    created.reports.push(rp)
+    assert.equal((await call('ops', 'POST', '/admin/review-queue/batch-verdict', { kind: 'report', itemIds: [rp], action: 'dismiss', reason: '短' })).code, 1001, '意见太短')
+    assert.equal((await call('ops', 'POST', '/admin/review-queue/batch-verdict', { kind: 'task_entry', itemIds: [1], action: 'pass' })).code, 1001, '约稿不进批量')
+    // report 批量不成立：意见逐笔进审计
+    ok(await call('ops', 'POST', '/admin/review-queue/batch-verdict', { kind: 'report', itemIds: [rp], action: 'dismiss', reason: stamp + ' 批量核实为误报' }))
+    const rpt = await one('SELECT status, resolution FROM content_report WHERE id = ?', [rp])
+    assert.equal(Number(rpt.status), 1, '举报不成立')
+    assert.match(rpt.resolution, /批量核实为误报/)
+    // 并发：同一批两条并发提交 → 每条待办只成功一次
+    const cc1 = await mkNote(1, stamp + ' 并发批量1')
+    const cc2 = await mkNote(1, stamp + ' 并发批量2')
+    created.notes.push(cc1, cc2)
+    const [x, y] = await Promise.all([
+      call('review', 'POST', '/admin/review-queue/batch-verdict', { kind: 'note', itemIds: [cc1, cc2], action: 'pass' }),
+      call('review', 'POST', '/admin/review-queue/batch-verdict', { kind: 'note', itemIds: [cc1, cc2], action: 'pass' }),
+    ])
+    const totalOk = (x.data?.ok || 0) + (y.data?.ok || 0)
+    assert.equal(totalOk, 2, '并发下每条只成功一次：' + JSON.stringify([x.data?.results, y.data?.results]))
+  })
+
+  console.log(`\n${passed} 项审核工作队列（批次 F-3 + 批次 A 修复 + R-03 批量审批）回归通过`)
 } finally {
   if (created.notes.length) {
     await q("DELETE FROM review_claim WHERE queue_kind = 'note' AND item_id IN (?)", [created.notes]).catch(() => {})

@@ -135,6 +135,13 @@ try {
     assert.equal(dataRows, dbAll, '导出行数 = 库内订单总数')
     // 城市账号导出被拒（批次 A 规则保持）
     assert.equal((await call(null, 'GET', '/admin/export/orders', null, cityTok)).code, 1003)
+    // U-04：按筛选导出与检索同口径——status=50 的行数与库内一致；非法状态拒绝
+    const dbDone = Number((await one('SELECT COUNT(*) n FROM orders WHERE status = 50')).n)
+    const expDone = ok(await call('super', 'GET', '/admin/export/orders?status=50'))
+    assert.equal(expDone.csv.trim().split('\n').length - 1, dbDone, '状态筛选导出行数 = 库内同状态数')
+    assert.equal((await call('super', 'GET', '/admin/export/orders?status=999')).code, 1001, '非法状态拒绝')
+    const expKw = ok(await call('super', 'GET', '/admin/export/orders?kw=不存在的单号xyz'))
+    assert.equal(expKw.csv.trim().split('\n').length - 1, 0, '关键字筛选空结果导出仅表头')
   })
 
   await test('T10 列表契约：内容/创作者/提现/风控为分页对象；越权与空态负向', async () => {

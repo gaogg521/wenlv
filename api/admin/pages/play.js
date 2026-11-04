@@ -4,16 +4,26 @@
 /* ============ 暗号 / 逐品佣金 / KYC / 共创 ============ */
 async function phrases() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/phrases')
-  const prods = await api('GET', '/admin/products')
-  const noPhrase = prods.filter((p) => !list.some((x) => x.id === p.id))
+  window.__phQ = window.__phQ || { page: 1, kw: '' }
+  const Q = window.__phQ
+  const [d, unconf] = await Promise.all([
+    api('GET', '/admin/phrases?' + new URLSearchParams({ page: Q.page, kw: Q.kw, pageSize: 20 }).toString()),
+    api('GET', '/admin/phrases?unconfigured=1').catch(() => ({ rows: [] })),
+  ])
+  const list = d.rows
+  const pages = Math.max(1, Math.ceil(d.total / d.pageSize))
+  const noPhrase = unconf.rows
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#f1e9fd">🎭</div><div><div class="l">已配暗号产品</div><div class="v">${list.length}</div><div class="s">剧本游入戏凭证</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">待配置产品</div><div class="v">${noPhrase.length}</div><div class="s">可选配暗号</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#f1e9fd">🎭</div><div><div class="l">已配暗号产品</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">剧本游入戏凭证</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">待配置产品</div><div class="v">${noPhrase.length}</div><div class="s">可选配暗号（在架产品）</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>暗号管理</h2><span class="muted">剧本游「入戏」凭证 · 用户暗号给游客 · 商家暗号核销员对答</span></div>
+    <form class="orders-search" onsubmit="event.preventDefault();window.__phQ.kw=this.kw.value.trim();window.__phQ.page=1;phrases()">
+      <input name="kw" type="search" value="${esc(Q.kw)}" placeholder="按线路名称搜索">
+      <button class="btn primary" type="submit">查询</button>
+      ${Q.kw ? '<button class="btn ghost" type="button" onclick="window.__phQ={page:1,kw:\'\'};phrases()">重置</button>' : ''}</form>
     ${list.length ? `<table><thead><tr><th>产品</th><th>用户暗号</th><th>商家暗号</th><th>频道</th><th>操作</th></tr></thead><tbody>
     ${list.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
       <td><code style="background:#f1e9fd;color:#6d28d9">${esc(x.phrase_user)}</code></td>
@@ -22,8 +32,9 @@ async function phrases() {
       <td><div class="td-actions">
         <button class="btn ghost sm" onclick="entityEditor('phrase', ${x.id}, { onSaved: () => phrases() })">编辑</button>
         <button class="btn danger sm" onclick="clearPhrase(${x.id})">清除</button>
-      </div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('还没有产品配暗号——下方选择线路开始配置')}
+      </div></td></tr>`).join('')}</tbody></table>
+    <div class="pagination"><span>共 ${Number(d.total).toLocaleString()} 条 · 第 ${d.page} / ${pages} 页</span><div><button class="btn ghost sm" ${d.page <= 1 ? 'disabled' : ''} onclick="window.__phQ.page--;phrases()">上一页</button> <button class="btn ghost sm" ${d.page >= pages ? 'disabled' : ''} onclick="window.__phQ.page++;phrases()">下一页</button></div></div>`
+    : emptyBox(Q.kw ? '没有符合条件的暗号记录' : '还没有产品配暗号——下方选择线路开始配置')}
     <div class="card-head" style="margin-top:16px"><h3>为线路配置暗号</h3></div>
     <div class="row">
       <select id="phProd" class="inp" style="width:320px">${noPhrase.map((p) => `<option value="${p.id}">${esc(p.title)}</option>`).join('') || '<option value="">全部线路均已配置</option>'}</select>
@@ -43,13 +54,19 @@ window.savePhrase = () => {
 }
 async function rateov() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const prods = await api('GET', '/admin/products')
-  const ov = await api('GET', '/admin/rate-overrides').catch(() => [])
-  const avgRate = ov.length ? (ov.reduce((s, x) => s + Number(x.promo_rate_bp), 0) / ov.length / 100).toFixed(1) : '—'
+  window.__roQ = window.__roQ || { page: 1, kw: '' }
+  const Q = window.__roQ
+  const [prods, d] = await Promise.all([
+    api('GET', '/admin/products'),
+    api('GET', '/admin/rate-overrides?' + new URLSearchParams({ page: Q.page, kw: Q.kw, pageSize: 20 }).toString()).catch(() => ({ rows: [], total: 0, page: 1, pageSize: 20, avgBp: 0 })),
+  ])
+  const ov = d.rows
+  const pages = Math.max(1, Math.ceil(d.total / d.pageSize))
+  const avgRate = d.avgBp ? (d.avgBp / 100).toFixed(1) : '—'
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdf3e0">📊</div><div><div class="l">已设覆盖</div><div class="v">${ov.length}</div><div class="s">单品费率覆盖</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">平均覆盖费率</div><div class="v">${avgRate}%</div><div class="s">上限 12% · 留空=恢复档位</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">📊</div><div><div class="l">已设覆盖</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">单品费率覆盖</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">平均覆盖费率</div><div class="v">${avgRate}%</div><div class="s">全量口径 · 上限 12% · 留空=恢复档位</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>逐品佣金覆盖</h2><span class="muted">D2 扩展 · 单品费率优先于推广商档位 5/8/12%</span></div>
@@ -58,12 +75,17 @@ async function rateov() {
       <button class="btn primary sm" onclick="saveRate()">设置覆盖 →</button>
       <span class="muted">需填写费率、生效期、调整原因与审批人；原因写入审计</span>
     </div>
+    <form class="orders-search" onsubmit="event.preventDefault();window.__roQ.kw=this.kw.value.trim();window.__roQ.page=1;rateov()">
+      <input name="kw" type="search" value="${esc(Q.kw)}" placeholder="按产品名称搜索">
+      <button class="btn primary" type="submit">查询</button>
+      ${Q.kw ? '<button class="btn ghost" type="button" onclick="window.__roQ={page:1,kw:\'\'};rateov()">重置</button>' : ''}</form>
     ${ov.length ? `<table><thead><tr><th>产品</th><th>单品费率</th><th>生效期</th><th>原因</th><th>操作</th></tr></thead><tbody>
     ${ov.map((x) => `<tr><td class="td-main">${esc(x.title)}</td>
       <td class="money num"><b>${(Number(x.promo_rate_bp) / 100).toFixed(2)}%</b></td>
       <td class="td-sub">${esc(x.rate_start || '—')} ~ ${esc(x.rate_end || '—')}</td><td class="td-sub">${esc(x.rate_reason || '—')}</td>
-      <td><button class="btn ghost sm" onclick="entityEditor('rateov', ${x.id}, { onSaved: () => rateov() })">编辑</button></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
+      <td><button class="btn ghost sm" onclick="entityEditor('rateov', ${x.id}, { onSaved: () => rateov() })">编辑</button></td></tr>`).join('')}</tbody></table>
+    <div class="pagination"><span>共 ${Number(d.total).toLocaleString()} 条 · 第 ${d.page} / ${pages} 页</span><div><button class="btn ghost sm" ${d.page <= 1 ? 'disabled' : ''} onclick="window.__roQ.page--;rateov()">上一页</button> <button class="btn ghost sm" ${d.page >= pages ? 'disabled' : ''} onclick="window.__roQ.page++;rateov()">下一页</button></div></div>`
+    : emptyBox(Q.kw ? '没有符合条件的覆盖记录' : '暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
 }
 window.saveRate = () => entityEditor('rateov', $('#roProd').value, { onSaved: () => rateov() })
 async function kyc() {

@@ -123,6 +123,45 @@ async function attestProductChange(productId, before, after, kind) {
   }
 }
 
+// U-04/R-05 配套：订单筛选条件构建（search 与按筛选导出共用同一套语义；手机号走盲索引不回显）
+async function orderFiltersOf(req, a) {
+  const date = (v, label) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, label + '格式应为 YYYY-MM-DD'); return v }
+  const conds = []
+  const addCond = (sql, ...args) => { conds.push({ sql, args }) }
+  const sc = scopeFilter(a, 'o.city_code')
+  if (sc.sql) addCond(sc.sql.replace(' AND ', ''), ...sc.params)
+  const filters = {}
+  const cityCode = String(req.query.cityCode || '').trim()
+  if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
+  const productId = Number(req.query.productId || 0)
+  if (productId) { addCond('o.product_id = ?', productId); filters.productId = productId }
+  const kw = String(req.query.kw || '').trim()
+  if (kw) {
+    // 红线 11：完整手机号检索时不把号码原样回显（filters.kw 脱敏）
+    filters.kw = /^1\d{10}$/.test(kw) ? kw.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : kw
+    if (/^1\d{10}$/.test(kw)) {
+      // 完整手机号：走盲索引查 user_id，不把号码拼进 SQL/响应
+      const w = (await import('../infra/mobile.mjs')).whereMobile(kw)
+      const users = await q(`SELECT u.id FROM user_account u WHERE ${w.sql}`, w.args)
+      if (!users.length) addCond('1 = 0')
+      else addCond(`o.user_id IN (${users.map((u) => Number(u.id)).join(',')})`)
+    } else addCond('(o.order_no LIKE ? OR u.nickname LIKE ? OR o.contact_name LIKE ?)', '%' + kw + '%', '%' + kw + '%', '%' + kw + '%')
+  }
+  const range = (col, from, to, label) => {
+    if (from) { date(from, label); addCond(`${col} >= ?`, from + ' 00:00:00') }
+    if (to) { date(to, label); addCond(`${col} <= ?`, to + ' 23:59:59.999') }
+  }
+  range('o.created_at', req.query.createdFrom, req.query.createdTo, '创建日期')
+  if (req.query.createdFrom) filters.createdFrom = req.query.createdFrom
+  if (req.query.createdTo) filters.createdTo = req.query.createdTo
+  range('o.paid_at', req.query.paidFrom, req.query.paidTo, '支付日期')
+  if (req.query.paidFrom) filters.paidFrom = req.query.paidFrom
+  if (req.query.paidTo) filters.paidTo = req.query.paidTo
+  const departDate = String(req.query.departDate || '').trim()
+  if (departDate) { date(departDate, '出发日期'); addCond('o.session_id IN (SELECT id FROM tour_session WHERE depart_date = ?)', departDate); filters.departDate = departDate }
+  return { conds, filters }
+}
+
 const admin = {
   'GET /admin/capabilities': async (req) => {
     const a = await requireAdmin(req)
@@ -373,41 +412,8 @@ const admin = {
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
-    const date = (v, label) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new BizError(1001, label + '格式应为 YYYY-MM-DD'); return v }
     // filters 收集的是"除 status 外"的条件（状态计数要与主查询共用它们）
-    const conds = [], condArgs = [] // [sql, args[]]
-    const addCond = (sql, ...args) => { conds.push({ sql, args }); }
-    const sc = scopeFilter(a, 'o.city_code')
-    if (sc.sql) addCond(sc.sql.replace(' AND ', ''), ...sc.params)
-    const filters = {}
-    const cityCode = String(req.query.cityCode || '').trim()
-    if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
-    const productId = Number(req.query.productId || 0)
-    if (productId) { addCond('o.product_id = ?', productId); filters.productId = productId }
-    const kw = String(req.query.kw || '').trim()
-    if (kw) {
-      // 红线 11：完整手机号检索时不把号码原样回显（filters.kw 脱敏）
-      filters.kw = /^1\d{10}$/.test(kw) ? kw.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : kw
-      if (/^1\d{10}$/.test(kw)) {
-        // 完整手机号：走盲索引查 user_id，不把号码拼进 SQL/响应
-        const w = (await import('../infra/mobile.mjs')).whereMobile(kw)
-        const users = await q(`SELECT u.id FROM user_account u WHERE ${w.sql}`, w.args)
-        if (!users.length) addCond('1 = 0')
-        else addCond(`o.user_id IN (${users.map((u) => Number(u.id)).join(',')})`)
-      } else addCond('(o.order_no LIKE ? OR u.nickname LIKE ? OR o.contact_name LIKE ?)', '%' + kw + '%', '%' + kw + '%', '%' + kw + '%')
-    }
-    const range = (col, from, to, label) => {
-      if (from) { date(from, label); addCond(`${col} >= ?`, from + ' 00:00:00') }
-      if (to) { date(to, label); addCond(`${col} <= ?`, to + ' 23:59:59.999') }
-    }
-    range('o.created_at', req.query.createdFrom, req.query.createdTo, '创建日期')
-    if (req.query.createdFrom) filters.createdFrom = req.query.createdFrom
-    if (req.query.createdTo) filters.createdTo = req.query.createdTo
-    range('o.paid_at', req.query.paidFrom, req.query.paidTo, '支付日期')
-    if (req.query.paidFrom) filters.paidFrom = req.query.paidFrom
-    if (req.query.paidTo) filters.paidTo = req.query.paidTo
-    const departDate = String(req.query.departDate || '').trim()
-    if (departDate) { date(departDate, '出发日期'); addCond('o.session_id IN (SELECT id FROM tour_session WHERE depart_date = ?)', departDate); filters.departDate = departDate }
+    const { conds, filters } = await orderFiltersOf(req, a)
     const baseWhere = conds.map((c) => c.sql).join(' AND ')
     const baseArgs = conds.flatMap((c) => c.args)
     // status 支持逗号多值（如驾驶舱"已支付以上"= 20,30,40,50）；单值行为不变
@@ -869,7 +875,21 @@ const admin = {
     const rows = await q(`SELECT * FROM risk_event ${W} ORDER BY id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
     return { rows, total, page, pageSize, filters }
   },
-  'GET /admin/audit-logs': async (req) => { await requireAdmin(req, ['super', 'finance', 'risk']); return await q('SELECT * FROM audit_log ORDER BY id DESC LIMIT 100') },
+  // R-05：审计日志服务端分页契约（审计表无界增长，不能只取前 100 条装作全部）
+  'GET /admin/audit-logs': async (req) => {
+    await requireAdmin(req, ['super', 'finance', 'risk'])
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 30)))
+    const conds = [], args = [], filters = {}
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('(actor LIKE ? OR module LIKE ? OR action LIKE ? OR biz_ref LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%', '%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    const module_ = String(req.query.module || '').trim()
+    if (module_) { conds.push('module = ?'); args.push(module_); filters.module = module_ }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const total = Number((await one(`SELECT COUNT(*) n FROM audit_log ${W}`, args)).n)
+    const rows = await q(`SELECT * FROM audit_log ${W} ORDER BY id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
+  },
   'GET /admin/attestations': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
     const { bizRef } = req.query
@@ -893,8 +913,17 @@ const admin = {
     const sc = scopeFilter(a)
     let rows = [], name = what
     if (what === 'orders') {
+      // U-04：导出与 /admin/orders/search 同一套筛选（状态/城市/商品/关键字/日期区间），
+      // 口径一致、上限 5000 行照旧
+      const of = await orderFiltersOf(req, a)
+      const statusList = req.query.status == null || req.query.status === '' ? [] : String(req.query.status).split(',').map(Number)
+      if (statusList.some((s) => ![10, 20, 30, 40, 50, 60, 70, 90].includes(s))) throw new BizError(1001, '订单状态无效')
+      const conds = statusList.length ? [...of.conds, { sql: `o.status IN (${statusList.map(() => '?').join(',')})`, args: statusList }] : of.conds
+      const W = conds.length ? 'WHERE ' + conds.map((c) => c.sql).join(' AND ') : ''
+      const args = conds.flatMap((c) => c.args)
       rows = await q(`SELECT o.order_no, o.status, o.qty, o.amount_goods, o.amount_bean_ded, o.insurance_fee, o.amount_pay,
-        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'o.city_code')} ORDER BY o.id DESC LIMIT 5000`, sc.params)
+        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY o.id DESC LIMIT 5000`, args)
+      name = 'orders-filtered'
     } else if (what === 'products') {
       rows = await q(`SELECT p.id, p.title, p.channel, p.city_code, p.cat, p.price_from, p.bean_gift, p.status, m.name merchant_name
         FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'p.city_code')} ORDER BY p.id`, sc.params)
@@ -920,18 +949,56 @@ const admin = {
   },
 
   // 约稿任务管理（P2 四态机：创建/审核）——T00：仅内部内容角色；城市账号按关联线路城市行级隔离
+  // R-05：约稿任务服务端分页 + 状态/关键字筛选 + 全量统计（KPI/页签用），不再 LIMIT 100 装作全部
   'GET /admin/content-tasks': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'review'])
     const cs = scopeFilter(a, 'p.city_code')
-    // 进度按参与记录统计：领取人数 / 创作中 / 待审核 / 已通过 / 现金待打款
-    return await q(`SELECT t.*, p.title product_title,
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = ['1=1'], args = [...cs.params]
+    if (cs.sql) conds.push(cs.sql.replace(' AND ', ''))
+    const st = String(req.query.status || '').trim()
+    if (st === 'open') conds.push('t.status = 1 AND (t.max_participants IS NULL OR t.max_participants > (SELECT COUNT(*) FROM content_task_entry e2 WHERE e2.task_id = t.id)) AND (t.deadline IS NULL OR t.deadline >= NOW())')
+    else if (st === 'off') conds.push('t.status = 4')
+    else if (st === 'review') conds.push('EXISTS (SELECT 1 FROM content_task_entry e3 WHERE e3.task_id = t.id AND e3.status = 2)')
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('t.title LIKE ?'); args.push('%' + kw + '%') }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const base = `FROM content_task t LEFT JOIN tour_product p ON p.id = t.product_id ${W}`
+    const total = Number((await one(`SELECT COUNT(*) n ${base}`, args)).n)
+    const rows = await q(`SELECT t.*, p.title product_title, p.city_code,
         COUNT(e.id) taken, SUM(e.status = 1) doing, SUM(e.status = 2) reviewing, SUM(e.status = 3) passed, SUM(e.cash_status = 1) cash_pending,
         (SELECT COUNT(*) FROM content_task_review r WHERE r.task_id = t.id) review_count
       FROM content_task t
       LEFT JOIN content_task_entry e ON e.task_id = t.id
       LEFT JOIN tour_product p ON p.id = t.product_id
-      WHERE 1=1${cs.sql}
-      GROUP BY t.id ORDER BY t.id DESC LIMIT 100`, cs.params)
+      ${W}
+      GROUP BY t.id ORDER BY t.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    // 统计与合计按城市范围全量口径（不随当前状态/关键字筛选变化），KPI 卡与页签用
+    const baseAll = `FROM content_task t LEFT JOIN tour_product p ON p.id = t.product_id WHERE 1=1${cs.sql}`
+    const stats = {
+      all: Number((await one(`SELECT COUNT(*) n ${baseAll}`, cs.params)).n),
+      open: Number((await one(`SELECT COUNT(*) n ${baseAll} AND t.status = 1 AND (t.max_participants IS NULL OR t.max_participants > (SELECT COUNT(*) FROM content_task_entry e2 WHERE e2.task_id = t.id)) AND (t.deadline IS NULL OR t.deadline >= NOW())`, cs.params)).n),
+      off: Number((await one(`SELECT COUNT(*) n ${baseAll} AND t.status = 4`, cs.params)).n),
+      review: Number((await one(`SELECT COUNT(*) n ${baseAll} AND EXISTS (SELECT 1 FROM content_task_entry e3 WHERE e3.task_id = t.id AND e3.status = 2)`, cs.params)).n),
+    }
+    const sums = await one(`SELECT COALESCE(SUM(e.status = 1), 0) doing, COALESCE(SUM(e.status = 2), 0) reviewing, COALESCE(SUM(e.status = 3), 0) passed
+      FROM content_task t LEFT JOIN content_task_entry e ON e.task_id = t.id LEFT JOIN tour_product p ON p.id = t.product_id WHERE 1=1${cs.sql}`, cs.params)
+    return { rows, total, page, pageSize, stats, sums: { doing: Number(sums.doing), reviewing: Number(sums.reviewing), passed: Number(sums.passed) }, filters: { ...(st ? { status: st } : {}), ...(kw ? { kw } : {}) } }
+  },
+
+  // R-05 配套：单条任务（页面详情/抽屉不再拉全列表 .find）
+  'GET /admin/content-tasks/:id': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'review'])
+    const cs = scopeFilter(a, 'p.city_code')
+    const row = await one(`SELECT t.*, p.title product_title, p.city_code,
+        COUNT(e.id) taken, SUM(e.status = 1) doing, SUM(e.status = 2) reviewing, SUM(e.status = 3) passed, SUM(e.cash_status = 1) cash_pending
+      FROM content_task t
+      LEFT JOIN content_task_entry e ON e.task_id = t.id
+      LEFT JOIN tour_product p ON p.id = t.product_id
+      WHERE t.id = ?${cs.sql} GROUP BY t.id`, [req.params.id, ...cs.params])
+    if (!row) throw new BizError(1004, '任务不存在或不在权限范围')
+    return row
   },
   // 某任务的参与者列表
   'GET /admin/content-tasks/:id/entries': async (req) => {

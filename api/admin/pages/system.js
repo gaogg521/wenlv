@@ -114,12 +114,25 @@ async function risk() {
 }
 async function audit() {
   $('#app').innerHTML = `<div class="card">${skel(6)}</div>`
-  const rows = await api('GET', '/admin/audit-logs')
-  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>操作审计</h2><span class="muted">只增不改 · 每次写操作前后快照</span></div>
+  window.__auditQ = window.__auditQ || { page: 1, kw: '', module: '' }
+  const Q = window.__auditQ
+  const d = await api('GET', '/admin/audit-logs?' + new URLSearchParams({ page: Q.page, kw: Q.kw, module: Q.module, pageSize: 30 }).toString())
+  const rows = d.rows
+  const pages = Math.max(1, Math.ceil(d.total / d.pageSize))
+  $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>操作审计</h2><span class="muted">只增不改 · 每次写操作前后快照 · 共 ${Number(d.total).toLocaleString()} 条</span></div>
+    <form class="orders-search" onsubmit="event.preventDefault();window.__auditQ.kw=this.kw.value.trim();window.__auditQ.module=this.module.value;window.__auditQ.page=1;audit()">
+      <input name="kw" type="search" value="${esc(Q.kw)}" placeholder="操作人 / 模块 / 动作 / 对象">
+      <select name="module"><option value="">全部模块</option>${['order', 'user', 'content', 'account', 'security', 'risk-case', 'config', 'settlement', 'withdraw', 'bean', 'badge'].map((m) => `<option ${Q.module === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <button class="btn primary" type="submit">查询</button>
+      ${Q.kw || Q.module ? '<button class="btn ghost" type="button" onclick="window.__auditQ={page:1,kw:\'\',module:\'\'};audit()">重置</button>' : ''}</form>
     ${rows.length ? `<table><thead><tr><th>时间</th><th>操作人</th><th>模块 / 动作</th><th>对象</th><th>变更</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td class="td-sub num">${esc(String(a.created_at).slice(5, 19))}</td><td>${esc(a.actor)}</td>
       <td><b>${esc(a.module)}</b> · ${esc(a.action)}</td><td class="td-sub">${esc(a.biz_ref || '')}</td>
-      <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无操作记录')}
+      <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>
+    <div class="pagination"><span>第 ${d.page} / ${pages} 页</span><div class="pagination-actions">
+      <button class="btn ghost sm" ${d.page <= 1 ? 'disabled' : ''} onclick="window.__auditQ.page--;audit()">上一页</button>
+      <button class="btn ghost sm" ${d.page >= pages ? 'disabled' : ''} onclick="window.__auditQ.page++;audit()">下一页</button></div></div>`
+    : emptyBox(Q.kw || Q.module ? '没有符合条件的审计记录' : '暂无操作记录')}
   </div>`
 }
 
