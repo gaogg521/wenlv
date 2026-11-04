@@ -461,10 +461,23 @@ async function web3dash() {
     <div class="chain-track">${nodes.join('') || '<div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div>'}</div>
     <div class="chain-divider"></div>
     <div class="flow-head">
+      <span class="chain-name" style="font-size:13px">🔎 存证检索</span>
+      <input id="attestQ" class="flow-input" style="min-width:330px"
+        placeholder="订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID"
+        onkeydown="if(event.key==='Enter')attestSearch()">
+      <button class="chain-btn" onclick="attestSearch()">检索 ↗</button>
+      <button class="chain-btn" onclick="loadFlowDemo()">看一条真实单的六步</button>
+      <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
+    </div>
+    <div id="attestSearchHint" class="chain-legend" style="border:0;padding:2px 0 8px">
+      可查：订单号 · 批次 <code>#12</code> · 交易哈希（64 位）· Merkle 根 / 前根 · 载荷哈希 · 凭证 <code>pass-1</code> · 旅豆流水 <code>bt-…</code> · 结算单 <code>settle-…</code> · 手机号 · 用户ID <code>user:12</code> · DID
+      <span class="muted" style="color:#7f92bd">｜合约地址查不到：当前走链上内置存证（DEPOSIT），链上标识就是交易哈希与根，没有合约地址</span>
+    </div>
+    <div id="attestResult"></div>
+    <div class="flow-head" style="margin-top:6px">
       <span class="chain-name" style="font-size:13px">🧭 单流程视角 · 一单六锚</span>
-      <input id="flowNo" class="flow-input" placeholder="输入订单号（如 WL202610311650904810）" onkeydown="if(event.key==='Enter')loadFlow()">
+      <input id="flowNo" class="flow-input" placeholder="订单号（如 WL202610311650904810）" onkeydown="if(event.key==='Enter')loadFlow()">
       <button class="chain-btn" onclick="loadFlow()">追踪此单 ↗</button>
-      <button class="chain-btn" onclick="loadFlowDemo()">演示完整流程</button>
       <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
     </div>
     <div id="flowTrack"></div>
@@ -495,6 +508,7 @@ async function web3dash() {
   </div>`
   if (window.__flowShown && window.__flowData) renderFlow(window.__flowData)
   // 刷新后把用户正看着的区块/步骤原样恢复：自动刷新不该把人的操作抹掉
+  if (window.__attestQ) attestSearch({ silent: true })
   if (window.__openBlockId != null) openBlock(window.__openBlockId, { silent: true })
   else if (window.__openFlowStep != null) openFlowStep(window.__openFlowStep, { silent: true })
   chainTimerSetup()
@@ -610,6 +624,86 @@ function renderFlow(d) {
   const track = document.getElementById('flowTrack')
   if (track) track.innerHTML = `<div class="chain-track flow">${parts.join('')}</div>`
 }
+// ---- 存证检索：一个入口吃多种标识（订单号/批次/交易哈希/根/凭证/手机号/用户ID/DID）----
+const ST_CN = { 0: '待打包', 1: '已打包·待锚定', 2: '已锚定', 3: '锚定重试', 4: '人工处理', 5: '已提交·待确认' }
+const stPill = (n) => {
+  const st = Number(n)
+  const cls = st === 2 ? 'ok' : st === 0 ? 'warn' : (st === 3 || st === 4) ? 'err' : 's20'
+  return `<span class="pill ${cls}">${ST_CN[st] || '—'}</span>`
+}
+function attestResultHtml(r) {
+  const empty = !r.order && !r.user && !r.pass && !(r.batches || []).length && !(r.events || []).length
+  const cap = r.capability || {}
+  if (empty) {
+    return `<div class="card" style="background:#fff8ec">
+      <div class="card-head"><h3>没查到「${esc(r.q)}」</h3><span class="muted">换一种标识试试</span></div>
+      <div class="muted" style="line-height:1.9">可查：${(cap.canSearch || []).map((x) => `<code>${esc(x)}</code>`).join(' · ')}</div>
+      <div class="muted" style="margin-top:6px">提示：单号要完整；批次写 <code>#12</code> 或 <code>batch:12</code>；哈希是 64 位，可从区块详情里「复制」。</div>
+      ${cap.noContract ? `<div class="muted" style="margin-top:6px;color:#98712a">${esc(cap.noContract)}</div>` : ''}
+    </div>`
+  }
+  const obj = []
+  if (r.order) {
+    const o = r.order
+    obj.push(`<span class="pill ok">订单</span> <b>${esc(o.orderNo)}</b>
+      <span class="muted">${esc(o.productName || '')} · ¥${(Number(o.amountPay) / 100).toFixed(2)} · 状态 ${esc(String(o.status))}</span>
+      <button class="btn ghost sm" onclick="document.getElementById('flowNo').value='${esc(o.orderNo)}';loadFlow()">看这单的六步 ›</button>`)
+  }
+  if (r.user) {
+    const u = r.user
+    obj.push(`<span class="pill s20">用户</span> <b>#${u.id} ${esc(u.nickname || '')}</b>
+      <span class="muted">等级 L${Number(u.memberLevel)}</span>
+      ${u.did ? `<span class="muted">DID <code>${esc(u.did)}</code><button class="copy-chip" onclick="copyText('${esc(u.did)}')">复制</button></span>` : '<span class="muted">未签发 DID</span>'}`)
+  }
+  if (r.pass) {
+    obj.push(`<span class="pill s20">权益凭证</span> <b>pass-${Number(r.pass.id)}</b>
+      <span class="muted">状态 ${Number(r.pass.status) === 2 ? '已核销' : '有效'} · 订单 #${Number(r.pass.orderId)}</span>`)
+  }
+  const batches = (r.batches || []).map((b) => `<div class="sr-batch">
+      <span class="sr-seq">#${Number(b.seq)}</span>
+      <span>${Number(b.is_day_close) ? '账本日终' : '业务批次'} · 业务日 ${esc(String(b.biz_date || '').slice(0, 10))} · ${Number(b.leaf_count || 0)} 条</span>
+      ${stPill(b.status)}
+      <code class="sr-root">根 ${esc(String(b.merkle_root || '').slice(0, 12))}…</code>
+      ${b.chain_tx_ref ? `<code class="sr-tx">链上 ${esc(String(b.chain_tx_ref).slice(0, 16))}…</code><button class="copy-chip" onclick="copyText('${esc(b.chain_tx_ref)}')">复制哈希</button>` : '<span class="muted">未上链</span>'}
+      ${b.chain_block ? `<span class="muted">块高 ${esc(b.chain_block)}</span>` : ''}
+      <button class="btn ghost sm" onclick="openBlock(${Number(b.id)})">打开批内事件 ›</button>
+    </div>`).join('')
+  const evs = (r.events || []).map((e) => `<tr>
+      <td>${bizTag(esc(e.biz_type))}</td>
+      <td class="num">${esc(e.biz_ref)}</td>
+      <td class="num">v${Number(e.version_no ?? 1)}</td>
+      <td>${stPill(e.status)}</td>
+      <td>${e.seq != null ? `<button class="btn ghost sm" onclick="openBlock(${Number(e.batch_id)})">#${Number(e.seq)}</button>` : '<span class="muted">未打包</span>'}</td>
+      <td class="td-sub"><code>${esc(String(e.payload_hash || '').slice(0, 16))}…</code></td>
+      <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
+      <td>${e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
+        : e.batch_id ? `<button class="btn ghost sm" onclick="verifyEventInline('${esc(e.biz_type)}','${esc(e.biz_ref)}',${Number(e.id)})">验证</button>` : ''}</td>
+    </tr>`).join('')
+  return `<div class="card">
+    <div class="card-head"><h3>检索「${esc(r.q)}」</h3>
+      <span class="muted">按${(r.matched || []).map((x) => `<code>${esc(x)}</code>`).join(' / ')}命中 · 链 ${esc((r.chain && r.chain.label) || '—')}</span></div>
+    ${obj.length ? `<div class="sr-obj">${obj.join('')}</div>` : ''}
+    ${batches ? `<div class="sr-sec">命中的批次（${(r.batches || []).length}）</div>${batches}` : ''}
+    ${evs ? `<div class="sr-sec">命中的存证事件（${(r.events || []).length}）</div>
+      <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>载荷指纹</th><th>时间</th><th></th></tr></thead><tbody>${evs}</tbody></table>` : ''}
+    ${cap.noContract ? `<div class="muted" style="margin-top:8px;color:#98712a">${esc(cap.noContract)}</div>` : ''}
+  </div>`
+}
+async function attestSearch(opt = {}) {
+  const el = document.getElementById('attestQ')
+  const v = opt.silent ? (window.__attestQ || '') : (el && el.value || '').trim()
+  if (!v) return toast('请输入要查的内容：订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID', true)
+  window.__attestQ = v
+  const box = document.getElementById('attestResult')
+  if (!box) return
+  if (!opt.silent) box.innerHTML = `<div class="card">${skel(2)}</div>`
+  try {
+    box.innerHTML = attestResultHtml(await api('GET', '/admin/attest/search?q=' + encodeURIComponent(v)))
+  } catch (e) {
+    box.innerHTML = `<div class="card" style="background:#fff8ec"><b>检索失败</b><div class="muted">${esc(e.message)}</div></div>`
+  }
+}
+
 async function loadFlow() {
   const no = (document.getElementById('flowNo')?.value || '').trim()
   if (!no) return toast('请输入订单号', true)
