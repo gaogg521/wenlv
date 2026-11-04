@@ -27,11 +27,12 @@ import mock from './mock.mjs'
 import chaingen from './chaingen.mjs'
 import tbaas from './tbaas.mjs'
 import antchain from './antchain.mjs'
+import antchainopen from './antchain-open.mjs'
 import evm, { NETWORKS } from './evm.mjs'
 import fisco from './fisco.mjs'
 import gateway, { PRESETS as GATEWAY_PRESETS } from './gateway.mjs'
 
-export const PROVIDERS = { noop, mock, chaingen, tbaas, antchain, fisco, gateway, evm }
+export const PROVIDERS = { noop, mock, chaingen, tbaas, antchain, antchainopen, fisco, gateway, evm }
 export { NETWORKS, GATEWAY_PRESETS }
 
 /**
@@ -54,6 +55,12 @@ export const CATALOG = {
     keys: [K('ANTCHAIN_ENDPOINT', '接入地址', { required: true }), K('ANTCHAIN_ACCESS_KEY', 'AccessKey', { required: true }), K('ANTCHAIN_ACCESS_SECRET', 'AccessSecret', { secret: true }),
       K('ANTCHAIN_PRIVATE_KEY', 'RSA 私钥（rsa 模式）', { secret: true, multiline: true }), K('ANTCHAIN_SIGN', '签名方式', { ph: 'hmac-sha256 / rsa-sha256' }),
       K('ANTCHAIN_BIZID', '链 BizId'), K('ANTCHAIN_ACCOUNT', '链上账户'), K('ANTCHAIN_COLLECTION_ID', '数字资产集合 ID（需资质）')] },
+  antchainopen: { group: 'alliance', vendor: '蚂蚁数字科技 · 开放联盟链', protocol: { transport: 'HTTPS REST（握手换 token，30 分钟）', sign: '握手：access.key 私钥 SHA256withRSA(AccessId+时间戳)→Hex', mode: '提交 DEPOSIT → QUERYTRANSACTION 核对链上内容', contract: '存证用 DEPOSIT，无需部署合约；仅支持密钥托管账户，需先分配燃料' },
+    keys: [K('ANTOPEN_ACCESS_ID', 'Access-id', { required: true }), K('ANTOPEN_ACCESS_KEY', 'access.key 私钥（粘贴文件全文）', { required: true, secret: true, multiline: true }),
+      K('ANTOPEN_ACCOUNT', '链上托管账户名', { required: true }), K('ANTOPEN_KMS_ID', 'MyKmsKey ID（密钥托管 ID）', { required: true, secret: true }),
+      K('ANTOPEN_TENANT_ID', '租户 ID', { required: true, ph: '取控制台地址 projectName 参数' }), K('ANTOPEN_BIZID', '链 ID', { ph: 'a00e36c5（默认）' }),
+      K('ANTOPEN_GAS', '单笔 gas 上限', { ph: '50000（默认）；低于实际消耗会返回成功但链上查无此交易' }), K('ANTOPEN_REST_URL', 'REST 地址', { ph: 'https://rest.baas.alipay.com（默认）' }),
+      K('ANTOPEN_WAIT_MAX_MS', '未上链判定时长（毫秒）', { ph: '600000（默认 10 分钟）；超时转人工' })] },
   fisco: { group: 'alliance', vendor: '微众银行 · 开源', protocol: { transport: 'WeBASE-Front REST', sign: '由 WeBASE 托管私钥签名', mode: '提交 → 回执确认（PBFT 即时终局）', contract: '需部署 writeRoot(bytes32,bytes32,uint64)' },
     keys: [K('FISCO_FRONT_URL', 'WeBASE-Front 地址', { required: true, ph: 'http://10.0.0.8:5002' }), K('FISCO_GROUP_ID', '群组', { ph: 'group0（3.x）/ 1（2.x）' }),
       K('FISCO_USER', '签名用户地址/ID', { required: true }), K('FISCO_CONTRACT_ADDRESS', '落根合约地址', { required: true }), K('FISCO_CONTRACT_NAME', '合约名', { ph: 'RootAnchor' }),
@@ -83,6 +90,7 @@ export function providerId() {
   if (has('CHAIN_ENDPOINT', 'CHAIN_ACCOUNT', 'CHAIN_KEY')) return 'chaingen'
   if (has('TBAAS_SECRET_ID', 'TBAAS_SECRET_KEY')) return 'tbaas'
   if (has('ANTCHAIN_ENDPOINT', 'ANTCHAIN_ACCESS_KEY')) return 'antchain'
+  if (has('ANTOPEN_ACCESS_ID', 'ANTOPEN_ACCESS_KEY')) return 'antchainopen'
   if (has('FISCO_FRONT_URL', 'FISCO_CONTRACT_ADDRESS')) return 'fisco'
   if (has('GW_ENDPOINT')) return 'gateway'
   if (has('EVM_RELAYER_URL', 'EVM_RELAYER_TOKEN')) return 'evm'

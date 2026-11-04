@@ -184,7 +184,7 @@ async function chainAssetsPage() {
       <div class="kpi"><div class="ico" style="background:#fdecea">⚠️</div><div><div class="l">失败</div><div class="v" style="font-size:18px">${d.failed}</div><div class="s">可重试</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">🧩</div><div><div class="l">支持资产</div><div class="v" style="font-size:15px">${cap.assets ? '是' : '否'}</div><div class="s">${cap.assets ? '可发行徽章/NFT' : '当前链只做存证'}</div></div></div>
     </div>
-    <div class="muted" style="margin-top:10px">切换链：改环境变量 <code>CHAIN_PROVIDER=chaingen|tbaas|antchain|evm|noop</code> 后重启，业务与页面零改动。当前缺：${(cur.missing || []).length ? '<b>' + esc(cur.missing.join('、')) + '</b>' : '无'}。</div>
+    <div class="muted" style="margin-top:10px">切换链：改环境变量 <code>CHAIN_PROVIDER=chaingen|tbaas|antchain|antchainopen|evm|noop</code> 后重启，业务与页面零改动。当前缺：${(cur.missing || []).length ? '<b>' + esc(cur.missing.join('、')) + '</b>' : '无'}。</div>
   </div>
 
   <div class="card">

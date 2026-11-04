@@ -197,7 +197,9 @@ async function main() {
     try { await api('POST', '/admin/settlements/' + id + '/confirm', {}, finance) } catch (e) { /* 商户未确认的结算单跳过 */ }
   }
   const kpi = await api('GET', '/admin/dash/kpi', null, admin)
-  step('运营-赵敏', `驾驶舱：今日 GMV ¥${kpi.gmvToday} · 订单 ${kpi.ordersToday} · 核销率 ${kpi.verifyRate} · 预算水位 ${kpi.budgetUsage}`)
+  const ins = await api('GET', '/admin/dash/insights', null, admin)
+  // 字段以接口为准：dash/kpi 给 orders/gmv/budgetUsage，核销率在 dash/insights 的漏斗里（v1.10 口径切换后）
+  step('运营-赵敏', `驾驶舱：今日 GMV ¥${kpi.gmv} · 订单 ${kpi.orders} · 核销率 ${ins.funnel.verifyRate} · 预算水位 ${kpi.budgetUsage}`)
 
   // ===== 终态校验 =====
   const { trialBalance } = await import('../src/domain/bean.mjs')
