@@ -60,7 +60,6 @@ tbody tr { transition: background .12s; }
 .dash-hero-kpi small { font-size: 11px; color: #cdb8a3; }
 .kpi-grid { gap: 14px; }
 .kpi { border-radius: 16px; padding: 20px 22px; position: relative; overflow: hidden; transition: transform .15s, box-shadow .15s; border: 1px solid #eee8de; background: #fff; }
-.kpi:hover { transform: translateY(-2px); box-shadow: 0 12px 28px #3a2e1f12; }
 .kpi::before { content: ''; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--acc, #c64e28); opacity: .85; }
 .kpi .ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--acc-soft, #fff1e6) !important; color: var(--acc, #c64e28); }
 .kpi .ico svg { width: 22px; height: 22px; }

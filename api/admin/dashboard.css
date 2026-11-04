@@ -91,7 +91,6 @@
 .dx .dx-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 0; }
 .dx-kpi { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 6px; min-height: 148px; padding: 18px 20px 16px; background: #fff; border: 1px solid var(--line); border-radius: 18px; transition: .18s; --acc: var(--coral); }
 .dx-kpi::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--acc); opacity: .85; }
-.dx-kpi:hover { transform: translateY(-2px); box-shadow: 0 14px 30px #3a2e1f14; }
 .dx-kpi.c-blue { --acc: var(--blue); } .dx-kpi.c-amber { --acc: #d9622f; } .dx-kpi.c-violet { --acc: var(--violet); }
 .dx-kpi.c-teal { --acc: var(--teal); } .dx-kpi.c-green { --acc: var(--green); } .dx-kpi.c-gold { --acc: var(--gold); }
 .dx-kpi-top { display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
