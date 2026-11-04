@@ -112,6 +112,45 @@ try {
     created.users.pop()
   })
 
+  await test('V-02/V-03：城市建案统一解析对象——缺字段/冲突字段/objectType 变化均校验真实对象城市；不得借建案处置平台事件', async () => {
+    const cityTok = jwtSign({ end: 'admin', role: 'city_partner', name: '案件回归-城市A', scopeCity: String(cityA) })
+    const cityPost = (body) => call(null, 'POST', '/admin/risk-cases', body, cityTok)
+    const title = stamp + ' 城市边界测试'
+    const note = stamp + ' 协查说明内容'
+    const ghost = await q('INSERT INTO user_account (mini_a_openid, nickname) VALUES (?,?)', ['rcqa-ghost2-' + stamp, stamp + '无单用户B'])
+    created.users.push(ghost.insertId)
+    // 缺 objectId、只给 userId 的旧绕过路径：无本城订单用户必须拒绝
+    const r1 = await cityPost({ sourceType: 'city', objectType: 'user', userId: ghost.insertId, title, note })
+    assert.equal(r1.code, 1003, '无本城订单用户拒绝：' + r1.msg)
+    // 冲突字段：objectId=本城用户 + userId=无单用户 → 拒绝
+    const r2 = await cityPost({ sourceType: 'city', objectType: 'user', objectId: uid, userId: ghost.insertId, title, note })
+    assert.equal(r2.code, 1001, '冲突字段拒绝：' + r2.msg)
+    // objectType 变化：userId 给了但对象类型是 other → 拒绝
+    const r3 = await cityPost({ sourceType: 'city', objectType: 'other', userId: ghost.insertId, title, note })
+    assert.equal(r3.code, 1001, 'objectType 变化拒绝：' + r3.msg)
+    // V-03：城市账号借 risk_event 来源建案 → 拒绝且事件 handled 不变
+    const ev = await q("INSERT INTO risk_event (user_id, kind, severity, detail) VALUES (?, 'verify_replay', 2, ?)", [ghost.insertId, JSON.stringify({ reason: stamp + 'V03T' })])
+    created.events.push(ev.insertId)
+    const r4 = await cityPost({ sourceType: 'risk_event', sourceId: ev.insertId, objectType: 'other', title, note })
+    assert.equal(r4.code, 1001, '城市账号不得用平台来源建案：' + r4.msg)
+    assert.equal(Number((await one('SELECT handled FROM risk_event WHERE id = ?', [ev.insertId])).handled), 0, '事件 handled 保持 0')
+    // 合法路径：仅给 objectId（本城用户）/ userId 与 objectId 一致 → 建案成功
+    const r5 = ok(await cityPost({ sourceType: 'city', objectType: 'user', objectId: uid, title, note }))
+    created.cases.push(r5.id)
+    const r6 = ok(await cityPost({ sourceType: 'city', objectType: 'user', userId: uid, objectId: uid, title, note }))
+    created.cases.push(r6.id)
+    // 详情不泄露：构造存量案件（city=本城，user 指向无本城订单账号）→ 城市视角 objectInfo 为空，平台视角可见
+    const legacy = await q(`INSERT INTO risk_case (case_no, source_type, object_type, user_id, city_code, severity, title, handler, created_by)
+      VALUES (?,?,?,?,?,2,?,?,?)`, ['RCQA' + stamp + 'L', 'city', 'user', ghost.insertId, cityA, stamp + ' 存量越界案件', 'admin:legacy', 'admin:legacy'])
+    created.cases.push(legacy.insertId)
+    const cityDetail = ok(await call(null, 'GET', `/admin/risk-cases/${legacy.insertId}`, null, cityTok))
+    assert.equal(cityDetail.objectInfo, null, '城市视角不泄露无关联账号风险状态')
+    const superDetail = ok(await call('super', 'GET', `/admin/risk-cases/${legacy.insertId}`))
+    assert.ok(superDetail.objectInfo, '平台视角可见对象信息')
+    await q('DELETE FROM user_account WHERE id = ?', [ghost.insertId])
+    created.users.pop()
+  })
+
   await test('队列契约与越权；并发结案只一人成功；旧 handle 必须带结论', async () => {
     const list = ok(await call('risk', 'GET', '/admin/risk-cases?status=1'))
     assert.ok(list.rows.every((k) => Number(k.status) === 1) && typeof list.total === 'number')
