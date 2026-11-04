@@ -170,12 +170,16 @@ export async function anchorToChain(batchId) {
   }
   // 提交已成功：此后的数据库异常不能记成"提交失败"，否则重试会重复上链
   const needConfirm = chain.needsConfirmation() && !existed
+  // 上链原文原样落库：v2 原文含毫秒时间戳与平台签名，重算不可能复现，确认时必须拿这一串比对
+  const content = r.content || null, tsMs = r.ts || null
   if (needConfirm) {
-    await q(`UPDATE attest_batch SET status = 5, chain_tx_ref = ?, chain_provider = ?, submitted_at = NOW(3), last_err = NULL WHERE id = ?`,
-      [r.txRef, chain.providerId(), batchId])
-    return { batchId, anchored: false, submitted: true, txRef: r.txRef, reason: '已提交，等待链上确认' }
+    await q(`UPDATE attest_batch SET status = 5, chain_tx_ref = ?, chain_provider = ?, chain_content = ?, chain_ts_ms = ?,
+      submitted_at = NOW(3), last_err = NULL WHERE id = ?`,
+      [r.txRef, chain.providerId(), content, tsMs, batchId])
+    return { batchId, anchored: false, submitted: true, txRef: r.txRef, signed: !!r.signed, reason: '已提交，等待链上确认' }
   }
-  await q('UPDATE attest_batch SET chain_provider = ? WHERE id = ?', [chain.providerId(), batchId])
+  await q('UPDATE attest_batch SET chain_provider = ?, chain_content = ?, chain_ts_ms = ? WHERE id = ?',
+    [chain.providerId(), content, tsMs, batchId])
   return await markAnchored(batchId, r.txRef, r.block, null, !!existed)
 }
 
@@ -242,7 +246,8 @@ async function confirmRows(rows) {
   const out = []
   for (const b of rows) {
     try {
-      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date, provider: b.chain_provider, submittedAt: b.submitted_at })
+      const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date,
+        provider: b.chain_provider, submittedAt: b.submitted_at, content: b.chain_content || undefined })
       if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
       else {
         await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',
