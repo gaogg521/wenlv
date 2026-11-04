@@ -76,9 +76,57 @@ export function handshakeSecret({ accessId, time, privateKey }) {
   return crypto.sign('RSA-SHA256', Buffer.from(String(accessId) + String(time), 'utf8'), key).toString('hex')
 }
 
-/** 存证内容：确定性字符串，confirm 时据此重算并与链上读回逐字比对 */
+/** 旧版（v1）存证内容：只有根/前根/业务日。保留只为兼容已锚定的历史批次 */
 export function contentOf({ root, prevRoot, bizDate }) {
   return ['wl-anchor/1', String(root), String(prevRoot || '0'.repeat(64)), dateNum(bizDate)].join('|')
+}
+
+// ===== v2：按方案 §7.6「上链的只有 哈希指纹 + 时间戳 + 主体标识 + 签名」=====
+// 实测（2026-11-04，真实链）：content 2000 字符内正常；4000 字符会"返回 success 但链上查无此交易"。
+// v2 完整格式约 690 字符（主体 8 + 链 8 + 类型 + 两个 64 位根 + 13 位毫秒 + 512 位签名），留足余量。
+const CONTENT_MAX = 2000
+
+/** 签名原文（不含签名本身）：主体标识 + 链 + 类型 + 根 + 前根 + 时间戳 */
+export function signPayload({ tenant, bizid, kind, root, prevRoot, ts }) {
+  return ['wl-anchor/2', String(tenant), String(bizid), String(kind || 'biz'), String(root),
+    String(prevRoot || '0'.repeat(64)), String(ts)].join('|')
+}
+
+/** v2 上链原文：四要素齐全，签名附在最后 */
+export function contentV2({ tenant, bizid, kind, root, prevRoot, ts, sig }) {
+  return signPayload({ tenant, bizid, kind, root, prevRoot, ts }) + '|' + String(sig)
+}
+
+/** 拆分 v2 原文，供确认阶段验签；不是 v2 返回 null（老批次走 v1 兼容路径） */
+export function parseContentV2(s) {
+  const parts = String(s || '').split('|')
+  if (parts.length !== 8 || parts[0] !== 'wl-anchor/2') return null
+  const [, tenant, bizid, kind, root, prevRoot, ts, sig] = parts
+  return { tenant, bizid, kind, root, prevRoot, ts, sig }
+}
+
+/** 用平台私钥对签名原文做 RSA-SHA256，返回 hex */
+export function signWith(privateKey, payload) {
+  const key = typeof privateKey === 'string' || Buffer.isBuffer(privateKey) ? crypto.createPrivateKey(toPem(privateKey)) : privateKey
+  return crypto.sign('RSA-SHA256', Buffer.from(String(payload), 'utf8'), key).toString('hex')
+}
+
+/** 由私钥导出公钥 PEM：第三方拿它可以独立验签，不需要我们的私钥 */
+export function publicKeyPemOf(privateKey) {
+  const key = typeof privateKey === 'string' || Buffer.isBuffer(privateKey) ? crypto.createPrivateKey(toPem(privateKey)) : privateKey
+  return crypto.createPublicKey(key).export({ type: 'spki', format: 'pem' })
+}
+
+/** 验签：pubPem 缺省时用平台私钥导出（自校验，能抓损坏但不算独立第三方验证） */
+export function verifyContentV2(content, pubPem) {
+  const c = parseContentV2(content)
+  if (!c) return { ok: false, reason: '不是 v2 格式' }
+  const payload = signPayload({ tenant: c.tenant, bizid: c.bizid, kind: c.kind, root: c.root, prevRoot: c.prevRoot, ts: c.ts })
+  try {
+    const key = crypto.createPublicKey(pubPem || publicKeyPemOf(E.ANTOPEN_ACCESS_KEY))
+    const ok = crypto.verify('RSA-SHA256', Buffer.from(payload, 'utf8'), key, Buffer.from(c.sig, 'hex'))
+    return { ok, reason: ok ? '' : '签名与内容不匹配', payload }
+  } catch (e) { return { ok: false, reason: '公钥不可用：' + e.message, payload } }
 }
 
 // 同一进程内所有请求串行并留间隔（免费版 TPS=1）；失败也占用间隔
@@ -155,11 +203,18 @@ export default {
       note: `链 ${e.bizid} · 托管账户存证（DEPOSIT）· gas 上限 ${e.gas}；需已给账户分配燃料`,
     }
   },
-  async anchor({ root, prevRoot, bizDate }) {
+  async anchor({ root, prevRoot, bizDate, kind }) {
     if (missing().length) return { txRef: null, block: null, mode: 'noop' }
     if (!HASH64.test(root || '')) throw new Error('antchain-open 根必须是 64 位十六进制')
     const e = env()
-    const content = contentOf({ root, prevRoot, bizDate })
+    // §7.6 四要素：哈希指纹(根) + 时间戳(毫秒) + 主体标识(租户/链) + 签名(平台私钥 RSA-SHA256)
+    const ts = Date.now()
+    const prev = prevRoot || '0'.repeat(64)
+    const payload = signPayload({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts })
+    let sig = 'nosig'
+    try { sig = signWith(e.accessKey, payload) } catch { sig = 'nosig' } // 密钥不可用如实降级，绝不假装签过
+    const content = contentV2({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts, sig })
+    if (content.length > CONTENT_MAX) throw hard('CONTENT_TOO_LONG', `上链原文 ${content.length} 字符，超过实测安全上限 ${CONTENT_MAX}`)
     // orderId 是业务方唯一标识（官方：用于重试去重），按根派生：同一批重试得到同一个 orderId
     const orderId = 'wl_' + root.slice(0, 32).toLowerCase()
     const j = await api('/api/contract/chainCallForBiz', (token) => ({
@@ -168,7 +223,9 @@ export default {
     }))
     const txRef = String(j.data || '')
     if (!HASH64.test(txRef)) throw new Error('antchain-open 响应缺少交易哈希')
-    return { txRef: txRef.toLowerCase(), block: null, mode: 'real' }
+    // content / ts 一起回传，域层原样落库：确认阶段必须拿"提交时那一串"逐字比对，
+    // 不能重算（重算复现不了同一毫秒），否则比对等于自欺
+    return { txRef: txRef.toLowerCase(), block: null, mode: 'real', content, ts, signed: sig !== 'nosig' }
   },
   /** 按交易哈希读回：未上链 → null；已上链 → {block, content, hash} */
   async queryTransaction(txRef) {
@@ -195,7 +252,7 @@ export default {
    *   · 超时仍未上链 —— 实测：gas 偏低时接口仍返回 success + 哈希，但链上查无此交易（404）。
    *     一直当"等待出块"会让批次永久停在待确认，对账上看不出来。
    */
-  async confirm({ txRef, root, prevRoot, bizDate, submittedAt }) {
+  async confirm({ txRef, root, prevRoot, bizDate, submittedAt, content: expectContent }) {
     if (!root || !bizDate) throw hard('BAD_ARGS', 'antchain-open 确认需要批次根与业务日期')
     const r = await this.queryTransaction(txRef)
     if (!r) {
@@ -209,11 +266,20 @@ export default {
     }
     if (!Number.isSafeInteger(r.block) || r.block <= 0) return { final: false, reason: '等待出块', confirmations: 0 }
     if (r.hash.toLowerCase() !== String(txRef).toLowerCase()) throw hard('TX_HASH_MISMATCH', 'antchain-open 回查交易哈希不一致')
-    if (r.content !== contentOf({ root, prevRoot, bizDate })) {
+    // 优先用提交时落库的原串比对（v2 带毫秒时间戳与签名，重算不可能一致）；
+    // 老批次没有存原文时回退 v1 公式，保持向后兼容
+    const expected = expectContent || contentOf({ root, prevRoot, bizDate })
+    if (r.content !== expected) {
       throw hard('CONTENT_MISMATCH', 'antchain-open 链上内容与批次不一致：该根此前已用其它内容（前根/业务日）上过链，'
         + '同一 orderId 的重复提交会被服务端丢弃并返回首次那笔，需人工核对后再决定是否换根重提')
     }
-    return { final: true, block: String(r.block), confirmations: 1 }
+    // v2 还要验签：链上那串里的签名，必须真的是平台私钥对"这串内容"的签名
+    const v2 = parseContentV2(r.content)
+    if (v2) {
+      const v = verifyContentV2(r.content)
+      if (!v.ok) throw hard('SIG_INVALID', 'antchain-open 链上原文签名校验失败：' + v.reason)
+    }
+    return { final: true, block: String(r.block), confirmations: 1, signed: v2 ? true : false, contentV2: !!v2 }
   },
   async queryByRoot() { return null },
   /** 连通性探测：握手 + 查最新块高，只读，不产生交易、不耗燃料 */

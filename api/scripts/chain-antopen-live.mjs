@@ -39,7 +39,8 @@ if (cmd === 'probe') {
   const r = await antopen.anchor({ root, prevRoot: '', bizDate })
   console.log('已提交 txRef=%s', r.txRef)
   for (let i = 0; i < 10; i++) {
-    const c = await antopen.confirm({ txRef: r.txRef, root, prevRoot: '', bizDate, submittedAt: new Date().toISOString() })
+    // 必须带提交时那一串原文：v2 含毫秒时间戳与签名，重算不可能一致
+    const c = await antopen.confirm({ txRef: r.txRef, root, prevRoot: '', bizDate, submittedAt: new Date().toISOString(), content: r.content })
     console.log('  确认 →', c)
     if (c.final) break
     await new Promise((res) => setTimeout(res, 3000))
