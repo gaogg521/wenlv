@@ -39,7 +39,15 @@
   <view class="kv" bindtap="goFaq"><text>常见问题</text><text class="v">返豆 · 核销 · 退改 ›</text></view>
     <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
   <view class="kv" wx:if="{{site.service_phone}}" bindtap="callService"><text>客服电话</text><text class="v">{{site.service_phone}}{{site.service_hours ? ' · ' + site.service_hours : ''}} ›</text></view>
-  <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">›</text></view>
+  <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">{{consentOpen ? '收起 ⌃' : '隐私授权 ›'}}</text></view>
+  <view wx:if="{{consentOpen}}" style="padding:8rpx 0 4rpx">
+    <view class="note">下面每一项都能随时关掉，关掉不影响已经完成的行程与订单。</view>
+    <view class="kv" wx:for="{{consents}}" wx:key="scene">
+      <text>{{item.label}}<text class="note" wx:if="{{item.version}}" style="margin-left:8rpx">v{{item.version}}</text></text>
+      <switch checked="{{item.granted}}" data-scene="{{item.scene}}" bindchange="consentToggle" color="#2f7d5d" />
+    </view>
+    <view class="note" wx:if="{{consentSavedAt}}">最近一次操作：{{consentSavedAt}}（已留档，可随时复核）</view>
+  </view>
 </view>
 <view class="card">
   <view class="kv" bindtap="goDoc" data-type="agreement"><text>用户协议</text><text class="v">›</text></view>
