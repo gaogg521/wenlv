@@ -14,7 +14,7 @@ try {
   const product = await one('SELECT id FROM tour_product LIMIT 1')
   const insert = await q("INSERT INTO co_creator(product_id,co_no,name,mobile,role,invest_amount,share_pct) VALUES (?,?,'画像测试共创','13812345678',1,100000,500)", [product.id, 'PC' + Date.now()])
   coId = insert.insertId
-  await q("INSERT INTO co_profit(settlement_id,co_creator_id,product_id,period,base_amount,amount,status) VALUES (999999,?,?,'2026-W44',10000,5000,1),(999998,?,?,'2026-W45',10000,3000,0)", [coId, product.id, coId, product.id])
+  await q("INSERT INTO co_profit(settlement_id,co_creator_id,product_id,period,base_amount,amount,status,paid_amount) VALUES (999999,?,?,'2026-W44',10000,5000,1,5000),(999998,?,?,'2026-W45',10000,3000,0,0)", [coId, product.id, coId, product.id])
   await test('统一列表、分类、搜索及统计一致', async () => {
     const all = ok(await call('/admin/partners'))
     assert.equal(all.total, all.counts.reduce((s, r) => s + Number(r.n), 0))

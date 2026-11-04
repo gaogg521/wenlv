@@ -82,6 +82,20 @@ async function userProfile(id) {
   try { p = await api('GET', '/admin/users/' + id) } catch (e) { return toast(e.message, true) }
   const u = p.user, t = p.trade, c = p.content
   const frozen = u.status === 0
+  // T05：运营标签与内部备注（追加式，不与用户自维护资料混淆）；T06：权益调整入口
+  let ops = null
+  if (adminCan('user.manage')) { try { ops = await api('GET', '/admin/users/' + id + '/ops') } catch (e) { ops = null } }
+  const opsHtml = ops ? `
+  <h3 style="margin:16px 0 8px">运营标签 <span class="td-sub">词表：参数中心 user.ops_tags · 内部口径，不下发游客端</span></h3>
+  <div>${ops.tags.length ? ops.tags.map((tg) => `<span class="pill s20" style="margin:0 6px 6px 0">${esc(tg.tag)}${tg.note ? ' <span class="td-sub">' + esc(tg.note) + '</span>' : ''} <a href="javascript:void(0)" style="color:var(--red)" onclick="removeUserTag(${u.id}, ${tg.id})">✕</a></span>`).join('') : '<span class="muted">暂无标签</span>'}</div>
+  ${ops.words.length ? `<div class="row" style="margin:8px 0"><select id="uTagSel" class="inp" style="width:160px">${ops.words.filter((w) => !ops.tags.some((tg) => tg.tag === w)).map((w) => `<option>${esc(w)}</option>`).join('')}</select>
+    <input id="uTagNote" class="inp" placeholder="打标说明（可选）" style="width:200px" maxlength="200">
+    <button class="btn ghost sm" onclick="addUserTag(${u.id})">打标</button></div>` : ''}
+  <h3 style="margin:16px 0 8px">内部备注 <span class="td-sub">追加式：只能新增，不能修改或删除历史</span></h3>
+  ${(ops.notes || []).slice(0, 5).map((n) => `<div class="rv-box"><p>${esc(n.note)}</p><span class="td-sub">${esc(n.actor)} · ${esc(String(n.created_at).slice(0, 16).replace('T', ' '))}</span></div>`).join('') || '<p class="muted">暂无内部备注</p>'}
+  <div class="row" style="margin:8px 0"><input id="uOpsNote" class="inp" style="flex:1" placeholder="2–500 字内部备注（勿录手机号/证件号）" maxlength="500">
+    <button class="btn ghost sm" onclick="addUserOpsNote(${u.id})">追加备注</button></div>
+  <div class="row" style="margin:8px 0"><button class="btn primary sm" onclick="entitlementModal(${u.id}, '${esc(u.nickname || '')}', ${PN(u.growth_value)}, ${PN(p.beans.balance)})">发起权益调整申请</button><span class="td-sub">旅豆/成长值/徽章走申请→他人审批→账本执行，无直接改余额</span></div>` : ''
   reviewDrawer(`用户画像 · ${esc(u.nickname || 'ID ' + u.id)}`, `
   <div class="pprofile-head">
     ${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}
@@ -91,6 +105,7 @@ async function userProfile(id) {
       <button class="btn ${frozen ? 'primary' : 'danger'} sm" onclick="userSetStatus(${u.id}, ${frozen ? 1 : 0})">${frozen ? '解除冻结' : '冻结账号'}</button>
       <button class="btn ghost sm" onclick="userSetRisk(${u.id}, ${u.risk_flag ? 0 : 1})">${u.risk_flag ? '取消风险标记' : '标记风险'}</button>` : '<span class="muted">账号状态与风险管理需运营或风控权限</span>'}</div>
   </div>
+  ${opsHtml}
   <div class="pstats">${stat('订单', PN(t.orders), `已完成 ${PN(t.completed)} · 退款 ${PN(t.refunded)}`)}${stat('消费金额', fen(t.gmv), `客单价 ${fen(t.aov)}`)}
     ${stat('旅豆余额', PN(p.beans.balance), `累计获得 ${PN(p.beans.lifetime)} · 已抵扣 ${PN(t.beans_used)}`)}${stat('内容', PN(c.notes.total) + ' 篇', `发布 ${PN(c.notes.published)} · 获赞 ${PN(c.notes.likes)}`)}</div>
   <div class="rv-grid">
@@ -143,7 +158,7 @@ async function merchantProfile(id) {
   reviewDrawer(`商户全景 · ${esc(m.name)}`, `
   <div class="pprofile-head"><i>${esc(String(m.name).slice(0, 1))}</i>
     <div><h2>${esc(m.name)} ${MERCHANT_ST[m.status] || ''}</h2><div class="td-sub">${esc(MERCHANT_KIND[m.kind] || m.kind || '')} · ${esc(CITY_CN[m.city_code] || m.city_code || '')} · 商户号 ${esc(m.merchant_no || '—')}</div></div>
-    <div class="pprofile-act"><button class="btn ghost sm" onclick="editMerchant(${m.id})">编辑资料</button></div></div>
+    <div class="pprofile-act">${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id})">编辑资料</button>` : '<span class="td-sub">商户资料由运营/超管维护</span>'}</div></div>
   <div class="pstats">${stat('累计 GMV', fen(k.gmv), `近 30 日 ${fen(k.gmv30)}`)}${stat('订单', PN(k.orders), `核销 ${PN(k.verified)} · 客单价 ${fen(k.aov)}`)}
     ${stat('退款率', pct(k.refund_rate), `退款 ${PN(k.refunded)} 单`)}${stat('评分', k.rating != null ? k.rating.toFixed(1) + ' ★' : '—', `${k.reviews} 条评价 · 复购用户 ${k.repeat_buyers}`)}</div>
   ${p.level ? `<div class="card" style="margin:0 0 12px"><div class="card-head"><h2>经营等级</h2><span class="muted">按订单、评价、退款率评定；门槛在参数中心 merchant.levels</span></div>
@@ -187,4 +202,95 @@ async function productProfile(id) {
     ${p.sessions.length ? `<table class="ptable"><thead><tr><th>出发日</th><th>已报 / 名额</th><th>成团线</th><th>价格</th></tr></thead><tbody>${p.sessions.map((s) => `<tr><td>${dt(s.depart_date, 10)}</td>
       <td class="num">${PN(s.booked)} / ${PN(s.quota)}</td><td class="num">${PN(s.min_go) || '—'}</td><td class="money num">${fen(s.price_adult)}</td></tr>`).join('')}</tbody></table>` : '<div class="td-sub">暂无团期</div>'}</div></div>
   <div><div class="rv-box"><div class="rv-h">评分分布</div>${p.dist.length ? p.dist.map((d) => kv(d.rating + ' ★', PN(d.n) + ' 条')).join('') : '<div class="td-sub">暂无评价</div>'}</div></div></div>`, '')
+}
+
+/* ============ T05/T06：运营标签/备注操作 + 人工权益调整 ============ */
+window.addUserTag = async (id) => {
+  try { await api('POST', `/admin/users/${id}/tags`, { tag: $('#uTagSel')?.value, note: ($('#uTagNote')?.value || '').trim() }); toast('已打标'); userProfile(id) } catch (e) { toast(e.message, true) }
+}
+window.removeUserTag = async (id, tagId) => {
+  try { await api('DELETE', `/admin/users/${id}/tags/${tagId}`); toast('已移除标签'); userProfile(id) } catch (e) { toast(e.message, true) }
+}
+window.addUserOpsNote = async (id) => {
+  try { await api('POST', `/admin/users/${id}/ops-notes`, { note: ($('#uOpsNote').value || '').trim() }); toast('备注已追加'); userProfile(id) } catch (e) { toast(e.message, true) }
+}
+// 发起权益调整：展示当前值与预期结果；执行与账本/成长/徽章在审批通过时同事务完成
+window.entitlementModal = (userId, nickname, growth, beanBalance) => {
+  modal('发起权益调整 · ' + esc(nickname || 'ID ' + userId), `
+    <p class="td-sub">当前：旅豆余额 <b>${Number(beanBalance).toLocaleString()}</b> · 成长值 <b>${Number(growth).toLocaleString()}</b>。提交后由超级管理员复核执行（审批人不能是申请人）；旅豆走账本分录（业务号幂等），不足余额的扣回会被拒绝。</p>
+    <div class="field"><label>调整类型 *</label><select id="eqKind" onchange="document.getElementById('eqBadgeRow').style.display=['badge_grant','badge_revoke'].includes(this.value)?'block':'none'">
+      <option value="bean_grant">旅豆补发</option><option value="bean_deduct">旅豆扣回</option>
+      <option value="growth_fix">成长值更正</option><option value="badge_grant">徽章补发</option><option value="badge_revoke">徽章撤回</option></select></div>
+    <div class="field" id="eqAmtRow"><label>数量 *（旅豆个数为正整数；成长值可为负用于冲正多记）</label><input id="eqAmount" type="number" step="1"></div>
+    <div class="field" id="eqBadgeRow" style="display:none"><label>徽章 *</label><select id="eqBadge"><option value="">加载中…</option></select></div>
+    <div class="field"><label>业务依据与原因 *（4–500 字，进入审计）</label><textarea id="eqReason" rows="2" maxlength="500"></textarea></div>
+    <div id="eqErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="entitlementSubmit(${userId})">提交申请</button>`)
+  document.getElementById('eqKind').onchange = (e) => {
+    document.getElementById('eqAmtRow').style.display = ['badge_grant', 'badge_revoke'].includes(e.target.value) ? 'none' : 'block'
+    if (['badge_grant', 'badge_revoke'].includes(e.target.value)) {
+      api('GET', '/admin/web3/badges').then((d) => { const rows = d.defs || [];
+        document.getElementById('eqBadge').innerHTML = rows.filter((b) => !String(b.rule_type || '').startsWith('m_')).map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join('') || '<option value="">无可选徽章</option>'
+      }).catch(() => { document.getElementById('eqBadge').innerHTML = '<option value="">徽章列表加载失败</option>' })
+    }
+  }
+}
+window.entitlementSubmit = async (userId) => {
+  try {
+    const kind = $('#eqKind').value
+    const body = { userId, kind, reason: ($('#eqReason').value || '').trim() }
+    if (!['badge_grant', 'badge_revoke'].includes(kind)) body.amount = Math.round(Number($('#eqAmount').value))
+    else body.badgeId = Number($('#eqBadge').value)
+    const r = await api('POST', '/admin/entitlements', body)
+    closeModal(); toast('申请 ' + r.reqNo + ' 已提交，等待超级管理员复核')
+    if (typeof entitlements === 'function' && ADMIN_CAPABILITIES.role !== 'city_partner') entitlements()
+  } catch (e) { $('#eqErr').textContent = e.message }
+}
+// 权益调整队列（用户与权益组）：运营/财务查看，超管审批执行
+const EQ_ST = { 0: '<span class="pill warn">待审批</span>', 1: '<span class="pill ok">已执行</span>', 2: '<span class="pill s70">已驳回</span>', 3: '<span class="pill off">已撤回</span>' }
+const EQ_KIND = { bean_grant: '旅豆补发', bean_deduct: '旅豆扣回', growth_fix: '成长值更正', badge_grant: '徽章补发', badge_revoke: '徽章撤回' }
+async function entitlements() {
+  $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
+  window.__eqQ = window.__eqQ || { page: 1, status: '' }
+  const Q = window.__eqQ
+  const data = await api('GET', '/admin/entitlements?' + new URLSearchParams({ page: Q.page, status: Q.status }).toString())
+  const rows = data.rows
+  const pages = Math.max(1, Math.ceil(data.total / data.pageSize))
+  const isSuper = ADMIN_CAPABILITIES.role === 'super'
+  const me = ME?.displayName || ME?.username || ''
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>人工权益调整</h2><span class="muted">运营/风控从用户画像发起 → 超管复核执行 → 账本分录与审计同事务；无直接改余额接口</span></div>
+    <div class="cfg-tabs">${[['', '全部'], [0, '待审批'], [1, '已执行'], [2, '已驳回'], [3, '已撤回']].map(([v, n]) => `<button class="cfg-tab ${String(Q.status) === String(v) ? 'on' : ''}" onclick="window.__eqQ.status='${v}';window.__eqQ.page=1;entitlements()">${n}</button>`).join('')}</div>
+    ${rows.length ? `<table><thead><tr><th>申请号</th><th>用户</th><th>类型 / 数量</th><th>依据</th><th>状态</th><th>申请人 / 审批</th><th>操作</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td class="num">${esc(r.req_no)}</td><td>${esc(r.nickname || 'ID ' + r.user_id)}<div class="td-sub">ID ${r.user_id}</div></td>
+      <td>${EQ_KIND[r.kind] || esc(r.kind)}${r.amount != null ? '<div class="num"><b>' + (r.amount > 0 && r.kind !== 'bean_deduct' ? '+' : '') + Number(r.amount).toLocaleString() + '</b></div>' : ''}</td>
+      <td class="td-sub" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.reason)}">${esc(r.reason)}</td>
+      <td>${EQ_ST[r.status] || r.status}${r.exec_result ? '<div class="td-sub">' + esc(r.exec_result) + '</div>' : ''}</td>
+      <td class="td-sub">${esc(r.applicant)}${r.approver ? '<br>复核：' + esc(r.approver) : ''}</td>
+      <td><div class="td-actions">
+        ${Number(r.status) === 0 && isSuper && r.applicant !== 'admin:' + me ? `<button class="btn primary sm" onclick="eqApprove(${r.id}, true)">通过执行</button><button class="btn danger sm" onclick="eqApprove(${r.id}, false)">驳回</button>` : ''}
+        ${Number(r.status) === 0 && r.applicant === 'admin:' + me ? `<button class="btn ghost sm" onclick="eqWithdraw(${r.id})">撤回</button>` : ''}
+        ${Number(r.status) === 0 && !isSuper && r.applicant !== 'admin:' + me ? '<span class="td-sub">待超管复核</span>' : ''}
+      </div></td></tr>`).join('')}</tbody></table>`
+    : emptyBox(Q.status !== '' ? '没有符合条件的申请。' : '暂无申请——从用户画像「发起权益调整申请」创建。')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${pages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__eqQ.page--;entitlements()">上一页</button> <button class="btn ghost sm" ${data.page >= pages ? 'disabled' : ''} onclick="window.__eqQ.page++;entitlements()">下一页</button></div></div>
+  </div>`
+}
+window.eqApprove = (id, pass) => {
+  modal((pass ? '通过并执行' : '驳回') + '权益申请 · #' + id, `
+    ${pass ? '<p class="td-sub">通过后立即执行：旅豆写账本分录（业务号幂等）、成长值重算等级、徽章入存证队列；与审计同事务，失败整体回滚。</p>' : '<p class="td-sub">驳回后申请人可修改依据重新提交。</p>'}
+    <div class="field"><label>${pass ? '复核说明（可选）' : '驳回原因（申请人可见）'}</label><input id="eqNote" maxlength="200"></div>
+    <div id="eqAErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${pass ? 'primary' : 'danger'}" onclick="eqApproveSubmit(${id}, ${pass})">确认</button>`)
+}
+window.eqApproveSubmit = async (id, pass) => {
+  try {
+    const r = await api('POST', '/admin/entitlements/' + id + '/approve', { pass, note: ($('#eqNote').value || '').trim() })
+    closeModal(); toast(pass ? '已执行：' + (r.execResult || '') : '已驳回')
+    entitlements()
+  } catch (e) { $('#eqAErr').textContent = e.message }
+}
+window.eqWithdraw = async (id) => {
+  try { await api('POST', '/admin/entitlements/' + id + '/withdraw'); toast('已撤回'); entitlements() } catch (e) { toast(e.message, true) }
 }

@@ -30,6 +30,25 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
+// 以 co_profit_pay 有效流水（status=1）为唯一事实源，重算分润单的已付额与结清状态。
+// 冲正流水是负向金额，SUM 天然抵扣；调用方必须已持有 co_profit 行锁并在事务内。
+// 最近打款展示取最近一笔有效正向流水；结清后清空由冲正导致的部分状态自动回待打款。
+async function recalcCoProfitPay(c, cpId, operatorName) {
+  const cp = await c.one('SELECT * FROM co_profit WHERE id = ? FOR UPDATE', [cpId])
+  const paid = Number((await c.one('SELECT COALESCE(SUM(amount),0) s FROM co_profit_pay WHERE co_profit_id = ? AND status = 1', [cpId])).s)
+  const last = await c.one("SELECT pay_ref, channel, note FROM co_profit_pay WHERE co_profit_id = ? AND status = 1 AND direction = 1 ORDER BY id DESC LIMIT 1", [cpId])
+  const wasSettled = Number(cp.status) === 1
+  const settled = Number(cp.status) !== 2 && paid >= Number(cp.amount)
+  await c.upd(`UPDATE co_profit SET paid_amount = ?, status = ?, pay_ref = ?, pay_channel = ?, pay_note = ?,
+    paid_at = ?, paid_by = ? WHERE id = ?`,
+    [paid, Number(cp.status) === 2 ? 2 : (settled ? 1 : 0),
+      last ? last.pay_ref : null, last ? last.channel : null, last ? last.note : null,
+      settled && !wasSettled ? new Date() : (settled ? cp.paid_at : null),
+      settled && !wasSettled ? (operatorName ? 'admin:' + operatorName : cp.paid_by) : (settled ? cp.paid_by : null),
+      cpId])
+  return { paid, settled }
+}
+
 // ---------- /admin 系统工作区（SRE）与生态/财务审批 ----------
 const adminSys = {
   // 小程序数据分析（官方 getDailyVisitTrend；未配置凭据=MOCK 曲线）
@@ -127,9 +146,30 @@ const adminSys = {
 }
 
 const adminEco = {
+  // T03/T10：服务端检索 + 分页契约 { rows, total, page, pageSize, statusCounts, countsScope, filters }
   'GET /admin/content': async (req) => {
-    const a=await requireAdmin(req, ['super', 'ops', 'review']),sc=scopeFilter(a,'p.city_code')
-    return await q(`SELECT c.*,u.nickname,u.creator_tag FROM content_note c JOIN user_account u ON u.id=c.user_id LEFT JOIN tour_product p ON p.id=c.related_product_id WHERE 1=1${sc.sql} ORDER BY c.id DESC LIMIT 100`,sc.params)
+    const a = await requireAdmin(req, ['super', 'ops', 'review'])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const sc = scopeFilter(a, 'p.city_code')
+    const conds = sc.sql ? [sc.sql.replace(' AND ', '')] : []
+    const args = [...sc.params]
+    const filters = {}
+    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (status != null) { conds.push('c.status = ?'); args.push(status); filters.status = status }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('(c.title LIKE ? OR u.nickname LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const from = `FROM content_note c JOIN user_account u ON u.id = c.user_id LEFT JOIN tour_product p ON p.id = c.related_product_id`
+    const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, args)).n)
+    const rows = await q(`SELECT c.*, u.nickname, u.creator_tag ${from} ${W} ORDER BY c.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    const condsNoStatus = conds.filter((c) => c !== 'c.status = ?')
+    const argsNoStatus = (() => { const out = []; let ai = 0; for (const c of conds) { const n = (c.match(/\?/g) || []).length; if (c === 'c.status = ?') { ai += n; continue } for (let k = 0; k < n; k++) out.push(args[ai++]); ai += n } return out })()
+    const countsRaw = await q(`SELECT c.status, COUNT(*) n ${from} ${condsNoStatus.length ? 'WHERE ' + condsNoStatus.join(' AND ') : ''} GROUP BY c.status`, argsNoStatus)
+    const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
+    statusCounts.all = countsRaw.reduce((s, r) => s + Number(r.n), 0)
+    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters }
   },
 
   // 评价管理（内容审核工作区）
@@ -181,6 +221,7 @@ const adminEco = {
         WHERE id = ? AND status IN (0,1)`, [st, passed ? null : reason, st, req.params.id])
       if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
       await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
+      await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [req.params.id])
       return { status: st }
     })
   },
@@ -196,7 +237,7 @@ const adminEco = {
     })
   },
   'GET /admin/agreements': async (req) => {
-    await requireAdmin(req)
+    await requireAdmin(req, ['super', 'ops', 'finance'])
     return await q('SELECT ac.*, m.name merchant_name FROM agreement_change ac JOIN merchant m ON m.id = ac.merchant_id ORDER BY ac.id DESC')
   },
   'POST /admin/agreements/:id/verdict': async (req) => {
@@ -211,10 +252,14 @@ const adminEco = {
 
 // ---------- 后台编辑能力（V14 补齐：风控处理/商户编辑/预算停用/推广商调档） ----------
 const adminEdit = {
-  // 风控事件处理
+  // 风控事件处理（T12：必须有处理结论，不再以 handled=1 作为完整结案；复杂处置请升级为风险案件）
   'POST /admin/risk/:id/handle': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'risk'])
-    await q('UPDATE risk_event SET handled = 1, handled_by = ?, handled_at = NOW(3) WHERE id = ?', [a.uid || 0, req.params.id])
+    const a = await requireAdmin(req, ['super', 'risk'])
+    const reason = String(req.body?.reason || '').trim()
+    if (reason.length < 4 || reason.length > 200) throw new BizError(1001, '请填写 4–200 字处理结论（进入审计）；复杂处置请升级为风险案件')
+    const n = await q('UPDATE risk_event SET handled = 1 WHERE id = ? AND handled = 0', [req.params.id])
+    if (!n.affectedRows) throw new BizError(2002, '事件已处理，请刷新')
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'risk', 'handle', 'risk-event-' + req.params.id, { handled: 0 }, { handled: 1, reason }))
     return { handled: true }
   },
 
@@ -268,6 +313,7 @@ const adminEdit = {
 
   'GET /admin/suppliers': async (req) => {
     const a = await requireAdmin(req)
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a)
     return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
       FROM supplier s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
@@ -307,18 +353,29 @@ const adminEdit = {
     return { updated: true }
   },
 
-  // 创作者池（UGC 运营）：按用户聚合内容产出；标签=资源状态（none/signed/star/limited）
+  // 创作者池（UGC 运营）：按用户聚合内容产出；标签=资源状态（none/signed/star/limited）。T03：服务端检索 + 分页
   'GET /admin/creators': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'review'])
-    return await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level, u.status,
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 30)))
+    const conds = [`(u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id))`]
+    const args = []
+    const filters = {}
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%'); filters.kw = kw }
+    const tag = String(req.query.tag || '').trim()
+    if (tag && CREATOR_TAGS.includes(tag)) { conds.push('u.creator_tag = ?'); args.push(tag); filters.tag = tag }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const base = `FROM user_account u`
+    const total = Number((await one(`SELECT COUNT(*) n ${base} ${W}`, args)).n)
+    const rows = await q(`SELECT u.id, u.nickname, u.creator_tag, u.member_level, u.status,
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id) note_count,
       (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
       (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count,
       (SELECT COUNT(*) FROM content_task_entry t WHERE t.user_id = u.id AND t.status = 3) task_done,
       (SELECT MAX(c.published_at) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) last_published
-      FROM user_account u
-      WHERE u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id) OR EXISTS (SELECT 1 FROM review r WHERE r.user_id = u.id)
-      ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT 200`)
+      ${base} ${W} ORDER BY published_count DESC, note_count DESC, u.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
   },
   'PUT /admin/creators/:id/tag': async (req) => {
     const a = await requireAdmin(req, 'creator.manage')
@@ -413,7 +470,7 @@ const adminNew = {
 
   // 共创人登记（资金商/商品商）
   'GET /admin/co-creators': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
+    await requireAdmin(req, ['super', 'ops', 'finance'])
     return await q(`SELECT cc.*, p.title FROM co_creator cc JOIN tour_product p ON p.id = cc.product_id
       ORDER BY cc.id DESC LIMIT 200`)
   },
@@ -435,24 +492,182 @@ const adminNew = {
     return { status: Number(status) ? 1 : 0 }
   },
 
-  // 共创分润台账（结算期生成）
+  // ===== 共创分润打款闭环（T01）：运营/财务核对台账，财务或超管登记真实打款 =====
+  // 唯一事实源是 co_profit_pay（每笔真实支付一行，流水号全局唯一）；co_profit.paid_amount/status 由有效流水重算。
   'GET /admin/co-profits': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
-    return await q(`SELECT cp.*, cc.co_no, cc.name, p.title FROM co_profit cp
-      JOIN co_creator cc ON cc.id = cp.co_creator_id JOIN tour_product p ON p.id = cp.product_id
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    return await q(`SELECT cp.*, cc.co_no, cc.name, cc.status co_status, p.title, p.city_code,
+        s.period settle_period,
+        (SELECT COUNT(*) FROM co_profit_pay y WHERE y.co_profit_id = cp.id AND y.status = 0) pending_approvals
+      FROM co_profit cp
+      JOIN co_creator cc ON cc.id = cp.co_creator_id
+      JOIN tour_product p ON p.id = cp.product_id
+      LEFT JOIN settlement s ON s.id = cp.settlement_id
       ORDER BY cp.id DESC LIMIT 200`)
   },
+  // 分润打款回单附件：存 static/receipts（/uploads 静态服务不覆盖该目录，URL 不对外）
+  'POST /admin/co-profits/receipt-upload': async (req) => {
+    await requireAdmin(req, 'coProfit.pay')
+    const { data, ext = 'jpg' } = req.body || {}
+    if (!['png', 'jpg', 'jpeg', 'webp', 'pdf'].includes(ext)) throw new BizError(1001, '回单仅支持 jpg/png/webp/pdf')
+    const buf = Buffer.from(String(data || ''), 'base64')
+    if (buf.length === 0 || buf.length > 5 * 1024 * 1024) throw new BizError(1001, '回单附件需在 5MB 内')
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = `receipt_${Date.now()}_${Math.floor(Math.random() * 9000 + 1000)}.${ext === 'jpeg' ? 'jpg' : ext}`
+    fs.writeFileSync(path.join(dir, name), buf)
+    return { url: '/receipts/' + name }
+  },
   'POST /admin/co-profits/:id/pay': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
-    await q('UPDATE co_profit SET status = 1 WHERE id = ? AND status = 0', [req.params.id])
-    return { paid: true }
+    const a = await requireAdmin(req, 'coProfit.pay')
+    const payRef = String(req.body.payRef || '').trim()
+    const channel = ['bank', 'alipay', 'wechat', 'cash', 'other'].includes(req.body.channel) ? req.body.channel : 'bank'
+    const payDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.payDate || '')) ? String(req.body.payDate) : bizDay()
+    const receiptUrl = String(req.body.receiptUrl || '').trim() || null
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    const amount = Number(req.body.amount)
+    if (!/^[\w-]{6,64}$/.test(payRef)) throw new BizError(1001, '请填写真实支付流水号（6–64 位字母、数字、- 或 _），以银行/渠道回单为准')
+    if (!Number.isInteger(amount) || amount <= 0) throw new BizError(1001, '实付金额需为大于 0 的整数（分）')
+    if (receiptUrl && !/^\/receipts\/[\w.-]+$/.test(receiptUrl)) throw new BizError(1001, '回单附件需先上传（登记表单内选择文件）')
+    return tx(async (c) => {
+      const cp = await c.one(`SELECT cp.*, cc.status co_status, cc.name co_name FROM co_profit cp
+        JOIN co_creator cc ON cc.id = cp.co_creator_id WHERE cp.id = ? FOR UPDATE`, [req.params.id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) === 2) throw new BizError(2002, '该分润单已作废，不能登记打款')
+      if (Number(cp.status) === 1) throw new BizError(2002, '该分润单已结清，请刷新后核对')
+      // 合作方停用即暂停打款（对应"用户/合作方冻结"检查；停用恢复或走冲正/作废流程后才能继续）
+      if (Number(cp.co_status) !== 1) throw new BizError(6001, `共创人「${cp.co_name}」合作已停用，暂停打款。请先恢复合作生效，或走冲正/作废流程`)
+      const remaining = Number(cp.amount) - Number(cp.paid_amount)
+      if (amount > remaining) throw new BizError(1001, `实付金额超过未付余额：应付 ${(Number(cp.amount) / 100).toFixed(2)} 元，已付 ${(Number(cp.paid_amount) / 100).toFixed(2)} 元，本次最多 ${(remaining / 100).toFixed(2)} 元，不可超付`)
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ?', [payRef])) throw new BizError(2002, '该支付流水号已登记过，请核对银行回单，不能重复登记')
+      const threshold = await cfgNum('coprofit.pay_approve_min')
+      const needsApprove = threshold > 0 && amount >= threshold
+      const payId = await c.ins(`INSERT INTO co_profit_pay (co_profit_id, direction, pay_ref, channel, pay_date, amount, receipt_url, note, status, operator)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [cp.id, 1, payRef, channel, payDate, amount, receiptUrl, note, needsApprove ? 0 : 1, 'admin:' + a.name])
+      if (needsApprove) {
+        await audit(c, 'admin:' + a.name, 'co-profit', 'pay-submit', 'coprofit-' + cp.id, null, { payId, payRef, amount, channel, threshold })
+        return { pending: true, payId, message: '已提交登记：达到审批阈值，等待超级管理员复核后生效' }
+      }
+      const { paid, settled } = await recalcCoProfitPay(c, cp.id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay', 'coprofit-' + cp.id,
+        { status: Number(cp.status), paidAmount: Number(cp.paid_amount) }, { payId, payRef, amount, channel, paid, settled })
+      return { paid: true, payId, settled }
+    })
+  },
+  // 超阈值登记的复核：提案人与审批人不能相同；通过前重验状态/冻结/余额/流水唯一
+  'POST /admin/co-profits/pays/:payId/approve': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const pass = req.body.pass === true
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y) throw new BizError(1004, '打款登记不存在')
+      if (Number(y.status) !== 0) throw new BizError(2002, '该笔登记已处理，请刷新')
+      if (y.operator === 'admin:' + a.name) throw new BizError(1003, '双人复核：复核人不能与登记人相同')
+      if (!pass) {
+        await c.upd('UPDATE co_profit_pay SET status = 2, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, note, y.id])
+        await audit(c, 'admin:' + a.name, 'co-profit', 'pay-reject', 'coprofit-' + y.co_profit_id, { payId: y.id, payRef: y.pay_ref }, { note })
+        return { rejected: true }
+      }
+      const cp = await c.one(`SELECT cp.*, cc.status co_status FROM co_profit cp JOIN co_creator cc ON cc.id = cp.co_creator_id WHERE cp.id = ? FOR UPDATE`, [y.co_profit_id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) !== 0) throw new BizError(2002, '分润单状态已变化（已结清或已作废），该登记不能生效，请驳回')
+      if (Number(cp.co_status) !== 1) throw new BizError(6001, '共创人合作已停用，不能通过该打款登记')
+      if (Number(cp.paid_amount) + Number(y.amount) > Number(cp.amount)) throw new BizError(2002, '分润单剩余额度不足以让该登记生效，请驳回后重新登记')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ? AND id <> ?', [y.pay_ref, y.id])) throw new BizError(2002, '该支付流水号已被其他登记使用')
+      await c.upd('UPDATE co_profit_pay SET status = 1, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, note, y.id])
+      const { paid, settled } = await recalcCoProfitPay(c, cp.id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-approve', 'coprofit-' + cp.id, { status: Number(cp.status), paidAmount: Number(cp.paid_amount) },
+        { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount), paid, settled, note })
+      return { approved: true, settled }
+    })
+  },
+  // 撤回：登记人可在复核前撤回自己的待复核登记（登记人不能自批/自驳，撤回是唯一出口）
+  'POST /admin/co-profits/pays/:payId/withdraw': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.pay')
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y) throw new BizError(1004, '打款登记不存在')
+      if (y.operator !== 'admin:' + a.name) throw new BizError(1003, '只能撤回本人登记的记录')
+      if (Number(y.status) !== 0) throw new BizError(2002, '仅待复核的登记可撤回')
+      await c.upd('UPDATE co_profit_pay SET status = 4, approver = ?, approve_note = ? WHERE id = ?', ['admin:' + a.name, '登记人撤回', y.id])
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-withdraw', 'coprofit-' + y.co_profit_id, { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount) }, { status: 4 })
+      return { withdrawn: true }
+    })
+  },
+  // 冲正：已生效打款登记错误时登记一笔负向流水，历史实付不改写；冲正后分润单回到待打款
+  'POST /admin/co-profits/pays/:payId/reverse': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.pay')
+    const payRef = String(req.body.payRef || '').trim()
+    const note = String(req.body.note || '').trim().slice(0, 255) || null
+    if (!/^[\w-]{6,64}$/.test(payRef)) throw new BizError(1001, '请填写冲正流水的真实支付流水号（6–64 位），以银行/渠道冲正回单为准')
+    return tx(async (c) => {
+      const y = await c.one('SELECT * FROM co_profit_pay WHERE id = ? FOR UPDATE', [req.params.payId])
+      if (!y || Number(y.direction) !== 1 || Number(y.status) !== 1) throw new BizError(2002, '仅有效的打款登记可冲正')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE pay_ref = ?', [payRef])) throw new BizError(2002, '该冲正流水号已登记过')
+      if (await c.one('SELECT id FROM co_profit_pay WHERE reversed_pay_id = ? AND status = 1', [y.id])) throw new BizError(2002, '该笔打款已被冲正，不能重复冲正')
+      await c.ins(`INSERT INTO co_profit_pay (co_profit_id, direction, pay_ref, channel, amount, note, status, operator, reversed_pay_id)
+        VALUES (?,?,?,?,-?,?,?,?,?)`,
+        [y.co_profit_id, 2, payRef, y.channel, y.amount, note, 1, 'admin:' + a.name, y.id])
+      const { paid, settled } = await recalcCoProfitPay(c, y.co_profit_id, a.name)
+      await audit(c, 'admin:' + a.name, 'co-profit', 'pay-reverse', 'coprofit-' + y.co_profit_id,
+        { payId: y.id, payRef: y.pay_ref, amount: Number(y.amount) }, { reverseRef: payRef, paid, settled, note })
+      return { reversed: true, paid, settled }
+    })
+  },
+  // 作废：未付的分润单整单作废（错单/重复生成）；已打款走冲正
+  'POST /admin/co-profits/:id/void': async (req) => {
+    const a = await requireAdmin(req, 'coProfit.void')
+    const reason = String(req.body.reason || '').trim()
+    if (reason.length < 4 || reason.length > 200) throw new BizError(1001, '请填写作废原因（4–200 字）')
+    return tx(async (c) => {
+      const cp = await c.one('SELECT * FROM co_profit WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!cp) throw new BizError(1004, '分润单不存在')
+      if (Number(cp.status) !== 0) throw new BizError(2002, '仅待打款的分润单可作废；已打款请走冲正')
+      if (Number(cp.paid_amount) > 0) throw new BizError(2002, '该分润单已有部分打款，不能作废，请走冲正')
+      await c.upd('UPDATE co_profit SET status = 2 WHERE id = ?', [cp.id])
+      await audit(c, 'admin:' + a.name, 'co-profit', 'void', 'coprofit-' + cp.id, { status: 0 }, { status: 2, reason })
+      return { voided: true }
+    })
+  },
+  // 打款历史（含待审批/驳回/冲正全轨迹）
+  'GET /admin/co-profits/:id/pays': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    return await q(`SELECT id, direction, pay_ref, channel, pay_date, amount, receipt_url, note, status, operator, approver, approve_note, reversed_pay_id, created_at
+      FROM co_profit_pay WHERE co_profit_id = ? ORDER BY id DESC`, [req.params.id])
+  },
+  // 回单附件受控下载（super/ops/finance；文件在 static/receipts，不进公开静态目录）
+  'GET /admin/co-profits/pays/:payId/receipt': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    const y = await one('SELECT receipt_url FROM co_profit_pay WHERE id = ?', [req.params.payId])
+    if (!y || !y.receipt_url) throw new BizError(1004, '该笔登记没有回单附件')
+    const name = String(y.receipt_url).replace('/receipts/', '')
+    if (!/^[\w.-]+$/.test(name)) throw new BizError(1001, '回单地址无效')
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts', name)
+    if (!file.startsWith(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'receipts')) || !fs.existsSync(file)) throw new BizError(1004, '回单文件不存在')
+    const ext = name.split('.').pop()
+    const data = fs.readFileSync(file).toString('base64')
+    return { name, contentType: ext === 'pdf' ? 'application/pdf' : 'image/' + (ext === 'jpg' ? 'jpeg' : ext), data }
   },
 }
 
 const adminFin = {
+  // T03/T10：提现审批服务端分页 + 状态筛选（旧数组契约同步为对象契约）
   'GET /admin/withdrawals': async (req) => {
     await requireAdmin(req, ['super', 'finance'])
-    return await q('SELECT w.*, u.nickname, u.status AS user_status FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id ORDER BY w.id DESC LIMIT 100')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const conds = ['1=1'], args = [], filters = {}
+    const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (status != null && [0, 1, 2].includes(status)) { conds.push('w.status = ?'); args.push(status); filters.status = status }
+    const kw = String(req.query.kw || '').trim()
+    if (kw) { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%'); filters.kw = kw }
+    const W = 'WHERE ' + conds.join(' AND ')
+    const from = 'FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id'
+    const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, args)).n)
+    const rows = await q(`SELECT w.*, u.nickname, u.status AS user_status ${from} ${W} ORDER BY w.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
+    return { rows, total, page, pageSize, filters }
   },
   'POST /admin/withdrawals/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
@@ -471,4 +686,48 @@ const adminFin = {
   },
 }
 
-export { adminSys, adminEco, adminEdit, adminNew, adminFin }
+
+export { adminSys, adminEco, adminEdit, adminNew, adminFin, fundWorkbenchAgg }
+
+// ===== T11（批次 F-2）：统一资金工作台（只读聚合）=====
+// 把商户结算、推广提现、创作奖励、共创分润汇成待办入口；保留各自账本语义，不做可改金额总表。
+// 口径声明：登记已付 ≠ 外部确认到账（外部支付通道未接入，均为人工回单登记）。
+const fundWorkbenchAgg = {
+  'GET /admin/fund-workbench': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance', 'ops'])
+    const N = (v) => Number(v || 0)
+    // 商户结算：status 2=财务复核通过待支付；3=已登记回单；缺回单不可能（登记强制 ref），查重复流水
+    const settlePending = await one(`SELECT COUNT(*) n, COALESCE(SUM(amt_fulfill + COALESCE(fee_merchant,0)),0) amt FROM settlement WHERE status = 2`)
+    const settlePaid = await one(`SELECT COUNT(*) n FROM settlement WHERE status = 3`)
+    const settleDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT payment_ref FROM settlement WHERE status = 3 AND payment_ref IS NOT NULL GROUP BY payment_ref HAVING COUNT(*) > 1) x`)).n)
+    // 推广提现：0=待审；1=已打款；冻结账号挂起的待审单
+    const wdPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(w.amount),0) amt FROM promoter_withdraw w WHERE w.status = 0`)
+    const wdFrozen = N((await one(`SELECT COUNT(*) n FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id WHERE w.status = 0 AND u.status = 0`)).n)
+    const wdDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT pay_ref FROM promoter_withdraw WHERE status = 1 AND pay_ref IS NOT NULL GROUP BY pay_ref HAVING COUNT(*) > 1) x`)).n)
+    // 现金加奖（约稿投稿通过后的待打款）
+    const cashPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(cash_reward),0) amt FROM content_task_entry WHERE cash_status = 1`)
+    const cashFrozen = N((await one(`SELECT COUNT(*) n FROM content_task_entry e JOIN user_account u ON u.id = e.user_id WHERE e.cash_status = 1 AND u.status = 0`)).n)
+    // 共创分润：待付 = status 0 的未付余额；已结清 status 1
+    const coPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(amount - paid_amount),0) amt FROM co_profit WHERE status = 0`)
+    const coSettled = N((await one(`SELECT COUNT(*) n FROM co_profit WHERE status = 1`)).n)
+    const coPendingApprovals = N((await one(`SELECT COUNT(*) n FROM co_profit_pay WHERE status = 0`)).n)
+    return {
+      scopeCity: a.scopeCity || null,
+      lines: [
+        { key: 'settlements', label: '商户结算', goto: 'settlements', unit: '分',
+          pending: { count: N(settlePending.n), amount: N(settlePending.amt) }, paidCount: N(settlePaid.n),
+          issues: [settleDupRef ? `重复回单流水 ${settleDupRef} 组` : ''] },
+        { key: 'withdrawals', label: '推广提现', goto: 'withdrawals', unit: '分',
+          pending: { count: N(wdPending.n), amount: N(wdPending.amt) },
+          issues: [wdFrozen ? `冻结账号挂起待审 ${wdFrozen} 笔（可驳回）` : '', wdDupRef ? `重复打款流水 ${wdDupRef} 组` : ''] },
+        { key: 'taskcash', label: '现金加奖', goto: 'taskcash', unit: '分',
+          pending: { count: N(cashPending.n), amount: N(cashPending.amt) },
+          issues: [cashFrozen ? `冻结账号待打款 ${cashFrozen} 笔（暂停发放）` : ''] },
+        { key: 'cocreate', label: '共创分润', goto: 'cocreate', unit: '分',
+          pending: { count: N(coPending.n), amount: N(coPending.amt) }, paidCount: N(coSettled.n),
+          issues: [coPendingApprovals ? `超阈值待复核登记 ${coPendingApprovals} 笔` : ''] },
+      ].map((l) => ({ ...l, issues: l.issues.filter(Boolean) })),
+      metricNote: '金额为"登记已付/待付"口径：均为人工回单登记，不等于外部渠道确认到账（外部支付/代付通道未接入）',
+    }
+  },
+}

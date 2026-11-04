@@ -8,7 +8,13 @@ async function orderDrawer(no) {
     <div class="order-service-actions">
       ${adminCan('order.service') ? `<button class="btn primary sm" onclick="editOrderContact('${esc(o.order_no)}')" ${[10,20,30].includes(Number(o.status)) ? '' : 'disabled title="已核销或已终结订单保留原联系人"'}>修正联系人</button><button class="btn ghost sm" onclick="orderServiceNote('${esc(o.order_no)}')">添加客服备注</button>` : '<span class="muted">当前角色可查看订单；联系人修正与备注需运营权限</span>'}
       ${adminCan('order.refund') && [20,30,40].includes(Number(o.status)) ? `<button class="btn danger sm" onclick="refundOrder('${esc(o.order_no)}')">处理退款</button>` : ''}
+      ${Number(o.status) === 10 && adminCan('order.service') ? `<button class="btn danger sm" onclick="cancelUnpaidOrder('${esc(o.order_no)}')">取消未支付订单</button>` : ''}
+      ${adminCan('ticket.manage') || adminCan('order.service') ? `<button class="btn ghost sm" onclick="ticketCreateModal('${esc(o.order_no)}')">发起售后</button>` : ''}
     </div>
+    ${(o.tickets?.length) ? `<h3 style="margin:16px 0 8px">售后工单</h3><table>
+      ${o.tickets.map((t) => `<tr><td class="num">${esc(t.ticket_no)}</td><td>${TICKET_CAT[t.category] || esc(t.category)}<div class="td-sub">${esc(t.assignee || '待认领')}</div></td>
+        <td>${TICKET_ST[t.status] || t.status}</td>
+        <td><button class="btn ghost sm" onclick="closeModal();window.__tkQ.page=1;tickets().then(() => setTimeout(() => ticketDrawer(${t.id}), 600))">时间线</button></td></tr>`).join('')}</table>` : ''}
     <div class="row" style="gap:8px"><span class="pill s${o.status}">${ST[o.status]}</span>
       <span class="money" style="font-size:18px">${fen(o.amount_pay)}</span>
       ${o.bean_deducted ? `<span class="pill warn">抵扣 ${o.bean_deducted} 豆</span>` : ''}</div>
@@ -31,6 +37,20 @@ async function orderDrawer(no) {
     <ul class="tl">${(o.events || []).map((e) => `<li>
       <div class="t">${ST[e.from_st] || e.from_st} → ${ST[e.to_st] || e.to_st}</div>
       <div class="d">${esc(String(e.detail || '').replace(/"/g, ''))} · ${esc(e.actor)} · ${esc(String(e.created_at).slice(5, 19))}</div></li>`).join('')}</ul>`)
+}
+// 取消未支付订单（T04）：走订单状态机，释放名额与旅豆；与支付回调并发由状态守卫裁决
+window.cancelUnpaidOrder = (no) => {
+  modal('取消未支付订单 · ' + esc(no), `
+    <p class="td-sub">仅待支付订单可取消；将释放占用名额、退回已抵扣旅豆并写入订单事件。若支付回调先到达，取消会失败并提示核对（不会出现已付款却无订单）。</p>
+    <div class="field"><label>取消原因 *（4–200 字，进入审计与订单事件）</label><input id="cuReason" maxlength="200"></div>
+    <div id="cuErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">返回</button><button class="btn danger" onclick="cancelUnpaidSubmit('${esc(no)}')">确认取消</button>`)
+}
+window.cancelUnpaidSubmit = async (no) => {
+  try {
+    await api('POST', '/admin/orders/' + no + '/cancel-unpaid', { reason: ($('#cuReason').value || '').trim() })
+    closeModal(); toast('订单已取消，名额已释放'); orders()
+  } catch (e) { $('#cuErr').textContent = e.message }
 }
 async function editOrderContact(no) {
   if (!adminCan('order.service')) return toast(adminWhy('order.service'), true)
@@ -143,7 +163,7 @@ async function merchants() {
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> <button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button></div><div style="margin-top:4px">${m.status === 0 ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : ''}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }

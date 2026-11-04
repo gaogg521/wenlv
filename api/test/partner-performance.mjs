@@ -32,7 +32,8 @@ try {
   await ins('promoter_withdraw','INSERT INTO promoter_withdraw(promoter_id,amount,status) VALUES (?,50,1)',[uid])
   await ins('promoter_withdraw','INSERT INTO promoter_withdraw(promoter_id,amount,status) VALUES (?,1000,0)',[uid])
   const co=await ins('co_creator','INSERT INTO co_creator(product_id,co_no,name,mobile,role,invest_amount,share_pct) VALUES (?,?,?,\'13812345678\',1,10000,500)',[pid,stamp,stamp+'共创'])
-  const profit=async(sid,period,base,amount,status)=>ins('co_profit','INSERT INTO co_profit(settlement_id,co_creator_id,product_id,period,base_amount,amount,status) VALUES (?,?,?,?,?,?,?)',[sid,co,pid,period,base,amount,status])
+  // T01：夹具按新口径造数——已结清(status=1)的单 paid_amount=amount（视同登记过全额打款流水）
+  const profit=async(sid,period,base,amount,status)=>ins('co_profit','INSERT INTO co_profit(settlement_id,co_creator_id,product_id,period,base_amount,amount,status,paid_amount) VALUES (?,?,?,?,?,?,?,?)',[sid,co,pid,period,base,amount,status,status===1?amount:0])
   await profit(s1,'2090-W01',10000,500,1);await profit(s2,'2090-W02',9999,500,0);await profit(999999999,'2090-W04',10000,500,0)
   for(let i=0;i<21;i++) {
     await ins('co_creator','INSERT INTO co_creator(product_id,co_no,name,mobile,role,invest_amount,share_pct) VALUES (?,?,?,\'13812345678\',1,0,500)',[pid,stamp+'-'+i,stamp+'空共创'+i])

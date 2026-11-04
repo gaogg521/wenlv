@@ -41,19 +41,40 @@ async function promoters() {
 }
 function promoterModal() {
   modal('开通推广服务商', `
-    <div class="field"><label>用户 ID *</label><input id="pr_uid" type="number" placeholder="在「权益账户」按昵称搜索用户后取其 ID"></div>
+    <div class="field"><label>搜索用户 *（昵称 / ID / 完整手机号）</label>
+      <div class="row"><input id="pr_search" style="flex:1" placeholder="输入关键词后点搜索" onkeydown="if(event.key==='Enter'){event.preventDefault();promoterSearch()}">
+      <button class="btn ghost sm" onclick="promoterSearch()">搜索</button></div>
+      <div id="pr_results" style="margin-top:6px;max-height:180px;overflow-y:auto"></div>
+      <div class="td-sub" id="pr_picked" style="margin-top:4px"></div></div>
+    <input type="hidden" id="pr_uid">
     <div class="field"><label>合作档位 *</label><select id="pr_tier">
       <option value="1">基础档 · 5%（按 90 天有效成交口径计佣）</option>
       <option value="2">优选档 · 8%</option>
       <option value="3">金牌档 · 12%（平台封顶，数据库 CHECK 焊死）</option></select></div>
-    <p class="muted">规则：一级 CPS、无层级裂变；费率写入后由订单结算自动分账；后续可在列表「调档/冻结」。</p>`,
+    <p class="muted">规则：一级 CPS、无层级裂变；选择后显示脱敏手机号与已有推广资格，重复开通会友好拒绝。</p>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="addPromoter()">确认开通</button>`)
+}
+window.promoterSearch = async () => {
+  const kw = ($('#pr_search').value || '').trim()
+  if (!kw) return toast('请输入搜索关键词', true)
+  try {
+    const d = await api('GET', '/admin/user-picker?kw=' + encodeURIComponent(kw))
+    $('#pr_results').innerHTML = d.rows.length ? d.rows.map((r) =>
+      `<div style="padding:4px 6px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--brand-soft)'" onmouseout="this.style.background=''" onclick='promoterPick(${JSON.stringify(JSON.stringify(r)).replace(/'/g, "&#39;")})'>
+        <b>${esc(r.nickname)}</b> <span class="td-sub">ID ${r.id}${r.mobile ? ' · ' + esc(r.mobile) : ''}${r.frozen ? ' · <span style="color:var(--red)">已冻结</span>' : ''}${r.isPromoter ? ' · 已是推广商' : ''}</span></div>`).join('')
+      : '<div class="td-sub">无匹配用户</div>'
+  } catch (e) { $('#pr_results').innerHTML = '<div class="td-sub" style="color:var(--red)">' + esc(e.message) + '</div>' }
+}
+window.promoterPick = (r) => {
+  const u = typeof r === 'string' ? JSON.parse(r) : r
+  $('#pr_uid').value = u.id
+  $('#pr_picked').innerHTML = `已选：<b>${esc(u.nickname)}</b>（ID ${u.id}${u.mobile ? ' · ' + esc(u.mobile) : ''}）${u.frozen ? ' <span style="color:var(--red)">已冻结</span>' : ''}${u.isPromoter ? ' <span class="pill s40">已是推广商</span>' : ''}`
 }
 async function addPromoter() {
   try {
-    if (!Number($('#pr_uid').value)) return toast('请填写用户 ID', true)
+    if (!Number($('#pr_uid').value)) return toast('请先搜索并选择用户', true)
     const uidVal = Number($('#pr_uid').value)
-    const r = { ...(await api('POST', '/admin/promoters/register', { userId: Number($('#pr_uid').value), tier: Number($('#pr_tier').value) })), userId: uidVal }
+    const r = { ...(await api('POST', '/admin/promoters/register', { userId: uidVal, tier: Number($('#pr_tier').value) })), userId: uidVal }
     toast('已开通，费率 ' + r.rateBp / 100 + '%，请补全服务商资料'); closeModal()
     const uid = Number($('#pr_uid')?.value) || null
     await promoters()
@@ -65,9 +86,14 @@ async function addPromoter() {
 /* ============ 提现审批（资金出口）============ */
 async function withdrawals() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/withdrawals')
+  // T03/T10：服务端分页 + 状态筛选（契约 { rows, total, page, pageSize }）
+  window.__wdQ = window.__wdQ || { page: 1, status: '' }
+  const data = await api('GET', '/admin/withdrawals?' + new URLSearchParams({ page: window.__wdQ.page, status: window.__wdQ.status }).toString())
+  const rows = data.rows
+  const wdPages = Math.max(1, Math.ceil(data.total / data.pageSize))
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务费提现审批</h2><span class="muted">资金出口 · 财务角色审批 · 打款流水必填留痕</span></div>
+    <div class="cfg-tabs">${[['', '全部'], [0, '待审'], [1, '已打款'], [2, '已驳回']].map(([v, n]) => `<button class="cfg-tab ${String(window.__wdQ.status) === String(v) ? 'on' : ''}" onclick="window.__wdQ.status='${v}';window.__wdQ.page=1;withdrawals()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>申请号</th><th>推广员</th><th>金额</th><th>备注</th><th>状态</th><th>审批</th><th>操作</th></tr></thead><tbody>
     ${rows.map((w) => `<tr><td class="num">#${w.id}</td><td>${esc(w.nickname)}${Number(w.user_status) === 0 ? ' <span class="pill s70">已冻结</span>' : ''}<div class="td-sub">ID ${w.promoter_id}</div></td>
       <td class="money num">${fen(w.amount)}</td><td class="td-sub">${esc(w.proposer_note || '')}</td>
@@ -75,7 +101,8 @@ async function withdrawals() {
       <td class="td-sub">${esc(w.reviewed_by || '—')}${w.pay_ref ? '<div>' + esc(w.pay_ref) + '</div>' : ''}</td>
       <td>${w.status === 0 ? `${Number(w.user_status) === 0 ? '<span class="td-sub">账号冻结，暂停打款</span>' : `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>`}
         <button class="btn danger sm" onclick="approveWithdraw(${w.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
-    </tbody></table>` : emptyBox('暂无提现申请（推广员在小程序 A「推广中心」发起）')}
+    </tbody></table>` : emptyBox(window.__wdQ.status !== '' ? '没有符合条件的提现申请。' : '暂无提现申请（推广员在小程序 A「推广中心」发起）')}
+    <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${wdPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__wdQ.page--;withdrawals()">上一页</button> <button class="btn ghost sm" ${data.page >= wdPages ? 'disabled' : ''} onclick="window.__wdQ.page++;withdrawals()">下一页</button></div></div>
   </div>`
 }
 async function approveWithdraw(id, pass) {

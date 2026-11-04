@@ -27,9 +27,9 @@ const RANKS = {
     (SELECT COALESCE(SUM(w.amount),0) FROM promoter_withdraw w WHERE w.promoter_id=p.user_id AND w.status=1) paid
     FROM promoter p JOIN user_account u ON u.id=p.user_id`,
   cocreator: `SELECT c.id,c.name,p.city_code,c.co_no,c.invest_amount,
-    (SELECT COALESCE(SUM(cp.amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id) profit,
-    (SELECT COALESCE(SUM(cp.amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id AND cp.status=1) paid,
-    (SELECT COALESCE(SUM(cp.amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id AND cp.status=1)/NULLIF(c.invest_amount,0) return_rate
+    (SELECT COALESCE(SUM(cp.amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id AND cp.status<>2) profit,
+    (SELECT COALESCE(SUM(cp.paid_amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id AND cp.status<>2) paid,
+    (SELECT COALESCE(SUM(cp.paid_amount),0) FROM co_profit cp WHERE cp.co_creator_id=c.id AND cp.status<>2)/NULLIF(c.invest_amount,0) return_rate
     FROM co_creator c JOIN tour_product p ON p.id=c.product_id`,
 }
 
@@ -101,8 +101,9 @@ async function promoterLedger(id,tab,pg) {
 async function coLedger(id,pg) {
   const partner=await one('SELECT c.name,c.invest_amount,c.share_pct,p.title FROM co_creator c JOIN tour_product p ON p.id=c.product_id WHERE c.id=?',[id])
   if (!partner) throw new BizError(1004,'共创人不存在')
-  const summary=await one('SELECT COALESCE(SUM(amount),0) profit,COALESCE(SUM(IF(status=1,amount,0)),0) paid,COALESCE(SUM(IF(status=0,amount,0)),0) pending,COUNT(*) total FROM co_profit WHERE co_creator_id=?',[id])
-  const rows=await q(`SELECT cp.id,cp.period,cp.status,cp.base_amount,cp.amount,cp.settlement_id,s.id source_id,s.period source_period,p.title,
+  // T01：应付不含已作废单；已付 = 有效打款流水累计（paid_amount，支持部分打款），待付 = 应付 − 已付
+  const summary=await one('SELECT COALESCE(SUM(IF(status<>2,amount,0)),0) profit,COALESCE(SUM(IF(status<>2,paid_amount,0)),0) paid,COALESCE(SUM(IF(status=0,amount-paid_amount,0)),0) pending,COUNT(*) total FROM co_profit WHERE co_creator_id=?',[id])
+  const rows=await q(`SELECT cp.id,cp.period,cp.status,cp.base_amount,cp.amount,cp.paid_amount,cp.pay_ref,cp.paid_at,cp.settlement_id,s.id source_id,s.period source_period,p.title,
     ROUND(s.amt_retained*(SELECT COALESCE(SUM(o.amount_pay-o.insurance_fee),0) FROM orders o WHERE o.settlement_id=s.id AND o.product_id=cp.product_id)/NULLIF(s.total_amount,0)) expected_base
     FROM co_profit cp LEFT JOIN settlement s ON s.id=cp.settlement_id LEFT JOIN tour_product p ON p.id=cp.product_id
     WHERE cp.co_creator_id=? ORDER BY cp.id DESC LIMIT ? OFFSET ?`,[id,pg.size,pg.offset])

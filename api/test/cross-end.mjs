@@ -130,8 +130,8 @@ await t('旅豆使用率：后台洞察 = 累计净消耗 ÷ 累计发放（按�
   assert.ok(f.consumed <= f.granted && f.consumed >= 0, `净消耗 ${f.consumed} 不应超过发放 ${f.granted}`)
   const ov = ok(await call('GET', '/admin/web3/overview', null, A))
   assert.equal(ov.beanGranted, f.granted); assert.equal(ov.beanConsumed, f.consumed)
-  const sum = await one(`SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE l.direction = 1 AND l.biz_type IN (1,2,3) AND a.user_id < 999999000000`)
-  assert.equal(Number(sum.s), f.granted, '发放量 = 真实用户户的入账合计')
+  const sum = await one(`SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE l.direction = 1 AND l.biz_type IN (1,2,3,7) AND a.user_id < 999999000000`)
+  assert.equal(Number(sum.s), f.granted, '发放量 = 真实用户户的入账合计（含 T06 人工补发 biz_type 7）')
 })
 let settle
 await t('结算：后台出单 → B 看到同一张单，金额逐字段一致；五口径之和 = 总额；该订单被纳入', async () => {
@@ -519,7 +519,7 @@ await t('提现闭环：A 申请 → 后台待办 +1 且金额同额；重复申
   const w1 = ok(await call('POST', '/c/promote/withdraw', { note: '跨端测试' }, pu.token)); assert.equal(w1.amount, 30000)
   assert.notEqual((await call('POST', '/c/promote/withdraw', {}, pu.token)).code, 0, '已有待处理申请时，不得再次申请同一笔余额')
   assert.equal(ok(await call('GET', '/c/promote/overview', null, pu.token)).pendingRequests, 1, 'A 看到 1 张待处理申请')
-  const row = ok(await call('GET', '/admin/withdrawals', null, A)).find((w) => Number(w.id) === Number(w1.id))
+  const row = ok(await call('GET', '/admin/withdrawals', null, A)).rows.find((w) => Number(w.id) === Number(w1.id))
   assert.ok(row && Number(row.status) === 0 && Number(row.amount) === 30000 && Number(row.promoter_id) === Number(uid), '后台提现列表应有同额待审核记录')
   assert.equal(await pendingWd(), pend0 + 1, '后台待办提现 +1')
   // 冻结期间：不能通过（打款）；申请入口也停
@@ -573,8 +573,8 @@ await t('共创分润：后台出结算单 → 分润 = 留存 × 产品占比 �
   const prof = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A))
   assert.equal(prof.profits.reduce((s, x) => s + Number(x.amount), 0), profit); assert.equal(prof.paid, 0)
   assert.ok(!JSON.stringify(prof.co).includes(PHONE), '画像里的电话必须脱敏')
-  // 发放
-  for (const cp of cps) ok(await call('POST', `/admin/co-profits/${cp.id}/pay`, {}, A))
+  // 发放（T01 新契约：登记唯一真实流水号后才结清）
+  for (const cp of cps) ok(await call('POST', `/admin/co-profits/${cp.id}/pay`, { payRef: 'XEND-CO-' + stamp + '-' + cp.id, channel: 'bank', amount: Number(cp.amount), note: '跨端回归夹具登记' }, A))
   const rec2 = ok(await call('GET', `/admin/partner-reconciliation/cocreator/${co.id}`, null, A))
   assert.deepEqual([Number(rec2.summary.paid), Number(rec2.summary.pending)], [profit, 0], '发放后对账页已发 = 应分')
   const prof2 = ok(await call('GET', `/admin/partners/cocreator/${co.id}`, null, A)); assert.equal(prof2.paid, profit); assert.equal(Number(prof2.returnRate), profit / 1000000)

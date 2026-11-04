@@ -122,8 +122,9 @@ export const people = {
     }
     const co = await one('SELECT c.role, c.invest_amount, c.share_pct, c.mobile, p.title FROM co_creator c JOIN tour_product p ON p.id = c.product_id WHERE c.id = ?', [id])
     co.mobile = maskMobile(co.mobile)
-    const profits = await q('SELECT period, status, SUM(amount) amount FROM co_profit WHERE co_creator_id = ? GROUP BY period, status ORDER BY period DESC', [id])
-    const paid = profits.filter(x => N(x.status) === 1).reduce((s, x) => s + N(x.amount), 0)
+    // T01：已付以有效打款流水累计（paid_amount，含部分打款）；status=1 表示已结清
+    const profits = await q('SELECT period, status, SUM(amount) amount, SUM(paid_amount) paid_amount FROM co_profit WHERE co_creator_id = ? GROUP BY period, status ORDER BY period DESC', [id])
+    const paid = profits.reduce((s, x) => s + N(x.paid_amount), 0)
     return { partner, co, profits, paid, returnRate: N(co.invest_amount) > 0 ? paid / N(co.invest_amount) : null }
   },
   // ---------------- 用户中心 ----------------
@@ -213,11 +214,13 @@ export const people = {
       content: { notes, recentNotes, tasks, badges }, promoter: promoter ? { ...promoter, commission } : null, staff, growth, ops,
     }
   },
-  // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计
+  // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计。
+  // T12：传 caseId 时把冻结/解冻写入案件时间线（处置动作引用案件）；解冻不等于结案（案件关闭仍走复核）。
   'POST /admin/users/:id/status': async (req) => {
     const a = await requireAdmin(req, 'user.manage')
     const st = Number(req.body.status)
     const reason = String(req.body.reason || '').trim()
+    const caseId = Number(req.body.caseId) || null
     if (![0, 1].includes(st)) throw new BizError(1001, '状态只能是正常或冻结')
     if (st === 0 && reason.length < 4) throw new BizError(1001, '冻结需要填写原因（至少 4 个字）')
     const id = await tx(async (c) => {
@@ -225,6 +228,12 @@ export const people = {
       if (!u) throw new BizError(1004, '用户不存在')
       await c.upd('UPDATE user_account SET status = ? WHERE id = ?', [st, u.id])
       await audit(c, 'admin:' + a.name, 'user', st ? 'unfreeze' : 'freeze', 'user-' + u.id, { status: N(u.status) }, { status: st, reason: reason || null })
+      if (caseId) {
+        const k = await c.one('SELECT id, status FROM risk_case WHERE id = ? FOR UPDATE', [caseId])
+        if (!k) throw new BizError(1004, '引用的案件不存在')
+        await c.q('INSERT INTO risk_case_record (case_id, actor, action, note, from_status, to_status) VALUES (?,?,?,?,?,?)',
+          [k.id, 'admin:' + a.name, st ? 'unfreeze' : 'freeze', reason || null, Number(k.status), Number(k.status)])
+      }
       return Number(u.id)
     })
     if (!st) return { status: st }
@@ -293,9 +302,10 @@ export const people = {
 
   // ---------------- 商品 / 线路数据 ----------------
   'GET /admin/products/:id/overview': async (req) => {
-    await requireAdmin(req)
+    const a = await requireAdmin(req)
     const p = await one('SELECT p.id, p.title, p.channel, p.city_code, p.status, p.price_from, m.name merchant_name FROM tour_product p LEFT JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
+    if (a.scopeCity && String(a.scopeCity) !== String(p.city_code)) throw new BizError(1003, '仅可查看本城商品数据')
     const kpi = await one(`SELECT COUNT(*) orders, COALESCE(SUM(CASE WHEN status IN ${PAID} THEN qty END), 0) travelers,
         COALESCE(SUM(CASE WHEN status IN ${PAID} THEN amount_pay END), 0) gmv, SUM(status = 70) refunded, COUNT(DISTINCT user_id) buyers,
         COALESCE(SUM(bean_deducted), 0) beans_used
@@ -318,6 +328,8 @@ async function partnerAccess(req) {
   if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
   return a
 }
+// 三个分支的字符串列来源排序规则不同（JSON_UNQUOTE 产 utf8mb4_bin、CAST AS CHAR 产连接排序规则），
+// UNION 会报 Illegal mix of collations（MySQL 9 全新库必炸，此前老库是历史默认值侥幸对齐）——显式统一为 utf8mb4_unicode_ci
 const PARTNER_ROWS = `SELECT 'city' kind, id, COALESCE(display_name, username) name, username ref, scope_city city_code, status FROM admin_user WHERE role = 'city_partner'
-  UNION ALL SELECT 'promoter', p.user_id, COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p.profile,'$.real_name')),''),u.nickname), CAST(p.user_id AS CHAR), NULL, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id
+  UNION ALL SELECT 'promoter', p.user_id, (COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(p.profile,'$.real_name')),''),u.nickname)) COLLATE utf8mb4_unicode_ci, (CAST(p.user_id AS CHAR)) COLLATE utf8mb4_unicode_ci, NULL, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id
   UNION ALL SELECT 'cocreator', c.id, c.name, c.co_no, p.city_code, c.status FROM co_creator c JOIN tour_product p ON p.id = c.product_id`

@@ -32,14 +32,14 @@ const ICONS = {
 const NAV = [
   ['经营总览', [['dash', '经营概览', 'dash']]],
   ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
-  ['订单履约', [['orders', '订单管理', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
-  ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag']]],
-  ['内容运营', [['contentdash', '内容看板', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
+  ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
+  ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
+  ['内容运营', [['contentdash', '内容看板', 'content'], ['reviewqueue', '审核队列', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
   ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
-  ['资金结算', [['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
+  ['资金结算', [['fund', '资金工作台', 'settlements'], ['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
   ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
-  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
+  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['accounts', '后台账号', 'sys'], ['cases', '风控案件', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
 ]
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
@@ -91,20 +91,20 @@ let MFA_CHALLENGE = null
 function login() {
   $('#lerr').textContent = ''
   api('POST', '/admin/login', { username: norm(document.querySelector('#luser').value), password: norm(document.querySelector('#lpass').value) }).then((d) => {
-    if (d.mfaRequired) {
-      MFA_CHALLENGE = d.challenge
-      const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
-      $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
-      $('#step1').style.display = 'none'
-      $('#step2').style.display = 'block'
-      document.querySelector('#mfacode')?.focus()
-      return
-    }
-    TOKEN = d.token; ME = d.user
-    localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
-    boot()
-  }).catch((e) => { $('#lerr').textContent = e.message })
-}
+      if (d.mfaRequired) {
+        MFA_CHALLENGE = d.challenge
+        const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
+        $('#mfaTip').textContent = (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+        $('#step1').style.display = 'none'
+        $('#step2').style.display = 'block'
+        document.querySelector('#mfacode')?.focus()
+        return
+      }
+      TOKEN = d.token; ME = d.user
+      localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
+      boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
+    }).catch((e) => { $('#lerr').textContent = e.message })
+  }
 async function mfaSubmit() {
   $('#lerr2').textContent = ''
   try {
@@ -112,7 +112,7 @@ async function mfaSubmit() {
     TOKEN = d.token; ME = d.user
     localStorage.setItem('admin_token', TOKEN); localStorage.setItem('admin_me', JSON.stringify(ME))
     MFA_CHALLENGE = null
-    boot()
+    boot(); if (ME?.mustChangePassword) showForcedPwdChange() // T02：重置后的临时密码登录必须先改密
   } catch (e) { $('#lerr2').textContent = e.message }
 }
 async function mfaResend() {
@@ -134,7 +134,7 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  const access = { ops: ['users','dash','orders','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','products','merchants','settlements'], finance: ['dash','orders','settlements','withdrawals','agreements','budgets','audit'], review: ['content','tasks'], risk: ['risk','users','conflicts','audit'] }
+  const access = { ops: ['users','dash','orders','tickets','entitlements','fund','reviewqueue','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements'], finance: ['dash','orders','fund','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks','reviewqueue'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
   for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
@@ -150,11 +150,11 @@ async function boot() {
     return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.length}</small></summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
-  // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）
+  // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）；hash 可带查询串（如 #orders?kw=x&page=2，T03 筛选恢复）
   const keys = [...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p)
-  const requested = location.hash.slice(1)
+  const requested = location.hash.slice(1).split('?')[0]
   const destination = keys.includes(requested) ? requested : keys[0]
-  history.replaceState(null, '', '#' + destination)
+  history.replaceState(null, '', location.hash || '#' + destination) // 保留 hash 查询串（T03 筛选恢复）
   go(destination, { history: false })
 }
 

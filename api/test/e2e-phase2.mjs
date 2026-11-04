@@ -61,7 +61,7 @@ async function main() {
   const ov = await api('GET', '/c/promote/overview', null, writer2.token)
   ok(ov.withdrawable >= 10000, '金牌 12% 佣金可提现（' + ov.withdrawable + ' 分）')
   const wd = await api('POST', '/c/promote/withdraw', { note: 'phase2' }, writer2.token)
-  const wdList = await api('GET', '/admin/withdrawals', null, fin)
+  const wdList = (await api('GET', '/admin/withdrawals', null, fin)).rows
   ok(wdList.some((x) => x.id === wd.id && x.status === 0), '提现进入财务队列')
   const done = await api('POST', '/admin/withdrawals/' + wd.id + '/verdict', { pass: true }, fin)
   ok(done.status === 1, '审批通过自动打款（MOCK 通道流水留痕）')

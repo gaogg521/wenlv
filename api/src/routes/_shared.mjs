@@ -47,6 +47,13 @@ export async function requireAdmin(req, roles) {
   const { jwtVerify } = await import('../auth.mjs')
   const p = jwtVerify(h)
   if (!p || p.end !== 'admin') throw new BizError(1002, '后台未登录')
+  // T02 会话生命周期：登录令牌带 ver=token_epoch。停用 / 改角色 / 改城市 / 重置密码后 epoch+1，
+  // 已登录会话在下一个请求即失效（不能只禁止下次登录）。
+  // 不带 ver 的令牌只可能出自掌握 JWT_SECRET 的一方（测试夹具），不参与本校验。
+  if (p.ver != null) {
+    const row = await one('SELECT status, token_epoch FROM admin_user WHERE id = ?', [p.uid])
+    if (!row || Number(row.status) !== 1 || Number(row.token_epoch) !== Number(p.ver)) throw new BizError(1002, '登录已失效（账号被停用或权限已变更），请重新登录')
+  }
   if (roles && !roles.includes(p.role)) throw new BizError(1003, '权限不足（' + p.role + '）')
   return p // 含 scopeCity（城市合伙人行级隔离）：列表查询必须经 scopeFilter 注入
 }
