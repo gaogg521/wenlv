@@ -87,7 +87,25 @@ export async function tickExpire() {
 }
 
 /** 存证打包（小时级）：本地 Merkle 根 + inclusion proof；随后尝试锚定（NOOP 下停留在"已打包"） */
-export async function tickAttest() {
+/** 打包节奏控制：本函数注释写"小时级"，但主循环每 60 秒调一次 —— 照这样每分钟一批，
+ *  一天 1440 批，燃料与"批次"语义都不对。这里按小时闸门，另留一个积压阈值做兜底：
+ *  待打包超过 200 条说明业务量上来了，不等整点。 */
+let lastAttestAt = 0
+const ATTEST_INTERVAL_MS = 55 * 60_000
+const ATTEST_URGENT_PENDING = 200
+
+export async function tickAttest(opts = {}) {
+  const { confirmPending: _c } = await import('./domain/attest.mjs')
+  const force = !!opts.force
+  if (!force && Date.now() - lastAttestAt < ATTEST_INTERVAL_MS) {
+    const pend = await one('SELECT COUNT(*) n FROM attest_event WHERE status = 0')
+    if (Number(pend.n) < ATTEST_URGENT_PENDING) {
+      // 确认环节不受闸门限制：已提交待确认的批次要尽快核验终局
+      const done = await _c(50)
+      return { batchId: 0, leaves: 0, root: null, seq: 0, prevRoot: null, anchored: 0, skipped: 'hourly-gate', pending: Number(pend.n), confirmed: done.filter((x) => x.anchored).length }
+    }
+  }
+  lastAttestAt = Date.now()
   const { packBatch, reanchorPending, confirmPending } = await import('./domain/attest.mjs')
   const confirmed = await confirmPending(50)
   if (confirmed.length) console.log('[job:attest-confirm]', confirmed.filter((x) => x.anchored).length, '/', confirmed.length, 'confirmed')

@@ -417,6 +417,45 @@ function blockLinkHTML(prevBranch, curBranch) {
   return `<div class="chain-link elbow"><i style="top:${top}px;height:${Math.abs(y2 - y1)}px;${edge};border-right:2px dashed var(--cl)"></i>
     <b style="top:${y2 - 1}px"></b><s class="tail" style="top:${y2 - 2}px"></s><u style="top:${y2 - 11}px">▸</u></div>`
 }
+/**
+ * 上链流水线：把"一个批次"从业务事件到链上确认的 5 段真实路径铺开。
+ * 段位与状态严格按库里的 status 走（0 待打包 / 1 已打包待锚定 / 5 已提交待确认 / 2 已锚定 / 3·4 异常），
+ * 不按"看起来差不多"画 —— 缺哪段就显示缺哪段。
+ */
+const PIPE_STEP = (done, label, sub, bad) => `<span class="pipe-step ${bad ? 'bad' : done ? 'done' : 'todo'}">
+  <i>${bad ? '!' : done ? '✓' : '·'}</i><b>${label}</b>${sub ? `<em>${sub}</em>` : ''}</span>`
+function pipelineHtml(batches, queue, demo) {
+  const pending = (queue || []).reduce((s, r) => s + Number(r.pending || 0), 0)
+  const rows = (batches || []).slice(0, 8).map((b) => {
+    const st = Number(b.status)
+    const hasRoot = st >= 1
+    const hasTx = !!b.chain_tx_ref
+    const hasBlock = !!b.chain_block
+    const ok = st === 2
+    const bad = st === 3 || st === 4
+    const prevTxt = b.prev_root ? `prev → ${String(b.prev_root).slice(0, 8)}…` : '创世（无前根）'
+    return `<div class="pipe-row${ok ? ' ok' : ''}">
+      <div class="pipe-id"><b>#${Number(b.seq)}</b><span>${esc(String(b.biz_date || '').slice(0, 10))}</span></div>
+      <div class="pipe-steps">
+        ${PIPE_STEP(true, `${Number(b.leaf_count)} 条事件入队`, '业务事实已在库')}
+        ${PIPE_STEP(hasRoot, '本地打包出根', hasRoot ? esc(String(b.merkle_root).slice(0, 10)) + '…' : '未打包')}
+        ${PIPE_STEP(hasTx, '提交交易', hasTx ? esc(String(b.chain_tx_ref).slice(0, 10)) + '…' : '未提交')}
+        ${PIPE_STEP(hasBlock, '链上出块', hasBlock ? '块 ' + esc(b.chain_block) : '等待出块')}
+        ${PIPE_STEP(ok, ok ? '确认锚定' : '待确认', ok ? (b.anchored_at ? esc(String(b.anchored_at).slice(5, 19)) : '已确认') : (bad ? '异常·已转人工' : '未完成'), bad)}
+      </div>
+      <div class="pipe-meta">${esc(prevTxt)}${demo ? ' · 演示' : ''}</div>
+    </div>`
+  }).join('')
+  return `<div class="pipe">
+    <div class="pipe-head">
+      <span class="chain-name" style="font-size:13px">🧾 上链流水线 · 真实流转路径</span>
+      <span class="muted">事件产生 → 本地 Merkle 打包 → 提交上链 → 出块 → 确认锚定；prev_root 把每批串成链</span>
+      <span class="chip" style="margin-left:auto">在途 ${pending} 条待打包</span>
+    </div>
+    ${rows || '<div class="blk-line" style="padding:16px">还没有批次：到「存证中心」点「① 打包」就会走出第一步</div>'}
+  </div>`
+}
+
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
@@ -459,6 +498,7 @@ async function web3dash() {
     </div>
     ${demo ? '<div class="chain-demo-note">演示模式：以下为模拟数据，仅预览多节点链路形态，不代表真实链上状态</div>' : ''}
     <div class="chain-track">${nodes.join('') || '<div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div>'}</div>
+    ${pipelineHtml(batches, (c && c.queue) || [], demo)}
     <div class="chain-divider"></div>
     <div class="flow-head">
       <span class="chain-name" style="font-size:13px">🔎 存证检索</span>
