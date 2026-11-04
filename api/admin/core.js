@@ -28,19 +28,10 @@ const ICONS = {
   risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 3 20h18zM12 10v4M12 17.5v.5"/></svg>',
   audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
 }
-// 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠
-const NAV = [
-  ['经营总览', [['dash', '经营概览', 'dash']]],
-  ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
-  ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
-  ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
-  ['内容运营', [['contentdash', '内容看板', 'content'], ['reviewqueue', '审核队列', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
-  ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
-  ['资金结算', [['fund', '资金工作台', 'settlements'], ['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
-  ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
-  ['可信存证', [['web3dash', '链路总览', 'eco'], ['attest', '存证中心', 'eco'], ['vc', '数字身份', 'kyc'], ['pointassets', '积分发行台账', 'budgets'], ['chainassets', '链与资产', 'sys'], ['chainhub', '链接入中心', 'sys'], ['terms', '术语映射', 'flag']]],
-  ['系统治理', [['risk', '风控事件', 'risk'], ['audit', '审计日志', 'audit'], ['security', '安全中心', 'risk'], ['accounts', '后台账号', 'sys'], ['cases', '风控案件', 'risk'], ['config', '参数中心', 'config'], ['features', '功能开关', 'flag'], ['integrations', '集成中心', 'withdraw'], ['system', '运维控制台', 'sys']]],
-]
+// 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠。
+// C-04：模块清单与角色默认集合的唯一数据源在后端（src/domain/modules.mjs，经 GET /admin/capabilities
+// 下发 allModules + modules）。前端不再写死 access 表；NAV 在 boot() 里由接口数据组装。
+let NAV = []
 
 const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify: '到店核销', bean_grant: '旅豆发放', bean_deduct: '旅豆抵扣',
   refund: '退款冲正', settlement: '商户结算', badge: '勋章发放', vc_issue: '身份凭证签发', vc_revoke: '身份凭证吊销', asset_issue: '资产发行' }
@@ -150,19 +141,17 @@ async function boot() {
   const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
-  // V-09：城市合伙人增加「风控案件」入口（本城协查可达）；案件页仅显示本城案件与协查/补材料动作
-  const access = { ops: ['users','dash','orders','tickets','entitlements','fund','reviewqueue','products','merchants','content','tasks','faqs','banners','promoters','agreements','kyc','cocreate'], city_partner: ['dash','orders','tickets','products','merchants','settlements','cases'], finance: ['dash','orders','fund','settlements','withdrawals','agreements','budgets','audit','cocreate','entitlements'], review: ['content','tasks','reviewqueue'], risk: ['risk','users','conflicts','audit','entitlements','cases'] }
-  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partners')
-  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('partnerperf')
-  for (const role of ['ops', 'finance', 'city_partner']) access[role].push('scenics')
-  for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentdash')
-  for (const role of ['ops', 'review', 'city_partner']) access[role].push('contentcases')
-  const allowed = access[ME?.role]
-  if (allowed && ['ops', 'finance'].includes(ME.role)) allowed.push('taskcash')
+  // C-04：菜单由接口驱动——allModules 是唯一模块清单（分组/中文名/图标），modules 是本人有效集合；
+  // 城市合伙人「风控案件」入口等角色差异全部在后端默认集合里（V54 种子与 V-09 修复）。
+  NAV = (ADMIN_CAPABILITIES.allModules || []).reduce((acc, m) => {
+    let g = acc.find(([name]) => name === m.group)
+    if (!g) { g = [m.group, []]; acc.push(g) }
+    g[1].push([m.key, m.name, m.icon])
+    return acc
+  }, [])
+  const allowed = new Set(ADMIN_CAPABILITIES.modules || [])
   $('#nav').innerHTML = NAV.map(([g, items]) => {
-    items = items.filter(([k]) => k !== 'contentcases' || ['super', 'ops', 'review', 'city_partner'].includes(ME?.role))
-    items = items.filter(([k]) => k !== 'partnerperf' || ['super', 'ops', 'finance', 'city_partner'].includes(ME?.role))
-    items = allowed ? items.filter(([k]) => allowed.includes(k)) : items
+    items = items.filter(([k]) => allowed.has(k))
     if (!items.length) return ''
     return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.length}</small></summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
   }).join('')
