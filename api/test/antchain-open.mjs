@@ -3,7 +3,7 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import assert from 'node:assert/strict'
-import antopen, { toPem, contentOf, handshakeSecret } from '../src/infra/chain/antchain-open.mjs'
+import antopen, { toPem, contentOf, handshakeSecret, parseContentV2, verifyContentV2 } from '../src/infra/chain/antchain-open.mjs'
 
 let pass = 0
 const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', name) } catch (e) { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 } }
@@ -74,17 +74,34 @@ try {
     assert.equal(handshakeSecret({ accessId: 'x', time: '123', privateKey: bare }), s)
     assert.throws(() => toPem(''), /为空/)
   })
-  await t('anchor：DEPOSIT 请求体字段齐全；内容是确定性字符串；orderId 随根派生；token 缓存，同一进程只握手一次', async () => {
+  await t('anchor：DEPOSIT 请求体字段齐全；上链原文含四要素（指纹/时间戳/主体标识/签名）；orderId 随根派生；token 缓存', async () => {
     conf(); Object.assign(st, { handshakes: 0, badSig: 0, depositCode: null }); st.deposits.length = 0
-    const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' })
+    const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', kind: 'biz' })
     assert.match(r.txRef, /^[0-9a-f]{64}$/); assert.equal(r.mode, 'real'); assert.equal(st.badSig, 0)
     const d = st.deposits[0]
     assert.equal(d.method, 'DEPOSIT'); assert.equal(d.bizid, 'a00e36c5'); assert.equal(d.account, 'acct'); assert.equal(d.mykmsKeyId, 'kms-id-1')
     assert.equal(d.tenantid, 'TENANT1'); assert.equal(d.gas, 50000); assert.equal(d.orderId, 'wl_' + ROOT.slice(0, 32)); assert.ok(d.token && d.accessId)
-    assert.equal(d.content, `wl-anchor/1|${ROOT}|${PREV}|20261104`)
-    assert.equal(contentOf({ root: ROOT, prevRoot: '', bizDate: '2026-11-04' }), `wl-anchor/1|${ROOT}|${'0'.repeat(64)}|20261104`)
+    // 方案 §7.6：上链的只有 哈希指纹 + 时间戳 + 主体标识 + 签名
+    const c = parseContentV2(d.content)
+    assert.ok(c, '不是 v2 四要素格式：' + d.content.slice(0, 40))
+    assert.equal(c.root, ROOT, '缺哈希指纹'); assert.equal(c.prevRoot, PREV, '缺前根')
+    assert.equal(c.tenant, 'TENANT1', '缺主体标识（租户）'); assert.equal(c.bizid, 'a00e36c5', '缺链标识'); assert.equal(c.kind, 'biz')
+    assert.match(c.ts, /^\d{13}$/, '时间戳必须是毫秒级，不能只到业务日')
+    assert.match(c.sig, /^[0-9a-f]{512}$/, '签名必须是 RSA-2048 的 512 位 hex')
+    assert.equal(r.content, d.content, '返回的原文必须与真正上链的那串一致')
+    assert.equal(r.signed, true, '有私钥时必须真签')
+    // 签名必须能被公钥验过（第三方拿公钥即可独立验证，不需要我们的私钥）
+    assert.equal(verifyContentV2(d.content).ok, true, '签名验不过')
+    const tampered = d.content.replace(ROOT, 'b'.repeat(1) + ROOT.slice(1))
+    assert.equal(verifyContentV2(tampered).ok, false, '内容被改动后签名必须失效')
+    assert.equal(contentOf({ root: ROOT, prevRoot: '', bizDate: '2026-11-04' }), `wl-anchor/1|${ROOT}|${'0'.repeat(64)}|20261104`, 'v1 兼容函数要保持原样')
     await antopen.anchor({ root: 'c'.repeat(64), bizDate: '2026-11-04' })
     assert.equal(st.handshakes, 1, '第二次提交复用 token')
+  })
+  await t('上链原文长度守门：超过实测安全上限直接拒绝，不让它"返回成功但链上查无此交易"', async () => {
+    conf()
+    // 用一个超长 kind 把原文撑过 2000：链上 4000 字符会假成功，必须在提交前拦住
+    await assert.rejects(() => antopen.anchor({ root: ROOT, bizDate: '2026-11-04', kind: 'x'.repeat(2100) }), /超过实测安全上限/)
   })
   await t('gas / 链 ID 可配', async () => {
     conf({ ANTOPEN_GAS: '70000', ANTOPEN_BIZID: 'deadbeef' }); st.deposits.length = 0
@@ -94,23 +111,27 @@ try {
   await t('confirm：未上链(404) → 等待出块；上链后内容逐字一致 → final', async () => {
     conf()
     const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' })
-    const arg = { txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' }
+    const arg = { txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', content: r.content }
     st.txs.get(r.txRef).block = 0
     assert.deepEqual(await antopen.confirm({ ...arg, txRef: 'f'.repeat(64) }), { final: false, reason: '等待出块', confirmations: 0 })
     assert.equal((await antopen.confirm(arg)).final, false, '块高 0 视为未出块')
     st.txs.get(r.txRef).block = 185031369
-    assert.deepEqual(await antopen.confirm(arg), { final: true, block: '185031369', confirmations: 1 })
+    const fin = await antopen.confirm(arg)
+    assert.equal(fin.final, true); assert.equal(fin.block, '185031369'); assert.equal(fin.confirmations, 1)
+    assert.equal(fin.contentV2, true, '应识别为 v2 四要素原文'); assert.equal(fin.signed, true, '应通过验签')
   })
   await t('confirm：链上内容与批次不一致 / 哈希不一致是硬错误，不是"再等等"', async () => {
     conf()
     const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' })
     st.txs.get(r.txRef).block = 9
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: 'e'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04' }),
+    // v2 下域层存的是"提交时那一串"，所以内容不符 = 库里存的原文与链上不是同一串
+    const wrong = r.content.replace(ROOT, 'e'.repeat(64))
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', content: wrong }),
       (e) => e.code === 'CONTENT_MISMATCH' && /链上内容与批次不一致/.test(e.message))
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: 'e'.repeat(64), bizDate: '2026-11-04' }),
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', content: r.content + 'x' }),
       (e) => e.code === 'CONTENT_MISMATCH')
     st.txs.get(r.txRef).hashOverride = '1'.repeat(64)
-    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04' }),
+    await assert.rejects(() => antopen.confirm({ txRef: r.txRef, root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', content: r.content }),
       (e) => e.code === 'TX_HASH_MISMATCH' && /哈希不一致/.test(e.message))
     await assert.rejects(() => antopen.confirm({ txRef: r.txRef }), /需要批次根与业务日期/)
   })
