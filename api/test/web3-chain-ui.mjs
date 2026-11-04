@@ -148,4 +148,30 @@ await t('查不到时给空态 + 可查类型清单，不是一片空白', () =>
   assert.match(html, /可查：/)
 })
 
+await t('上链流水线：五段真实路径齐全（事件→根→交易→出块→确认），已锚定批次五段全绿', () => {
+  const html = ctx.pipelineHtml([{ seq: 3, biz_date: '2026-11-04', leaf_count: 20, merkle_root: 'f'.repeat(64),
+    prev_root: 'a'.repeat(64), status: 2, chain_tx_ref: 'e'.repeat(64), chain_block: '185034002', anchored_at: '2026-11-04 19:55:00' }], [{ pending: 0 }], false)
+  for (const seg of ['条事件入队', '本地打包出根', '提交交易', '链上出块', '确认锚定']) assert.ok(html.includes(seg), '缺少段位：' + seg)
+  assert.equal((html.match(/pipe-step done/g) || []).length, 5, '已锚定批次应当五段全 done')
+  assert.match(html, /185034002/, '没有块高')
+  assert.match(html, /prev → aaaaaaaa/, '没有显示前根指向')
+})
+
+await t('上链流水线：各段严格按库里 status 画，不按"看起来差不多"（5=已提交待确认 / 1=仅打包 / 3=异常）', () => {
+  const base = { seq: 9, biz_date: '2026-11-04', leaf_count: 5, merkle_root: 'f'.repeat(64), prev_root: null, chain_tx_ref: 'e'.repeat(64), chain_block: null }
+  const s5 = ctx.pipelineHtml([{ ...base, status: 5 }], [], false)
+  assert.equal((s5.match(/pipe-step done/g) || []).length, 3, '已提交待确认 = 事件/根/提交 三段 done')
+  const s1 = ctx.pipelineHtml([{ ...base, status: 1, chain_tx_ref: null }], [], false)
+  assert.equal((s1.match(/pipe-step done/g) || []).length, 2, '仅打包 = 事件/根 两段 done')
+  const s3 = ctx.pipelineHtml([{ ...base, status: 3 }], [], false)
+  assert.match(s3, /pipe-step bad/, '锚定失败必须标红，不能显示成待确认')
+  assert.match(s3, /异常·已转人工/)
+})
+
+await t('上链流水线：没有批次时给出下一步动作，不是空白；在途数量显示出来', () => {
+  const html = ctx.pipelineHtml([], [{ pending: 7 }], false)
+  assert.match(html, /还没有批次/)
+  assert.match(html, /在途 7 条待打包/)
+})
+
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
