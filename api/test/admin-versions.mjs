@@ -80,7 +80,42 @@ try {
     assert.equal(cnt, 1, '历史只增不改（复核仍为 1 条）')
   })
 
-  console.log(`\n${passed} 项批次 F-2（R-01 主数据版本化第一期）回归通过`)
+  await test('R-01 第二期：商户实体编辑入簿（V58 乐观锁）；版本恢复写新版本带回旧值', async () => {
+    const m = (await q('INSERT INTO merchant (city_code, name, kind, merchant_no, status, updated_version) VALUES (?,?,?,?,1,0)',
+      ['310118', stamp + ' 在营商户', 'ticket', 'MVER2' + stamp, 1])).insertId
+    made.merchants.push(m)
+    // 商户资料编辑 → 入版本簿 + 乐观锁生效
+    const e1 = ok(await call('super', 'PUT', `/admin/entities/merchant/${m}`, { values: { name: stamp + ' 改名后的商户' } }))
+    assert.equal(e1.version, 1, '商户编辑返回新版本号')
+    const e2 = await call('super', 'PUT', `/admin/entities/merchant/${m}`, { values: { name: stamp + ' 二次覆盖' }, expectedVersion: 0 })
+    assert.equal(e2.code, 2002, '商户乐观锁冲突拒绝：' + e2.msg)
+    const hm = ok(await call('super', 'GET', `/admin/master-versions?kind=merchant&refId=${m}`))
+    assert.equal(hm.rows.length, 1, '商户编辑入簿')
+    // 商品版本恢复：改价 → 恢复 → 现值回到旧价且新增一条恢复版本
+    const p = made.products[0]
+    if (!p) return
+    const before = await one('SELECT price_from, updated_version FROM tour_product WHERE id = ?', [p])
+    const curVersion = Number(before.updated_version)
+    ok(await call('super', 'PUT', `/admin/entities/product/${p}`, { values: { price_from: 199 }, expectedVersion: curVersion }))
+    const hBefore = ok(await call('super', 'GET', `/admin/master-versions?kind=product&refId=${p}`))
+    // 找最近一条"含价格字段"的版本作为恢复目标（跳过纯状态变更）
+    const target = hBefore.rows.find((v) => {
+      const s = typeof v.snapshot === 'string' ? JSON.parse(v.snapshot) : v.snapshot
+      return s.after && s.after.price_from != null
+    })
+    assert.ok(target, '历史中存在含价格的版本')
+    const oldPrice = (typeof target.snapshot === 'string' ? JSON.parse(target.snapshot) : target.snapshot).after.price_from
+    ok(await call('super', 'POST', '/admin/master-versions/restore', { kind: 'product', refId: p, versionNo: target.versionNo, reason: stamp + ' 误改恢复测试' }))
+    const after = await one('SELECT price_from FROM tour_product WHERE id = ?', [p])
+    assert.equal(Number(after.price_from), Number(oldPrice), '现值恢复为旧版本价格：' + after.price_from + ' = ' + oldPrice)
+    const hAfter = ok(await call('super', 'GET', `/admin/master-versions?kind=product&refId=${p}`))
+    assert.ok(Number(hAfter.rows[0].versionNo) > target.versionNo, '恢复写了一条新版本（历史不被改写）')
+    const rSnap = typeof hAfter.rows[0].snapshot === 'string' ? JSON.parse(hAfter.rows[0].snapshot) : hAfter.rows[0].snapshot
+    assert.equal(rSnap.restoredFrom, target.versionNo, '快照标注恢复来源')
+    assert.equal((await call('ops', 'POST', '/admin/master-versions/restore', { kind: 'product', refId: p, versionNo: 1, reason: '越权原因测试四字' })).code, 1003, '非超管不可恢复')
+  })
+
+  console.log(`\n${passed} 项批次 F-2/G（R-01 主数据版本化）回归通过`)
 } finally {
   for (const p of made.products) {
     await q('DELETE FROM master_data_version WHERE kind = ? AND ref_id = ?', ['product', p]).catch(() => {})

@@ -766,6 +766,42 @@ const admin = {
     return { kind, refId, rows }
   },
 
+  // R-01 第二期：恢复历史版本 = 写一条新版本把旧值带回来（绝不 UPDATE 历史）。
+  // 仅开放商品（价格/名称/赠豆/状态/归属字段白名单）；商户状态恢复走审核/停用流程，不走快照恢复。
+  'POST /admin/master-versions/restore': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { kind, refId, versionNo, reason } = req.body || {}
+    if (kind !== 'product') throw new BizError(1001, '当前仅支持商品版本恢复；商户状态请走审核/停用流程')
+    const why = String(reason || '').trim()
+    if (why.length < 4 || why.length > 200) throw new BizError(1001, '请填写 4–200 字恢复原因（进入审计与版本簿）')
+    const v = await one('SELECT * FROM master_data_version WHERE kind = ? AND ref_id = ? AND version_no = ?', [kind, Number(refId), Number(versionNo)])
+    if (!v) throw new BizError(1004, '版本不存在')
+    const snap = typeof v.snapshot === 'string' ? JSON.parse(v.snapshot) : v.snapshot
+    // 目标 = 该版本执行后的值（after）；快照是存储口径（金额=分）
+    const after = snap.after || {}
+    const FIELD_MAP = { price_from: 'price_from', title: 'title', bean_gift: 'bean_gift', status: 'status', supplier_id: 'supplier_id', scenic_id: 'scenic_id' }
+    const sets = [], args = []
+    for (const [k, col] of Object.entries(FIELD_MAP)) {
+      if (after[k] == null) continue
+      const val = /^\d+$/.test(String(after[k])) ? Number(after[k]) : after[k]
+      sets.push(`\`${col}\` = ?`); args.push(val)
+    }
+    if (!sets.length) throw new BizError(1001, '该版本没有可恢复的字段值')
+    const cur = await one('SELECT updated_version, price_from, status FROM tour_product WHERE id = ?', [Number(refId)])
+    if (!cur) throw new BizError(1004, '商品不存在')
+    await tx(async (c) => {
+      await c.q(`UPDATE tour_product SET ${sets.join(', ')}, updated_version = updated_version + 1 WHERE id = ?`, [...args, Number(refId)])
+      const seq = await c.one('SELECT COALESCE(MAX(version_no), 0) v FROM master_data_version WHERE kind = ? AND ref_id = ?', ['product', Number(refId)])
+      await c.q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
+        ['product', Number(refId), Number(seq.v) + 1,
+          JSON.stringify({ before: snap.after, after: Object.fromEntries(Object.entries(snap.after).map(([k, val]) => [k, /^\d+$/.test(String(val)) ? Number(val) : val])), changedFields: Object.keys(snap.after), restoredFrom: Number(versionNo) }),
+          'admin:' + a.name, '恢复自 v' + versionNo + '：' + why])
+      await audit(c, 'admin:' + a.name, 'product', 'version-restore', 'product-' + refId, null, { restoredFrom: Number(versionNo), reason: why })
+    })
+    await attestProductChange(Number(refId), { price: cur.price_from, status: cur.status }, { price: after.price_from, status: after.status }, 'restore')
+    return { restored: true, fromVersion: Number(versionNo) }
+  },
+
   'POST /admin/products/:id/status': async (req) => {
     const a = await requireAdmin(req, 'product.status')
     if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
