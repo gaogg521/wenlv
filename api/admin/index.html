@@ -56,8 +56,9 @@
 <!-- ===== 主框架 ===== -->
 <div id="frame" style="display:none">
   <aside class="side" id="workspaceSide" aria-label="主导航">
-    <a class="side-logo" href="#dash"><img class="side-mark" src="/admin-ui/assets/logo.png" alt="" aria-hidden="true"><span>向往的自由<small>文旅数据 · 运营工作台</small></span></a>
-    <div class="nav-search"><label for="navSearch">查找功能</label><input id="navSearch" type="search" placeholder="搜索菜单…" autocomplete="off"><p id="navEmpty" hidden>未找到相关功能</p></div>
+    <a class="side-logo" href="#dash" onclick="goHome();return false" title="返回工作台" aria-label="返回工作台首页"><img class="side-mark" src="/admin-ui/assets/logo.png" alt="" aria-hidden="true"><span>向往的自由<small>文旅数据 · 运营工作台</small></span></a>
+    <div class="nav-home" style="padding:12px 18px 0"><button id="navHome" class="btn ghost sm" type="button" style="width:100%" onclick="goHome()">⌂ 返回工作台</button></div>
+    <div class="nav-search"><label for="navSearch">查找功能</label><input id="navSearch" type="search" placeholder="搜索菜单…" autocomplete="off"><button id="navClear" class="btn ghost sm" type="button" hidden style="margin-top:7px;width:100%">✕ 清除搜索，显示全部菜单</button><p id="navEmpty" hidden>未找到相关功能</p></div>
     <nav id="nav"></nav>
     <div class="side-foot">
       <div id="paymode" class="pill-mini">支付通道检测中…</div>
@@ -65,7 +66,7 @@
   </aside>
   <div class="main">
     <header class="topbar">
-      <button class="menu-toggle" id="menuToggle" aria-label="展开导航" aria-expanded="false" aria-controls="workspaceSide">☰</button><div id="crumb">经营概览</div>
+      <button class="menu-toggle" id="menuToggle" aria-label="展开导航" aria-expanded="false" aria-controls="workspaceSide">☰</button><div id="crumb" role="link" tabindex="0" title="返回工作台" aria-label="返回工作台首页">经营概览</div>
       <div class="top-right">
         <span class="who" id="who"></span>
         <button class="btn ghost sm" onclick="logout()">退出登录</button>

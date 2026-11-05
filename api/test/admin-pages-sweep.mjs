@@ -37,6 +37,9 @@ const ROLES = [
   ['risk', 'sweep-risk-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
   ['readonly', 'sweep-readonly-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
   ['city_partner', 'sweep-city-' + stamp, 'Sweep!' + stamp + 'A1', '310118', true],
+  // P-12：sre/dev 此前不在矩阵里（整页失败缺陷 P-03 的盲区），纳入九身份
+  ['sre', 'sweep-sre-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
+  ['dev', 'sweep-dev-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
 ]
 const made = []
 const results = []
@@ -71,9 +74,41 @@ try {
       results.push({ role, mod, api, code: r.code, ok: okr, msg: okr ? undefined : r.msg })
     }
   }
-  console.log(`R-04 矩阵普查（QA-07 自建夹具）：${pass} 通过 / ${fail} 失败`)
+  // P-12：页面子请求也要成对受控——共享字典/资金接口按模块授权同向：
+  //   有 users 模块的角色 member/levels 必须 200；没有的必须 1003（不得静默降级为空）
+  //   有 taskcash 模块的角色 task-cash 必须 200；没有的必须 1003
+  const SUBS = [
+    ['users', '/admin/member/levels'],
+    ['taskcash', '/admin/task-cash'],
+    ['audit', '/admin/audit-logs?page=1&pageSize=5'],
+    ['chainhub', '/admin/chain/hub'],
+    ['integrations', '/admin/integrations'],
+  ]
+  let subPass = 0, subFail = 0
+  for (const [role, username, password, , mine] of ROLES) {
+    const l = await (await fetch(base + '/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) })).json()
+    if (l.code !== 0) continue
+    const T = l.data.token
+    const cap = (await call('GET', '/admin/capabilities', T)).data
+    const has = (m) => cap.modules.includes(m)
+    for (const [mod, api] of SUBS) {
+      if (mod === 'chainhub' || mod === 'integrations') {
+        // P-03：这两个视图 super/sre/dev 可读（运维只读视图），其他按模块
+        const should = has(mod) || ['sre', 'dev'].includes(role)
+        const r = await call('GET', api, T)
+        const okr = should ? r.code === 0 : r.code === 1003
+        if (okr) subPass++; else { subFail++; results.push({ role, mod: 'sub:' + mod, api, code: r.code, ok: false, msg: r.msg }) }
+        continue
+      }
+      const should = has(mod)
+      const r = await call('GET', api, T)
+      const okr = should ? r.code === 0 : r.code === 1003
+      if (okr) subPass++; else { subFail++; results.push({ role, mod: 'sub:' + mod, api, code: r.code, ok: false, msg: r.msg }) }
+    }
+  }
+  console.log(`R-04 矩阵普查（QA-07 自建夹具，P-12 九身份）：${pass} 主接口通过 / ${fail} 失败；${subPass} 子请求受控通过 / ${subFail} 失败`)
   for (const r of results) if (r.ok === false) console.log('  FAIL', r.role, r.mod, r.api, '->', r.code, r.msg)
-  if (fail) process.exitCode = 1
+  if (fail || subFail) process.exitCode = 1
 } finally {
   // 精确清理：只删本套件创建的账号与其审计（admin/ops 等公共账号不动）
   for (const username of made) {

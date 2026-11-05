@@ -94,21 +94,24 @@ function riskDetailHtml(raw) { // detail 是 JSON：先给原因，其余字段�
   if (Array.isArray(d)) return d.length ? d.slice(0, 3).map(one).join('<div style="border-top:1px dashed #eee;margin:5px 0"></div>') + (d.length > 3 ? `<div class="td-sub">… 共 ${d.length} 项</div>` : '') : '<span class="td-sub">—</span>'
   return one(d)
 }
+window.riskClearKw = () => { window.__riskQ.kw = ''; window.__riskQ.page = 1; risk() }
 async function risk() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   // T03/T10：服务端分页 + 处理状态筛选
-  window.__riskQ = window.__riskQ || { page: 1, handled: '' }
-  const data = await api('GET', '/admin/risk?' + new URLSearchParams({ page: window.__riskQ.page, handled: window.__riskQ.handled }).toString())
+  window.__riskQ = window.__riskQ || { page: 1, handled: '', kw: '' }
+  const data = await api('GET', '/admin/risk?' + new URLSearchParams({ page: window.__riskQ.page, handled: window.__riskQ.handled, kw: window.__riskQ.kw || '' }).toString())
   const rows = data.rows
   const rkPages = Math.max(1, Math.ceil(data.total / data.pageSize))
+  const hasRiskKw = !!(window.__riskQ.kw || '').trim()
   $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>风控事件</h2><span class="muted">核销重放 / 设备聚集 / 退款滥用 / 佣金异常</span></div>
+    <div class="orders-search"><label for="riskKw" class="muted">搜索事件</label><input id="riskKw" type="search" value="${esc(window.__riskQ.kw || '')}" placeholder="事件类型（如 attest）或说明文字" style="max-width:320px"><button class="btn primary sm" onclick="window.__riskQ.kw=document.getElementById('riskKw').value.trim();window.__riskQ.page=1;risk()">查询</button>${hasRiskKw ? '<button class="btn ghost sm" onclick="riskClearKw()">清除</button>' : ''}</div>
     <div class="cfg-tabs">${[['', '全部'], [0, '未处理'], [1, '已处理']].map(([v, n]) => `<button class="cfg-tab ${String(window.__riskQ.handled) === String(v) ? 'on' : ''}" onclick="window.__riskQ.handled='${v}';window.__riskQ.page=1;risk()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>类型</th><th>级别</th><th>详情</th><th>时间</th><th>状态</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td>${riskKindHtml(r.kind)}</td>
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
       <td>${riskDetailHtml(r.detail)}</td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
-      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(window.__riskQ.handled !== '' ? '没有符合条件的风控事件。' : '暂无风控事件 🎉')}
+      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(hasRiskKw || window.__riskQ.handled !== '' ? '没有符合条件的风控事件——试试清除关键词或切换处理状态。' : '暂无风控事件 🎉')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${rkPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__riskQ.page--;risk()">上一页</button> <button class="btn ghost sm" ${data.page >= rkPages ? 'disabled' : ''} onclick="window.__riskQ.page++;risk()">下一页</button></div></div>
   </div>`
 }
@@ -160,11 +163,11 @@ async function system() {
   <div class="card">
     <div class="card-head" id="sysJobs"><h3>定时任务</h3>
       <div>
-        <button class="btn ghost sm" onclick="runJob('close-timeout')">关单</button>
+        ${adminCan('system.jobRun') ? `<button class="btn ghost sm" onclick="runJob('close-timeout')">关单</button>
         <button class="btn ghost sm" onclick="runJob('commission-due')">佣金到期</button>
         <button class="btn ghost sm" onclick="runJob('complete-due')">完成到期单</button>
         <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">存证打包</button>
-        <button class="btn ghost sm" onclick="runJob('bean-expire')">豆过期</button>
+        <button class="btn ghost sm" onclick="runJob('bean-expire')">豆过期</button>` : '<span class="muted">手动任务干预由超级管理员或运维执行</span>'}
       </div></div>
     <div class="row" style="margin-top:4px"><span class="muted">迁移脚本：${(o.migrations || []).map((m) => '<code>' + esc(m) + '</code>').join(' ')}</span></div>
     <table><thead><tr><th>任务</th><th>最近执行</th><th>状态</th><th>累计</th></tr></thead><tbody>
@@ -366,8 +369,8 @@ async function integrations() {
         <td style="width:340px">${f.label ? `<div>${esc(f.label)}</div><code class="td-sub">${esc(f.key)}</code>` : `<code>${esc(f.key)}</code>`}</td>
         <td>${f.stored ? `<span class="pill ok">${esc(f.stored)}</span>` : f.envFallback ? '<span class="pill s20">来自 .env</span>' : '<span class="pill off">未设置</span>'}</td>
         <td style="text-align:right">
-          <button class="btn ghost sm" onclick="setCred('${esc(f.key)}', ${f.secret ? 'true' : 'false'})">设置</button>
-          ${f.stored ? `<button class="btn danger sm" onclick="delCred('${esc(f.key)}')">清除</button>` : ''}
+          ${ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn ghost sm" onclick="setCred('${esc(f.key)}', ${f.secret ? 'true' : 'false'})">设置</button>
+          ${f.stored ? `<button class="btn danger sm" onclick="delCred('${esc(f.key)}')">清除</button>` : ''}` : '<span class="td-sub">凭据由超级管理员维护</span>'}
         </td></tr>`).join('')}</table>
     </div>`).join('')}
   </div>`

@@ -50,3 +50,14 @@ export function effectiveModules(role) {
   const base = ROLE_DEFAULT_MODULES[role]
   return base ? [...base] : []
 }
+
+/**
+ * P-09：角色默认落地页——登录后与侧栏「返回工作台」的目标，按职责配置而不是"第一个可见栏目"。
+ * 首选不在该账号有效模块集合内时由前端回落第一个可用栏目（模块可被收回，首页跟着收回）：
+ * super/ops/readonly/city_partner→经营概览；finance→资金工作台；review→审核队列；
+ * risk→风控事件；sre/dev→运维控制台。未知角色 null（前端回落）。
+ */
+export const ROLE_HOME = {
+  super: 'dash', ops: 'dash', readonly: 'dash', city_partner: 'dash',
+  finance: 'fund', review: 'reviewqueue', risk: 'risk', sre: 'system', dev: 'system',
+}

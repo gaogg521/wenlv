@@ -219,7 +219,10 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/dash/insights', 'dash', 'view'],
   ['GET', '/admin/content-dashboard', 'contentdash', 'view'],
   ['GET', '/admin/wxdata/visit-trend', 'dash', 'view'],
-  ['GET', '/admin/member/levels', 'dash', 'view'],
+  // P-07：会员等级是共享字典（用户画像/徽章页显示等级名），跟随 users 查看权——
+  // 不再挂在 dash 经营首页模块下（风控有 users 无 dash，此前字典被 1003，画像等级名降级）。
+  // 撤销 users 后字典与画像一并受控；不为它开放经营汇总或订单数据。
+  ['GET', '/admin/member/levels', 'users', 'view'],
   ['GET', '/admin/merchant/levels', 'merchants', 'view'],
   // 逐品佣金（rateov）
   ['GET', '/admin/rate-overrides', 'rateov', 'view'],

@@ -180,7 +180,7 @@
         <button class="btn primary" type="submit">查询</button><button class="btn ghost" id="clearOrders" type="button">重置</button></form>
       ${srcChips.length ? `<div class="src-chips"><span class="muted">来自经营概览的筛选</span>${srcChips.map((c) => `<span class="src-chip">${esc(c)}</span>`).join('')}<button type="button" class="btn ghost sm" id="clearSrcChips">清除</button></div>` : ''}
       <div class="cfg-tabs" role="tablist" aria-label="订单状态">${[[0, '全部'], ...Object.entries(ST).map(([v, label]) => [Number(v), label])].map(([v, label]) => `<button type="button" class="cfg-tab ${String(v) === String(orderState.status || 0) ? 'on' : ''}" role="tab" aria-selected="${String(v) === String(orderState.status || 0)}" data-order-status="${v}">${label}<span> ${Number(v === 0 ? counts.all : counts[v] || 0).toLocaleString()}</span></button>`).join('')}</div>
-      ${d.rows.length ? `<table><thead><tr><th>订单 / 线路</th><th>用户 / 人数</th><th>应付金额</th><th>旅豆抵扣</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${d.rows.map(o => `<tr><td><button class="order-link" data-order-no="${esc(o.order_no)}">${esc(o.order_no)}</button><div class="td-sub">${esc(o.title)} · ${esc(o.city_code)}</div></td><td>${esc(o.nickname || '—')}<div class="td-sub">${Number(o.qty)} 人</div></td><td class="money num">${fen(o.amount_pay)}</td><td>${o.bean_deducted ? Number(o.bean_deducted) + ' 豆' : '—'}</td><td><span class="pill s${Number(o.status)}">${ST[o.status] || '未知状态'}</span></td><td class="td-sub">${esc(String(o.created_at || '').replace('T', ' ').slice(0, 16))}</td><td><button class="btn ghost sm" data-order-no="${esc(o.order_no)}">详情</button>${[20, 30, 40].includes(Number(o.status)) ? `<button class="btn danger sm" data-refund-no="${esc(o.order_no)}">退款</button>` : ''}${window.PAY_MOCK && Number(o.status) === 40 ? `<button class="btn ghost sm" data-complete-no="${esc(o.order_no)}" title="联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）">完成</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+      ${d.rows.length ? `<table><thead><tr><th>订单 / 线路</th><th>用户 / 人数</th><th>应付金额</th><th>旅豆抵扣</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${d.rows.map(o => `<tr><td><button class="order-link" data-order-no="${esc(o.order_no)}">${esc(o.order_no)}</button><div class="td-sub">${esc(o.title)} · ${esc(o.city_code)}</div></td><td>${esc(o.nickname || '—')}<div class="td-sub">${Number(o.qty)} 人</div></td><td class="money num">${fen(o.amount_pay)}</td><td>${o.bean_deducted ? Number(o.bean_deducted) + ' 豆' : '—'}</td><td><span class="pill s${Number(o.status)}">${ST[o.status] || '未知状态'}</span></td><td class="td-sub">${esc(String(o.created_at || '').replace('T', ' ').slice(0, 16))}</td><td><button class="btn ghost sm" data-order-no="${esc(o.order_no)}">详情</button>${[20, 30, 40].includes(Number(o.status)) ? `<button class="btn danger sm" data-refund-no="${esc(o.order_no)}">退款</button>` : ''}${window.PAY_MOCK && Number(o.status) === 40 && adminCan('order.complete') ? `<button class="btn ghost sm" data-complete-no="${esc(o.order_no)}" title="联调：模拟观察期结束，订单进入可结算状态（生产环境禁用）">完成</button>` : ''}</td></tr>`).join('')}</tbody></table>`
       : `<div class="empty"><div class="e-ico">⌕</div>${hasFilter ? '没有符合条件的订单' : '暂无订单数据'}<p class="muted">${hasFilter ? '试试其他关键词，或点「重置」清空筛选条件。' : '游客下单后会显示在这里。'}</p></div>`}
       <div class="pagination"><span>共 ${Number(d.total).toLocaleString()} 笔 · 第 ${d.page} / ${pages} 页 · 每页 ${d.pageSize} 笔</span><div class="pagination-actions"><button class="btn ghost sm" id="ordersPrev" ${d.page <= 1 ? 'disabled' : ''}>上一页</button><button class="btn ghost sm" id="ordersNext" ${d.page >= pages ? 'disabled' : ''}>下一页</button></div></div></section>`
     let debounce = null
@@ -206,6 +206,18 @@
   }
 
   function enhanceTables(root) {
+    // P-05：目标栏目不在本人有效模块集合内的跳转入口不是"能点的卡片"——统一摘除手型/箭头/悬停/键盘可达，
+    // 保留静态信息与文案。后端 requireModule 1003 兜底不变；不给错误的办理文案（"去办理"箭头随之消失）。
+    root.querySelectorAll('[onclick*="go("]').forEach(el => {
+      const m = (el.getAttribute('onclick') || '').match(/go\('([^'?/]+)/)
+      if (!m) return
+      if (allowedItems().some(item => item.dataset.p === m[1])) return
+      el.classList.remove('go')
+      el.removeAttribute('onclick'); el.removeAttribute('onkeydown')
+      el.removeAttribute('role'); el.removeAttribute('tabindex')
+      el.querySelectorAll('.go-arrow').forEach(a => a.remove())
+      el.title = '需要对应栏目权限，当前账号不可进入'
+    })
     const editorActions = { editMerchant: 'entity.merchant.edit', addMerchant: 'entity.merchant.create', approveMerchant: 'merchant.approve', editProduct: 'entity.product.edit', sessionModal: 'entity.session.create' }
     root.querySelectorAll('button[onclick]').forEach(button => {
       const handler = button.getAttribute('onclick') || ''
@@ -281,7 +293,48 @@
     })
     if (!needle) navBeforeSearch = null
     document.getElementById('navEmpty').hidden = count > 0
+    const clearBtn = document.getElementById('navClear')
+    if (clearBtn) clearBtn.hidden = !needle
   }
+  // P-01：明确的「清除搜索 / 恢复全部菜单」入口——清空输入并走同一恢复逻辑（展开状态、高亮、空态）
+  const navClear = document.getElementById('navClear')
+  if (navClear) navClear.onclick = () => { search.value = ''; search.dispatchEvent(new Event('input')); search.focus() }
+
+  // P-01/P-09：统一的「返回工作台」动作（侧栏按钮 / Logo / 面包屑共用）——
+  // 清空导航搜索并恢复全部菜单 → 关闭弹层 → 跳角色默认首页（capabilities.homeModule，无权限回落第一个栏目）。
+  // 有未保存修改的弹窗/抽屉先二次确认，避免返回操作静默丢表单。
+  const hasUnsavedDialogInput = () => {
+    for (const root of document.querySelectorAll('#modalRoot .modal, #modalRoot .drawer, #eeRoot')) {
+      for (const el of root.querySelectorAll('input:not([type=hidden]), select, textarea')) {
+        if (el.disabled || el.readOnly) continue
+        if (el.type === 'checkbox' || el.type === 'radio') { if (el.checked !== el.defaultChecked) return true }
+        else if (String(el.value) !== String(el.defaultValue)) return true
+      }
+    }
+    return false
+  }
+  window.goHome = function () {
+    const doHome = () => {
+      // 资料编辑器抽屉自管（不在 modalRoot）：goHome 已做脏检查，这里直接关闭，不走它自己的 confirm
+      if (document.getElementById('eeRoot') && typeof window.eeCloseHard === 'function') window.eeCloseHard()
+      closeModal()
+      search.value = ''
+      search.dispatchEvent(new Event('input'))
+      document.getElementById('navEmpty').hidden = true
+      const keys = allowedItems().map(el => el.dataset.p)
+      const home = ADMIN_CAPABILITIES?.homeModule
+      const target = home && keys.includes(home) ? home : keys[0]
+      if (target) go(target)
+    }
+    if (hasUnsavedDialogInput()) {
+      window.__goHomeConfirm = () => { closeModal(); doHome() }
+      modal('有未保存的修改', '<p>返回工作台会关闭当前窗口，未保存的修改将丢失。</p>',
+        '<button class="btn ghost" onclick="closeModal()">留在本页</button><button class="btn danger" onclick="window.__goHomeConfirm()">放弃修改并返回</button>')
+    } else doHome()
+  }
+  const crumb = document.getElementById('crumb')
+  if (crumb) crumb.onclick = () => window.goHome()
+  if (crumb) crumb.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.goHome() } }
   document.getElementById('menuToggle').onclick = () => {
     const open = document.body.classList.toggle('nav-open')
     document.getElementById('menuToggle').setAttribute('aria-expanded', String(open))

@@ -142,7 +142,8 @@ async function boot() {
     $('#app').innerHTML = `<div class="card error-state"><h2>操作权限加载失败</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="boot()">重试</button></div>`
     return
   }
-  const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控' }[ME?.role] || ME?.role || ''
+  // P-10：九个角色全部有中文名（顶栏），未知角色显示原码兜底
+  const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控', readonly: '只读观察', sre: '运维', dev: '开发', city_partner: '城市合伙人' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
   // C-04：菜单由接口驱动——allModules 是唯一模块清单（分组/中文名/图标），modules 是本人有效集合；
@@ -163,7 +164,9 @@ async function boot() {
     return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.filter(([k]) => !mergedUnder(k)).length}</small></summary>` + items.map(([k,n,ic]) => { const m = mergedUnder(k); const label = (typeof TRUST_LABEL !== 'undefined' && TRUST_LABEL[k]) || n; const alias = (typeof TRUST_ALIAS !== 'undefined' && TRUST_ALIAS[k]) || ''; return `<button class="nav-item${m ? ' nav-merged' : ''}" ${m ? 'hidden' : ''} data-p="${k}" data-alias="${alias}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${label}</span></button>` }).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
-  // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）；hash 可带查询串（如 #orders?kw=x&page=2，T03 筛选恢复）
+  // 恢复地址栏里的页面；无效/无权限时落「角色默认首页」（P-09，capabilities.homeModule 按职责下发，
+  // 不再一律"第一个可见栏目"——审核落审核队列、财务落资金工作台、风控落风控事件、运维落控制台）；
+  // 首页模块被收回时回落第一个可见栏目。hash 可带查询串（如 #orders?kw=x&page=2，T03 筛选恢复）
   const keys = [...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p)
   if (!keys.length) {
     history.replaceState(null, '', location.pathname)
@@ -172,8 +175,11 @@ async function boot() {
     return
   }
   const requested = location.hash.slice(1).split('?')[0]
-  const destination = keys.includes(requested) ? requested : keys[0]
-  history.replaceState(null, '', location.hash || '#' + destination) // 保留 hash 查询串（T03 筛选恢复）
+  const home = ADMIN_CAPABILITIES.homeModule
+  const destination = keys.includes(requested) ? requested : (home && keys.includes(home) ? home : keys[0])
+  // URL 与实际页面必须一致：请求页无效/无权限时重写 hash（不能保留 #dash 却显示别的页面），
+  // 有效时保留完整 hash（含筛选查询串）
+  history.replaceState(null, '', keys.includes(requested) ? location.hash : '#' + destination)
   go(destination, { history: false })
 }
 

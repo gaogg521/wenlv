@@ -121,9 +121,11 @@ window.kycResolve = async (id, action) => {
 }
 async function cocreate() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const prods = await api('GET', '/admin/products')
+  // P-02：本页不再依赖 /admin/products（历史遗留的死请求让无 products 模块的财务整页打不开）；
+  // 登记共创人的线路下拉由 entity-schemas（cocreate 模块）服务端填充，最小引用不含商品管理数据。
+  // co-profits 加载失败如实报错并给重试，不再吞成空列表把"应付 0"冒充真实数据。
   const list = await api('GET', '/admin/co-creators')
-  const profits = await api('GET', '/admin/co-profits').catch(() => [])
+  const profits = await api('GET', '/admin/co-profits')
   const canPay = adminCan('coProfit.pay'), canVoid = adminCan('coProfit.void')
   const totalInvest = list.reduce((s, c) => s + Number(c.invest_amount), 0)
   const totalPaid = profits.reduce((s, c) => s + Number(c.paid_amount), 0)

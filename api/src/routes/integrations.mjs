@@ -41,7 +41,9 @@ const FIELD_CN = {
 const integrations = {
   // ===== 链接入中心：联盟链 / 公链接入的配置、自检、探测、切换（只超管）=====
   'GET /admin/chain/hub': async (req) => {
-    await requireAdmin(req, ['super'])
+    // P-03：运维/开发提供只读运维视图（本接口只回凭据是否已配置的布尔与提示，不含任何秘密值）；
+    // 保存凭据、套用模板、切换链路仍仅超管（下方 POST 各路由不变）
+    await requireAdmin(req, ['super', 'sre', 'dev'])
     const { listSecretMeta, secretSync } = await import('../infra/secrets.mjs')
     const stored = Object.fromEntries((await listSecretMeta()).map((r) => [r.k, r]))
     const cur = chain.providerId()
@@ -108,13 +110,14 @@ const integrations = {
     return { applied: Object.keys(vals) }
   },
   'POST /admin/chain/selftest/:provider': async (req) => {
-    await requireAdmin(req, ['super'])
+    // P-03：离线自检/只读探测是无副作用的诊断动作，运维/开发可用；结果不改任何配置
+    await requireAdmin(req, ['super', 'sre', 'dev'])
     const p = chain.providerById(req.params.provider)
     if (!p || typeof p.selfTest !== 'function') throw new BizError(1004, '该链无离线自检')
     return p.selfTest()
   },
   'POST /admin/chain/probe/:provider': async (req) => {
-    await requireAdmin(req, ['super'])
+    await requireAdmin(req, ['super', 'sre', 'dev'])
     const p = chain.providerById(req.params.provider)
     if (!p || typeof p.probe !== 'function') throw new BizError(1004, '该链无只读探测接口，请用离线自检 + 小额试锚验证')
     try { return { ...(await p.probe()), at: new Date().toISOString() } } catch (e) { return { ok: false, detail: e.message, at: new Date().toISOString() } }
@@ -137,7 +140,8 @@ const integrations = {
   },
 
   'GET /admin/integrations': async (req) => {
-    await requireAdmin(req, ['super'])
+    // P-03：集成中心对运维/开发开放只读视图（通道就绪状态与字段提示，不含凭据值）；保存仍仅超管
+    await requireAdmin(req, ['super', 'sre', 'dev'])
     const { listSecretMeta } = await import('../infra/secrets.mjs')
     const { getSecrets } = await import('../infra/secrets.mjs')
     const stored = Object.fromEntries((await listSecretMeta()).map((r2) => [r2.k, r2.hint]))

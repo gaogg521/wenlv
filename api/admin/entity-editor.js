@@ -320,6 +320,8 @@
     st = null
   }
   window.eeClose = () => { if (st && st.dirty && !confirm('修改尚未保存，确定关闭？')) return; closeEditor(true) }
+  // 无条件关闭（供工作台「返回工作台」的统一脏检查后调用；不走本编辑器自己的 confirm，避免双重确认）
+  window.eeCloseHard = () => closeEditor(true)
   document.addEventListener('keydown', (e) => {
     if (!st) return
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); eeSave() }
