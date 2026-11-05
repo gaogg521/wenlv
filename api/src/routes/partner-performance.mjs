@@ -4,7 +4,7 @@ import { requireAdmin } from './_shared.mjs'
 const num = v => Number(v || 0)
 const PAID = '(20,30,40,50)'
 async function access(req, kind) {
-  const a = await requireAdmin(req, ['super','ops','finance','city_partner'])
+  const a = await requireAdmin(req, ['super','ops','finance','city_partner','readonly'])
   if (!['city','promoter','cocreator'].includes(kind)) throw new BizError(1001,'合伙人类型无效')
   if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003,'城市账号未绑定城市')
   if (a.scopeCity && kind !== 'city') throw new BizError(1003,'城市范围账号不能查看全局推广与共创资金账本')

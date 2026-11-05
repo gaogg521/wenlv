@@ -423,7 +423,11 @@ const admin = {
     const { toSessionId, reason, diffBean } = req.body || {}
     const why = String(reason || '').trim()
     if (why.length < 4 || why.length > 300) throw new BizError(1001, '请填写 4–300 字改期原因')
-    const o = await one('SELECT * FROM orders WHERE id = ?', [req.params.id])
+    // N-006：前端传订单号、数字 ID 两种形态都接受（页面按订单号调用）
+    const key = String(req.params.id || '')
+    const o = /^\d+$/.test(key)
+      ? await one('SELECT * FROM orders WHERE id = ?', [Number(key)])
+      : await one('SELECT * FROM orders WHERE order_no = ?', [key])
     if (!o) throw new BizError(1004, '订单不存在')
     if (a.scopeCity && String(o.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '仅可办理本城订单')
     if (![20, 30].includes(Number(o.status))) throw new BizError(2002, '仅「已支付 / 已确认」订单可改期；已核销、退款中或已完成的订单请走对应流程')
@@ -465,10 +469,11 @@ const admin = {
     const kw = String(req.query.kw || '').trim()
     if (kw) { conds.push('(r.order_no LIKE ? OR r.req_no LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
     const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
-    const from = `FROM order_reschedule r JOIN orders o ON o.id = r.order_id ${W}`
+    // N-007：JOIN 写全在 from 里（原先 rows 查询把 p JOIN 追加在 WHERE 之后，SQL 语法错误）
+    const from = `FROM order_reschedule r JOIN orders o ON o.id = r.order_id JOIN tour_product p ON p.id = o.product_id ${W}`
     const total = Number((await one(`SELECT COUNT(*) n ${from}`, args)).n)
     const rows = await q(`SELECT r.*, p.title product_title, o.status order_status ${from}
-      JOIN tour_product p ON p.id = o.product_id ORDER BY r.id DESC LIMIT ? OFFSET ?`,
+      ORDER BY r.id DESC LIMIT ? OFFSET ?`,
       [...args, pageSize, (page - 1) * pageSize])
     const RS_ST = { 0: '待审批', 1: '待执行', 2: '已驳回', 3: '已执行', 4: '已撤回', 5: '执行失败' }
     return { rows: rows.map((r) => ({ ...r, statusCn: RS_ST[r.status] })), total, page, pageSize, filters }

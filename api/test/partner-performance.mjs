@@ -86,7 +86,9 @@ try {
     for(const kind of ['promoter','cocreator']) assert.equal((await get('/admin/partner-performance?kind='+kind,t)).code,1003)
     assert.equal((await get(`/admin/partner-reconciliation/city/${other}`,t)).code,1003)
     assert.equal((await get('/admin/partner-performance',token('city_partner'))).code,1003)
-    for(const role of ['review','risk','readonly']) assert.equal((await get('/admin/partner-performance',token(role))).code,1003)
+    for(const role of ['review','risk']) assert.equal((await get('/admin/partner-performance',token(role))).code,1003)
+    // R-04 修复：readonly 默认菜单含排行与对账（只读核对）——现在可达
+    ok(await get('/admin/partner-performance',token('readonly')))
     for(const role of ['ops','finance']) ok(await get('/admin/partner-performance',token(role)))
     assert.equal((await get('/admin/partner-performance?sort=invalid')).code,1001)
     assert.equal((await get('/admin/partner-performance?kind=invalid')).code,1001)

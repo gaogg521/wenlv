@@ -71,7 +71,8 @@ export const adminUserOps = {
 
   // ---- T06：人工权益调整申请 ----
   'GET /admin/entitlements': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'finance'])
+    // R-04：risk 默认菜单含权益调整（只读跟进冻结相关调整队列）；写路径（申请/审批）不含 risk
+    const a = await requireAdmin(req, ['super', 'ops', 'finance', 'risk'])
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
     const conds = [], args = [], filters = {}
