@@ -39,16 +39,48 @@ const BIZ_CN = { order: '订单完成', pass_issue: '凭证签发', pass_verify:
   // C-08：生命周期/整改新增事件类型中文化（未登记类型仍显示原码，语义不变）
   kyc: '实名认证通过', merchant_join: '商户准入', content_review: '内容审核结论', withdraw: '提现申请',
   did_issue: '数字身份签发', consent: '协议签署', commission: '佣金计提', co_profit: '共创分润计提', product_change: '商品价格/状态变更' }
-/** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]） */
+// P-10：审计里的模块 / 动作 / 验证方式 / 字段名显示中文，技术键保留为可复制的小字辅助信息；
+// 未知值显示原码兜底（语义不变，数据库原值不动）。filter 下拉与详情共用这两张表。
+const AUDIT_MODULE_CN = {
+  account: '后台账号', bean: '旅豆账本', budget: '旅豆预算', chain: '链接入', config: '参数中心', content: '内容审核',
+  'content-task': '约稿任务', creator: '创作者', integration: '集成中心', merchant: '商户', product: '商品',
+  risk: '风控事件', 'risk-case': '风险案件', scenic: '景区', security: '安全中心', settlement: '商户结算',
+  site: '小程序装修', supplier: '供应商', vc: '数字身份', order: '订单', user: '用户中心', withdrawal: '提现',
+  agreement: '分账协议', feature: '功能开关', kyc: '实名认证', badge: '徽章', co_profit: '共创分润', attest: '存证',
+}
+const AUDIT_ACTION_CN = {
+  create: '新建', update: '修改', set: '设置', delete: '删除', approve: '复核通过', reject: '驳回', handle: '处理',
+  review: '审核结论', tag: '打标签', creds: '保存凭据', issue: '签发', revoke: '吊销', 'image-add': '添加图片',
+  'merchant-confirm': '商户确认', 'legacy-repair': '历史修复', 'mfa-setup': '绑定两步验证', 'mfa-disable': '停用两步验证',
+  'mfa-flags': '调整两步验证策略', 'reset-password': '重置密码', activate: '设为当前', disable: '停用', restore: '恢复',
+  freeze: '冻结', unfreeze: '解冻', grant: '发放', backfill: '补发', propose: '提交提案', rollback: '回滚',
+  confirm: '确认', cancel: '取消', pay: '登记打款', void: '作废', reverse: '冲正', status: '变更状态',
+}
+const AUDIT_FIELD_CN = { len: '凭据长度（位）', role: '角色', scopeCity: '管辖城市', mfaChannel: '验证方式', mfaEnabled: '两步验证', epoch: '会话版本', status: '状态', mobile: '手机号', email: '邮箱', displayName: '显示名', note: '备注' }
+const MFA_CHANNEL_CN = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }
+const auditModuleCn = (m) => AUDIT_MODULE_CN[m] || m || '—'
+const auditActionCn = (a) => AUDIT_ACTION_CN[a] || a || '—'
+/** 审计变更：逐字段对比（JSON 列由驱动解析为对象，不能直接 String()，否则显示 [object Object]）；
+ * 快照表达用「未设置 / 已删除 / 变更前后」，验证方式（totp/sms/email）显示中文。 */
 function auditDiff(before, after) {
   const obj = (v) => { if (v == null) return {}; if (typeof v === 'string') { try { return JSON.parse(v) } catch { return { value: v } } } return v }
   const b = obj(before), a = obj(after)
   const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])]
-  if (!keys.length) return '—'
-  const show = (v) => v === undefined ? '∅' : esc((typeof v === 'object' ? JSON.stringify(v) : String(v)).slice(0, 40))
-  return '<div class="audit-diff">' + keys.slice(0, 6).map((k) => b[k] === a[k]
-    ? `<div><span class="k">${esc(k)}</span> ${show(a[k])}</div>`
-    : `<div><span class="k">${esc(k)}</span> <del>${show(b[k])}</del> → <ins>${show(a[k])}</ins></div>`).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
+  if (!keys.length) return '<span class="td-sub">无快照内容</span>'
+  const show = (v, isBefore) => {
+    if (v === undefined) return isBefore ? '<span class="td-sub">（此前未设置）</span>' : '<span class="td-sub">已删除</span>'
+    if (v === null) return '<span class="td-sub">未设置</span>'
+    let s = typeof v === 'object' ? JSON.stringify(v) : String(v)
+    s = s === '' ? '（空）' : s
+    return esc(s.slice(0, 40))
+  }
+  const fld = (k) => esc(AUDIT_FIELD_CN[k] || k)
+  return '<div class="audit-diff">' + keys.slice(0, 6).map((k) => {
+    const val = (v, isB) => (k === 'mfaChannel' || k === 'mfa_channel') && MFA_CHANNEL_CN[v] ? esc(MFA_CHANNEL_CN[v]) : show(v, isB)
+    return b[k] === a[k]
+      ? `<div><span class="k">${fld(k)}</span> ${val(a[k], false)}</div>`
+      : `<div><span class="k">${fld(k)}</span> <del>${val(b[k], true)}</del> → <ins>${val(a[k], false)}</ins></div>`
+  }).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
 }
 const bizTag = (t) => `<span class="biz-tag">${BIZ_CN[t] || t}<small>${t}</small></span>`
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))

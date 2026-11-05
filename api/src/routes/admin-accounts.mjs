@@ -160,13 +160,19 @@ const adminAccounts = {
     if (!u) throw new BizError(1004, '账号不存在')
     const mods = await import('../domain/modules.mjs')
     const { accountModules } = await import('../domain/admin-modules.mjs')
+    const { ADMIN_ACTIONS } = await import('../domain/admin-capabilities.mjs')
     const grants = await q('SELECT module_key, effect, reason, granted_by, granted_at FROM admin_user_module WHERE user_id = ? ORDER BY module_key', [u.id])
     const eff = await accountModules(u.id, u.role)
+    // P-11：模块授权 ≠ 拿到全部办理权——弹窗如实列出该角色在动作层的可用/不可用清单
+    //（资金打款、复核、导出等细粒度约束不随模块授权变化；super 恒全部）
+    const actions = Object.entries(ADMIN_ACTIONS).map(([key, rule]) => ({
+      key, label: rule.label, allowed: rule.roles.includes(u.role),
+    }))
     return {
       userId: u.id, username: u.username, role: u.role,
       defaults: mods.ROLE_DEFAULT_MODULES[u.role] || [],
       modules: mods.MODULES, effective: [...eff],
-      grants, cityDeny: mods.CITY_DENY_MODULES,
+      grants, cityDeny: mods.CITY_DENY_MODULES, actions,
     }
   },
 

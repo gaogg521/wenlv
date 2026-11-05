@@ -1329,6 +1329,12 @@ async function pointassets() {
       <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">用户累计获得</div><div class="v" style="font-size:18px">${num(d.userLifetime)}</div><div class="s">不含预算 / 平台户</div></div></div>
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
     </div>
+    ${d.calibers ? `<div class="note" style="margin-top:12px;border:1px solid #f1e1ca;background:#fffaf1;border-radius:9px;padding:10px 12px">
+      <b>口径说明（四个数不要混用）</b>：预算登记累计 <b class="num">${num(d.calibers.budgetGranted)}</b>（批次额度内已发放的登记数）·
+      账本业务发放累计 <b class="num">${num(d.calibers.bizGranted)}</b>（双分录可逐笔追溯）·
+      期初导入累计 <b class="num">${num(d.calibers.openingImported)}</b>（历史余额一次性入账，业务号可识别）·
+      当前留存累计 <b class="num">${num(d.calibers.retained)}</b>。${d.calibers.gap > 0 ? `差额 <b class="num">${num(d.calibers.gap)}</b> 为历史来源待核对（${esc(d.calibers.note)}）` : esc(d.calibers.note)}
+    </div>` : ''}
   </div>
   <div class="card">
     <div class="card-head"><h3>按业务汇总（真实用户）</h3><span class="muted">只算用户账户这一侧；预算户、平台户不计入。右列是全账本双分录校验</span></div>

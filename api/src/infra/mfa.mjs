@@ -84,13 +84,39 @@ async function sendEmailReal(email, code, s) {
   })
 }
 
-/** 通道状态（后台账号 / 安全中心 / 运维控制台展示用）：configured=凭据齐全，deliverable=真能发出去 */
+/** 目标脱敏：手机 138****1234；邮箱 a***@domain.com（M-03：证据只留脱敏目标） */
+export function maskTarget(t) {
+  const s = String(t || '')
+  if (/@/.test(s)) { const [u, d] = s.split('@'); return u.slice(0, 1) + '***@' + d }
+  return s.length >= 7 ? s.slice(0, 3) + '****' + s.slice(-4) : '***'
+}
+
+/** 记录一次真实通道发送结果（安全中心测试或登录自然发送），供五态展示与排查 */
+export async function recordProbe(channel, target, ok, detail, by) {
+  await q('INSERT INTO channel_probe (channel, target_masked, result, detail, by_admin) VALUES (?,?,?,?,?)',
+    [channel, maskTarget(target), ok ? 1 : 0, String(detail || '').slice(0, 255), by || 'auto']).catch(() => {})
+}
+
+/**
+ * 通道状态（M-03 五态）：state = unconfigured 未配置 / mock 模拟发送 / ready 已配置待联调 /
+ * verified 最近联调通过 / fault 最近一次发送故障。deliverable 仍表示「会走真实发送程序」，
+ * 但不再对外表述成"已验证可送达"——那要看 state=verified 与最近测试记录。
+ */
 export async function channelStatus() {
   const d = await detect()
+  const last = {}
+  for (const ch of ['sms', 'email']) {
+    last[ch] = await one('SELECT result, target_masked, detail, created_at FROM channel_probe WHERE channel = ? ORDER BY id DESC LIMIT 1', [ch]).catch(() => null)
+  }
+  const stateOf = (configured, realSender, lp) =>
+    !configured ? 'unconfigured'
+      : !realSender ? 'mock'
+        : !lp ? 'ready'
+          : Number(lp.result) === 1 ? 'verified' : 'fault'
   return {
-    totp: { configured: true, deliverable: true },
-    sms: { configured: d.sms, deliverable: d.sms && REAL_SENDER.sms },
-    email: { configured: d.smtp, deliverable: d.smtp && REAL_SENDER.email },
+    totp: { configured: true, deliverable: true, state: 'verified' },
+    sms: { configured: d.sms, deliverable: d.sms && REAL_SENDER.sms, state: stateOf(d.sms, REAL_SENDER.sms, last.sms), lastProbe: last.sms || null },
+    email: { configured: d.smtp, deliverable: d.smtp && REAL_SENDER.email, state: stateOf(d.smtp, REAL_SENDER.email, last.email), lastProbe: last.email || null },
   }
 }
 
@@ -107,7 +133,7 @@ export async function sendCode(target, channel, purpose = 'login') {
   const real = (channel === 'sms' ? st.sms : st.email).deliverable
   if (real) {
     // 真实通道发送失败要让调用方看见，不再静默吞掉（否则用户一直等不到验证码）
-    try { await (channel === 'sms' ? sendSmsReal : sendEmailReal)(target, code, d.s) } catch (e) { throw new Error('验证码发送失败：' + e.message) }
+    try { await (channel === 'sms' ? sendSmsReal : sendEmailReal)(target, code, d.s); await recordProbe(channel, target, true, '登录/绑定发送受理', 'auto') } catch (e) { await recordProbe(channel, target, false, e.message, 'auto'); throw new Error('验证码发送失败：' + e.message) }
   } else if (channel === 'sms') console.log(`[sms:MOCK] ${target} 验证码 ${code}（5 分钟有效，后台安全中心可见）`)
   else console.log(`[email:MOCK] ${target} 验证码 ${code}（5 分钟有效，后台安全中心可见）`)
   return { sent: true, mock: !real }

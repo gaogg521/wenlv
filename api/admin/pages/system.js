@@ -125,12 +125,12 @@ async function audit() {
   $('#app').innerHTML = `<div class="card"><div class="card-head"><h2>操作审计</h2><span class="muted">只增不改 · 每次写操作前后快照 · 共 ${Number(d.total).toLocaleString()} 条</span></div>
     <form class="orders-search" onsubmit="event.preventDefault();window.__auditQ.kw=this.kw.value.trim();window.__auditQ.module=this.module.value;window.__auditQ.page=1;audit()">
       <input name="kw" type="search" value="${esc(Q.kw)}" placeholder="操作人 / 模块 / 动作 / 对象">
-      <select name="module"><option value="">全部模块</option>${['order', 'user', 'content', 'account', 'security', 'risk-case', 'config', 'settlement', 'withdraw', 'bean', 'badge'].map((m) => `<option ${Q.module === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+      <select name="module"><option value="">全部模块</option>${['order', 'user', 'content', 'account', 'security', 'risk-case', 'config', 'settlement', 'withdraw', 'bean', 'badge', 'chain', 'integration', 'vc', 'merchant', 'product'].map((m) => `<option value="${m}" ${Q.module === m ? 'selected' : ''}>${auditModuleCn(m)}（${m}）</option>`).join('')}</select>
       <button class="btn primary" type="submit">查询</button>
       ${Q.kw || Q.module ? '<button class="btn ghost" type="button" onclick="window.__auditQ={page:1,kw:\'\',module:\'\'};audit()">重置</button>' : ''}</form>
     ${rows.length ? `<table><thead><tr><th>时间</th><th>操作人</th><th>模块 / 动作</th><th>对象</th><th>变更</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td class="td-sub num">${esc(String(a.created_at).slice(5, 19))}</td><td>${esc(a.actor)}</td>
-      <td><b>${esc(a.module)}</b> · ${esc(a.action)}</td><td class="td-sub">${esc(a.biz_ref || '')}</td>
+      <td><b>${esc(auditModuleCn(a.module))}</b> · ${esc(auditActionCn(a.action))}<div class="td-sub">${esc(a.module)} / ${esc(a.action)}</div></td><td class="td-sub">${esc(a.biz_ref || '')}</td>
       <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>
     <div class="pagination"><span>第 ${d.page} / ${pages} 页</span><div class="pagination-actions">
       <button class="btn ghost sm" ${d.page <= 1 ? 'disabled' : ''} onclick="window.__auditQ.page--;audit()">上一页</button>
@@ -276,9 +276,34 @@ async function security() {
       <td class="td-sub">${esc(String(c3.created_at).slice(5, 19))}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无验证码记录')}
   </div>`
 }
-// 通道状态：TOTP 恒可用；短信/邮箱 = 凭据 + 发送器两层，缺哪层就如实说哪层
-const mfaChanState = (c) => c.deliverable ? '<span class="pill ok">● 可用</span>'
-  : c.configured ? '<span class="pill warn">● 凭据已配置，发送器尚未接入</span>' : '<span class="pill warn">● 未配置</span>'
+// 通道状态（M-03 五态）：配置齐全 ≠ 已验证可送达——verified 只能由真实发送测试/自然发送产生
+const MFA_STATE_CN = {
+  unconfigured: '<span class="pill off">● 未配置</span>',
+  mock: '<span class="pill warn">● 模拟发送（MOCK）</span>',
+  ready: '<span class="pill s20">● 已配置·待联调</span>',
+  verified: '<span class="pill ok">● 最近联调通过</span>',
+  fault: '<span class="pill s70">● 最近发送故障</span>',
+}
+const mfaChanState = (c) => MFA_STATE_CN[c.state] || (c.deliverable ? '<span class="pill ok">● 可用</span>'
+  : c.configured ? '<span class="pill warn">● 凭据已配置，发送器尚未接入</span>' : '<span class="pill warn">● 未配置</span>')
+// 发送测试（M-03）：真实发一条到指定目标并记录结果；只存脱敏目标
+window.mfaProbeModal = (channel) => {
+  const name = channel === 'sms' ? '短信' : '邮箱'
+  modal('真实发送测试 · ' + name, `
+    <p class="td-sub">将向下方目标真实发送一条验证码并记录受理结果（脱敏入审计）。注意：服务商受理 ≠ 收件端已收到；请确认收到并完成一次校验后才视为真实收件通过。</p>
+    <div class="field"><label>测试收件目标（真实${name === '短信' ? '手机号' : '邮箱地址'}）</label><input id="mfaProbeTarget" placeholder="${name === '短信' ? '例如 13800000000' : '例如 ops@example.com'}"></div>
+    <div id="mfaProbeErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="mfaProbeSubmit('${channel}')">发送测试</button>`)
+}
+window.mfaProbeSubmit = async (channel) => {
+  const target = ($('#mfaProbeTarget').value || '').trim()
+  if (!target) { $('#mfaProbeErr').textContent = '请填写测试收件目标'; return }
+  try {
+    const r = await api('POST', `/admin/security/channels/${channel}/test`, { target })
+    modal('测试已发起', `<p>${esc(r.note)}</p><p class="td-sub">当前通道状态：${mfaChanState({ state: r.state })}${r.lastProbe ? `<br>最近测试：${esc(r.lastProbe.target_masked)} · ${esc(String(r.lastProbe.created_at || '').slice(0, 19))} · ${Number(r.lastProbe.result) === 1 ? '受理成功' : '失败'}` : ''}</p>`,
+      `<button class="btn primary" onclick="closeModal();security()">知道了</button>`)
+  } catch (e) { $('#mfaProbeErr').textContent = e.message }
+}
 // C-02：全局三档切换（D-02：admin.mfa.mode 是敏感参数——提交提案，第二人复核后生效，不直接改）
 window.mfaModeSet = (mode) => {
   const names = { off: '关闭', optional: '可选模式', required: '强制模式' }
@@ -307,14 +332,17 @@ window.mfaFlagsHere = async (id, patch) => {
     toast(r.note || '已调整'); security()
   } catch (e) { toast(e.message, true) }
 }
+const mfaChanHint = (c) => c.deliverable || c.state === 'verified' ? '凭据齐全，走真实发送程序' : c.state === 'mock' ? '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）' : c.state === 'ready' ? '凭据已保存，但尚未完成一次真实发送联调' : c.state === 'fault' ? '最近一次真实发送失败，请检查凭据/网络后重试' : '未配置：请先在集成中心保存凭据'
+const mfaProbeLine = (c) => c.lastProbe ? `<div>最近测试：${esc(c.lastProbe.target_masked)} · ${esc(String(c.lastProbe.created_at || '').slice(0, 19))} · ${Number(c.lastProbe.result) === 1 ? '<span class="pill ok">受理成功</span>' : '<span class="pill s70">失败</span>'}${c.lastProbe.detail ? `<div class="td-sub">${esc(c.lastProbe.detail)}</div>` : ''}</div>` : ''
+const testBtn = (ch, c) => c.configured && ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn ghost sm" onclick="mfaProbeModal('${ch}')">发送测试</button>` : (c.configured ? '' : cfgBtn())
+const cfgBtn = () => `<button class="btn ghost sm" onclick="closeModal();go('integrations')">去集成中心配置 →</button>`
 function mfaChannelPanel(chn) {
   const row = (name, hint, state, go) => `<tr><td class="td-main" style="width:180px">${name}</td><td>${state}</td><td class="td-sub">${hint}</td><td style="text-align:right">${go || ''}</td></tr>`
-  const cfgBtn = `<button class="btn ghost sm" onclick="closeModal();go('integrations')">去集成中心配置 →</button>`
   return `<table><tbody>
     ${row('验证器 App（TOTP）', 'Microsoft / Google Authenticator 等，无需任何配置', mfaChanState(chn.totp), '')}
-    ${row('短信验证码', chn.sms.deliverable ? '验证码会真实发送到手机' : '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）', mfaChanState(chn.sms), chn.sms.deliverable ? '' : cfgBtn)}
-    ${row('邮箱验证码', chn.email.deliverable ? '验证码会真实发送到邮箱' : '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）', mfaChanState(chn.email), chn.email.deliverable ? '' : cfgBtn)}
-  </tbody></table>${(chn.sms.configured && !chn.sms.deliverable) || (chn.email.configured && !chn.email.deliverable) ? '<p class="td-sub" style="margin-top:8px">⚠ 凭据已保存，但系统里真实的短信 / 邮件发送程序还没有接入，所以暂时仍不会真实发出；接入前请优先使用验证器 App。</p>' : ''}`
+    ${row('短信验证码', mfaChanHint(chn.sms) + mfaProbeLine(chn.sms), mfaChanState(chn.sms), testBtn('sms', chn.sms))}
+    ${row('邮箱验证码', mfaChanHint(chn.email) + mfaProbeLine(chn.email), mfaChanState(chn.email), testBtn('email', chn.email))}
+  </tbody></table><p class="td-sub" style="margin-top:8px">状态口径：未配置 / 模拟发送（MOCK，仅演示联调，不作为真实双因素证据）/ 已配置·待联调 / 最近联调通过 / 最近发送故障。「最近联调通过」表示服务商受理了一次真实发送，收件端确认仍以最近测试记录与实际收件为准。</p>`
 }
 async function mfaSetup(userId, username) {
   const r = await api('POST', '/admin/security/mfa/setup', { userId })
