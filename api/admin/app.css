@@ -208,6 +208,12 @@ tbody tr:last-child td { border-bottom: none; }
 .copy-chip { margin-left: 6px; padding: 0 6px; height: 20px; line-height: 18px; font-size: 11px;
   border: 1px solid rgba(120,150,210,.45); border-radius: 6px; background: #fff; color: #4a5f8a; cursor: pointer; }
 .copy-chip:hover { border-color: #7fa8ff; color: #2a6bd6; }
+/* 表格里能点的业务单号 / 批次号 / 链名：长得像链接，悬停有下划线；高亮被点中的那条 */
+.ref-link { padding: 0; margin: 0; border: 0; background: none; font: inherit; color: #2a6bd6; cursor: pointer; text-align: left; }
+.ref-link:hover { text-decoration: underline; }
+.ref-link:focus-visible { outline: 2px solid #ce8053; outline-offset: 2px; border-radius: 3px; }
+tr.ev-hit > td { background: #fff6e0; }
+tr.ev-hit { scroll-margin-top: 120px; }
 /* 展开的详情滚动到顶时不要被页头压住 */
 #blockDetail { scroll-margin-top: 88px; }
 .block-detail-card { border-left: 3px solid #7fb0ff; }

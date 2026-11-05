@@ -32,15 +32,16 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h3>存证批次（Merkle 根 · 链式前根）</h3><span class="muted">prev_root 指向上批根：改任一批必须改其后所有批次，而最新根在链上</span></div>
     ${(d.batches || []).length ? `<table><thead><tr><th>seq</th><th>业务日</th><th>Merkle 根</th><th>前根</th><th>叶数</th><th>尝试</th><th>链上编号</th><th>状态</th></tr></thead><tbody>
-      ${d.batches.map((b) => `<tr><td class="num">#${b.seq}${Number(b.is_day_close) ? ' <span class="pill off">账本日终</span>' : ''}</td>
+      ${d.batches.map((b) => `<tr class="click-row" ${dxKey} title="点开看这一批的事件，并逐条验证" onclick="openBlock(${Number(b.id)})"><td class="num">#${b.seq}${Number(b.is_day_close) ? ' <span class="pill off">账本日终</span>' : ''}</td>
         <td>${esc(String(b.biz_date).slice(0, 10))}</td>
-        <td><code>${esc(String(b.merkle_root).slice(0, 20))}…</code></td>
-        <td class="td-sub">${b.prev_root ? '<code>' + esc(String(b.prev_root).slice(0, 12)) + '…</code>' : '链起点'}</td>
+        <td>${hashCopy(b.merkle_root, String(b.merkle_root).slice(0, 20) + '…')}</td>
+        <td class="td-sub">${b.prev_root ? hashCopy(b.prev_root, String(b.prev_root).slice(0, 12) + '…') : '链起点'}</td>
         <td class="num">${Number(b.leaf_count)}</td>
         <td class="td-sub">${Number(b.attempt) || 0}${b.last_err ? '<br><span class="pill s70">' + esc(String(b.last_err).slice(0, 24)) + '</span>' : ''}</td>
-        <td class="td-sub">${b.chain_tx_ref ? esc(b.chain_tx_ref) : '—'}</td>
+        <td class="td-sub">${b.chain_tx_ref ? hashCopy(b.chain_tx_ref, String(b.chain_tx_ref).slice(0, 16) + '…') : '—'}</td>
         <td>${STMAP[b.status] || ''}</td></tr>`).join('')}</tbody></table>` : emptyBox('尚无批次：点上方「① 打包」即可出根')}
   </div>
+  <div id="blockDetail"></div>
   <div class="card">
     <div class="card-head"><h3>旅豆账本日终封存</h3><span class="muted">借贷恒等（Σ借=Σ贷）才允许封存 —— 「严禁超发」的唯一外部证明</span></div>
     ${(d.dayRoots || []).length ? `<table><thead><tr><th>业务日</th><th>叶数</th><th>Σ贷（发放）</th><th>Σ借（消耗）</th><th>恒等</th><th>Merkle 根</th><th>对外</th></tr></thead><tbody>
@@ -54,10 +55,10 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h3>最近事件</h3></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>Merkle 根</th><th>时间</th></tr></thead><tbody>
-    ${(d.recent || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
+    ${(d.recent || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${evRefLink(e)}</td>
       <td class="num">v${Number(e.version_no ?? 1)}</td>
-      <td>${STMAP[e.status]}</td><td class="td-sub">${e.seq ? '#' + e.seq : '—'}</td>
-      <td class="td-sub">${e.merkle_root ? '<code>' + esc(String(e.merkle_root).slice(0, 16)) + '…</code>' : '—'}</td>
+      <td>${STMAP[e.status]}</td><td class="td-sub">${e.seq ? batchLink(e.batch_id, '#' + e.seq) : '—'}</td>
+      <td class="td-sub">${e.merkle_root ? hashCopy(e.merkle_root, String(e.merkle_root).slice(0, 16) + '…') : '—'}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('')}
     </tbody></table>
   </div>`
@@ -198,7 +199,7 @@ async function chainAssetsPage() {
     <div class="card-head"><h3>多链能力矩阵</h3><span class="muted">不同链能做不同的事：联盟链只存证，公链才发资产</span></div>
     <table><thead><tr><th>链</th><th>存证锚定</th><th>按根反查</th><th>资产发行</th><th>DID</th><th>状态</th><th>说明</th></tr></thead><tbody>
     ${(d.providers || []).map((p) => `<tr>
-      <td class="td-main">${esc(p.label)}${p.current ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td class="td-main"><button class="ref-link" type="button" title="去链接入中心配置这条链" onclick="go('chainhub')">${esc(p.label)}</button>${p.current ? ' <span class="pill ok">当前</span>' : ''}</td>
       <td>${mark(p.capabilities.anchor)}</td><td>${mark(p.capabilities.queryByRoot)}</td>
       <td>${mark(p.capabilities.assets)}</td><td>${mark(p.capabilities.did)}</td>
       <td>${p.mode === 'real' ? '<span class="pill ok">已配置</span>' : '<span class="pill off">缺凭据</span>'}</td>
@@ -211,7 +212,7 @@ async function chainAssetsPage() {
     <div class="card-head"><h3>预埋体检</h3><span class="muted">离线自检 · 不需要凭据 · ${(c.summary || {}).ready}/${(c.summary || {}).total} 家通过</span></div>
     <table><thead><tr><th>链</th><th>离线自检</th><th>凭据</th><th>必问对方</th></tr></thead><tbody>
     ${(c.preflight || []).filter((p) => p.id !== 'noop' && p.id !== 'mock').map((p) => `<tr>
-      <td class="td-main">${esc(p.label)}${p.active ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td class="td-main"><button class="ref-link" type="button" title="去链接入中心补凭据 / 做连通性探测" onclick="go('chainhub')">${esc(p.label)}</button>${p.active ? ' <span class="pill ok">当前</span>' : ''}</td>
       <td>${p.selfOk ? '<span class="pill ok">通过</span>' : '<span class="pill warn">失败</span>'}</td>
       <td class="td-sub">${p.missing.length ? '缺 <b>' + esc(p.missing.join('、')) + '</b>' : '<span class="pill ok">齐备</span>'}</td>
       <td class="td-sub"><details><summary>${p.ask.length} 条</summary><ul style="margin:6px 0 0 16px;padding:0">${p.ask.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details></td>
@@ -240,7 +241,7 @@ async function chainAssetsPage() {
         <td>${esc(r.kind)}</td><td class="td-sub">${esc(r.channel)}</td><td class="td-sub">${esc(r.provider)}</td>
         <td class="td-sub">${esc(r.nickname || '用户' + r.user_id)}</td>
         <td class="td-sub mono">${esc(r.token_id || '—')}</td>
-        <td class="td-sub mono">${r.tx_ref ? esc(String(r.tx_ref).slice(0, 14)) + '…' : '—'}</td>
+        <td class="td-sub mono">${r.tx_ref ? hashCopy(r.tx_ref, String(r.tx_ref).slice(0, 14) + '…') : '—'}</td>
         <td>${r.status == 1 ? '<span class="pill ok">已发行</span>' : (r.status == 0 ? '<span class="pill warn">待发行</span>' : '<span class="pill s70">失败</span>')}
           ${r.err ? '<div class="td-sub">' + esc(String(r.err).slice(0, 30)) + '</div>' : ''}</td>
         <td>${r.status == 1 ? '—' : `<button class="btn ghost sm" onclick="retryAsset(${r.id})">重试</button>`}</td></tr>`).join('')}
@@ -541,7 +542,7 @@ async function web3dash() {
   <div class="card">
     <div class="card-head"><h3>链上事件动态</h3><button class="btn ghost sm" onclick="go('attest')">进入存证中心 ›</button></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>时间</th></tr></thead><tbody>
-    ${(d.recentEvents || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${esc(e.biz_ref)}</td>
+    ${(d.recentEvents || []).map((e) => `<tr><td>${bizTag(esc(e.biz_type))}</td><td class="num">${evRefLink(e)}</td>
       <td>${e.status === 2 ? '<span class="pill ok">已锚定</span>' : (e.status === 1 ? '<span class="pill s20">已打包·待锚定</span>' : '<span class="pill warn">待打包</span>')}</td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
@@ -603,7 +604,7 @@ async function openBlock(id, opt = {}) {
       <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 16))}…</code></td>
       <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
       <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
-        : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline('${esc(e.biz_type)}','${esc(e.biz_ref)}',${e.id})">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
+        : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.id)},this)">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
     </tbody></table>
   </div>`
   // block:'start' 才保证用户真的“看见”结果；nearest 在很多情况下等于不滚动
@@ -615,10 +616,40 @@ function closeBlock() {
   const box = document.getElementById('blockDetail')
   if (box) box.innerHTML = ''
 }
-async function verifyEventInline(bizType, bizRef, id) {
+// ---- 可点击的链上字段：业务单号 / 批次号 / 哈希（链路总览、存证中心、链与资产共用）----
+// 放进 onclick="…" 的字符串实参：JSON 转义 + HTML 转义，业务单号里有引号也不会拆坏属性
+const w3Arg = (s) => esc(JSON.stringify(String(s ?? '')))
+/** 业务单号：已入批 → 打开所属区块并高亮这条再验证；待打包 → 就地验证（告诉你它还没入链，而不是沉默） */
+const evRefLink = (e) => `<button class="ref-link" type="button" title="${Number(e.batch_id) ? '打开所属批次并验证' : '验证这条记录'}" onclick="openEvent(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.batch_id) || 0},this)">${esc(e.biz_ref)}</button>`
+const batchLink = (id, label) => (Number(id) ? `<button class="ref-link" type="button" title="打开这一批的事件" onclick="openBlock(${Number(id)})">${esc(label)}</button>` : esc(label))
+/** 哈希：显示缩略，点「复制」拿完整值（放在可点行里时不让点击冒泡去触发整行） */
+const hashCopy = (full, shown) => `<code>${esc(shown)}</code><button class="copy-chip" type="button" title="复制完整值" onclick="event.stopPropagation();copyText(${w3Arg(full)})">复制</button>`
+async function openEvent(bizType, bizRef, batchId, btn) {
+  let anchor = btn
+  if (batchId && document.getElementById('blockDetail')) {
+    await openBlock(batchId)
+    const hit = [...document.querySelectorAll('#blockDetail tbody tr')].find((r) => r.children[2] && r.children[2].textContent.trim() === String(bizRef))
+    if (hit) {
+      hit.classList.add('ev-hit')
+      hit.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      anchor = hit.querySelector('button, a') || btn
+    }
+  }
+  await verifyEventInline(bizType, bizRef, 0, anchor)
+}
+async function verifyEventInline(bizType, bizRef, id, anchor) {
   const r = await api('GET', '/admin/attest/verify?bizType=' + encodeURIComponent(bizType) + '&bizRef=' + encodeURIComponent(bizRef))
-  const ok = r.found && r.proofValid !== false
-  toast(r.found ? (ok ? '验证通过 · ' + (r.note || '') : '验证失败：证明路径对不上根') : '未找到该单号', !ok)
+  // 三态：证明/指纹对不上 = 失败；还没有证明路径（待打包、已入队）= 尚未入链，不能说"通过"；其余才是通过
+  const bad = r.found && (r.proofValid === false || r.canonicalValid === false)
+  const pending = r.found && !bad && r.proofValid == null
+  const kind = !r.found ? 'warn' : bad ? 's70' : pending ? 'warn' : 'ok'
+  const text = !r.found ? '未找到该单号' : bad ? '验证失败：证明路径或指纹对不上根' : pending ? '尚未入链 · ' + (r.note || '待打包') : '验证通过 · ' + (r.note || '')
+  toast(text, kind === 's70')
+  // toast 一闪而过：结果同时留在被点的位置旁边，人没看到 toast 也不等于没验证
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.querySelectorAll('.verify-chip').forEach((n) => n.remove())
+    anchor.insertAdjacentHTML('afterend', `<span class="pill ${kind} verify-chip" style="margin-left:6px;white-space:normal">${esc(text)}</span>`)
+  }
 }
 // ---- 单流程视角：一单六锚（一笔订单的 6 步链上锚点） ----
 const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>', '<span class="dpill ok">已锚定</span>']
@@ -717,7 +748,7 @@ function attestResultHtml(r) {
       <td class="td-sub"><code>${esc(String(e.payload_hash || '').slice(0, 16))}…</code></td>
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
       <td>${e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
-        : e.batch_id ? `<button class="btn ghost sm" onclick="verifyEventInline('${esc(e.biz_type)}','${esc(e.biz_ref)}',${Number(e.id)})">验证</button>` : ''}</td>
+        : e.batch_id ? `<button class="btn ghost sm" onclick="verifyEventInline(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.id)},this)">验证</button>` : ''}</td>
     </tr>`).join('')
   return `<div class="card">
     <div class="card-head"><h3>检索「${esc(r.q)}」</h3>
@@ -825,7 +856,7 @@ async function pointassets() {
   <div class="card">
     <div class="card-head"><h3>发行批次</h3></div>
     <table><thead><tr><th>批次</th><th>名称</th><th>额度</th><th>已发放</th><th>回流</th><th>状态</th></tr></thead><tbody>
-    ${(d.budgets || []).map((b) => `<tr><td>#${b.id}</td><td>${esc(b.name || '—')}</td><td class="num">${Number(b.total)}</td>
+    ${(d.budgets || []).map((b) => `<tr class="click-row" ${dxKey} title="去预算管理查看这个批次" onclick="go('budgets')"><td>#${b.id}</td><td>${esc(b.name || '—')}</td><td class="num">${Number(b.total)}</td>
       <td class="num">${Number(b.granted)}</td><td class="num">${Number(b.returned)}</td>
       <td>${b.status === 1 ? '<span class="pill ok">启用</span>' : '<span class="pill s70">停用</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无批次</td></tr>'}
     </tbody></table>
