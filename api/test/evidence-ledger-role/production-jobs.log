@@ -1,0 +1,7 @@
+[wanderlust-api] http://172.29.128.120:8080  管理后台: http://172.29.128.120:8080/admin-ui  支付通道: MOCK(联调)
+[wanderlust-api] http://172.21.112.1:8080  管理后台: http://172.21.112.1:8080/admin-ui  支付通道: MOCK(联调)
+[jobs] 进程内调度已启动（持有 MySQL 咨询锁）
+[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00
+[job:commission] 0 due→payable
+[job:bean-day] 2026-11-04 已封存
+[job:attest-reconcile] ALL PASS

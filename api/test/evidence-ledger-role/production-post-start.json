@@ -1,0 +1,97 @@
+{
+  "originalLedgerAmountsAndRefsPreserved": true,
+  "sealedLedgerRowsPreserved": true,
+  "dailyImbalances": [],
+  "reconcile": {
+    "at": "2026-11-05T08:21:24.421Z",
+    "ok": true,
+    "checks": [
+      {
+        "id": "I1",
+        "name": "历史日根的叶数与账本一致",
+        "ok": true,
+        "detail": {
+          "mismatch": 0,
+          "sealedDays": 2
+        }
+      },
+      {
+        "id": "I2",
+        "name": "日终根借贷恒等",
+        "ok": true,
+        "detail": {
+          "bad": 0
+        }
+      },
+      {
+        "id": "I3",
+        "name": "存证队列不堵塞(>2h)",
+        "ok": true,
+        "detail": {
+          "stuck": 0
+        }
+      },
+      {
+        "id": "I4",
+        "name": "存证链不断(prev_root)",
+        "ok": true,
+        "detail": {
+          "broken": 0
+        }
+      },
+      {
+        "id": "I5",
+        "name": "无假上链记录",
+        "ok": true,
+        "detail": {
+          "fake": 0
+        }
+      },
+      {
+        "id": "I7",
+        "name": "已提交批次 6 小时内得到链上确认",
+        "ok": true,
+        "detail": {
+          "stale": 0
+        }
+      },
+      {
+        "id": "I6",
+        "name": "旅豆流水均有存证(≥95%)",
+        "ok": true,
+        "detail": {
+          "ledger": 34,
+          "attested": 34,
+          "missing": 0,
+          "ratio": 1
+        }
+      }
+    ]
+  },
+  "publicProof": {
+    "code": 0,
+    "msg": "ok",
+    "data": {
+      "found": true,
+      "bizDate": "2026-11-04",
+      "leafCount": 4,
+      "debitSum": 328,
+      "creditSum": 328,
+      "balanced": true,
+      "merkleRoot": "633087d0c65b55f689cb7aa5ce5ec6aa0a91b7f06e9660d6e20a7b9e480d8fa7",
+      "prevRoot": "9e308ce3ed0f57ea3210ee8c6575d13fd7b847da5e1ac0f9dd01a974fe976fbd",
+      "chainRef": null,
+      "anchoredAt": null,
+      "note": "借贷恒等(Σ借=Σ贷) 成立后才允许封存；prevRoot 指向上一封存日，形成不可回改的账本链",
+      "platform": "向往的自由 · 向往自由链账本封存"
+    },
+    "traceId": "tmw3a0yn4"
+  },
+  "counts": [
+    {
+      "orders": 1482,
+      "users": 40,
+      "admins": 5
+    }
+  ]
+}
