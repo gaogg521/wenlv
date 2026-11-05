@@ -245,7 +245,7 @@ await t('演示单的每一步都落在演示链的区块上：批次号 / 状�
 
 await t('「看一条真实单的六步」取真实订单，不是偷偷放演示数据；退出演示时一并收掉演示单', () => {
   assert.match(code, /onclick="loadFlowSample\(\)">看一条真实单的六步/)
-  assert.match(code, /find\(\(e\) => e\.biz_type === 'order'\)/, '没有从真实事件里找订单')
+  assert.match(code, /c\.latestOrder\) return loadFlow\(c\.latestOrder/, '没有用后端给的真实订单')
   assert.match(code, /退出演示时，演示单[\s\S]{0,200}window\.__flowData = null/, '退出演示没收掉演示单')
 })
 
@@ -254,6 +254,35 @@ await t('后端：批次带业务构成 mix，单流程事件带 batch_id（前�
   assert.match(route, /for \(const b of batches\) b\.mix =/, '存证中心批次没带 mix')
   assert.match(route, /GROUP BY batch_id, biz_type/)
   assert.match(route, /const COLS = '[^']*e\.batch_id,/, '单流程 COLS 没带 batch_id')
+})
+
+console.log('== 页面排布 ==')
+
+await t('上链流水线取最新的 8 批（batches 是升序，原来取成了最旧的 8 批）', () => {
+  const bs = Array.from({ length: 10 }, (_, i) => ({ seq: i + 1, biz_date: '2026-11-05', leaf_count: 1, merkle_root: 'f'.repeat(64), status: 2 }))
+  const html = ctx.pipelineHtml(bs, [], false)
+  assert.ok(html.indexOf('<b>#10</b>') > 0 && html.indexOf('<b>#10</b>') < html.indexOf('<b>#3</b>'), '应从最新一批开始')
+  assert.ok(!html.includes('<b>#2</b>'), '不该再画最旧的批次')
+})
+
+await t('数字身份页顶部卡片：有有效凭证就放真实卡（数字可点），没有才放示例；吊销 / 过期的不算', () => {
+  const v = (x) => ({ id: 1, user_id: 7, nickname: '陈姐', did: 'did:cn:wl:AAA', claims: { scope: 'travel', level: '探索者', levelNo: 3, trips: 2, cities: 1, badges: [] }, expires_at: '2099-01-01 00:00:00', ...x })
+  const real = ctx.vcHeroCard([v({})])
+  assert.match(real, /陈姐/); assert.match(real, /vcStatOpen\(7,/, '真实卡的数字应可点'); assert.ok(!real.includes('示例卡片'))
+  for (const dead of [v({ revoked_at: '2026-01-01' }), v({ expires_at: '2020-01-01 00:00:00' })]) assert.match(ctx.vcHeroCard([dead]), /示例卡片/)
+  assert.match(ctx.vcHeroCard([]), /示例卡片/)
+})
+
+await t('身份列表带头像：有图用图，没图用昵称首字；恶意头像地址不进 src', () => {
+  const r = { total: 3, size: 12, page: 1, summary: { users: 3, beanAccounts: 0, vcHolders: 0 }, rows: [
+    { userId: 1, nickname: '小满', avatar: 'https://x.test/a.png', did: 'did:a', levelNo: 1, levelName: 'L', status: 1, beanBalance: null, badges: 0, trips: 0, vcActive: 0 },
+    { userId: 2, nickname: '陈姐', avatar: null, did: 'did:b', levelNo: 1, levelName: 'L', status: 1, beanBalance: null, badges: 0, trips: 0, vcActive: 0 },
+    { userId: 3, nickname: '坏人', avatar: 'javascript:alert(1)', did: 'did:c', levelNo: 1, levelName: 'L', status: 1, beanBalance: null, badges: 0, trips: 0, vcActive: 0 },
+  ] }
+  const html = ctx.idListHtml(r)
+  assert.match(html, /<img class="id-ava" src="https:\/\/x\.test\/a\.png"/)
+  assert.match(html, /<span class="id-ava"[^>]*>陈<\/span>/)
+  assert.ok(!html.includes('javascript:'), '非 http(s) 头像不能进 src')
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

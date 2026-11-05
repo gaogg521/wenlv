@@ -76,8 +76,11 @@ const web3 = {
       b.seq, b.merkle_root, b.chain_tx_ref, b.status AS batch_status
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id ORDER BY e.id DESC LIMIT 30`)
     const dayRoots = await q('SELECT * FROM bean_day_root ORDER BY biz_date DESC LIMIT 10')
+    // 「看一条真实单的六步」用：优先走完全程（已完成 + 已结算）的单子，最近事件里没有订单也能找到
+    const latest = await one(`SELECT e.biz_ref FROM attest_event e JOIN orders o ON o.order_no = e.biz_ref
+      WHERE e.biz_type = 'order' ORDER BY (o.status = 50) DESC, (o.settlement_id IS NOT NULL) DESC, e.id DESC LIMIT 1`)
     return {
-      batches, queue, recent, dayRoots,
+      batches, queue, recent, dayRoots, latestOrder: latest ? latest.biz_ref : null,
       chain: chain.chainStatus(),
       // 语义分档：NOOP 期一律"已打包·待锚定"，绝不出现"已上链"
       chainMode: chain.chainMode() === 'real' ? `已接入${chain.chainStatus().label}：新批次真实锚定` : 'NOOP：哈希与 Merkle 根实时落库，批次停在「已打包·待锚定」' // 文案跟着当前链走，不能写死某一家,

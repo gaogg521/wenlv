@@ -124,6 +124,8 @@ await t('链路视图与单流程对得上：每一步事件带 batch_id，且�
     if (Number(b.is_day_close)) assert.deepEqual(b.mix, {}, '日终批 #' + b.seq + ' 不该有业务事件构成')
     else assert.equal(Object.values(b.mix).reduce((a, c) => a + c, 0), Number(b.leaf_count), '批次 #' + b.seq + ' mix 合计应等于事件数')
   }
+  assert.ok(center.latestOrder, '存证中心应给出一笔真实订单，供「看一条真实单的六步」');
+  assert.ok(await one("SELECT 1 FROM attest_event WHERE biz_type = 'order' AND biz_ref = ?", [center.latestOrder]), 'latestOrder 必须是有存证事件的订单')
   for (const s of withEv) { const m = await dbMix(s.ev.batch_id); assert.ok(m[s.ev.biz_type] > 0, s.label + ' 所在批次里没有 ' + s.ev.biz_type) }
 })
 await t('对外验证：订单已锚定、证明可复算、给出交易号；对外流程与后台一致', async () => {
