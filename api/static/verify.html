@@ -329,6 +329,26 @@ async function renderBean(d) {
     <div class="row"><div class="k">双分录平衡</div><div class="v">${ok ? '成立（差额 0）' : '不成立'}</div></div>
   </div>
 
+  ${(function () {
+    const cat = d.categories
+    if (!cat) return ''
+    const amt = (x) => esc(x.amount ?? 0) + ' 豆 · ' + esc(x.count ?? 0) + ' 笔'
+    return `<div class="card">
+    <h2>当日分录构成（按真实业务口径）</h2>
+    <div class="note" style="margin:0 0 8px">把上面的借贷合计按业务类型拆开。每笔发放/调整在账本里是一借一贷两条分录：用户账户记一条，预算池等对手账户记一条。<b>对手分录不是用户的收入或消费</b>，不与用户口径混计。</div>
+    <div class="row"><div class="k">用户发放（消费返豆 / 任务 / 内容奖励）</div><div class="v mono">${amt(cat.userGranted)}</div></div>
+    <div class="row"><div class="k">期初导入（历史余额一次性入账）</div><div class="v mono">${amt(cat.openingImported)}</div></div>
+    <div class="row"><div class="k">退款冲正（退回用户旅豆）</div><div class="v mono">${amt(cat.refundReversed)}</div></div>
+    <div class="row"><div class="k">用户抵扣（下单使用旅豆）</div><div class="v mono">${amt(cat.userDebited)}</div></div>
+    ${cat.otherAdjust && (cat.otherAdjust.credit || cat.otherAdjust.debit) ? `<div class="row"><div class="k">其他调整（过期回收 / 人工调整）</div><div class="v mono">入 ${esc(cat.otherAdjust.credit)} 豆 · 出 ${esc(cat.otherAdjust.debit)} 豆 · ${esc(cat.otherAdjust.count)} 笔</div></div>` : ''}
+    <div class="row"><div class="k">对手分录（预算池 / 平台哨兵户）</div><div class="v mono">贷 ${esc(cat.counterparty.credit)} 豆 · 借 ${esc(cat.counterparty.debit)} 豆</div></div>
+    <div class="row"><div class="k">构成对账</div><div class="v">${cat.reconciled
+      ? '一致：用户口径 + 对手分录 = 当日借贷合计，无未解释分录'
+      : '<span style="color:var(--warn)">分类合计与封存合计对不上，请勿采信本页，请联系平台核查</span>'}</div></div>
+    <div class="note" style="margin-top:8px">双分录平衡只说明账本内部记账一致；发行上限由预算与年度总量闸门另行控制，本页不据此认定"未超发"。当日没有某类业务时计数为 0，是真实为零，不是缺数据。</div>
+  </div>`
+  })()}
+
   <div class="card">
     <h2>日终根</h2>
     <div class="v mono" style="word-break:break-all">${esc(d.merkleRoot)}</div>

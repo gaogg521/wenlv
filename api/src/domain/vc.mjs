@@ -10,7 +10,7 @@
 import crypto from 'node:crypto'
 import { q, one } from '../db.mjs'
 import { attest } from './attest.mjs'
-import { getSecret, setSecret, secretStatus } from '../infra/secrets.mjs'
+import { getSecret, setSecret, setSecretIfAbsent, secretStatus } from '../infra/secrets.mjs'
 import * as member from './member.mjs'
 
 const KEY_NAME = 'VC_ISSUER_KEY'
@@ -53,9 +53,21 @@ async function issuerKey() {
   const priv = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64')
   const pubJwk = publicKey.export({ format: 'jwk' })
   const payload = { priv, pubJwk, kid, did, createdAt: new Date().toISOString() }
-  await setSecret(KEY_NAME, JSON.stringify(payload), 'system:vc')
-  console.log('[vc] issuer 密钥已生成并加密入库（kid=' + kid + '）')
-  return { kid, did, priv: privateKey, pubJwk, createdAt: payload.createdAt }
+  // 并发首次初始化（P-15）：插入只在该键确实不存在时生效，先落库者获胜；输者丢弃自己的候选钥匙、
+  // 沿用插入后库里实际存着的密钥——保证任何时刻对外签名用的都是最终落库的那把，不会签出无人能验的凭证。
+  const stored = await setSecretIfAbsent(KEY_NAME, JSON.stringify(payload), 'system:vc')
+  let k
+  try { k = JSON.parse(stored) } catch {
+    throw new Error(KEY_NAME + ' 并发初始化后无法读取已落库的密钥：已拒绝覆盖，请人工检查主密钥配置')
+  }
+  if (k.kid !== kid) console.log('[vc] issuer 密钥已由并发初始化先行落库，沿用已存在密钥（kid=' + k.kid + '）')
+  return {
+    kid: k.kid,
+    did: k.did,
+    priv: crypto.createPrivateKey({ key: Buffer.from(k.priv, 'base64'), format: 'der', type: 'pkcs8' }),
+    pubJwk: k.pubJwk,
+    createdAt: k.createdAt,
+  }
 }
 
 /** DID 派生盐：稳定、独立于 JWT_SECRET（改 JWT 密钥不应让全体 DID 失效） */
@@ -64,8 +76,10 @@ async function pepper() {
   if (st === 'undecryptable') throw new Error(PEPPER_NAME + ' 已存在但无法用当前主密钥解密：已拒绝重新生成（重新生成会让全体 DID 变化），原密文未改动')
   let p = await getSecret(PEPPER_NAME)
   if (!p) {
-    p = crypto.randomBytes(32).toString('hex')
-    await setSecret(PEPPER_NAME, p, 'system:vc')
+    // 并发首次初始化（P-15）：与 issuerKey 相同的原子首写；输者沿用先落库的盐，绝不回退用自己的候选值（否则 DID 不稳定）
+    const stored = await setSecretIfAbsent(PEPPER_NAME, crypto.randomBytes(32).toString('hex'), 'system:vc')
+    if (!stored) throw new Error(PEPPER_NAME + ' 并发初始化后无法读取已落库的盐：已拒绝覆盖，请人工检查主密钥配置')
+    p = stored
   }
   return p
 }
