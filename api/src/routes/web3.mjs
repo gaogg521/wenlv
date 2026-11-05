@@ -54,7 +54,9 @@ const web3 = {
   // 后台：存证批次与队列总览
   'GET /admin/attest/center': async (req) => {
     await requireAdmin(req)
-    const batches = await q('SELECT * FROM attest_batch ORDER BY seq DESC LIMIT 20')
+    // 默认最近 20 批；链路视图点「再看更早」时传 batchLimit（上限 200）
+    const batchLimit = Math.min(200, Math.max(20, Math.floor(Number(req.query.batchLimit) || 20)))
+    const batches = await q(`SELECT * FROM attest_batch ORDER BY seq DESC LIMIT ${batchLimit}`)
     // 每个区块里装的是哪些业务环节（订单/出票/核销/返豆/结算…）：链路视图直接画在区块上，不用悬停或点开才知道
     if (batches.length) {
       const mixRows = await q(`SELECT batch_id, biz_type, COUNT(*) n FROM attest_event
@@ -546,10 +548,25 @@ const web3 = {
     const a = await requireAdmin(req, ['super', 'ops'])
     const userId = Number(req.body?.userId)
     if (!Number.isInteger(userId) || userId <= 0) throw new BizError(1001, '请填写用户 id')
-    const scope = req.body?.scope === 'basic' ? 'basic' : 'travel'
-    const v = await vc.issue(userId, scope)
+    const scope = vc.ALL_SCOPES.includes(req.body?.scope) ? req.body.scope : 'travel'
+    let v
+    try { v = await vc.issue(userId, scope) } catch (e) { if (/身份/.test(e.message)) throw new BizError(1001, e.message); throw e }
     await tx(async (c) => audit(c, 'admin:' + a.name, 'vc', 'issue', 'vc-' + v.jti, null, { userId, scope }))
     return v
+  },
+  // 批量签发：先看有多少人符合，再确认执行
+  'GET /admin/web3/vc/batch': async (req) => {
+    await requireAdmin(req)
+    if (!vc.ALL_SCOPES.includes(req.query.scope)) throw new BizError(1001, '请选择凭证范围')
+    return await vc.batchPreview(req.query.scope)
+  },
+  'POST /admin/web3/vc/batch': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops'])
+    const scope = req.body?.scope
+    if (!vc.ALL_SCOPES.includes(scope)) throw new BizError(1001, '请选择凭证范围')
+    const r = await vc.issueBatch(scope, req.body?.limit)
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'vc', 'issue_batch', 'vc-batch-' + scope, null, { scope, issued: r.issued, failed: r.failed.length }))
+    return r
   },
   // 身份档案：数字身份(DID) ↔ 旅豆账户 ↔ 徽章 / 行程 / 凭证，按 user_id 一一关联
   'GET /admin/web3/identities': async (req) => {

@@ -15,7 +15,7 @@ async function attest() {
   const pct = (n, all) => (all ? Math.round(n / all * 100) : 0)
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
+    <div class="card-head"><h3>存证概况</h3><span class="muted">${esc(d.chainMode)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">📚</div><div><div class="l">存证事件</div><div class="v" style="font-size:18px">${tot}</div><div class="s">已锚定 ${pct(anch, tot)}%</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdf3e0">📥</div><div><div class="l">待打包</div><div class="v" style="font-size:18px${pend ? ';color:#b7791f' : ''}">${pend}</div><div class="s">小时级打包</div></div></div>
@@ -131,7 +131,11 @@ async function vcPage() {
   <div class="card">
     <div class="card-head"><h3>身份档案 · 数字身份 ↔ 旅豆账户</h3><span class="muted">一人一个数字身份（DID），与其旅豆账户、徽章、行程按用户 id 一一关联；点数字可看明细</span></div>
     <div class="row" style="margin-bottom:10px"><input id="idq" placeholder="昵称 / 用户 id / DID" style="width:260px" onkeydown="if(event.key==='Enter')vcIdentityList(1)">
-      <button class="btn primary sm" onclick="vcIdentityList(1)">查询</button></div>
+      <button class="btn primary sm" onclick="vcIdentityList(1)">查询</button>
+      <select id="idSize" aria-label="每页人数" onchange="vcIdentityList(1)"><option value="12">每页 12 人</option><option value="30">每页 30 人</option><option value="100">每页 100 人</option></select>
+      <span style="flex:1"></span>
+      <select id="vcBatchScope" aria-label="批量签发的凭证范围"><option value="travel">旅行身份</option><option value="basic">基础身份</option><option value="creator">创作者</option><option value="promoter">推广服务商</option><option value="merchant">商户</option></select>
+      <button class="btn ghost sm" onclick="vcBatchOpen()">批量签发</button></div>
     <div id="idList">${idListHtml(idn)}</div>
   </div>
 
@@ -141,7 +145,7 @@ async function vcPage() {
       ${d.recent.map((v) => `<tr><td class="num">${v.id}</td>
         <td class="td-main">${esc(v.nickname || '用户' + v.user_id)}</td>
         <td class="td-sub mono">${esc(String(v.did).slice(0, 18))}…</td>
-        <td><span class="pill off">${esc(v.scope)}</span></td>
+        <td><span class="pill off">${esc(SCOPE_CN[v.scope] || v.scope)}</span></td>
         <td class="td-sub">${esc(String(v.issued_at).slice(5, 19))}</td>
         <td class="td-sub">${esc(String(v.expires_at).slice(5, 19))}</td>
         <td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td>
@@ -153,7 +157,7 @@ async function vcPage() {
     <div class="card-head"><h3>代用户签发（演示 / 客服）</h3><span class="muted">签完可直接复制凭证去验签台验证</span></div>
     <div class="row">
       <input id="vcUid" type="number" placeholder="用户 id" style="width:120px">
-      <select id="vcScope"><option value="travel">travel（含行程/城市/徽章）</option><option value="basic">basic（仅等级/入会）</option></select>
+      <select id="vcScope"><option value="travel">旅行身份（含行程/城市/徽章）</option><option value="basic">基础身份（仅等级/入会）</option><option value="creator">创作者</option><option value="promoter">推广服务商</option><option value="merchant">商户</option></select>
       <button class="btn primary sm" onclick="issueVc()">签发</button>
       <button class="btn ghost sm" onclick="openVerifyVc()">用当前凭证打开验签台</button>
     </div>
@@ -278,6 +282,12 @@ function vcCardSvg(claims, meta = {}) {
   let c = claims
   if (typeof c === 'string') { try { c = JSON.parse(c) } catch { c = {} } }
   c = c || {}
+  if (CARD_ROLES[c.role]) {   // 角色凭证：按该角色的系列和等级出卡，只画凭证里有的事实
+    const stats = c.role === 'creator' ? [{ label: '已发布内容', val: c.works ?? 0 }, { label: '已完成约稿', val: c.tasks ?? 0 }] : []
+    const sub = c.role === 'merchant' ? [c.merchantName, c.position].filter(Boolean).join(' · ') : c.role === 'promoter' ? '一级推广 · 无层级' : '内容创作身份'
+    return cardFace({ role: c.role, tier: cardTierOf(c.levelNo, cardTotal(c.role)), levelName: c.level, levelNo: c.levelNo, sub, stats,
+      note: stats.length ? '' : '身份凭证：不含金额与联系方式', did: meta.did, exp: meta.exp, status: meta.status || '', uid: meta.uid })
+  }
   const travel = c.scope === 'travel'
   return cardFace({
     role: 'traveler', tier: meta.tier || cardTierOf(c.levelNo, cardTotal('traveler')),
@@ -287,11 +297,13 @@ function vcCardSvg(claims, meta = {}) {
     did: meta.did, exp: meta.exp, status: meta.status || (meta.sample ? '示例' : ''), uid: meta.uid,
   })
 }
-/** 其他角色的身份卡（创作者 / 推广服务商 / 商户）：后台展示用，不在可携出凭证里，卡面上明说 */
-function roleCardSvg(card) {
+/** 档案里的角色身份卡（创作者 / 推广服务商 / 商户）：统计是后台口径，比凭证披露得多；opt.vc 是这个角色的有效凭证 */
+function roleCardSvg(card, opt = {}) {
+  const v = opt.vc
   return cardFace({ role: card.role, tier: cardTierOf(card.rank, card.total), levelName: card.levelName, levelNo: card.rank, sub: card.sub,
-    stats: card.stats || [], foot: '后台身份卡 · 不含在可携出凭证内' })
+    stats: card.stats || [], did: v ? opt.did : '', exp: v ? v.expires_at : '', status: v ? '有效' : '', foot: v ? '' : '未签发角色凭证' })
 }
+const SCOPE_CN = { travel: '旅行身份', basic: '基础身份', creator: '创作者', promoter: '推广服务商', merchant: '商户' }
 
 /* ---- 卡面图鉴：每个角色系列的全部卡种；用不上的卡种标「预留」 ---- */
 const CARD_DEMO = {
@@ -362,13 +374,36 @@ async function vcIdentityList(page) {
   const kw = (document.getElementById('idq') || {}).value || ''
   const box = document.getElementById('idList'); if (!box) return
   try {
-    const r = await api('GET', '/admin/web3/identities?size=12&page=' + (page || 1) + '&q=' + encodeURIComponent(kw.trim()))
+    const size = (document.getElementById('idSize') || {}).value || 12
+    const r = await api('GET', '/admin/web3/identities?size=' + size + '&page=' + (page || 1) + '&q=' + encodeURIComponent(kw.trim()))
     window.__idPage = r.page
     box.innerHTML = idListHtml(r)
   } catch (e) { toast(e.message, true) }
 }
-async function vcIssueFor(uid) {
+/** 批量签发：先告诉你会签给多少人，确认后执行；每人一张，已有有效凭证的人跳过 */
+async function vcBatchOpen() {
+  const scope = (document.getElementById('vcBatchScope') || {}).value || 'travel'
+  try {
+    const p = await api('GET', '/admin/web3/vc/batch?scope=' + scope)
+    if (!p.pending) return toast('没有需要签发的人：符合条件的都已有有效凭证', false)
+    const n = Math.min(p.pending, p.max)
+    modal('批量签发 · ' + esc(SCOPE_CN[scope]), `<p>将给 <b>${n}</b> 人各签发一张「${esc(SCOPE_CN[scope])}」凭证${p.pending > p.max ? `（共 ${p.pending} 人符合，单次最多 ${p.max} 人，可再次执行）` : ''}。</p>
+      <p class="muted" style="margin-top:8px">已有有效凭证的人会跳过。每张都会写入审计和存证队列，下次打包合并成一个根上链；签发后可以逐张吊销。</p>`,
+      `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="vcBatchRun('${scope}')">确认签发</button>`)
+  } catch (e) { toast(e.message, true) }
+}
+async function vcBatchRun(scope) {
+  closeModal()
+  toast('正在批量签发…', false)
+  try {
+    const r = await api('POST', '/admin/web3/vc/batch', { scope })
+    toast(`已签发 ${r.issued} 张${r.failed.length ? '，失败 ' + r.failed.length + ' 张：' + r.failed[0].reason : ''}${r.remaining ? '，还剩 ' + r.remaining + ' 人' : ''}`, r.failed.length > 0)
+    vcPage()
+  } catch (e) { toast(e.message, true) }
+}
+async function vcIssueFor(uid, scope) {
   const el = document.getElementById('vcUid'); if (el) el.value = uid
+  const sc = document.getElementById('vcScope'); if (sc && scope) sc.value = scope
   const box = document.getElementById('vcOut')
   if (el && box) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
   await issueVc()
@@ -389,8 +424,8 @@ async function vcIdentity(uid, sec) {
   const none = (t) => `<div class="muted" style="padding:6px 0">${t}</div>`
   drawer(esc(d.nickname) + ' · 身份档案', `
     <div class="muted" style="margin-bottom:8px">用户 #${d.userId} · DID <code>${esc(String(d.did).slice(0, 24))}…</code> <button class="copy-chip" type="button" onclick="copyText(${w3Arg(d.did)})">复制</button></div>
-    <div class="vc-wallet">${vcCardSvg(d.claims, { uid: d.userId, did: d.did, exp: lastVc && lastVc.expires_at, status: st || '未签发' })}${(d.roleCards || []).map(roleCardSvg).join('')}</div>
-    <div class="muted" style="margin:6px 0 12px">点旅行身份卡上的等级 / 行程 / 城市 / 徽章，直接跳到对应明细。${(d.roleCards || []).length ? '创作者、推广服务商、商户卡是后台身份展示，不含在可携出凭证内。' : ''}下面是后台可见的完整档案；凭证本身只含最小披露字段。</div>
+    <div class="vc-wallet">${vcCardSvg(d.claims, { uid: d.userId, did: d.did, exp: lastVc && lastVc.expires_at, status: st || '未签发' })}${(d.roleCards || []).map((rc) => { const v = d.vcs.find((x) => x.scope === rc.role && !x.revoked_at && new Date(x.expires_at) > new Date()); return `<div>${roleCardSvg(rc, { vc: v, did: d.did })}<div class="vc-card-act">${v ? `<span class="pill ok">角色凭证有效</span><span class="muted">至 ${esc(String(v.expires_at).slice(0, 10))}</span>` : `<button class="btn primary sm" type="button" onclick="closeModal();vcIssueFor(${d.userId},'${rc.role}')">签发${esc(CARD_ROLES[rc.role].label)}凭证</button>`}</div></div>` }).join('')}</div>
+    <div class="muted" style="margin:6px 0 12px">点旅行身份卡上的等级 / 行程 / 城市 / 徽章，直接跳到对应明细。${(d.roleCards || []).length ? '角色卡上的统计是后台口径；签发出去的角色凭证只含身份与等级，不含金额。' : ''}下面是后台可见的完整档案；凭证本身只含最小披露字段。</div>
     <div class="vc-secs">
       ${section('level', '等级与成长', null, `<div class="vc-kv"><span>当前等级</span><b>Lv.${L.no} ${esc(L.name)}</b><span>成长值</span><b>${fmtN(L.growth)}</b>
         <span>等级区间</span><b>${fmtN(L.from)}${L.to == null ? ' 以上' : ' – ' + fmtN(L.to)}</b><span>下一级</span><b>${L.nextName ? esc(L.nextName) + '（还差 ' + fmtN(Math.max(0, L.to - L.growth)) + '）' : '已是最高级'}</b>
@@ -401,7 +436,7 @@ async function vcIdentity(uid, sec) {
       ${section('bean', '旅豆账户', null, d.bean ? `<div class="vc-kv"><span>当前余额</span><b>${fmtN(d.bean.balance)} 豆</b><span>累计获得</span><b>${fmtN(d.bean.lifetime)} 豆</b></div>
         ${d.bean.ledger.length ? `<table style="margin-top:8px"><thead><tr><th>时间</th><th>类型</th><th>变动</th><th>余额</th><th>引用</th></tr></thead><tbody>${d.bean.ledger.map((l) => `<tr><td class="td-sub">${T(l.created_at)}</td><td>${esc(BEAN_BIZ[l.biz_type] || '其他')}</td><td class="num" style="color:${Number(l.direction) === 1 ? '#17824d' : '#b42318'}">${Number(l.direction) === 1 ? '+' : '−'}${fmtN(l.amount)}</td><td class="num">${fmtN(l.after_bal)}</td><td class="td-sub mono">${esc(l.biz_ref || '—')}</td></tr>`).join('')}</tbody></table>` : ''}
         <div style="margin-top:8px"><button class="btn ghost sm" onclick="closeModal();go('pointassets')">去旅豆发行台账</button></div>` : none('该用户还没有旅豆账户（还没产生过旅豆）'))}
-      ${section('vcs', '凭证记录', d.vcs.length, `${d.vcs.length ? `<table><thead><tr><th>#</th><th>范围</th><th>签发</th><th>到期</th><th>状态</th></tr></thead><tbody>${d.vcs.map((v) => `<tr><td class="num">${v.id}</td><td><span class="pill off">${esc(v.scope)}</span></td><td class="td-sub">${T(v.issued_at)}</td><td class="td-sub">${T(v.expires_at)}</td><td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td></tr>`).join('')}</tbody></table>` : none('还没有签发过凭证')}
+      ${section('vcs', '凭证记录', d.vcs.length, `${d.vcs.length ? `<table><thead><tr><th>#</th><th>范围</th><th>签发</th><th>到期</th><th>状态</th></tr></thead><tbody>${d.vcs.map((v) => `<tr><td class="num">${v.id}</td><td><span class="pill off">${esc(SCOPE_CN[v.scope] || v.scope)}</span></td><td class="td-sub">${T(v.issued_at)}</td><td class="td-sub">${T(v.expires_at)}</td><td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td></tr>`).join('')}</tbody></table>` : none('还没有签发过凭证')}
         <div style="margin-top:8px"><button class="btn primary sm" onclick="closeModal();vcIssueFor(${d.userId})">签发一张新凭证</button></div>`)}
     </div>`)
   if (sec) setTimeout(() => { const el = document.getElementById('vcsec-' + sec); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('vc-sec-hit') } }, 80)
@@ -463,9 +498,11 @@ async function chainAssetsPage() {
   const cur = d.chain || {}
   const cap = cur.capabilities || {}
   const mark = (b) => (b ? '<span class="pill ok">支持</span>' : '<span class="pill off">—</span>')
+  const canIssue = !!cap.assets
+  const assetChains = (d.providers || []).filter((p) => p.capabilities.assets && p.provider !== 'mock' && p.id !== 'mock')
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>链与资产</h2><span class="muted">当前链：<b>${esc(cur.label || cur.provider)}</b> · ${cur.mode === 'real' ? '<span class="pill ok">已接入</span>' : '<span class="pill warn">未接入（NOOP）</span>'}</span></div>
+    <div class="card-head"><h3>当前链：${esc(cur.label || cur.provider)} ${cur.mode === 'real' ? '<span class="pill ok">已接入</span>' : '<span class="pill warn">未接入（NOOP）</span>'}</h3><span class="muted">${cap.assets ? '这条链可以发行资产' : '这条链只做存证，不能发行资产'}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">已发行</div><div class="v" style="font-size:18px">${d.issued}</div><div class="s">累计 ${d.total}</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdf3e0">⏳</div><div><div class="l">待发行</div><div class="v" style="font-size:18px">${d.pending}</div><div class="s">凭据到位后补发</div></div></div>
@@ -476,14 +513,17 @@ async function chainAssetsPage() {
   </div>
 
   <div class="card">
-    <div class="card-head"><h3>发行一件资产</h3><span class="muted">微信渠道被硬禁（D10）；不支持资产的链会明确报错</span></div>
-    <div class="row">
+    <div class="card-head"><h3>发行一件资产</h3><span class="muted">微信渠道被硬禁（D10）</span></div>
+    ${canIssue ? '' : `<div class="asset-block"><b>${esc(cur.label || '当前链')}只做存证，现在不能发行资产。</b>
+      要发行需要先接入支持资产的链${assetChains.length ? '：' + assetChains.map((p) => esc(p.label) + (p.mode === 'real' ? '（已配置）' : '（缺凭据）')).join('、') : ''}。
+      <button class="btn ghost sm" type="button" onclick="go('chainhub')">去链接入中心</button></div>`}
+    <div class="row${canIssue ? '' : ' row-off'}">
       <select id="akKind">${(d.kinds || []).map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select>
       <select id="akChannel">${(d.channels || []).map((c) => `<option value="${c.id}" ${c.allowed ? '' : 'disabled'}>${esc(c.label)}${c.allowed ? '' : '（禁止）'}</option>`).join('')}</select>
       <input id="akUid" type="number" placeholder="用户 id" style="width:110px">
       <input id="akToken" placeholder="tokenId（可空）" style="width:140px">
       <input id="akName" placeholder="名称，如「瑜伽修行者」" style="width:200px">
-      <button class="btn primary sm" onclick="issueAsset()">发行</button>
+      <button class="btn primary sm" onclick="issueAsset()" ${canIssue ? '' : 'disabled title="当前链不支持发行资产"'}>发行</button>
     </div>
     <div id="akOut"></div>
   </div>
@@ -498,8 +538,8 @@ async function chainAssetsPage() {
         <td class="td-sub mono">${r.tx_ref ? hashCopy(r.tx_ref, String(r.tx_ref).slice(0, 14) + '…') : '—'}</td>
         <td>${r.status == 1 ? '<span class="pill ok">已发行</span>' : (r.status == 0 ? '<span class="pill warn">待发行</span>' : '<span class="pill s70">失败</span>')}
           ${r.err ? '<div class="td-sub">' + esc(String(r.err).slice(0, 30)) + '</div>' : ''}</td>
-        <td>${r.status == 1 ? '—' : `<button class="btn ghost sm" onclick="retryAsset(${r.id})">重试</button>`}</td></tr>`).join('')}
-    </tbody></table>` : emptyBox('还没有发行记录：上方选类型与用户发行一件试试')}
+        <td>${r.status == 1 ? '—' : `<button class="btn ghost sm" onclick="retryAsset(${r.id})" ${canIssue ? '' : 'disabled title="当前链不支持发行资产"'}>重试</button>`}</td></tr>`).join('')}
+    </tbody></table>` : emptyBox(canIssue ? '还没有发行记录：上方选类型与用户发行一件试试' : '还没有发行记录：当前链不能发行，接入支持资产的链后才会有')}
   </div>
 
   <div class="card">
@@ -820,7 +860,8 @@ if (typeof window.addEventListener === 'function' && !window.__chainResizeBound)
 async function web3dash(opt = {}) {
   if (!opt.silent) $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
-  const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center')])
+  const lim = window.__chainLimit || 20
+  const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center' + (lim > 20 ? '?batchLimit=' + lim : ''))])
   const demo = !!window.__demoChain
   const batches = demo ? mockChain() : (c.batches || []).slice().sort((a, b) => a.seq - b.seq)
   const pendingN = demo ? batches.filter((b) => Number(b.status) === 0).reduce((s, b) => s + Number(b.leaf_count), 0) : Number(d.pendingEvents)
@@ -890,6 +931,7 @@ async function web3dash(opt = {}) {
       <div class="chain-divider"></div>
     </div>
     ${chainTrackHTML(descs, chainTrackWidth())}
+    ${!demo && Number(d.batches) > batches.length ? `<div class="chain-more">显示最近 ${batches.length} 批，共 ${Number(d.batches)} 批 ${batches.length < 200 ? '<button class="chain-btn" onclick="chainMore()">再看更早 20 批</button>' : '<span>（一次最多看 200 批，更早的请用检索）</span>'}</div>` : ''}
     <div class="chain-legend">
       ${CHAIN_LEGEND.map(([k, n]) => `<span><i class="lg" style="background:${bizColor(k)}66;border:1px solid ${bizColor(k)}"></i>${n}</span>`).join('')}
       <span><i class="lg" style="background:${DAY_CLOSE_COLOR}66;border:1px solid ${DAY_CLOSE_COLOR}"></i>账本日终（分支）</span>
@@ -919,6 +961,7 @@ async function web3dash(opt = {}) {
   else if (window.__openFlowStep != null) openFlowStep(window.__openFlowStep, { silent: true })
   chainTimerSetup()
 }
+function chainMore() { window.__chainLimit = Math.min((window.__chainLimit || 20) + 20, 200); web3dash({ silent: true }) }
 function chainTimerSetup() {
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
   if (!window.__chainAuto) return
@@ -1274,7 +1317,7 @@ async function pointassets() {
   const totIn = biz.reduce((s, x) => s + Number(x.userIn || 0), 0), totOut = biz.reduce((s, x) => s + Number(x.userOut || 0), 0), totN = biz.reduce((s, x) => s + Number(x.entries || 0), 0)
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>旅豆发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
+    <div class="card-head"><h3>发行概况</h3><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
     <div class="cap-box">
       <div class="cap-t"><span>${esc(cap.year || '')} 年度发行额度（严禁超发）</span><b>${num(capUsed)} / ${num(capTotal)}</b></div>
       <div class="cap-bar"><i style="width:${capPct}%"></i></div>

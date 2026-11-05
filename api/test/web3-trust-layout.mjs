@@ -147,7 +147,7 @@ await t('同一角色不同等级卡种不同；不同角色系列不同；同�
   assert.match(a, /data-role="traveler" data-tier="classic"/); assert.match(a, /普卡/)
   assert.match(b, /data-role="traveler" data-tier="black"/); assert.match(b, /黑金卡/)
   const m = ctx.roleCardSvg({ role: 'merchant', rank: 2, total: 4, levelName: '优选商户', sub: '示例店 · 老板', stats: [{ label: '完成订单', val: 3 }] })
-  assert.match(m, /data-role="merchant" data-tier="gold"/); assert.match(m, /商户系列/); assert.match(m, /不含在可携出凭证内/, '非凭证要明说')
+  assert.match(m, /data-role="merchant" data-tier="gold"/); assert.match(m, /商户系列/); assert.match(m, /未签发角色凭证/, '没签发要明说')
   const id = (x) => x.match(/<linearGradient id="(vc\d+)"/)[1]
   assert.notEqual(id(a), id(b))
 })
@@ -162,6 +162,24 @@ await t('卡面图鉴：每个系列五种卡面，用不上的标预留；等�
   assert.equal((html.match(/vc-tile reserved/g) || []).length, 1, '4 级时只有钻石卡预留')
   assert.match(html, /Lv\.4 环球探索家<\/span><b>10 人/); assert.match(html, /预留：等级加到 5 级后启用/)
   for (const k of ['creator', 'promoter', 'merchant']) assert.match(html, new RegExp("vcGallery\\('" + k + "'\\)"), '缺系列入口 ' + k)
+})
+
+await t('后台前端和服务端的卡种规则一致（小程序用服务端那份）', async () => {
+  const { cardTierOf } = await import('../src/domain/card-tier.mjs')
+  for (let n = 1; n <= 6; n++) for (let r = 0; r <= 7; r++) assert.equal(ctx.cardTierOf(r, n), cardTierOf(r, n), r + '/' + n)
+})
+await t('角色凭证出对应系列的卡；推广卡不画金额，商户卡带门店名', () => {
+  const p = ctx.vcCardSvg({ role: 'promoter', level: '金牌服务商', levelNo: 3, scope: 'promoter' }, { did: 'did:cn:wl:abc', status: '有效' })
+  assert.match(p, /data-role="promoter" data-tier="black"/); assert.match(p, /不含金额与联系方式/); assert.ok(!/¥/.test(p))
+  assert.match(ctx.vcCardSvg({ role: 'merchant', level: '优选商户', levelNo: 2, merchantName: '朱家角小店', position: '老板', scope: 'merchant' }, {}), /朱家角小店 · 老板/)
+  const c = ctx.vcCardSvg({ role: 'creator', level: '签约创作者', levelNo: 2, works: 7, tasks: 2, scope: 'creator' }, {})
+  assert.match(c, /data-role="creator"/); assert.match(c, />7</)
+})
+await t('档案里的角色卡：已签发显示有效，未签发说明未签发', () => {
+  const card = { role: 'promoter', rank: 1, total: 3, levelName: '基础服务商', sub: 'x', stats: [] }
+  assert.match(ctx.roleCardSvg(card), /未签发角色凭证/)
+  const on = ctx.roleCardSvg(card, { vc: { expires_at: '2099-01-01 00:00:00' }, did: 'did:cn:wl:abc' })
+  assert.match(on, />有效</); assert.match(on, /2099-01-01/); assert.ok(!/未签发角色凭证/.test(on))
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

@@ -633,3 +633,11 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .cap-bar { height: 8px; margin: 8px 0 6px; border-radius: 4px; background: #ece9e3; overflow: hidden; }
 .cap-bar i { display: block; min-width: 2px; height: 100%; background: linear-gradient(90deg, #4aa77a, #c8a24a); }
 .cap-s { font-size: 12px; color: var(--sub, #7a837e); }
+
+/* 链与资产：当前链不能发行时 */
+.asset-block { margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: #fff8ec; border: 1px solid #f0dcb4; font-size: 12.5px; line-height: 1.8; color: #6b5a33; }
+.asset-block b { color: #8a5a10; }
+.row-off { opacity: .5; }
+/* 档案里每张角色卡下面的凭证状态 / 签发入口 */
+.vc-card-act { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.chain-more { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 2px 18px 8px; font-size: 12px; color: #9db1e2; }

@@ -24,6 +24,7 @@ import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
 import * as member from '../domain/member.mjs'
+import { cardOf } from '../domain/card-tier.mjs'
 import * as badgeArt from '../domain/badge-art.mjs'
 import * as merchantLevel from '../domain/merchant-level.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
@@ -757,20 +758,20 @@ const cIdentity = {
       if (e) attestations.push({ orderNo: o.order_no, code: String(e.payload_hash).slice(0, 8).toUpperCase(), sealed: e.status >= 1, at: e.created_at })
     }
     const lvl = withLevelArt(await member.progress(u.uid), req)
-    return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, levelName: lvl.name, growth: lvl.points, joinedAt: acc.created_at, level: lvl },
+    return { profile: { nickname: acc.nickname, memberLevel: acc.member_level, levelName: lvl.name, growth: lvl.points, joinedAt: acc.created_at, level: lvl, card: cardOf('traveler', acc.member_level, (await member.levels()).length) },
       passes, badges, fresh, attestations, groups: badgeArt.CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })),
       statement: '消费与权益的可信记录，作为贡献分与会员成长的依据' }
   },
   // 数字身份凭证（VC-JWT）：用户可取走、可出示、他方可验。微信内不展示字样（D6），由 B/G 端与生态 H5 使用
   'GET /c/vc': async (req) => {
     const u = requireUser(req)
-    const scope = req.query.scope === 'basic' ? 'basic' : 'travel'
-    const v = await vc.issue(u.uid, scope)
+    const scope = vc.ALL_SCOPES.includes(req.query.scope) ? req.query.scope : 'travel'
+    let v
+    try { v = await vc.issue(u.uid, scope) } catch (e) { if (/身份/.test(e.message)) throw new BizError(1001, e.message); throw e }
     return {
       did: v.did, jwt: v.jwt, scope, expiresAt: v.expiresAt,
       claims: v.claims, issuer: v.issuer,
-      disclose: ['会员等级', '成长区间', '入会年月', '行程数', '城市数', '徽章名'],
-      withheld: ['姓名', '手机号', '身份证号', '订单号', '金额'],
+      ...vc.disclosure(scope),
     }
   },
 }

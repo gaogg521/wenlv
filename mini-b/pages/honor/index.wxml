@@ -1,8 +1,9 @@
 <view wx:if="{{!d}}" class="empty" style="padding:120rpx 40rpx;text-align:center;color:#8a919c">{{loadTxt}}</view>
 <block wx:else>
-  <view class="hero hn-hero">
+  <view class="hero hn-hero {{d.card ? 'tier-' + d.card.tier : ''}}">
     <image class="hn-crest" src="{{d.level.art}}" mode="aspectFit" />
     <view class="hn-info">
+      <view class="tier-row" wx:if="{{d.card}}"><text>{{d.card.series}}</text><text class="tier-name">{{d.card.tierName}}</text></view>
       <view class="sub2">当前经营等级</view>
       <view class="hi" style="font-size:44rpx">{{d.level.name}}</view>
       <view class="sub2">订单 {{d.level.metrics.orders}} · 评价 {{d.level.metrics.reviews}}{{d.level.ratingText}}</view>

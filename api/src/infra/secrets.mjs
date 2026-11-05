@@ -56,7 +56,9 @@ export async function secretsHealth() {
  * undecryptable 必须失败关闭——否则一次配置错误（换了 JWT_SECRET / SECRETS_KEY）就会把原密钥覆盖掉。
  */
 export async function secretStatus(key) {
-  const c = await load()
+  let c = await load()
+  // 缓存最多旧 15 秒：要判定「解不开」（调用方会因此失败关闭）之前先重读一次，不能拿过期状态拒绝正常请求
+  if (undecryptable.includes(key)) c = await load(true)
   if (key in c && c[key]) return 'ok'
   if (undecryptable.includes(key)) return 'undecryptable'
   return process.env[key] ? 'ok' : 'missing'

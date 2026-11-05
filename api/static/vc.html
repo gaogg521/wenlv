@@ -58,7 +58,7 @@
   <div class="brand"><span class="dot"></span>向往的自由 <span style="opacity:.6;font-weight:400;font-size:13px">WANDERLUST</span></div>
   <div class="sub">旅行数字身份 · 验签台</div>
   <h1>验一张身份凭证，只看它该让你看的</h1>
-  <p class="lead">粘贴用户出示的凭证即可验签：签名是否由本平台签发、是否过期/吊销、以及<strong>它只披露了哪些旅行事实</strong>。</p>
+  <p class="lead">粘贴用户出示的凭证即可验签：签名是否由本平台签发、是否过期/吊销、以及<strong>它只披露了哪些事实</strong>。</p>
 </div></header>
 
 <div class="wrap">
@@ -110,8 +110,9 @@ async function doVerify() {
 function render(d) {
   const c = d.claims || {}
   const chips = Object.entries(c).filter(([k]) => k !== 'scope').map(([k, v]) => {
-    const label = { level: '等级', levelNo: '等级序号', growthBand: '成长区间', memberSince: '入会年月', trips: '行程数', cities: '城市数', badges: '徽章' }[k] || k
-    return `<span class="chip">${esc(label)} <b>${esc(Array.isArray(v) ? (v.join('、') || '无') : v)}</b></span>`
+    const label = { role: '身份', level: '等级', levelNo: '等级序号', growthBand: '成长区间', memberSince: '入会年月', trips: '行程数', cities: '城市数', badges: '徽章', merchantName: '门店', position: '在店职务', works: '已发布内容', tasks: '已完成约稿' }[k] || k
+    const shown = k === 'role' ? ({ creator: '创作者', promoter: '推广服务商', merchant: '商户' }[v] || v) : v
+    return `<span class="chip">${esc(label)} <b>${esc(Array.isArray(shown) ? (shown.join('、') || '无') : shown)}</b></span>`
   }).join('')
 
   $('#out').innerHTML = `
@@ -131,7 +132,7 @@ function render(d) {
   </div>
 
   <div class="card">
-    <h2>披露的旅行事实</h2>
+    <h2>${c.role ? '披露的身份事实' : '披露的旅行事实'}</h2>
     <div class="chips">${chips || '<span class="chip">无</span>'}</div>
     <h2 style="margin-top:18px">未披露（从不下发）</h2>
     <div class="chips">${(d.notDisclosed || []).map((x) => `<span class="chip" style="color:var(--faint)">${esc(x)}</span>`).join('')}</div>

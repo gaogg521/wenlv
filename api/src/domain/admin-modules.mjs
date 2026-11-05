@@ -275,6 +275,8 @@ export const ROUTE_MODULES = [
   ['POST', '/admin/web3/badges/:id/grant', 'badges', 'manage'],
   // 数字身份 / 链资产（vc/chainassets/chainhub）
   ['POST', '/admin/web3/vc/issue', 'vc', 'manage'],
+  ['GET', '/admin/web3/vc/batch', 'vc', 'view'],
+  ['POST', '/admin/web3/vc/batch', 'vc', 'manage'],
   ['POST', '/admin/web3/vc/:id/revoke', 'vc', 'manage'],
   ['GET', '/admin/web3/contract-account', 'chainassets', 'view'],
   ['POST', '/admin/web3/assets/issue', 'chainassets', 'manage'],

@@ -134,13 +134,14 @@ async function claimsOf(userId, scope) {
 /**
  * 签发一张 VC（VC-JWT）
  * @param {number} userId
- * @param {'basic'|'travel'} scope basic=等级与入会时间；travel=再加行程数/城市数/徽章
+ * @param {'basic'|'travel'|'creator'|'promoter'|'merchant'} scope basic=等级与入会时间；travel=再加行程数/城市数/徽章；其余=该角色的身份与等级（必须真实持有该角色）
  */
 export async function issue(userId, scope = 'travel', ttlDays = VC_TTL_DAYS) {
+  if (!ALL_SCOPES.includes(scope)) throw new Error('未知的凭证范围：' + scope)
   const k = await issuerKey()
   const did = await userDid(userId)
   if (!did) throw new Error('用户不存在')
-  const claims = await claimsOf(userId, scope)
+  const claims = ROLE_SCOPES.includes(scope) ? await roleClaims(userId, scope) : await claimsOf(userId, scope)
   const now = Math.floor(Date.now() / 1000)
   const ttlSec = Math.max(1, Math.round(Number(ttlDays) * 86400))   // 支持亚天级 TTL（自测过期用）
   const exp = now + ttlSec
@@ -156,7 +157,7 @@ export async function issue(userId, scope = 'travel', ttlDays = VC_TTL_DAYS) {
     jti,
     vc: {
       '@context': ['https://www.w3.org/2018/credentials/v1', 'https://wanderlust.local/contexts/travel-v1.json'],
-      type: ['VerifiableCredential', scope === 'travel' ? 'WanderlustTravelCredential' : 'WanderlustMemberCredential'],
+      type: ['VerifiableCredential', ROLE_SCOPES.includes(scope) ? 'WanderlustRoleCredential' : scope === 'travel' ? 'WanderlustTravelCredential' : 'WanderlustMemberCredential'],
       credentialSubject: claims,
       // 声明"这是平台签发的旅行事实"，不含任何 PII
       credentialSchema: { id: 'https://wanderlust.local/schemas/travel-v1', type: 'JsonSchema' },
@@ -205,8 +206,14 @@ export async function verify(jwt) {
   if (rec && rec.revoked_at) return { valid: false, reason: '凭证已被吊销：' + (rec.revoke_reason || '未注明'), revokedAt: rec.revoked_at }
 
   // 账号被停用 → 凭证随之失效（用户端封号要能传导到凭证）
-  const u = await one('SELECT status FROM user_account WHERE did_ref = ?', [payload.sub])
+  const u = await one('SELECT id, status FROM user_account WHERE did_ref = ?', [payload.sub])
   if (u && Number(u.status) !== 1) return { valid: false, reason: '账号已停用，凭证失效' }
+
+  // 角色凭证：不再具备该身份（推广资格失效、离开门店等）即失效
+  const subjectScope = payload.vc?.credentialSubject?.scope
+  if (u && ROLE_SCOPES.includes(subjectScope)) {
+    try { await roleClaims(u.id, subjectScope) } catch { return { valid: false, reason: '持有人已不再具备该身份，凭证失效' } }
+  }
 
   return {
     valid: true, reason: '签名有效、未过期、未吊销',
@@ -215,8 +222,8 @@ export async function verify(jwt) {
     expiresAt: new Date((payload.exp || 0) * 1000).toISOString(),
     claims: payload.vc?.credentialSubject || {},
     types: payload.vc?.type || [],
-    disclosed: ['会员等级', '成长区间', '入会年月', '行程数', '城市数', '徽章名'],
-    notDisclosed: ['姓名', '手机号', '身份证号', '订单号', '任何金额'],
+    disclosed: disclosure(subjectScope).disclose,
+    notDisclosed: disclosure(subjectScope).withheld,
   }
 }
 
@@ -283,6 +290,72 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
   const agg = await one(`SELECT (SELECT COUNT(*) FROM user_account) users, (SELECT COUNT(*) FROM bean_account WHERE user_id < 999999000000) bean_accounts,
     (SELECT COUNT(DISTINCT user_id) FROM vc_issue WHERE revoked_at IS NULL AND expires_at > NOW(3)) vc_holders`)
   return { total, page, size, rows: out, summary: { users: Number(agg.users), beanAccounts: Number(agg.bean_accounts), vcHolders: Number(agg.vc_holders) } }
+}
+
+/* ---- 角色凭证：持有人可向第三方证明"我是平台的 xx 商户 / 服务商 / 创作者"，最小披露，不含金额与联系方式 ---- */
+export const ROLE_SCOPES = ['creator', 'promoter', 'merchant']
+export const ALL_SCOPES = ['travel', 'basic', ...ROLE_SCOPES]
+const ROLE_LABEL = { creator: '创作者', promoter: '推广服务商', merchant: '商户' }
+const STAFF_ROLE = { 1: '核销员', 2: '店长', 3: '老板' }
+
+/** 凭证披露范围：对外说清楚给了什么、没给什么 */
+export function disclosure(scope) {
+  const withheld = ['姓名', '手机号', '身份证号', '订单号', '任何金额']
+  if (scope === 'creator') return { disclose: ['角色', '创作者等级', '已发布内容数', '已完成约稿数'], withheld }
+  if (scope === 'promoter') return { disclose: ['角色', '服务商等级'], withheld: [...withheld, '佣金比例', '推广业绩'] }
+  if (scope === 'merchant') return { disclose: ['角色', '经营等级', '门店名称', '在店职务'], withheld: [...withheld, '营业数据'] }
+  if (scope === 'basic') return { disclose: ['会员等级', '成长区间', '入会年月'], withheld }
+  return { disclose: ['会员等级', '成长区间', '入会年月', '行程数', '城市数', '徽章名'], withheld }
+}
+
+/** 角色凭证的声明。没有该身份直接报错：不能给没资格的人签 */
+async function roleClaims(userId, scope) {
+  const noRole = () => new Error(`该用户没有${ROLE_LABEL[scope]}身份，不能签发${ROLE_LABEL[scope]}凭证`)
+  if (scope === 'promoter') {
+    const p = await one('SELECT tier FROM promoter WHERE user_id = ? AND status = 1', [userId])
+    if (!p) throw noRole()
+    const rank = Math.min(Number(p.tier) || 1, PROMOTER_LEVELS.length)
+    return { role: scope, level: PROMOTER_LEVELS[rank - 1].name, levelNo: rank, scope }
+  }
+  if (scope === 'merchant') {
+    const s = await one('SELECT s.role, m.name, m.level FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id WHERE s.user_id = ? AND s.status = 1 ORDER BY s.role DESC LIMIT 1', [userId])
+    if (!s) throw noRole()
+    const lvs = await merchantLevel.levels(), lv = lvs.find((l) => l.lv === Number(s.level)) || lvs[0]
+    return { role: scope, level: lv.name, levelNo: lv.lv, merchantName: String(s.name), position: STAFF_ROLE[s.role] || '店员', scope }
+  }
+  const u = await one('SELECT creator_tag FROM user_account WHERE id = ?', [userId])
+  const c = await one(`SELECT (SELECT COUNT(*) FROM content_note n WHERE n.user_id = ? AND n.status = 2) notes,
+    (SELECT COUNT(*) FROM content_task_entry t WHERE t.user_id = ? AND t.status = 3) tasks`, [userId, userId])
+  if (!u || !isCreator(u.creator_tag, c.notes)) throw noRole()
+  const rank = CREATOR_RANK[u.creator_tag] || 1
+  return { role: scope, level: CREATOR_LEVELS[rank - 1].name, levelNo: rank, works: Number(c.notes), tasks: Number(c.tasks), scope }
+}
+
+/* ---- 批量签发：给符合条件、还没有有效凭证的人各签一张；每张都进存证队列，由下一次打包统一成一个根 ---- */
+const batchWhere = (scope) => {
+  const cond = ['u.status = 1', 'NOT EXISTS (SELECT 1 FROM vc_issue v WHERE v.user_id = u.id AND v.scope = ? AND v.revoked_at IS NULL AND v.expires_at > NOW(3))']
+  if (scope === 'promoter') cond.push('EXISTS (SELECT 1 FROM promoter p WHERE p.user_id = u.id AND p.status = 1)')
+  if (scope === 'merchant') cond.push('EXISTS (SELECT 1 FROM merchant_staff s WHERE s.user_id = u.id AND s.status = 1)')
+  if (scope === 'creator') cond.push("(u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id AND c.status = 2))")
+  return cond.join(' AND ')
+}
+export const BATCH_MAX = 200
+export async function batchPreview(scope) {
+  if (!ALL_SCOPES.includes(scope)) throw new Error('未知的凭证范围：' + scope)
+  const r = await one(`SELECT COUNT(*) n FROM user_account u WHERE ${batchWhere(scope)}`, [scope])
+  return { scope, pending: Number(r.n) || 0, max: BATCH_MAX }
+}
+export async function issueBatch(scope, limit = BATCH_MAX) {
+  if (!ALL_SCOPES.includes(scope)) throw new Error('未知的凭证范围：' + scope)
+  const n = Math.min(BATCH_MAX, Math.max(1, Number(limit) || BATCH_MAX))
+  const rows = await q(`SELECT u.id FROM user_account u WHERE ${batchWhere(scope)} ORDER BY u.id LIMIT ${n}`, [scope])
+  let issued = 0
+  const failed = []
+  for (const r of rows) {   // 逐个签：一个人失败不拖累其他人，失败原因如实带回
+    try { await issue(Number(r.id), scope); issued++ } catch (e) { failed.push({ userId: Number(r.id), reason: String(e.message).slice(0, 120) }) }
+  }
+  const left = await batchPreview(scope)
+  return { scope, issued, failed, remaining: left.pending }
 }
 
 /* ---- 卡面体系的数据：各角色的等级清单与人数（卡种由前端按「第几级 / 共几级」算），以及单个用户的其他角色身份 ---- */
