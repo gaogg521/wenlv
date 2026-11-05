@@ -20,7 +20,7 @@ const sha = (b) => crypto.createHash('sha256').update(b).digest('hex')
 
 const meta = JSON.parse(fs.readFileSync(path.join(DIR, 'build', 'build.json'), 'utf8'))
 const bin = fs.readFileSync(path.join(DIR, 'build', 'WanderlustRootStore.bin'), 'utf8').trim()
-const src = fs.readFileSync(path.join(DIR, meta.sourceFile), 'utf8')
+const src = fs.readFileSync(path.join(DIR, meta.sourceFile), 'utf8').replace(/\r\n/g, '\n')   // 与编译脚本一致：按 LF 算哈希
 const problems = []
 if (sha(src) !== meta.sourceSha256) problems.push('源码与编译产物对不上（sourceSha256 不一致）：先重新编译，别部署一份和源码不符的字节码')
 if (sha(bin) !== meta.binSha256) problems.push('bin 与 build.json 里的哈希不一致，产物被改动过')

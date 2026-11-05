@@ -27,7 +27,9 @@ try { solc = createRequire(import.meta.url)('solc') } catch {
 if (!solc) { console.log(`✗ 找不到 solc。先装：cd api && npm install --no-save solc@${WANT}（或用 SOLC_DIR 指向装有它的目录）`); process.exit(2) }
 if (!solc.version().startsWith(WANT)) { console.log(`✗ solc 版本是 ${solc.version()}，这份合约钉死 ${WANT}。换版本=换字节码，要重新评审后再改这里`); process.exit(2) }
 
-const source = fs.readFileSync(path.join(DIR, 'WanderlustRootStore.sol'), 'utf8')
+// 统一按 LF 编译与计算哈希：Windows 工作区(autocrlf)是 CRLF、Linux/CI 是 LF，solc 的元数据哈希与 sourceSha256 都依赖源码字节，
+// 不归一化的话同一份合约在不同机器上得到不同字节码、`npm test` 也会因哈希对不上变红
+const source = fs.readFileSync(path.join(DIR, 'WanderlustRootStore.sol'), 'utf8').replace(/\r\n/g, '\n')
 const out = JSON.parse(solc.compile(JSON.stringify({
   language: 'Solidity', sources: { 'WanderlustRootStore.sol': { content: source } },
   settings: { optimizer: { enabled: true, runs: 200 }, outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object'] } } },
@@ -49,7 +51,7 @@ if (check) {
   if (have.sourceSha256 !== meta.sourceSha256) diff.push('源码哈希')
   if (have.binSha256 !== meta.binSha256) diff.push('字节码哈希')
   if (fs.readFileSync(path.join(BUILD, 'WanderlustRootStore.bin'), 'utf8').trim() !== bin) diff.push('bin 文件')
-  if (fs.readFileSync(path.join(BUILD, 'WanderlustRootStore.abi.json'), 'utf8') !== abi) diff.push('abi 文件')
+  if (fs.readFileSync(path.join(BUILD, 'WanderlustRootStore.abi.json'), 'utf8').replace(/\r\n/g, '\n') !== abi) diff.push('abi 文件')
   if (diff.length) { console.log('✗ 已提交的产物与当前源码重编译的结果不一致：' + diff.join('、') + '。运行不带 --check 的命令更新 build/，并重新评审'); process.exit(1) }
   console.log(`✓ 一致：solc ${solc.version().split('+')[0]} 重编译结果与已提交产物逐字相同（bin sha256 ${meta.binSha256.slice(0, 16)}…，${meta.binBytes} 字节）`)
   process.exit(0)

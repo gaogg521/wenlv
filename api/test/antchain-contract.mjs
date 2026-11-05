@@ -183,7 +183,7 @@ try {
   await t('产物与源码绑定：build.json 的 sourceSha256 = 当前 .sol；bin 哈希与文件一致（改了合约源码不重编译会红）', () => {
     const meta = JSON.parse(fs.readFileSync(path.join(CDIR, 'build', 'build.json'), 'utf8'))
     const sha = (b) => crypto.createHash('sha256').update(b).digest('hex')
-    assert.equal(meta.sourceSha256, sha(fs.readFileSync(path.join(CDIR, 'WanderlustRootStore.sol'), 'utf8')), '源码改了但没重新编译：重编译并更新 build/')
+    assert.equal(meta.sourceSha256, sha(fs.readFileSync(path.join(CDIR, 'WanderlustRootStore.sol'), 'utf8').replace(/\r\n/g, '\n')), '源码改了但没重新编译：重编译并更新 build/')
     const bin = fs.readFileSync(path.join(CDIR, 'build', 'WanderlustRootStore.bin'), 'utf8').trim()
     assert.equal(meta.binSha256, sha(bin)); assert.match(bin, /^[0-9a-f]+$/); assert.equal(bin.length / 2, meta.binBytes)
     assert.match(meta.solc, /^0\.6\.12/)
