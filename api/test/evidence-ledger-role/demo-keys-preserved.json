@@ -1,0 +1,50 @@
+[
+  {
+    "k": "ANTOPEN_ACCESS_ID",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_ACCESS_KEY",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_ACCOUNT",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_BIZID",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_GAS",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_KMS_ID",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_REST_URL",
+    "unchanged": 1
+  },
+  {
+    "k": "ANTOPEN_TENANT_ID",
+    "unchanged": 1
+  },
+  {
+    "k": "CHAIN_PROVIDER",
+    "unchanged": 1
+  },
+  {
+    "k": "VC_ISSUER_KEY",
+    "unchanged": 1
+  },
+  {
+    "k": "WX_APPID",
+    "unchanged": 1
+  },
+  {
+    "k": "WX_SECRET",
+    "unchanged": 1
+  }
+]
