@@ -19,11 +19,13 @@ contract WanderlustRootStore {
         uint64  anchoredAt; // 写入时的区块时间（秒）
     }
 
-    // 存储布局（V2，蚂蚁链真机教训）：owner 与 lastSeq **各占一整个存储槽，不打包**。
-    // 这条链的 msg.sender 是 32 字节账户地址，构造里 owner = msg.sender 会把高位字节漏进同槽相邻的变量：
-    // V1 里 owner(address) 与 lastSeq(uint32) 同槽，部署后 head().seq 读出 2087900645 而不是 0。
-    // 所以 lastSeq 用 uint256 独占一槽（对外 head() 仍返回 uint32，writeRoot 签名不变）。
-    address public owner;
+    // 蚂蚁链真机教训（两条，都是 msg.sender 是 32 字节账户地址造成的；solc 默认它只有 20 字节、不做清理）：
+    //   V1：owner(address) 与 lastSeq(uint32) 同槽打包，owner = msg.sender 把高位字节漏进 lastSeq，
+    //       部署后 head().seq 读出 2087900645 而不是 0。→ 存储不打包，lastSeq 用 uint256 独占一槽。
+    //   V2：读 owner（address 类型）时 solc 会清成 20 字节，而 msg.sender 仍是 32 字节，"msg.sender == owner" 永远不等，
+    //       真机 senderIsOwner() 返回 false，writeRoot 必回滚。→ 不用 address 类型比较身份：
+    //       用内联汇编取 caller() 的原始 256 位，以 bytes32 存储并比较（_sender / ownerKey）。
+    bytes32 public ownerKey;      // 写入账户的 32 字节原始调用者地址（= 控制台里的"账户地址"）
     uint256 public lastSeq;
     bytes32 public lastRoot;
     uint256 public totalRoots;
@@ -31,15 +33,20 @@ contract WanderlustRootStore {
     mapping(bytes32 => Root) private roots;
 
     event RootAnchored(bytes32 indexed root, bytes32 prevRoot, uint64 bizDate, uint32 leafCount, uint32 seq, uint64 at);
-    event OwnerChanged(address indexed from, address indexed to);
+    event OwnerChanged(bytes32 indexed from, bytes32 indexed to);
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "only owner");
+        require(_sender() == ownerKey, "only owner");
         _;
     }
 
+    /// @dev 原始 256 位调用者。不能写 msg.sender：见文件头 V2 教训（address 类型会被清成 20 字节）。
+    function _sender() private view returns (bytes32 s) {
+        assembly { s := caller() }
+    }
+
     constructor() public {
-        owner = msg.sender;
+        ownerKey = _sender();
     }
 
     /// @notice 落一枚根。同根重复提交返回 false（幂等），不覆盖、不重发事件。
@@ -76,15 +83,16 @@ contract WanderlustRootStore {
         return (uint32(lastSeq), lastRoot, totalRoots);
     }
 
-    /// @notice 诊断：调用者是否被识别为 owner。蚂蚁链的 msg.sender 是 32 字节，部署后先用它在真机确认 onlyOwner 的比较成立，再写第一枚根。
+    /// @notice 诊断：调用者是否被识别为 owner。部署后先用它在真机确认 onlyOwner 的比较成立（V2 就是这里返回了 false），再写第一枚根。
     function senderIsOwner() public view returns (bool) {
-        return msg.sender == owner;
+        return _sender() == ownerKey;
     }
 
     /// @notice 移交写入权（例如更换服务账号）。历史根不受影响。
-    function transferOwnership(address next) public onlyOwner {
-        require(next != address(0), "bad owner");
-        emit OwnerChanged(owner, next);
-        owner = next;
+    /// @param nextKey 新写入账户的 32 字节地址（控制台里的"账户地址"，64 位 hex），不是 20 字节 address。
+    function transferOwnership(bytes32 nextKey) public onlyOwner {
+        require(nextKey != bytes32(0), "bad owner");
+        emit OwnerChanged(ownerKey, nextKey);
+        ownerKey = nextKey;
     }
 }

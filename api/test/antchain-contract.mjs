@@ -93,8 +93,15 @@ try {
   await t('合约存储布局：owner 之外不许有小整数/布尔/地址状态变量（V1 教训：32 字节 msg.sender 的高位会漏进同槽相邻变量）', () => {
     const src = fs.readFileSync(path.join(CDIR, 'WanderlustRootStore.sol'), 'utf8')
     const small = [...src.matchAll(/^\s*(uint(?:8|16|32|64|128)|int\d*|bool|address|bytes(?:[1-9]|[12]\d|3[01]))\s+(?:public|private|internal)\s+(\w+)\s*;/gm)].map((m) => m[2])
-    assert.deepEqual(small, ['owner'], '状态变量里除 owner 外还有可打包的小类型：' + small.join(','))
+    assert.deepEqual(small, [], '状态变量里有可打包/会被 solc 清理的小类型（含 address）：' + small.join(','))
     assert.match(src, /uint256\s+public\s+lastSeq\s*;/)
+  })
+  await t('身份比较不能用 address/msg.sender（V2 教训：address 被清成 20 字节，msg.sender 是 32 字节，永远不等）：必须用 caller() 的原始 256 位', () => {
+    const code = fs.readFileSync(path.join(CDIR, 'WanderlustRootStore.sol'), 'utf8').replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.ok(!/msg\.sender/.test(code), '代码里还在用 msg.sender（注释除外）')
+    assert.ok(!/\baddress\b/.test(code), '代码里还有 address 类型')
+    assert.match(code, /assembly\s*\{\s*s\s*:=\s*caller\(\)\s*\}/)
+    assert.match(code, /_sender\(\)\s*==\s*ownerKey/)
   })
   await t('独立起链：第二批用合约自己的链头（seq=2、prevRoot=上一根），不理会库里批次的 prev_root（那条链有 DEPOSIT 时代的批次接不上）', async () => {
     const r = await contract.anchor({ root: R('b'), prevRoot: R('7'), leafCount: 3, bizDate: D })
@@ -223,7 +230,7 @@ try {
     const ok = await run(['--yes'], env)
     assert.equal(ok.code, 0); assert.match(ok.out, /部署成功/); assert.equal(st.deploys.length, 1)
     const d = st.deploys[0]
-    assert.equal(d.method, 'DEPLOYCONTRACTFORBIZ'); assert.equal(d.contractName, 'WanderlustRootStoreV2'); assert.equal(d.gas, 2000000); assert.equal(d.tenantid, 'T')
+    assert.equal(d.method, 'DEPLOYCONTRACTFORBIZ'); assert.equal(d.contractName, 'WanderlustRootStoreV3'); assert.equal(d.gas, 2000000); assert.equal(d.tenantid, 'T')
     assert.equal(d.contractCode, fs.readFileSync(path.join(CDIR, 'build', 'WanderlustRootStore.bin'), 'utf8').trim(), '传的不是编译产物')
     st.deployResult = 5
     const bad = await run(['--yes', '--code-format', 'base64'], { ...env, ANTOPEN_ACCESS_ID: 'ck-dep2' })
