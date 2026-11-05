@@ -75,7 +75,9 @@ try {
   })
   await test('角色权限与缺失主体处理', async () => {
     for (const role of ['ops','finance']) ok(await call('/admin/partners', token(role)))
-    for (const role of ['review','risk','readonly']) assert.equal((await call('/admin/partners', token(role))).code, 1003)
+    for (const role of ['review','risk']) assert.equal((await call('/admin/partners', token(role))).code, 1003)
+    // R-04 修复：readonly 默认菜单含 partners（只读核对）——现在可达
+    assert.equal((await call('/admin/partners', token('readonly'))).code, 0)
     assert.equal((await call('/admin/partners/city/999999999')).code, 1004)
     assert.equal((await call('/admin/partners', 'invalid')).code, 1002)
   })

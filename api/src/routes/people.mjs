@@ -332,8 +332,8 @@ export const people = {
 }
 
 async function partnerAccess(req) {
-  const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner'])
-  // 无城市绑定的城市账号不能退化成全量权限。
+  // R-04：readonly 默认菜单含合伙人中心/排行对账（只读核对）；无城市绑定的城市账号不能退化成全量权限。
+  const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner', 'readonly'])
   if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
   return a
 }
