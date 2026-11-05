@@ -161,6 +161,12 @@ async function boot() {
   fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）；hash 可带查询串（如 #orders?kw=x&page=2，T03 筛选恢复）
   const keys = [...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p)
+  if (!keys.length) {
+    history.replaceState(null, '', location.pathname)
+    $('#app').innerHTML = '<div class="card"><h2>当前账号暂无可用栏目</h2><p>请联系超级管理员调整模块权限，重新登录后生效。</p></div>'
+    $('#pageTitle').textContent = '暂无可用栏目'
+    return
+  }
   const requested = location.hash.slice(1).split('?')[0]
   const destination = keys.includes(requested) ? requested : keys[0]
   history.replaceState(null, '', location.hash || '#' + destination) // 保留 hash 查询串（T03 筛选恢复）

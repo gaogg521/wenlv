@@ -94,7 +94,7 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/web3/badges', 'badges', 'view'],
   ['GET', '/admin/web3/wallets', 'wallets', 'view'],
   ['GET', '/admin/web3/wallets/:userId', 'wallets', 'view'],
-  ['GET', '/admin/web3/chain', 'chainassets', 'view'],
+  ['GET', '/admin/web3/chain', ['web3dash', 'chainassets'], 'view'],
   ['GET', '/admin/web3/assets', 'chainassets', 'view'],
   ['GET', '/admin/web3/vc', 'vc', 'view'],
   ['GET', '/admin/chain/hub', 'chainhub', 'view'],
@@ -177,7 +177,8 @@ export const ROUTE_MODULES = [
   ['DELETE', '/admin/products/:id/images', 'products', 'manage'],
   ['POST', '/admin/products/:id/uploads', 'products', 'manage'],
   ['POST', '/admin/uploads', 'products', 'manage'],
-  ['GET', '/admin/master-versions', 'products', 'view'],
+  // 历史快照供商品/商户维护与资金核对共用；恢复写入仍只归商品办理。
+  ['GET', '/admin/master-versions', ['products', 'merchants', 'fund'], 'view'],
   ['POST', '/admin/master-versions/restore', 'products', 'manage'],
   ['GET', '/admin/sessions', 'products', 'view'],
   ['POST', '/admin/sessions', 'products', 'manage'],
@@ -289,17 +290,18 @@ export const ROUTE_MODULES = [
   ['PUT', '/admin/entities/:kind/:id', 'ENTITY_DYNAMIC', 'manage'],
   // 审核队列（reviewqueue）
   ['GET', '/admin/review-queue', 'reviewqueue', 'view'],
-  ['POST', '/admin/review-queue/:kind/:itemId/claim', 'reviewqueue', 'manage'],
-  ['POST', '/admin/review-queue/:kind/:itemId/release', 'reviewqueue', 'manage'],
+  ['POST', '/admin/review-queue/:kind/:itemId/claim', { city_partner: 'contentcases', default: 'reviewqueue' }, 'manage'],
+  ['POST', '/admin/review-queue/:kind/:itemId/release', { city_partner: 'contentcases', default: 'reviewqueue' }, 'manage'],
   ['POST', '/admin/review-queue/batch-verdict', 'reviewqueue', 'manage'],
   // 售后工单（tickets）
   ['GET', '/admin/tickets', 'tickets', 'view'],
-  ['GET', '/admin/tickets/:id', 'tickets', 'view'],
+  // 财务等待协作仅能从资金模块读取详情；不获得工单队列或办理权。
+  ['GET', '/admin/tickets/:id', { finance: 'fund', default: 'tickets' }, 'view'],
   ['POST', '/admin/tickets', 'tickets', 'manage'],
   ['POST', '/admin/tickets/:id/note', 'tickets', 'manage'],
   ['POST', '/admin/tickets/:id/:action', 'tickets', 'manage'],
   // 导出（export.* 能力另叠加）
-  ['GET', '/admin/export/:what', 'orders', 'export'],
+  ['GET', '/admin/export/:what', 'EXPORT_DYNAMIC', 'export'],
   // 残余收口（QA-03）：不能有绕过模块校验的 admin 接口
   ['POST', '/admin/faqs', 'faqs', 'manage'],
   ['POST', '/admin/merchants/:id', 'merchants', 'manage'],
@@ -314,7 +316,7 @@ export const ROUTE_MODULES = [
 const ENTITY_KIND_MODULE = {
   product: 'products', merchant: 'merchants', scenic: 'scenics', supplier: 'suppliers',
   budget: 'budgets', faq: 'faqs', banner: 'banners', task: 'tasks', promoter: 'promoters',
-  creator: 'creators', site: 'miniapp', phrase: 'phrases', rateov: 'rateov', cocreate: 'cocreate',
+  creator: 'creators', site: 'miniapp', phrase: 'phrases', rateov: 'rateov', cocreate: 'cocreate', cocreator: 'cocreate',
   agreement: 'agreements', kyc: 'kyc', badge: 'badges', session: 'products',
 }
 
@@ -331,6 +333,9 @@ export function matchRouteModule(method, pathname) {
       if (ps[i] !== segs[i]) { ok = false; break }
     }
     if (ok) {
+      if (module === 'EXPORT_DYNAMIC') {
+        return { module: { orders: 'orders', products: 'products', settlements: 'settlements', merchants: 'merchants', scenics: 'scenics', suppliers: 'suppliers', creators: 'creators' }[segs[2]] || 'orders', action }
+      }
       if (module === 'ENTITY_DYNAMIC') {
         // :kind 占位在第 3 段（/admin/entities/:kind...）；site 特殊（/admin/entities/site/:id 的第 3 段是 'site'）
         const kind = segs[2] === 'site' ? 'site' : (segs[2] || 'product')

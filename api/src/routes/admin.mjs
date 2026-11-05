@@ -523,6 +523,7 @@ const admin = {
         if (claim.affectedRows !== 1) { result = { status: Number(r.status), idempotent: Number(r.status) === 3 }; if (result.idempotent) return; throw new BizError(2002, '仅「待执行」申请可执行') }
         const o = await c.one('SELECT * FROM orders WHERE id = ? FOR UPDATE', [r.order_id])
         if (!o || ![20, 30].includes(Number(o.status))) throw new BizError(2002, '订单状态已变化（已核销/退款中/关闭），不能改期，请驳回或登记失败')
+        if (Number(o.session_id) !== Number(r.from_session_id)) throw new BizError(2002, '订单团期已变化，请重新申请改期')
         const to = await c.one('SELECT * FROM tour_session WHERE id = ? FOR UPDATE', [r.to_session_id])
         if (!to || Number(to.status) !== 1) throw new BizError(2001, '目标团期已不可报名，执行失败')
         const moved = await c.upd('UPDATE tour_session SET booked = booked - ? WHERE id = ? AND booked >= ?', [r.qty, r.from_session_id, r.qty])
@@ -563,7 +564,10 @@ const admin = {
     const r = await one('SELECT * FROM order_reschedule WHERE id = ?', [req.params.id])
     if (!r) throw new BizError(1004, '改期申请不存在')
     if (Number(r.status) !== 0) throw new BizError(2002, '仅待审批申请可撤回')
-    if (r.applicant !== 'admin:' + a.name && a.role !== 'super') throw new BizError(1003, '仅申请人或超级管理员可撤回')
+    const isApplicant = r.applicant_uid != null
+      ? a.uid != null && Number(r.applicant_uid) === Number(a.uid)
+      : r.applicant === 'admin:' + a.name
+    if (!isApplicant && a.role !== 'super') throw new BizError(1003, '仅申请人或超级管理员可撤回')
     await tx(async (c) => {
       await c.q('UPDATE order_reschedule SET status = 4 WHERE id = ? AND status = 0', [r.id])
       await audit(c, 'admin:' + a.name, 'order', 'reschedule-cancel', 'reschedule-' + r.id, { status: 0 }, { status: 4 })

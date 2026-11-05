@@ -76,11 +76,13 @@ try {
   assert.equal(apply.code, 0, '申请应成功: ' + apply.msg)
   // 同名自批 → 应 1003
   const rSameName = await call('POST', `/admin/reschedules/${apply.data.id}/verdict`, { pass: true }, T1)
+  assert.equal(rSameName.code, 1003, '同账号自批必须明确拒绝')
   console.log('同名自批:', rSameName.code, rSameName.msg)
   if (rSameName.code === 0) { console.log('  ✗ 意外：同名自批被放行？'); failures++ }
   // 改显示名后重新登录（同 UID）→ 自批
   const T2 = await login(stamp + '改名后审批')
   const rRenamed = await call('POST', `/admin/reschedules/${apply.data.id}/verdict`, { pass: true }, T2)
+  assert.equal(rRenamed.code, 1003, '同UID改名后仍明确拒绝')
   console.log('同UID改名自批:', rRenamed.code, rRenamed.msg)
   if (rRenamed.code === 0) { failures++; console.log('  ✗ REPRODUCED QA-01：同 UID 改名自批被放行') }
   else console.log('  ✓ 已拒绝（可能已修复）')
@@ -106,6 +108,10 @@ try {
   const b3a = Number(after.find((x) => Number(x.id) === s3).booked), b4a = Number(after.find((x) => Number(x.id) === s4).booked)
   const balAfter = Number((await one('SELECT balance FROM bean_account WHERE user_id = ?', [buyer]))?.balance || 0)
   const ord = await one('SELECT version, session_id, amount_pay FROM orders WHERE id = ?', [o2])
+  assert.equal(Number(ord.amount_pay), 22000, '价差4000减旅豆2000只调账一次')
+  assert.equal(execCount, 1, '必须恰好一次真实执行，其余幂等返回')
+  const auditCount = Number((await one("SELECT COUNT(*) n FROM audit_log WHERE action='reschedule-execute' AND biz_ref=?", ['reschedule-' + apply2.data.id])).n)
+  assert.equal(auditCount, 1, '执行审计恰好一条')
   const evCount = Number((await one('SELECT COUNT(*) n FROM order_event WHERE order_id = ? AND detail LIKE ?', [o2, '%改期换团：%' + s3 + '%'])).n)
   const ordVersion0 = 0 // 夹具新单 version 从 0 起
   console.log(`订单 version=${ord.version}（应+1）session=${ord.session_id}（应=${s4}）改期事件=${evCount}（应1）`)
@@ -117,13 +123,14 @@ try {
   console.log(`\n${failures === 0 ? 'QA-01/QA-02 回归通过（改名自批拒绝 + 并发恰好一次）' : failures + ' 项缺陷仍在'}`)
   process.exitCode = failures > 0 ? 2 : 0
 } finally {
-  await q("DELETE FROM order_reschedule WHERE order_no LIKE 'WLQARP%' OR order_no LIKE 'WLQP%'").catch(() => {})
   for (const o of made.orders) {
+    const requests = await q('SELECT id FROM order_reschedule WHERE order_id=?', [o])
+    for (const r of requests) await q("DELETE FROM audit_log WHERE module='order' AND biz_ref=?", ['reschedule-' + r.id])
+    await q('DELETE FROM order_reschedule WHERE order_id=?', [o])
     await q('DELETE FROM order_event WHERE order_id = ?', [o]).catch(() => {})
-    await q("DELETE FROM audit_log WHERE module='order' AND biz_ref LIKE 'reschedule-%'").catch(() => {})
     await q('DELETE FROM orders WHERE id = ?', [o]).catch(() => {})
   }
-  await q("DELETE FROM bean_flow WHERE biz_ref LIKE 'QARP%'").catch(() => {})
+  await q('DELETE FROM bean_flow WHERE user_id IN (?)', [made.users]).catch(() => {})
   for (const s of made.sessions) await q('DELETE FROM tour_session WHERE id = ?', [s]).catch(() => {})
   if (made.users.length) {
     await q('DELETE FROM bean_account WHERE user_id IN (?)', [made.users]).catch(() => {})

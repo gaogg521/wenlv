@@ -8,15 +8,17 @@ import { q, one, closeDb } from '../src/db.mjs'
 import { jwtSign } from '../src/auth.mjs'
 
 const base = 'http://127.0.0.1:' + (process.env.PORT || 8080)
-const call = async (m, p, b, t) => (await fetch(base + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: m === 'GET' || m === 'HEAD' || b == null ? undefined : JSON.stringify(b) })).json()
+const call = async (m, p, b, t) => (await fetch(base + p, { signal: AbortSignal.timeout(15000), method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: m === 'GET' || m === 'HEAD' || b == null ? undefined : JSON.stringify(b) })).json()
 const ok = (r) => { assert.equal(r.code, 0, r.msg); return r.data }
 let passed = 0
-const healthAt = async (tag) => { const h = await (await fetch('http://127.0.0.1:18095/c/health')).json(); console.log('    [svc] ' + tag + ' 服务时间=' + h.data.time) }
+const healthAt = async (tag) => { const h = await (await fetch(base + '/c/health', { signal: AbortSignal.timeout(5000) })).json(); assert.equal(h.code, 0); console.log('    [svc] ' + tag + ' 服务时间=' + h.data.time) }
 const test = async (name, fn) => { await fn(); passed++; console.log('  ✓ ' + name) }
 
 const stamp = 'QADN' + Math.random().toString(36).slice(2, 8)
 const made = { admins: [], audits: [] }
 const superT = jwtSign({ end: 'admin', role: 'super', name: '撤权回归-超管' })
+const devRowsBefore = await q("SELECT * FROM admin_role_module WHERE role = 'dev'")
+const devConfigBefore = await one("SELECT * FROM admin_role_config WHERE role = 'dev'")
 const mkAccount = async (role, scopeCity) => {
   const name = 'qadn-' + stamp + '-' + Math.random().toString(36).slice(2, 6)
   const r = ok(await call('POST', '/admin/accounts', { username: name, displayName: name + '名', role, password: 'Qadn!' + stamp + 'A1', scopeCity }, superT))
@@ -30,6 +32,10 @@ const mkAccount = async (role, scopeCity) => {
 try {
   // 每模块：[模块 key, 读接口, 写接口(可选)]——撤权后两者都必须 1003
   const PROBES = {
+    dash: ['GET', '/admin/dash/kpi', null, null, null],
+    conflicts: ['GET', '/admin/verify/conflicts', 'POST', '/admin/verify/conflicts/999999/resolve', {}],
+    wallets: ['GET', '/admin/web3/wallets', null, null, null],
+    badges: ['GET', '/admin/web3/badges', 'POST', '/admin/web3/badges', {}],
     orders: ['GET', '/admin/orders/search?pageSize=1', 'POST', '/admin/orders/WLQA-NOT-EXIST/reschedule', { toSessionId: 1, reason: '撤权后不得办理' }],
     products: ['GET', '/admin/products', 'POST', '/admin/products/1/status', { status: 0 }],
     merchants: ['GET', '/admin/merchants', 'POST', '/admin/merchants/999999/approve', {}],
@@ -91,6 +97,11 @@ try {
       // 读直调
       const gr = await call(gm, gp, null, tok)
       assert.equal(gr.code, 1003, `${mod} 读直调（${gp}）撤权后应 1003，实际 ${gr.code} ${gr.msg || ''}`)
+      if (mod === 'products') assert.equal((await call('GET', '/admin/export/products', null, tok)).code, 1003, '商品撤权不能绕过导出')
+      if (mod === 'cocreate') {
+        assert.equal((await call('GET', '/admin/entity-schemas/cocreator', null, tok)).code, 1003, '共创人实体schema遵守共创模块撤权')
+        assert.equal((await call('POST', '/admin/entities/cocreator', { values: {} }, tok)).code, 1003, '共创人实体写入不能归错商品模块')
+      }
       checked++
       // 写直调（有写探针的模块）
       if (wm) {
@@ -105,8 +116,6 @@ try {
   })
 
   await healthAt('QA-04 前')
-  if (process.env.SKIP_QA04) console.log('  ⏭ QA-04 块跳过（SKIP_QA04）')
-  else
   await test('QA-04：角色默认逐个关闭 → 空集合保持空（重登/缓存/重启语义），单账号 allow 叠加有效', async () => {
     // 用 dev 角色（初始 9 项）做全撤空实验
     const acct = await mkAccount('dev')
@@ -119,32 +128,24 @@ try {
     assert.equal(Number((await one("SELECT COUNT(*) n FROM admin_role_module WHERE role = 'dev'")).n), 0, '角色矩阵 0 行')
     assert.ok(await one("SELECT role FROM admin_role_config WHERE role = 'dev'"), '配置标记已写入')
     // 新登录：capabilities.modules 必须为空（不回退基线）
-    const rl = await call('POST', '/admin/login', { username: (await one('SELECT username FROM admin_user WHERE id = ?', [acct.id])).username, password: 'Qadn!' + stamp + 'A1' })
-    console.log('    [诊断] relogin 完整响应:', JSON.stringify(rl).slice(0, 300))
-    const cap = await call('GET', '/admin/capabilities', null, rl.data.token)
-    const dbRow = await one('SELECT id, username, status, token_epoch, role FROM admin_user WHERE id = ?', [rl.data.user.uid])
-    const allIds = (await q('SELECT id FROM admin_user ORDER BY id')).map((x) => x.id)
-    console.log('    [诊断3] QA库全部账号ID:', JSON.stringify(allIds))
-    console.log('    [诊断2] cap:', cap.code, cap.msg || '', '| 服务端库行:', JSON.stringify(dbRow), '| token ver:', JSON.stringify((await import('../src/auth.mjs')).jwtVerify(rl.data.token)))
-    if (cap.code === 0) assert.deepEqual(cap.data.modules, [], '全部撤空后新登录仍为空集合')
-    const { jwtSign: js2 } = await import('../src/auth.mjs')
-    const manual = js2({ uid: rl.data.user.uid, ver: 10, end: 'admin', role: 'dev', name: 'x' })
-    const capM = await call('GET', '/admin/capabilities', null, manual)
-    console.log('    [诊断4] 手签同 payload cap:', capM.code, capM.msg || '', 'modules:', JSON.stringify(capM.data?.modules))
-    if (capM.code !== 0) process.exit(9)
+    assert.equal((await call('GET', '/admin/capabilities', null, acct.token)).code, 1002, '角色变更使旧会话失效')
+    const cap = ok(await call('GET', '/admin/capabilities', null, await acct.relogin()))
+    assert.deepEqual(cap.modules, [], '全部撤空后新登录仍为空集合')
+    const { accountModules, invalidateModuleCache } = await import('../src/domain/admin-modules.mjs')
+    invalidateModuleCache(null)
+    assert.deepEqual([...await accountModules(acct.id, 'dev')], [], '新进程缓存从持久配置读取空集合')
     // 夹具账号单独 allow 叠加：audit 单独授予 → 只有 audit
-    ok(await call('POST', `/admin/accounts/${acct.id}/modules`, { grants: [{ moduleKey: 'audit', effect: 'allow' }], reason: stamp + ' 单账号叠加' }, superT))
+    ok(await call('POST', `/admin/accounts/${acct.id}/modules`, { grants: [{ moduleKey: 'system', effect: 'allow' }], reason: stamp + ' 单账号叠加' }, superT))
     const cap2 = ok(await call('GET', '/admin/capabilities', null, await acct.relogin()))
-    assert.deepEqual(cap2.data.modules, ['audit'], '单账号 allow 叠加生效且仅此一项')
+    assert.deepEqual(cap2.modules, ['system'], '单账号 allow 叠加生效且仅此一项')
     // 无 audit 的直调仍 1003、有 audit 的可达
-    assert.equal((await call('GET', '/admin/system/overview', await acct.relogin())).code, 1003, '未叠加模块仍拒绝')
-    assert.equal((await call('GET', '/admin/audit-logs?pageSize=1', await acct.relogin())).code, 0, '叠加模块可达')
+    assert.equal((await call('GET', '/admin/features', null, await acct.relogin())).code, 1003, '未叠加模块仍拒绝')
+    assert.equal((await call('GET', '/admin/system/overview', null, await acct.relogin())).code, 0, '叠加模块可达')
     // 恢复 dev 基线：矩阵行加回 + 删配置标记（还原"从未配置"状态，供其他套件/复跑）
-    for (const mod of devDefaults) await q('INSERT IGNORE INTO admin_role_module (role, module_key, level) VALUES (?,?,?)', ['dev', mod, 'manage'])
-    await q("DELETE FROM admin_role_config WHERE role = 'dev'")
-    await q("DELETE FROM admin_user_module WHERE user_id = ?", [acct.id]).catch(() => {})
+    for (const mod of devDefaults) ok(await call('POST', '/admin/role-modules', { role: 'dev', moduleKey: mod, on: true, reason: stamp + ' 恢复默认模块' }, superT))
+    ok(await call('POST', `/admin/accounts/${acct.id}/modules`, { grants: [{ moduleKey: 'system', effect: null }], reason: stamp + ' 恢复账号继承' }, superT))
     const cap3 = ok(await call('GET', '/admin/capabilities', null, await acct.relogin()))
-    assert.equal(cap3.data.modules.length, 9, '恢复后回到基线 9 项')
+    assert.equal(cap3.modules.length, 9, '恢复后回到基线 9 项')
     // 清理服务端缓存（invalidateModuleCache(null) 由 role-modules POST 已触发；此处显式兜底由重启覆盖）
   })
 
@@ -155,8 +156,12 @@ try {
     await q('DELETE FROM admin_user WHERE id = ?', [id]).catch(() => {})
     await q("DELETE FROM audit_log WHERE module='account' AND biz_ref = ?", ['admin-' + id]).catch(() => {})
   }
-  await q("DELETE FROM audit_log WHERE module='account' AND action='role-module'").catch(() => {})
-  // 角色矩阵/配置标记还原（dev 已在用例内恢复；保险起见再清一次标记与孤儿行）
-  await q("DELETE FROM admin_role_config WHERE role = 'dev'").catch(() => {})
+  // 无论断言在哪一步失败，都恢复本次变更的角色集合，不能清整类审计。
+  await q("DELETE FROM admin_role_module WHERE role = 'dev'")
+  for (const row of devRowsBefore) await q('INSERT INTO admin_role_module SET ?', [row])
+  if (devRowsBefore.length) ok(await call('POST', '/admin/role-modules', { role: 'dev', moduleKey: devRowsBefore[0].module_key, on: true, reason: stamp + ' 恢复测试前角色配置' }, superT))
+  await q("DELETE FROM admin_role_config WHERE role = 'dev'")
+  if (devConfigBefore) await q('INSERT INTO admin_role_config SET ?', [devConfigBefore])
+  await q("DELETE FROM audit_log WHERE module='account' AND action='role-module' AND JSON_UNQUOTE(JSON_EXTRACT(after_val,'$.reason')) LIKE ?", [stamp + '%'])
   await closeDb()
 }
