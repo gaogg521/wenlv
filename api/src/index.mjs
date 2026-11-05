@@ -39,7 +39,7 @@ async function bootstrap() {
   // 城市合伙人演示账号（幂等，独立于首启种子块）
   const cityPw = process.env.CITY_PARTNER_PASSWORD || 'city123'
   await q(`INSERT INTO admin_user (username, password_hash, role, display_name, scope_city) VALUES
-    ('city310118', ?, 'city_partner', '青浦城市合伙人·演示', '310118') ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)`,
+    ('city310118', ?, 'city_partner', '青浦城市合伙人·演示', '310118') ON DUPLICATE KEY UPDATE username = VALUES(username)`,
     [hashPassword(cityPw)])
   console.log('[boot] 城市合伙人演示账号：city310118（仅可见 310118 青浦数据）')
   // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）
