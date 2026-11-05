@@ -174,4 +174,86 @@ await t('上链流水线：没有批次时给出下一步动作，不是空白�
   assert.match(html, /在途 7 条待打包/)
 })
 
+console.log('== 区块上显示业务环节 / 单流程与链路视图对上号 ==')
+
+await t('区块节点直接画出批内业务环节（订单/出票/核销…），多于 3 类折成 +N', () => {
+  const html = ctx.blockNodeHTML({ ...B, mix: { order: 8, pass_issue: 4, pass_verify: 3, bean_grant: 2, settlement: 1 } })
+  assert.match(html, /blk-mix/)
+  for (const w of ['订单 <b>8</b>', '出票 <b>4</b>', '核销 <b>3</b>']) assert.ok(html.includes(w), '缺少环节标签：' + w)
+  assert.match(html, /\+3/, '第 4、5 类应折成 +3')
+  assert.ok(!html.includes('返豆 <b>2</b>'), '超出 3 类的不该直接画')
+})
+
+await t('业务主线环节排在前面：勋章数量再多也不挤掉订单/出票/核销', () => {
+  const html = ctx.blockNodeHTML({ ...B, mix: { badge: 35, order: 3, pass_verify: 2, pass_issue: 2, merchant_join: 9 } })
+  const i = (w) => html.indexOf(w)
+  assert.ok(i('订单 <b>3</b>') > 0 && i('订单 <b>3</b>') < i('出票 <b>2</b>') && i('出票 <b>2</b>') < i('核销 <b>2</b>'), '应按 订单→出票→核销 顺序')
+  assert.ok(!html.includes('勋章 <b>35</b>'), '旁路事件排在主线之后，超出 3 类折成 +N')
+})
+
+await t('账本日终块标「旅豆账本封存」，没有构成数据的旧接口也不报错', () => {
+  assert.match(ctx.blockNodeHTML({ ...DAY, mix: { bean_ledger: 6 } }), /旅豆账本封存/)
+  assert.doesNotThrow(() => ctx.blockNodeHTML(B))
+})
+
+await t('演示链的每个业务块自带业务构成，且合计 = 事件数', () => {
+  for (const b of ctx.mockChain()) {
+    const n = Object.values(b.mix).reduce((a, c) => a + c, 0)
+    assert.equal(n, Number(b.leaf_count), `演示块 #${b.seq} 构成合计 ${n} ≠ ${b.leaf_count}`)
+  }
+})
+
+await t('单流程每一步的「批 #N」可点，回到链路视图里这个区块', () => {
+  const html = ctx.flowStepHTML({ no: '②', label: '支付成功', hint: '', ev: { biz_type: 'order', biz_ref: 'WL1', version_no: 1, status: 2, payload_hash: 'f'.repeat(64), created_at: '2026-11-01 10:00:00', seq: 3, batch_id: 7, merkle_root: B.merkle_root } }, 1)
+  assert.match(html, /event\.stopPropagation\(\);focusBlock\(7\)/, '批次号没挂定位')
+  assert.match(html, />批 #3</)
+  assert.ok(!/focusBlock/.test(ctx.flowStepHTML({ no: '②', label: '支付成功', hint: '', ev: { biz_type: 'order', biz_ref: 'WL1', status: 0, payload_hash: 'f'.repeat(64), created_at: '2026-11-01 10:00:00', seq: null, batch_id: null } }, 1)), '待打包的步骤没有区块，不该有定位入口')
+})
+
+await t('flowMarkChain：这一单经过的区块被打上 ①② 角标并高亮，其余区块不受影响', () => {
+  const mkNode = () => { const n = { cls: new Set(), html: '', classList: { add: (c) => n.cls.add(c), remove: (c) => n.cls.delete(c), contains: (c) => n.cls.has(c) }, querySelector: () => null, insertAdjacentHTML: (_p, h) => { n.html += h } }; return n }
+  const nodes = { 'bnode-7': mkNode(), 'bnode-9': mkNode(), 'bnode-11': mkNode() }
+  documentStub.getElementById = (id) => nodes[id] || null
+  documentStub.querySelectorAll = () => Object.values(nodes)
+  const ev = (batch_id, seq) => ({ batch_id, seq, status: 2 })
+  ctx.window.__flowData = { steps: [{ no: '①', ev: ev(7, 3) }, { no: '②', ev: ev(7, 3) }, { no: '③', ev: ev(9, 4) }, { no: '④', ev: null }, { no: '⑤', ev: ev(99, 8) }], refunds: [{ batch_id: 9, seq: 4 }] }
+  const marks = ctx.flowMarkChain()
+  assert.ok(nodes['bnode-7'].cls.has('trace-hit') && nodes['bnode-9'].cls.has('trace-hit'))
+  assert.ok(!nodes['bnode-11'].cls.has('trace-hit'), '没经过的区块不该高亮')
+  assert.match(nodes['bnode-7'].html, /<i>①<\/i><i>②<\/i>/)
+  assert.match(nodes['bnode-9'].html, /<i>③<\/i><i>退<\/i>/)
+  assert.equal(JSON.stringify(marks.map((m) => [m.id, m.onChain])), '[[7,true],[9,true],[99,false]]', '不在最近区块里的也要列出来（点开直接看批内事件）')
+  documentStub.getElementById = () => null; documentStub.querySelectorAll = () => []
+})
+
+await t('演示单的每一步都落在演示链的区块上：批次号 / 状态 / 区块 id 一一对应', async () => {
+  ctx.window.__demoChain = true   // 已处于演示链：只渲染单流程，不重画整页
+  await ctx.loadFlowDemo()
+  const d = ctx.window.__flowData
+  const chain = Object.fromEntries(ctx.mockChain().map((b) => [b.id, b]))
+  assert.equal(d.steps.length, 6)
+  assert.equal(d.steps.map((s) => s.no).join(''), '①②③④⑤⑥', '演示单的步骤编号应是 ①~⑥，不是业务单号')
+  for (const s of d.steps) {
+    const b = chain[s.ev.batch_id]
+    assert.ok(b, `${s.label} 的 batch_id ${s.ev.batch_id} 不在演示链里`)
+    assert.equal(b.seq, s.ev.seq, `${s.label} 批次号对不上`)
+    assert.equal(Number(b.status), Number(s.ev.status), `${s.label} 状态与所在区块不一致`)
+    assert.ok(String(s.ev.created_at).slice(0, 10) >= String(b.biz_date).slice(0, 10), `${s.label} 发生时间早于所在区块的业务日`)
+  }
+  ctx.window.__demoChain = false; ctx.window.__flowData = null
+})
+
+await t('「看一条真实单的六步」取真实订单，不是偷偷放演示数据；退出演示时一并收掉演示单', () => {
+  assert.match(code, /onclick="loadFlowSample\(\)">看一条真实单的六步/)
+  assert.match(code, /find\(\(e\) => e\.biz_type === 'order'\)/, '没有从真实事件里找订单')
+  assert.match(code, /退出演示时，演示单[\s\S]{0,200}window\.__flowData = null/, '退出演示没收掉演示单')
+})
+
+await t('后端：批次带业务构成 mix，单流程事件带 batch_id（前端靠它对上区块）', () => {
+  const route = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'web3.mjs'), 'utf8')
+  assert.match(route, /for \(const b of batches\) b\.mix =/, '存证中心批次没带 mix')
+  assert.match(route, /GROUP BY batch_id, biz_type/)
+  assert.match(route, /const COLS = '[^']*e\.batch_id,/, '单流程 COLS 没带 batch_id')
+})
+
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

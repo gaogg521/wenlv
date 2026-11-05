@@ -437,9 +437,12 @@ function mockChain() {
   const HEX = ['3f9a1c7e5d24b806', '8d02e4b1a97c33f5', '5c77aa190e6db248', 'e21b6d40fa93c715',
     '9b48f0c26d1eab73', '17d5a93e04fb8c62', '4e6c88d2b17a05f3', 'b0f3126a7de948c1']
   const root = (i) => HEX[i % 8] + '9f4c1a2b7de50863'
+  const TYPES = ['order', 'pass_issue', 'bean_grant', 'pass_verify', 'refund', 'settlement', 'bean_deduct']
   const mk = (seq, kind, status, date, leaves) => ({ id: 900 + seq, seq, biz_date: date,
     merkle_root: root(seq - 1), prev_root: seq === 1 ? null : root(seq - 2), leaf_count: leaves,
     is_day_close: kind === 'day' ? 1 : 0, status, attempt: 0,
+    // 演示区块的业务构成：与 mockBlockEvents 同一套取法（按叶序轮转业务类型）
+    mix: kind === 'day' ? { bean_ledger: leaves } : Array.from({ length: leaves }, (_, i) => TYPES[(seq + i) % TYPES.length]).reduce((m, t) => { m[t] = (m[t] || 0) + 1; return m }, {}),
     chain_tx_ref: status === 2 ? 'DEMO-TX-' + String(seq).padStart(4, '0') : null,
     anchored_at: status === 2 ? date + ' 09:12:00' : null })
   return [
@@ -459,7 +462,23 @@ function mockBlockEvents(b) {
 }
 function toggleDemoChain() {
   window.__demoChain = !window.__demoChain
+  // 退出演示时，演示单（落在模拟链区块上）也一起收掉：真链上没有这些区块
+  if (!window.__demoChain && window.__flowData && window.__flowData.demo) { window.__flowData = null; window.__flowShown = false; window.__openFlowStep = undefined }
   web3dash()
+}
+/** 区块上的业务环节标签：把批内事件按业务类型归类，最多画 3 个，其余折成 +N（完整构成在悬停卡 / 批内事件表） */
+const BLK_SHORT = { order: '订单', pass_issue: '出票', pass_verify: '核销', bean_grant: '返豆', bean_deduct: '抵扣',
+  refund: '退款', settlement: '结算', badge: '勋章', vc_issue: '身份凭证', vc_revoke: '凭证吊销', asset_issue: '资产' }
+const FLOW_ORDER = ['bean_deduct', 'order', 'pass_issue', 'pass_verify', 'bean_grant', 'settlement', 'refund']
+function blockMixHTML(b, max = 3) {
+  if (Number(b.is_day_close) === 1) return '<div class="blk-mix"><span class="mx day">旅豆账本封存</span></div>'
+  // 业务主线（抵扣→订单→出票→核销→返豆→结算→退款）优先、按流程顺序；勋章/准入/审核这类旁路事件数量再多也排在后面
+  const rank = (k) => { const i = FLOW_ORDER.indexOf(k); return i < 0 ? 99 : i }
+  const ents = Object.entries(b.mix || {}).sort((a, c) => rank(a[0]) - rank(c[0]) || c[1] - a[1])
+  if (!ents.length) return '<div class="blk-mix"></div>'
+  const shown = ents.slice(0, max)
+  const rest = ents.slice(max).reduce((s, [, n]) => s + n, 0)
+  return `<div class="blk-mix">${shown.map(([k, n]) => `<span class="mx" title="${esc(BIZ_CN[k] || k)}">${esc(BLK_SHORT[k] || BIZ_CN[k] || k)} <b>${Number(n)}</b></span>`).join('')}${rest ? `<span class="mx more" title="其他业务类型 ${rest} 条">+${rest}</span>` : ''}</div>`
 }
 function blockNodeHTML(b) {
   const dayClose = Number(b.is_day_close) === 1
@@ -476,6 +495,7 @@ function blockNodeHTML(b) {
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
     <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
+    ${blockMixHTML(b, window.__chainDense ? 2 : 3)}
     <div class="blk-line">根 <code class="dk">${root8}…</code></div>
     <div class="blk-line">${BLOCK_ST[st] || ''} <span class="node-open">查看批内事件 ›</span></div>
   </div>`
@@ -492,7 +512,7 @@ const tipRow = (k, v) => v == null || v === '' ? '' : `<div class="tip-row"><spa
 const tipTime = (t) => t ? esc(String(t).slice(0, 19).replace('T', ' ')) : ''
 function blockTipHtml(b) {
   const st = Number(b.status), day = Number(b.is_day_close) === 1
-  const mix = tipCache[b.id]
+  const mix = b.mix || tipCache[b.id]   // 接口已随批次带回业务构成；没有（旧接口）才按需拉取
   return `<div class="tip-head"><span class="tip-kind ${day ? 'gold' : ''}">${day ? '账本日终' : '业务区块'}</span><b>#${b.seq}</b>
       <span class="dpill ${st === 2 ? 'ok' : st === 3 ? 'err' : st === 0 ? 'warn' : 'info'}">${TIP_ST[st] || '—'}</span>${window.__demoChain ? '<span class="dpill warn">演示</span>' : ''}</div>
     ${tipRow('业务日', esc(String(b.biz_date || '').slice(0, 10)))}
@@ -533,7 +553,7 @@ function chainTip(ev, kind, id) {
   if (!el.innerHTML.trim()) return
   el.hidden = false; el.dataset.key = kind + id
   chainTipMove(ev)
-  if (kind === 'b' && tipCache[id] === undefined) {
+  if (kind === 'b' && tipCache[id] === undefined && !((window.__chainMap || {})[id] || {}).mix) {
     if (window.__demoChain) { tipCache[id] = null; return render() }
     api('GET', '/admin/attest/batch/' + id).then((r) => {
       tipCache[id] = (r.events || []).reduce((m, x) => { m[x.biz_type] = (m[x.biz_type] || 0) + 1; return m }, {})
@@ -632,7 +652,7 @@ function chainRelayout() {
   const next = chainTrackHTML(window.__chainDescs, chainTrackWidth())
   const tmp = document.createElement('div'); tmp.innerHTML = next
   const n = tmp.firstElementChild
-  if (n && n.dataset.per !== el.dataset.per) el.replaceWith(n)
+  if (n && n.dataset.per !== el.dataset.per) { el.replaceWith(n); flowMarkChain() }   // 重排后重新标出"本单经过的区块"
 }
 if (typeof window.addEventListener === 'function' && !window.__chainResizeBound) {
   window.__chainResizeBound = true
@@ -651,6 +671,7 @@ async function web3dash() {
   const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
   const lastSeq = batches.length ? batches[batches.length - 1].seq : 0
   window.__chainMap = Object.fromEntries(batches.map((b) => [b.id, b]))
+  window.__chainDense = batches.length > 18
   const descs = []   // 链路节点描述：branch=账本日终（下沉一档的分支块），连线与换行由 chainTrackHTML 统一生成
   batches.forEach((b) => descs.push({ html: blockNodeHTML(b), branch: Number(b.is_day_close) === 1 }))
   if (Number(pendingN) > 0) {
@@ -687,7 +708,7 @@ async function web3dash() {
         placeholder="订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID"
         onkeydown="if(event.key==='Enter')attestSearch()">
       <button class="chain-btn" onclick="attestSearch()">检索 ↗</button>
-      <button class="chain-btn" onclick="loadFlowDemo()">看一条真实单的六步</button>
+      <button class="chain-btn" onclick="loadFlowSample()">看一条真实单的六步</button>
       <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
     </div>
     <div id="attestSearchHint" class="chain-legend" style="border:0;padding:2px 0 8px">
@@ -849,8 +870,33 @@ function flowStepHTML(s, i) {
     ${cube3d(tone, { sm: true })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
     <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>
-    <div class="blk-line">批 #${e.seq != null ? e.seq : '—'} · ${FLOW_ST[st] || ''}</div>
+    <div class="blk-line">${batchChip(e)} · ${FLOW_ST[st] || ''}</div>
   </div>`
+}
+/** 「批 #12」：点它回到上方链路视图里这个区块（单流程里的每一步，都落在链路视图的某个区块里） */
+const batchChip = (e) => (e.seq != null && Number(e.batch_id) ? `<button class="ref-link blk-ref" type="button" title="定位到链路视图里的区块 #${Number(e.seq)}" onclick="event.stopPropagation();focusBlock(${Number(e.batch_id)})">批 #${Number(e.seq)}</button>` : `批 #${e.seq != null ? e.seq : '—'}`)
+const STEP_TAG = { r: '退' }
+/** 把"这一单"标到链路视图上：经过的区块打上 ①②… 步骤角标并高亮；单流程与链路视图是同一批区块的两种看法 */
+function flowMarkChain() {
+  document.querySelectorAll('#chainViz .chain-track:not(.flow) .chain-node').forEach((n) => { n.classList.remove('trace-hit'); const t = n.querySelector('.trace-tags'); if (t) t.remove() })
+  const d = window.__flowData; if (!d) return []
+  const hits = new Map()   // batch_id → { seq, tags[] }
+  const put = (e, tag) => { if (!e || !Number(e.batch_id)) return; const h = hits.get(Number(e.batch_id)) || { seq: e.seq, tags: [] }; h.tags.push(tag); hits.set(Number(e.batch_id), h) }
+  ;(d.steps || []).forEach((s) => put(s.ev, s.no))
+  ;(d.refunds || []).forEach((e) => put(e, STEP_TAG.r))
+  hits.forEach((h, id) => {
+    const n = document.getElementById('bnode-' + id); if (!n) return
+    n.classList.add('trace-hit')
+    n.insertAdjacentHTML('afterbegin', `<div class="trace-tags" title="本单的 ${esc(h.tags.join(' '))} 在这个区块里">${h.tags.map((t) => `<i>${esc(t)}</i>`).join('')}</div>`)
+  })
+  return [...hits.entries()].map(([id, h]) => ({ id, seq: h.seq, tags: h.tags, onChain: !!document.getElementById('bnode-' + id) }))
+}
+function focusBlock(id) {
+  const n = document.getElementById('bnode-' + id)
+  if (!n) { openBlock(id); return }   // 不在最近 20 个区块里（链路视图只画最近的）→ 直接打开它的批内事件
+  n.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+  n.classList.remove('flash'); void n.offsetWidth; n.classList.add('flash')
+  setTimeout(() => n.classList.remove('flash'), 2200)
 }
 function renderFlow(d) {
   const o = d.order || {}
@@ -873,7 +919,9 @@ function renderFlow(d) {
       <div class="blk-line">${FLOW_ST[Number(e.status)] || ''}</div></div>`)
   })
   const track = document.getElementById('flowTrack')
-  if (track) track.innerHTML = `<div class="chain-track flow">${parts.join('')}</div>`
+  const marks = flowMarkChain()
+  if (track) track.innerHTML = `<div class="chain-track flow">${parts.join('')}</div>
+    ${marks.length ? `<div class="flow-blocks">这一单落在链路视图的 <b>${marks.length}</b> 个区块里：${marks.map((m) => `<button class="ref-link" type="button" onclick="focusBlock(${m.id})">区块 #${Number(m.seq)} <em>${esc(m.tags.join(' '))}</em></button>`).join('')}<span class="muted">点一下定位到上方对应区块</span></div>` : ''}`
 }
 // ---- 存证检索：一个入口吃多种标识（订单号/批次/交易哈希/根/凭证/手机号/用户ID/DID）----
 const ST_CN = { 0: '待打包', 1: '已打包·待锚定', 2: '已锚定', 3: '锚定重试', 4: '人工处理', 5: '已提交·待确认' }
@@ -965,21 +1013,35 @@ async function loadFlow() {
     toast(/订单不存在|1004/.test(e.message) ? `没找到订单 ${no}：核对单号，或点「演示完整流程」看形态` : e.message, true)
   }
 }
-function loadFlowDemo() {
-  const mk = (no, label, hint, seq, t, st) => ({ no, label, hint, ev: { biz_type: label, biz_ref: no, version_no: 1, status: st, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: '17d5a93e04fb8c629f4c1a2b7de50863' } })
-  renderFlow({
+/** 看一条真实单的六步：取最近一笔有订单存证的真实订单；一笔都没有才退回演示数据（并明说） */
+async function loadFlowSample() {
+  try {
+    const c = await api('GET', '/admin/attest/center')
+    const o = (c.recent || []).find((e) => e.biz_type === 'order')
+    if (o) { const el = document.getElementById('flowNo'); if (el) el.value = o.biz_ref; return loadFlow() }
+  } catch (e) { /* 取不到就走演示 */ }
+  toast('还没有真实订单的存证，先用演示数据看形态')
+  loadFlowDemo()
+}
+/** 演示完整流程：演示单的每一步都落在「演示 · 多节点形态」那条模拟链的区块里（批次号、状态、日期一一对应），两个视图看到的是同一批区块 */
+async function loadFlowDemo() {
+  const chainBlk = Object.fromEntries(mockChain().map((b) => [b.seq, b]))
+  const mk = (no, ref, label, hint, seq, t, st) => ({ no, label, hint, ev: { biz_type: label, biz_ref: ref, version_no: 1, status: st, batch_id: chainBlk[seq].id, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: chainBlk[seq].merkle_root } })
+  window.__flowData = {
     demo: true,
-    order: { orderNo: 'WL20261101DEMO01', status: 50, statusText: '已完成', productName: '朱家角水乡沉浸一日（演示）', qty: 2, amountPay: 39800, beanDeducted: 200, createdAt: '2026-10-31 10:02:11', paidAt: '2026-10-31 10:03:05', completedAt: '2026-10-31 15:40:22' },
+    order: { orderNo: 'WL20261101DEMO01', status: 50, statusText: '已完成', productName: '朱家角水乡沉浸一日（演示）', qty: 2, amountPay: 39800, beanDeducted: 200, createdAt: '2026-10-28 10:02:11', paidAt: '2026-10-28 10:03:05', completedAt: '2026-10-30 15:40:22' },
     steps: [
-      mk('bt-DEMO1001', '旅豆抵扣', '下单锁豆', 12, '2026-10-31 10:02:30', 1),
-      mk('WL20261101DEMO01', '支付成功', '订单事实入链', 12, '2026-10-31 10:03:05', 2),
-      mk('pass-901', '出票', '权益凭证 ×2', 13, '2026-10-31 10:03:40', 2),
-      mk('pass-901-1', '核销', '到店扫码', 13, '2026-10-31 11:25:02', 1),
-      mk('bt-DEMO1002', '返豆', '消费奖励', 14, '2026-10-31 15:40:22', 1),
-      mk('settle-31', '结算', '五口径分账', 20, '2026-11-03 01:00:10', 0),
+      mk('①', 'bt-DEMO1001', '旅豆抵扣', '下单锁豆', 3, '2026-10-28 10:02:30', Number(chainBlk[3].status)),
+      mk('②', 'WL20261101DEMO01', '支付成功', '订单事实入链', 3, '2026-10-28 10:03:05', Number(chainBlk[3].status)),
+      mk('③', 'pass-901', '出票', '权益凭证 ×2', 4, '2026-10-29 10:03:40', Number(chainBlk[4].status)),
+      mk('④', 'pass-901-1', '核销', '到店扫码', 4, '2026-10-29 11:25:02', Number(chainBlk[4].status)),
+      mk('⑤', 'bt-DEMO1002', '返豆', '消费奖励', 6, '2026-10-30 15:40:22', Number(chainBlk[6].status)),
+      mk('⑥', 'settle-31', '结算', '五口径分账', 7, '2026-10-31 01:00:10', Number(chainBlk[7].status)),
     ],
     refunds: [],
-  })
+  }
+  window.__flowShown = true
+  if (!window.__demoChain) { window.__demoChain = true; await web3dash() } else renderFlow(window.__flowData)
 }
 function openFlowStep(i, opt = {}) {
   const d = window.__flowData

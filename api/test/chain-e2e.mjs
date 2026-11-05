@@ -109,6 +109,23 @@ await t('一笔走完全程（支付→出票→核销→完成→返豆→结�
   const miss = f.steps.filter((s) => ['order', 'issue', 'verify', 'grant', 'settle'].includes(s.key)).filter((s) => !(s.ev && Number(s.ev.status) === 2 && Number(s.ev.batch_status) === 2)).map((s) => s.key)
   assert.deepEqual(miss, [], '这些步骤没有已锚定的事件：' + miss)
 })
+await t('链路视图与单流程对得上：每一步事件带 batch_id，且该批次在存证中心里的业务构成（mix）确实包含这一步的业务类型', async () => {
+  const f = ok(await call('GET', '/admin/attest/flow/' + full.order_no, null, A))
+  const withEv = f.steps.filter((s) => s.ev)
+  assert.ok(withEv.length >= 5)
+  for (const s of withEv) assert.ok(Number(s.ev.batch_id) > 0, s.label + ' 的事件没带 batch_id')
+  // 存证中心只回最近 20 批；单流程里更早的批次不在其内，直接查库对照
+  const center = ok(await call('GET', '/admin/attest/center', null, A))
+  const dbMix = async (id) => (await q('SELECT biz_type, COUNT(*) n FROM attest_event WHERE batch_id = ? GROUP BY biz_type', [id])).reduce((m, r) => { m[r.biz_type] = Number(r.n); return m }, {})
+  for (const b of center.batches) {
+    assert.ok(b.mix && typeof b.mix === 'object', '批次 #' + b.seq + ' 没带 mix')
+    assert.deepEqual(b.mix, await dbMix(b.id), '批次 #' + b.seq + ' 的 mix 与库里不一致')
+    // 账本日终批的叶子是旅豆流水（不是 attest_event），所以它的 mix 为空——前端对日终块单独标「旅豆账本封存」；业务批的 mix 合计必须等于事件数
+    if (Number(b.is_day_close)) assert.deepEqual(b.mix, {}, '日终批 #' + b.seq + ' 不该有业务事件构成')
+    else assert.equal(Object.values(b.mix).reduce((a, c) => a + c, 0), Number(b.leaf_count), '批次 #' + b.seq + ' mix 合计应等于事件数')
+  }
+  for (const s of withEv) { const m = await dbMix(s.ev.batch_id); assert.ok(m[s.ev.biz_type] > 0, s.label + ' 所在批次里没有 ' + s.ev.biz_type) }
+})
 await t('对外验证：订单已锚定、证明可复算、给出交易号；对外流程与后台一致', async () => {
   const v = ok(await call('GET', '/open/verify/order/' + full.order_no))
   assert.equal(v.found, true); assert.equal(v.proofValid, true); assert.equal(v.canonicalValid, true); assert.ok(v.chainRef && !String(v.chainRef).startsWith('NOOP'), '应有链上交易号')

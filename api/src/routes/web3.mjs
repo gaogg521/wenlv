@@ -55,6 +55,18 @@ const web3 = {
   'GET /admin/attest/center': async (req) => {
     await requireAdmin(req)
     const batches = await q('SELECT * FROM attest_batch ORDER BY seq DESC LIMIT 20')
+    // 每个区块里装的是哪些业务环节（订单/出票/核销/返豆/结算…）：链路视图直接画在区块上，不用悬停或点开才知道
+    if (batches.length) {
+      const mixRows = await q(`SELECT batch_id, biz_type, COUNT(*) n FROM attest_event
+        WHERE batch_id IN (${batches.map(() => '?').join(',')}) GROUP BY batch_id, biz_type`, batches.map((b) => b.id))
+      const mix = new Map()
+      for (const r of mixRows) {
+        const m = mix.get(Number(r.batch_id)) || {}
+        m[r.biz_type] = Number(r.n)
+        mix.set(Number(r.batch_id), m)
+      }
+      for (const b of batches) b.mix = mix.get(Number(b.id)) || {}
+    }
     const queue = await q(`SELECT biz_type,
       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) pending,
       SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) packed,
@@ -252,7 +264,7 @@ const web3 = {
     const orderNo = String(req.params.orderNo || '').trim()
     const o = await one('SELECT o.*, p.title product_name FROM orders o LEFT JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ?', [orderNo])
     if (!o) throw new BizError(1201, '订单不存在')
-    const COLS = 'e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, b.seq, b.merkle_root, b.status AS batch_status'
+    const COLS = 'e.id, e.biz_type, e.biz_ref, e.version_no, e.status, e.payload_hash, e.created_at, e.batch_id, b.seq, b.merkle_root, b.status AS batch_status'
     const ev = (bizType, bizRef) => one(`SELECT ${COLS} FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
       WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     const ledger = await q('SELECT DISTINCT tx_no, biz_type FROM bean_ledger WHERE biz_ref = ?', [orderNo])
