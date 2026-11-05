@@ -1,0 +1,18 @@
+{
+  "core.js": {
+    "http": 200,
+    "sha256": "a471c5b6d96fb0f895f1e9765c5a30a168509f5aee971b1979e3783921eab8ab",
+    "matchesSource": true
+  },
+  "pages/trade.js": {
+    "http": 200,
+    "sha256": "4daf8b652d2cc983ea4e6cec8e08a43bcc4abd463a59489482af3dff9a38c3a8",
+    "matchesSource": true
+  },
+  "pages/dashboard.js": {
+    "http": 200,
+    "sha256": "fd33d48d7f907b2b73b10d334ac1747bb7c24d8f737da69aa95212f8785a4b01",
+    "matchesSource": true
+  },
+  "health": true
+}
