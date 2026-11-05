@@ -97,6 +97,8 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/web3/chain', ['web3dash', 'chainassets'], 'view'],
   ['GET', '/admin/web3/assets', 'chainassets', 'view'],
   ['GET', '/admin/web3/vc', 'vc', 'view'],
+  ['GET', '/admin/web3/identities', 'vc', 'view'],
+  ['GET', '/admin/web3/identity/:userId', 'vc', 'view'],
   ['GET', '/admin/chain/hub', 'chainhub', 'view'],
   ['GET', '/admin/attest/center', 'attest', 'view'],
   ['GET', '/admin/attest/batch/:id', 'attest', 'view'],

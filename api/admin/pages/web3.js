@@ -13,9 +13,10 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-      ${(d.queue || []).map((qq) => `<div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
-        <div><div class="l">${BIZ_CN[qq.biz_type] || esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.pending)} 待打包</div>
-        <div class="s">已打包 ${Number(qq.packed || 0)} · 已锚定 ${Number(qq.anchored)} · 累计 ${Number(qq.total)}</div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
+      ${(d.queue || []).map((qq) => `<div class="kpi att-kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
+        <div style="flex:1;min-width:0"><div class="l">${BIZ_CN[qq.biz_type] || esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.total)} <small style="font-size:12px;font-weight:400;color:var(--sub)">条事件</small></div>
+        <div class="att-bar" title="已锚定占累计"><i style="width:${Number(qq.total) ? Math.round(Number(qq.anchored) / Number(qq.total) * 100) : 0}%"></i></div>
+        <div class="s att-st"><span class="${Number(qq.pending) ? 'warn' : ''}">待打包 ${Number(qq.pending)}</span><span>已打包 ${Number(qq.packed || 0)}</span><span class="ok">已锚定 ${Number(qq.anchored)}</span></div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">① 打包（出 Merkle 根）</button>
@@ -86,6 +87,7 @@ async function terms() {
 async function vcPage() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/web3/vc')
+  const idn = await api('GET', '/admin/web3/identities?size=12&page=1')
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>数字身份 · 可携出旅行凭证</h2><span class="muted">${esc(d.policy)}</span></div>
@@ -103,8 +105,15 @@ async function vcPage() {
   </div>
 
   <div class="card">
+    <div class="card-head"><h3>身份档案 · 数字身份 ↔ 旅豆账户</h3><span class="muted">一人一个数字身份（DID），与其旅豆账户、徽章、行程按用户 id 一一关联；点数字可看明细</span></div>
+    <div class="row" style="margin-bottom:10px"><input id="idq" placeholder="昵称 / 用户 id / DID" style="width:260px" onkeydown="if(event.key==='Enter')vcIdentityList(1)">
+      <button class="btn primary sm" onclick="vcIdentityList(1)">查询</button></div>
+    <div id="idList">${idListHtml(idn)}</div>
+  </div>
+
+  <div class="card">
     <div class="card-head"><h3>凭证长什么样</h3><span class="muted">用户拿到的是一张只含旅行事实的身份卡。下方是示例（非真实用户）；在「最近签发」里点「卡片」可看真实凭证</span></div>
-    <div id="vcCardBox">${vcCardSvg(VC_SAMPLE, { sample: true })}</div>
+    <div id="vcCardBox">${vcCardSvg(VC_SAMPLE, { sample: true, uid: 0 })}</div>
   </div>
 
   <div class="card">
@@ -128,7 +137,7 @@ async function vcPage() {
         <td class="td-sub">${esc(String(v.issued_at).slice(5, 19))}</td>
         <td class="td-sub">${esc(String(v.expires_at).slice(5, 19))}</td>
         <td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td>
-        <td><button class="btn ghost sm" onclick="showVcCard(${v.id})">卡片</button> ${v.revoked_at ? '' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
+        <td><button class="btn ghost sm" onclick="showVcCard(${v.id})">卡片</button> <button class="btn ghost sm" onclick="vcIdentity(${v.user_id})">档案</button> ${v.revoked_at ? '' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('尚未签发过凭证：上方选一个用户签发即可')}
   </div>`
   window.__vcLast = ''
@@ -137,36 +146,50 @@ async function vcPage() {
 
 const VC_SAMPLE = { level: '探索者', levelNo: 3, growthBand: '1000–2999', memberSince: '2026-03', scope: 'travel', trips: 12, cities: 5, badges: ['初访古镇', '山海行者', '夜游达人'] }
 
-/** 数字身份卡（SVG）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额 */
+/** 数字身份卡（SVG）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额。
+ *  meta.uid 给了就可点：等级 / 行程 / 城市 / 徽章 都能点开看明细（uid=0 是示例卡，点了只提示） */
 function vcCardSvg(claims, meta = {}) {
   let c = claims
   if (typeof c === 'string') { try { c = JSON.parse(c) } catch { c = {} } }
   c = c || {}
   const travel = c.scope === 'travel'
   const status = meta.status || (meta.sample ? '示例' : '')
+  const hit = (k, x, y, w, h, inner) => {
+    if (meta.uid == null) return inner
+    const u = Number(meta.uid) || 0
+    return `<g class="vc-hit" role="button" tabindex="0" aria-label="查看${k}明细" onclick="vcStatOpen(${u},'${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();vcStatOpen(${u},'${k}')}"><rect class="hitbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="transparent"/>${inner}</g>`
+  }
   let x = 28, y = 214, chips = ''
-  for (const b of (c.badges || []).slice(0, 8)) {
+  const names = (c.badges || []).slice(0, 8)
+  for (const b of names) {
     const w = String(b).length * 13 + 22
     if (x + w > 492) { x = 28; y += 30 }
     chips += `<rect x="${x}" y="${y - 16}" width="${w}" height="23" rx="11.5" fill="rgba(245,210,122,.16)" stroke="rgba(245,210,122,.55)"/><text x="${x + w / 2}" y="${y}" text-anchor="middle" font-size="12" fill="#f5d27a">${esc(b)}</text>`
     x += w + 8
   }
-  const stat = (lx, label, val) => `<text x="${lx}" y="150" font-size="26" font-weight="700" fill="#fff">${esc(val)}</text><text x="${lx}" y="172" font-size="12" fill="rgba(255,255,255,.62)">${esc(label)}</text>`
+  const badgeBottom = y + 10
+  const stat = (k, lx, label, val) => hit(k, lx - 8, 122, 118, 62, `<text x="${lx}" y="150" font-size="26" font-weight="700" fill="#fff">${esc(val)}</text><text x="${lx}" y="172" font-size="12" fill="rgba(255,255,255,.62)">${esc(label)} ›</text>`)
   const h = Math.max(300, y + 62)
   return `<svg viewBox="0 0 520 ${h}" style="width:100%;max-width:520px;height:auto;border-radius:14px;box-shadow:0 8px 24px rgba(15,42,74,.25)" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="数字身份卡">
     <defs><linearGradient id="vcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2a4a"/><stop offset="1" stop-color="#0e6b5c"/></linearGradient></defs>
     <rect width="520" height="${h}" rx="14" fill="url(#vcg)"/>
-    <circle cx="452" cy="64" r="46" fill="none" stroke="rgba(245,210,122,.35)" stroke-width="2"/><circle cx="452" cy="64" r="34" fill="none" stroke="rgba(245,210,122,.2)" stroke-width="1"/>
-    <text x="452" y="70" text-anchor="middle" font-size="18" font-weight="700" fill="#f5d27a">Lv.${esc(c.levelNo ?? '-')}</text>
     <text x="28" y="40" font-size="13" fill="rgba(255,255,255,.7)" letter-spacing="2">向往的自由 · 旅行身份凭证</text>
-    <text x="28" y="88" font-size="34" font-weight="700" fill="#fff">${esc(c.level || '—')}</text>
-    <text x="28" y="112" font-size="12" fill="rgba(255,255,255,.62)">成长区间 ${esc(c.growthBand || '—')} · 入会 ${esc(c.memberSince || '—')}</text>
-    ${travel ? stat(28, '完成行程', c.trips ?? 0) + stat(150, '到访城市', c.cities ?? 0) + stat(272, '荣誉徽章', (c.badges || []).length) : '<text x="28" y="150" font-size="13" fill="rgba(255,255,255,.62)">基础凭证：仅含等级与入会时间</text>'}
-    ${chips}
+    ${hit('level', 20, 52, 300, 70, `<text x="28" y="88" font-size="34" font-weight="700" fill="#fff">${esc(c.level || '—')}</text>
+      <text x="28" y="112" font-size="12" fill="rgba(255,255,255,.62)">成长区间 ${esc(c.growthBand || '—')} · 入会 ${esc(c.memberSince || '—')} ›</text>`)}
+    ${hit('level', 396, 14, 108, 100, `<circle cx="452" cy="64" r="46" fill="none" stroke="rgba(245,210,122,.35)" stroke-width="2"/><circle cx="452" cy="64" r="34" fill="none" stroke="rgba(245,210,122,.2)" stroke-width="1"/>
+      <text x="452" y="70" text-anchor="middle" font-size="18" font-weight="700" fill="#f5d27a">Lv.${esc(c.levelNo ?? '-')}</text>`)}
+    ${travel ? stat('trips', 28, '完成行程', c.trips ?? 0) + stat('cities', 150, '到访城市', c.cities ?? 0) + stat('badges', 272, '荣誉徽章', (c.badges || []).length) : '<text x="28" y="150" font-size="13" fill="rgba(255,255,255,.62)">基础凭证：仅含等级与入会时间</text>'}
+    ${names.length ? hit('badges', 20, 190, 480, badgeBottom - 190, chips) : ''}
     <line x1="28" y1="${h - 46}" x2="492" y2="${h - 46}" stroke="rgba(255,255,255,.18)"/>
     <text x="28" y="${h - 26}" font-size="11" fill="rgba(255,255,255,.6)">${meta.did ? 'DID ' + esc(String(meta.did).slice(0, 26)) + '…' : '最小披露：不含姓名 / 手机号 / 身份证 / 订单号 / 金额'}${meta.exp ? ' · 有效期至 ' + esc(String(meta.exp).slice(0, 10)) : ''}</text>
     ${status ? `<text x="492" y="${h - 26}" text-anchor="end" font-size="12" font-weight="700" fill="#7ce0b5">${esc(status)}</text>` : ''}
   </svg>`
+}
+
+/** 点卡片上的数字：真实用户 → 打开身份档案并定位到对应一节；示例卡 → 只提示 */
+function vcStatOpen(uid, k) {
+  if (!uid) return toast('这是示例卡片：真实用户的卡片上，等级 / 行程 / 城市 / 徽章都能点开看明细', false)
+  vcIdentity(uid, k)
 }
 
 function showVcCard(id) {
@@ -174,8 +197,78 @@ function showVcCard(id) {
   const box = document.getElementById('vcCardBox')
   if (!v || !box) return
   const status = v.revoked_at ? '已吊销' : (new Date(v.expires_at) > new Date() ? '有效' : '已过期')
-  box.innerHTML = `<div class="muted" style="margin-bottom:8px">凭证 #${esc(v.id)} · ${esc(v.nickname || '用户' + v.user_id)}</div>${vcCardSvg(v.claims, { did: v.did, exp: v.expires_at, status })}`
+  box.innerHTML = `<div class="muted" style="margin-bottom:8px">凭证 #${esc(v.id)} · ${esc(v.nickname || '用户' + v.user_id)} · 点卡片上的数字看明细</div>${vcCardSvg(v.claims, { did: v.did, exp: v.expires_at, status, uid: v.user_id })}`
   box.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+/* ---- 身份档案列表：数字身份(DID) ↔ 旅豆账户 ↔ 徽章 / 行程 / 凭证，同一行 ---- */
+const fmtN = (n) => Number(n || 0).toLocaleString()
+function idListHtml(r) {
+  const pages = Math.max(1, Math.ceil(r.total / r.size))
+  const lvTag = (x) => `<span class="pill off">Lv.${x.levelNo} ${esc(x.levelName)}</span>`
+  return `<div class="muted" style="margin-bottom:8px">用户 <b>${r.summary.users}</b> · 旅豆账户 <b>${r.summary.beanAccounts}</b>（尚未产生旅豆的用户没有账户） · 持有效凭证 <b>${r.summary.vcHolders}</b> 位</div>
+  ${r.rows.length ? `<table><thead><tr><th>用户</th><th>数字身份 DID</th><th>等级</th><th>旅豆账户（余额 / 累计）</th><th>徽章</th><th>行程</th><th>凭证</th><th>操作</th></tr></thead><tbody>
+    ${r.rows.map((x) => `<tr>
+      <td class="td-main">${esc(x.nickname)}<div class="td-sub">#${x.userId}${x.status === 1 ? '' : ' · 非正常'}</div></td>
+      <td class="td-sub">${hashCopy(x.did, String(x.did).slice(0, 20) + '…')}</td>
+      <td>${lvTag(x)}</td>
+      <td>${x.beanBalance == null ? '<span class="muted">未开户</span>' : `<button class="ref-link" type="button" title="看旅豆流水" onclick="vcIdentity(${x.userId},'bean')"><b>${fmtN(x.beanBalance)}</b> / ${fmtN(x.beanLifetime)} 豆</button>`}</td>
+      <td><button class="ref-link" type="button" onclick="vcIdentity(${x.userId},'badges')">${x.badges}</button></td>
+      <td><button class="ref-link" type="button" onclick="vcIdentity(${x.userId},'trips')">${x.trips}</button></td>
+      <td>${x.vcActive ? `<span class="pill ok">有效 ${x.vcActive}</span>` : '<span class="pill off">未签发</span>'}</td>
+      <td><button class="btn ghost sm" onclick="vcIdentity(${x.userId})">档案</button> <button class="btn ghost sm" onclick="vcIssueFor(${x.userId})">签发</button></td></tr>`).join('')}
+  </tbody></table>
+  <div class="row" style="margin-top:10px;justify-content:flex-end;gap:8px"><span class="muted">第 ${r.page} / ${pages} 页 · 共 ${r.total} 人</span>
+    <button class="btn ghost sm" ${r.page <= 1 ? 'disabled' : ''} onclick="vcIdentityList(${r.page - 1})">上一页</button>
+    <button class="btn ghost sm" ${r.page >= pages ? 'disabled' : ''} onclick="vcIdentityList(${r.page + 1})">下一页</button></div>` : emptyBox('没有匹配的用户')}`
+}
+async function vcIdentityList(page) {
+  const kw = (document.getElementById('idq') || {}).value || ''
+  const box = document.getElementById('idList'); if (!box) return
+  try {
+    const r = await api('GET', '/admin/web3/identities?size=12&page=' + (page || 1) + '&q=' + encodeURIComponent(kw.trim()))
+    window.__idPage = r.page
+    box.innerHTML = idListHtml(r)
+  } catch (e) { toast(e.message, true) }
+}
+async function vcIssueFor(uid) {
+  const el = document.getElementById('vcUid'); if (el) el.value = uid
+  const box = document.getElementById('vcOut')
+  if (el && box) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+  await issueVc()
+}
+
+/** 身份档案抽屉：卡片（数字可点）+ 等级 / 行程 / 城市 / 徽章 / 旅豆账户与流水 / 凭证记录 */
+async function vcIdentity(uid, sec) {
+  drawer('身份档案', skel(4))
+  let d
+  try { d = await api('GET', '/admin/web3/identity/' + uid) } catch (e) { closeModal(); return toast(e.message, true) }
+  const cityName = (code) => (typeof CITY_CN !== 'undefined' && CITY_CN[code]) || ('城市 ' + code)
+  const T = (x) => esc(String(x || '').slice(0, 16).replace('T', ' '))
+  const lastVc = d.vcs[0]
+  const st = !lastVc ? '' : lastVc.revoked_at ? '已吊销' : (new Date(lastVc.expires_at) > new Date() ? '有效' : '已过期')
+  const BEAN_BIZ = { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '过期', 7: '风控回收', 8: '期初余额导入' }
+  const L = d.level
+  const section = (k, title, count, body) => `<section class="vc-sec" id="vcsec-${k}"><h4>${title}${count == null ? '' : ` <b>${count}</b>`}</h4>${body}</section>`
+  const none = (t) => `<div class="muted" style="padding:6px 0">${t}</div>`
+  drawer(esc(d.nickname) + ' · 身份档案', `
+    <div class="muted" style="margin-bottom:8px">用户 #${d.userId} · DID <code>${esc(String(d.did).slice(0, 24))}…</code> <button class="copy-chip" type="button" onclick="copyText(${w3Arg(d.did)})">复制</button></div>
+    ${vcCardSvg(d.claims, { uid: d.userId, did: d.did, exp: lastVc && lastVc.expires_at, status: st || '未签发' })}
+    <div class="muted" style="margin:6px 0 12px">点卡片上的等级 / 行程 / 城市 / 徽章，直接跳到对应明细。下面是后台可见的完整档案；凭证本身只含最小披露字段。</div>
+    <div class="vc-secs">
+      ${section('level', '等级与成长', null, `<div class="vc-kv"><span>当前等级</span><b>Lv.${L.no} ${esc(L.name)}</b><span>成长值</span><b>${fmtN(L.growth)}</b>
+        <span>等级区间</span><b>${fmtN(L.from)}${L.to == null ? ' 以上' : ' – ' + fmtN(L.to)}</b><span>下一级</span><b>${L.nextName ? esc(L.nextName) + '（还差 ' + fmtN(Math.max(0, L.to - L.growth)) + '）' : '已是最高级'}</b>
+        <span>入会时间</span><b>${T(d.memberSince)}</b></div>`)}
+      ${section('trips', '完成行程', d.claims.trips, d.trips.length ? `<table><thead><tr><th>订单号</th><th>线路</th><th>城市</th><th>完成</th></tr></thead><tbody>${d.trips.map((t) => `<tr><td class="td-sub">${hashCopy(t.order_no, t.order_no)}</td><td class="td-main">${esc(t.title)}</td><td class="td-sub">${esc(cityName(t.city_code))}</td><td class="td-sub">${T(t.at)}</td></tr>`).join('')}</tbody></table>` : none('还没有已核销 / 已完成的行程'))}
+      ${section('cities', '到访城市', d.claims.cities, d.cities.length ? `<div class="vc-chips">${d.cities.map((c) => `<span class="pill ok">${esc(cityName(c.city_code))} × ${c.n}</span>`).join('')}</div>` : none('还没有到访城市'))}
+      ${section('badges', '荣誉徽章', d.badges.length, d.badges.length ? `<table><thead><tr><th>徽章</th><th>获得条件</th><th>获得时间</th><th>来源</th></tr></thead><tbody>${d.badges.map((b) => `<tr><td class="td-main">${esc(b.name)}</td><td class="td-sub">${esc(b.rule_desc || '—')}</td><td class="td-sub">${T(b.granted_at)}</td><td class="td-sub mono">${esc(b.ref || '—')}</td></tr>`).join('')}</tbody></table>` : none('还没有徽章'))}
+      ${section('bean', '旅豆账户', null, d.bean ? `<div class="vc-kv"><span>当前余额</span><b>${fmtN(d.bean.balance)} 豆</b><span>累计获得</span><b>${fmtN(d.bean.lifetime)} 豆</b></div>
+        ${d.bean.ledger.length ? `<table style="margin-top:8px"><thead><tr><th>时间</th><th>类型</th><th>变动</th><th>余额</th><th>引用</th></tr></thead><tbody>${d.bean.ledger.map((l) => `<tr><td class="td-sub">${T(l.created_at)}</td><td>${esc(BEAN_BIZ[l.biz_type] || '其他')}</td><td class="num" style="color:${Number(l.direction) === 1 ? '#17824d' : '#b42318'}">${Number(l.direction) === 1 ? '+' : '−'}${fmtN(l.amount)}</td><td class="num">${fmtN(l.after_bal)}</td><td class="td-sub mono">${esc(l.biz_ref || '—')}</td></tr>`).join('')}</tbody></table>` : ''}
+        <div style="margin-top:8px"><button class="btn ghost sm" onclick="closeModal();go('pointassets')">去旅豆发行台账</button></div>` : none('该用户还没有旅豆账户（还没产生过旅豆）'))}
+      ${section('vcs', '凭证记录', d.vcs.length, `${d.vcs.length ? `<table><thead><tr><th>#</th><th>范围</th><th>签发</th><th>到期</th><th>状态</th></tr></thead><tbody>${d.vcs.map((v) => `<tr><td class="num">${v.id}</td><td><span class="pill off">${esc(v.scope)}</span></td><td class="td-sub">${T(v.issued_at)}</td><td class="td-sub">${T(v.expires_at)}</td><td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td></tr>`).join('')}</tbody></table>` : none('还没有签发过凭证')}
+        <div style="margin-top:8px"><button class="btn primary sm" onclick="closeModal();vcIssueFor(${d.userId})">签发一张新凭证</button></div>`)}
+    </div>`)
+  if (sec) setTimeout(() => { const el = document.getElementById('vcsec-' + sec); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('vc-sec-hit') } }, 80)
 }
 
 async function issueVc() {
@@ -189,13 +282,14 @@ async function issueVc() {
       <div class="card" style="margin-top:12px;background:#f0faf7">
         <div class="row" style="margin:0"><span class="pill ok">已签发</span>
           <span class="muted">${esc(r.did)} · 有效期至 ${esc(String(r.expiresAt).slice(0, 19))}</span></div>
-        <div style="margin-top:10px">${vcCardSvg(r.claims, { did: r.did, exp: r.expiresAt, status: '有效' })}</div>
+        <div style="margin-top:10px">${vcCardSvg(r.claims, { did: r.did, exp: r.expiresAt, status: '有效', uid: userId })}</div>
         <textarea readonly style="width:100%;height:88px;margin-top:10px;font-family:monospace;font-size:11px">${esc(r.jwt)}</textarea>
         <div class="row" style="margin-top:8px"><button class="btn ghost sm" onclick="copyVc()">复制凭证</button>
           <button class="btn primary sm" onclick="openVerifyVc()">去验签</button></div>
       </div>
 `
     toast('已签发')
+    if (document.getElementById('idList')) vcIdentityList(window.__idPage || 1)   // 档案列表里的凭证状态同步刷新
   } catch (e) { toast(e.message, true) }
 }
 
@@ -934,7 +1028,7 @@ async function pointassets() {
   <div class="card">
     <div class="card-head"><h2>积分发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">旅豆账户数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）· 与「数字身份」的凭证持有人是两个口径</div></div></div>
+      <div class="kpi go" title="去数字身份：按用户看身份档案、旅豆账户与徽章" onclick="go('vc')"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">旅豆账户数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）· 点开到「数字身份」看每个账户对应的身份档案</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🛡</div><div><div class="l">年度总量哨兵</div><div class="v" style="font-size:18px">${d.globalCap ? (d.globalCap.cap_total || d.globalCap.total || '—') : '—'}</div><div class="s">严禁超发 · 双分录平衡</div></div></div>
     </div>

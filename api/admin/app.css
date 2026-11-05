@@ -543,3 +543,24 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .pipe-step.todo { background: #f2f4f9; border-color: #e2e7f1; color: #93a1b8; }
 .pipe-step.bad { background: rgba(220,60,60,.10); border-color: rgba(220,60,60,.35); color: #b02a2a; }
 .pipe-meta { font-size: 11px; color: #8a9ab8; min-width: 150px; text-align: right; }
+
+/* 数字身份卡：可点的数字 + 档案抽屉 */
+.vc-hit { cursor: pointer; outline: none; }
+.vc-hit:hover .hitbg, .vc-hit:focus-visible .hitbg { fill: rgba(255,255,255,.10); stroke: rgba(245,210,122,.5); }
+.vc-secs { display: flex; flex-direction: column; gap: 14px; }
+.vc-sec { border: 1px solid var(--line, #e6ebe7); border-radius: 10px; padding: 10px 12px; transition: box-shadow .3s, border-color .3s; }
+.vc-sec h4 { font-size: 13px; margin: 0 0 8px; color: #3e4c4e; }
+.vc-sec h4 b { color: var(--brand-deep, #b4492a); margin-left: 4px; }
+.vc-sec-hit { border-color: #e0a15c; box-shadow: 0 0 0 3px rgba(224,161,92,.25); }
+.vc-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 12.5px; } .vc-kv span { color: var(--sub, #6b746f); }
+.vc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.drawer .vc-sec table { font-size: 12px; }
+/* 存证中心卡片：累计为主，三段状态 + 进度条 */
+.att-bar { height: 4px; border-radius: 3px; background: #ece9e3; margin: 6px 0 5px; overflow: hidden; } .att-bar i { display: block; height: 100%; background: #4aa77a; }
+.att-st { display: flex; gap: 10px; flex-wrap: wrap; } .att-st .warn { color: #b7791f; font-weight: 700; } .att-st .ok { color: #17824d; }
+/* 可信存证页签：合并后的子页并排，侧栏只留一个入口 */
+.trust-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.trust-tab { border: 1px solid var(--line, #e3e0d8); background: #fff; border-radius: 999px; padding: 6px 16px; font-size: 13px; color: #4b5651; cursor: pointer; }
+.trust-tab:hover { border-color: #d2a77a; }
+.trust-tab.on { background: var(--brand, #c8552d); border-color: var(--brand, #c8552d); color: #fff; font-weight: 700; }
+.trust-tabs-hint { margin-left: 8px; font-size: 12px; color: var(--sub, #7a837e); }
