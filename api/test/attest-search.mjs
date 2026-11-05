@@ -74,6 +74,23 @@ await t('查不到时返回空结果 + 能力说明（不报 500，也不假装�
   assert.ok(d.capability.canSearch.length >= 8, '能力清单太少')
 })
 
+console.log('== 事件列表带 batch_id（后台页面据此让「业务单号」点得进所属批次）==')
+
+await t('存证中心「最近事件」与链路总览「事件动态」每行都带 batch_id 键；已入批的事件 id 与库一致，待打包的为空', async () => {
+  const center = ok(await call('GET', '/admin/attest/center', null, A))
+  const over = ok(await call('GET', '/admin/web3/overview', null, A))
+  for (const [name, rows] of [['recent', center.recent], ['recentEvents', over.recentEvents]]) {
+    assert.ok(Array.isArray(rows) && rows.length, name + ' 为空，库里没有事件可验')
+    assert.ok(rows.every((e) => 'batch_id' in e), name + ' 有行缺少 batch_id 键，页面就无法打开所属批次')
+  }
+  const row = center.recent.find((e) => e.batch_id) || null
+  if (row) {
+    const db = await one('SELECT batch_id FROM attest_event WHERE biz_type = ? AND biz_ref = ? ORDER BY id DESC LIMIT 1', [row.biz_type, row.biz_ref])
+    assert.equal(Number(row.batch_id), Number(db.batch_id), 'batch_id 与库里不一致')
+  }
+  for (const e of center.recent.filter((x) => Number(x.status) === 0)) assert.equal(e.batch_id, null, '待打包事件不该有批次 id')
+})
+
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 
 // 数据库连接池不会自己退出，closeDb 收尾后自然退出——直接 process.exit 会在 Windows 上

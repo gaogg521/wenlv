@@ -60,7 +60,7 @@ const web3 = {
       SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) packed,
       SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) anchored,
       COUNT(*) total FROM attest_event GROUP BY biz_type`)
-    const recent = await q(`SELECT e.biz_type, e.biz_ref, e.version_no, e.status, e.created_at,
+    const recent = await q(`SELECT e.biz_type, e.biz_ref, e.version_no, e.status, e.created_at, e.batch_id,
       b.seq, b.merkle_root, b.chain_tx_ref, b.status AS batch_status
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id ORDER BY e.id DESC LIMIT 30`)
     const dayRoots = await q('SELECT * FROM bean_day_root ORDER BY biz_date DESC LIMIT 10')
@@ -294,7 +294,7 @@ const web3 = {
       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) pending FROM attest_event`)
     const badges = await one('SELECT COUNT(*) c FROM user_badge')
     const beanFlow = await bean.flow()
-    const events = await q(`SELECT biz_type, biz_ref, status, created_at FROM attest_event ORDER BY id DESC LIMIT 12`)
+    const events = await q(`SELECT biz_type, biz_ref, status, created_at, batch_id FROM attest_event ORDER BY id DESC LIMIT 12`)
     return {
       batches: Number(b.batches) || 0, anchoredBatches: Number(b.anchored) || 0,
       events: Number(e.total) || 0, anchoredEvents: Number(e.anchored) || 0, pendingEvents: Number(e.pending) || 0,
