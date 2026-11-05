@@ -50,7 +50,7 @@ t('消耗不允许透支：余额不足必须 revert，不能写成负数或 0 �
 
 t('存证合约：序号必须连续 +1、前根必须等于上一批的根（删掉一批立刻暴露）', () => {
   const code = stripComments(root)
-  assert.match(code, /seq\s*==\s*lastSeq\s*\+\s*1/, '缺少序号连续性校验')
+  assert.match(code, /(?:uint256\(seq\)|seq)\s*==\s*lastSeq\s*\+\s*1/, '缺少序号连续性校验')
   assert.match(code, /prevRoot\s*==\s*lastRoot/, '缺少前根衔接校验')
   assert.match(code, /if\s*\(roots\[root\]\.anchoredAt\s*!=\s*0\)\s*return false/, '同根重复写应为幂等返回 false')
 })

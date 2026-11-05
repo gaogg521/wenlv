@@ -19,8 +19,12 @@ contract WanderlustRootStore {
         uint64  anchoredAt; // 写入时的区块时间（秒）
     }
 
+    // 存储布局（V2，蚂蚁链真机教训）：owner 与 lastSeq **各占一整个存储槽，不打包**。
+    // 这条链的 msg.sender 是 32 字节账户地址，构造里 owner = msg.sender 会把高位字节漏进同槽相邻的变量：
+    // V1 里 owner(address) 与 lastSeq(uint32) 同槽，部署后 head().seq 读出 2087900645 而不是 0。
+    // 所以 lastSeq 用 uint256 独占一槽（对外 head() 仍返回 uint32，writeRoot 签名不变）。
     address public owner;
-    uint32  public lastSeq;
+    uint256 public lastSeq;
     bytes32 public lastRoot;
     uint256 public totalRoots;
 
@@ -45,7 +49,7 @@ contract WanderlustRootStore {
         require(bizDate >= 20200101 && bizDate <= 29991231, "bad bizDate");
         require(leafCount > 0, "bad leafCount");
         if (roots[root].anchoredAt != 0) return false;          // 幂等：这枚根已经写过了
-        require(seq == lastSeq + 1, "seq must be lastSeq+1");   // 不许跳号、不许重号
+        require(uint256(seq) == lastSeq + 1,"seq must be lastSeq+1");   // 不许跳号、不许重号
         require(prevRoot == lastRoot, "prevRoot mismatch");     // 前根必须接上，链条不可断
 
         roots[root] = Root({ prevRoot: prevRoot, bizDate: bizDate, leafCount: leafCount, seq: seq, anchoredAt: uint64(block.timestamp) });
@@ -69,7 +73,12 @@ contract WanderlustRootStore {
 
     /// @notice 链头：最新序号与最新根，第三方对比"我手里的批次是不是最新的"
     function head() public view returns (uint32 seq, bytes32 root, uint256 count) {
-        return (lastSeq, lastRoot, totalRoots);
+        return (uint32(lastSeq), lastRoot, totalRoots);
+    }
+
+    /// @notice 诊断：调用者是否被识别为 owner。蚂蚁链的 msg.sender 是 32 字节，部署后先用它在真机确认 onlyOwner 的比较成立，再写第一枚根。
+    function senderIsOwner() public view returns (bool) {
+        return msg.sender == owner;
     }
 
     /// @notice 移交写入权（例如更换服务账号）。历史根不受影响。

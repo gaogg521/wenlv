@@ -86,7 +86,7 @@ CATALOG.antchaincontract = { group: 'alliance', vendor: '蚂蚁数字科技 · �
   protocol: { transport: 'HTTPS REST（握手换 token，30 分钟）', sign: '握手同「内置存证」；写合约由托管账户在链上签名', mode: '提交 writeRoot → 回执 + getRoot 反查确认',
     contract: '需先部署落根合约 WanderlustRootStore（不可逆）；链强制序号 +1 / 前根接上 / 同根幂等；读也走交易（耗 gas）；与内置存证共用凭据' },
   keys: [...CATALOG.antchainopen.keys.filter((k) => k.key !== 'ANTOPEN_GAS'),
-    K('ANTOPEN_CONTRACT_NAME', '合约名', { required: true, ph: 'WanderlustRootStore（部署时用的名字）' }),
+    K('ANTOPEN_CONTRACT_NAME', '合约名', { required: true, ph: 'WanderlustRootStoreV2（部署时用的名字；V1 有缺陷，别用）' }),
     K('ANTOPEN_CONTRACT_GAS', '合约调用 gas 上限', { ph: '500000（默认）；按实测调。偏低会读写失败' }),
     K('ANTOPEN_CONTRACT_STRICT', '确认时用 getRoot 反查', { ph: '1（默认，多一笔读调用）/ 0（只看回执）' }),
     K('ANTOPEN_CONTRACT_BYTES', 'bytes32 入参格式', { ph: '0x（默认）/ hex / base64；文档没写清，部署后真机核对' })] }
