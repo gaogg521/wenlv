@@ -87,6 +87,21 @@ try {
     assert.equal(d.allModules.find((m) => m.key === 'reviewqueue').name, '审核队列', '中文名与旧 NAV 一致')
   })
 
+  await test('P-09 角色默认落地页：capabilities.homeModule 按职责下发且在有效集合内', async () => {
+    const { ROLE_HOME } = await import('../src/domain/modules.mjs')
+    for (const role of ['super', 'ops', 'finance', 'review', 'risk', 'readonly', 'sre', 'dev', 'city_partner']) {
+      const d = ok(await call(tok(role), 'GET', '/admin/capabilities'))
+      assert.equal(d.homeModule, ROLE_HOME[role], role + ' 首页应为 ' + ROLE_HOME[role])
+      assert.ok(d.modules.includes(d.homeModule), role + ' 默认首页必须在本人有效模块集合内（否则前端回落，违背"按职责落地"）')
+    }
+    assert.equal(ROLE_HOME.finance, 'fund', '财务落资金工作台')
+    assert.equal(ROLE_HOME.review, 'reviewqueue', '审核落审核队列')
+    assert.equal(ROLE_HOME.risk, 'risk', '风控落风控事件')
+    assert.equal(ROLE_HOME.sre, 'system', '运维落控制台')
+    const ghost = ok(await call(tok('mystery_role'), 'GET', '/admin/capabilities'))
+    assert.equal(ghost.homeModule ?? null, null, '未知角色无首页（前端回落第一个可用栏目）')
+  })
+
   await test('C-05 账号三态：读回/保存校验（原因必填、模块无效、super 拒改）', async () => {
     const uid = await mkAccount('finance')
     made.admins.push(uid)
