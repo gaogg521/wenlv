@@ -133,4 +133,35 @@ await t('侧栏每个模块配的图标都真实存在（数字身份配了不�
   assert.deepEqual(used.filter(([, ic]) => !icons.has(ic)).map(([k, ic]) => k + '→' + ic), [])
 })
 
+console.log('== 卡面体系 ==')
+await t('等级 → 卡种：最高一级固定黑金，其余从普卡往上；等级数变了自动跟着变', () => {
+  const T = (r, n) => ctx.cardTierOf(r, n)
+  assert.equal([1, 2, 3, 4].map((r) => T(r, 4)).join(), 'classic,gold,platinum,black')
+  assert.equal([1, 2, 3].map((r) => T(r, 3)).join(), 'classic,gold,black')
+  assert.equal([1, 2, 3, 4, 5].map((r) => T(r, 5)).join(), 'classic,gold,platinum,diamond,black')
+  assert.equal(T(9, 4), 'black', '超出范围收到最高级'); assert.equal(T(0, 4), 'classic'); assert.equal(T(1, 1), 'classic', '只有一级时不算黑金')
+})
+await t('同一角色不同等级卡种不同；不同角色系列不同；同页多张卡渐变 id 不重名', () => {
+  ctx.window.__cardScale = { traveler: { levels: [1, 2, 3, 4].map((lv) => ({ lv, name: 'L' + lv, n: lv })) } }
+  const a = ctx.vcCardSvg({ ...claims, levelNo: 1 }, {}), b = ctx.vcCardSvg({ ...claims, levelNo: 4 }, {})
+  assert.match(a, /data-role="traveler" data-tier="classic"/); assert.match(a, /普卡/)
+  assert.match(b, /data-role="traveler" data-tier="black"/); assert.match(b, /黑金卡/)
+  const m = ctx.roleCardSvg({ role: 'merchant', rank: 2, total: 4, levelName: '优选商户', sub: '示例店 · 老板', stats: [{ label: '完成订单', val: 3 }] })
+  assert.match(m, /data-role="merchant" data-tier="gold"/); assert.match(m, /商户系列/); assert.match(m, /不含在可携出凭证内/, '非凭证要明说')
+  const id = (x) => x.match(/<linearGradient id="(vc\d+)"/)[1]
+  assert.notEqual(id(a), id(b))
+})
+await t('吊销 / 过期的卡有印章并去色；有效不带印章', () => {
+  for (const st of ['已吊销', '已过期']) { const s = ctx.vcCardSvg(claims, { status: st }); assert.match(s, /grayscale/); assert.match(s, new RegExp('letter-spacing="6">' + st)) }
+  assert.ok(!/grayscale/.test(ctx.vcCardSvg(claims, { status: '有效' })))
+})
+await t('卡面图鉴：每个系列五种卡面，用不上的标预留；等级名与人数取自配置', () => {
+  ctx.window.__cardScale = { traveler: { levels: [{ lv: 1, name: '探索者', n: 18 }, { lv: 2, name: '旅行家', n: 4 }, { lv: 3, name: '城市探索官', n: 8 }, { lv: 4, name: '环球探索家', n: 10 }] } }
+  const html = ctx.vcGalleryHtml('traveler')
+  assert.equal((html.match(/class="vc-tile (reserved)?"/g) || []).length, 5)
+  assert.equal((html.match(/vc-tile reserved/g) || []).length, 1, '4 级时只有钻石卡预留')
+  assert.match(html, /Lv\.4 环球探索家<\/span><b>10 人/); assert.match(html, /预留：等级加到 5 级后启用/)
+  for (const k of ['creator', 'promoter', 'merchant']) assert.match(html, new RegExp("vcGallery\\('" + k + "'\\)"), '缺系列入口 ' + k)
+})
+
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

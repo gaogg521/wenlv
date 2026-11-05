@@ -1,5 +1,5 @@
 /* 链接入中心 */
-.ch-hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 26px 30px; margin-bottom: 18px; border-radius: 16px; color: #e6eeff;
+.ch-hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 16px 24px; margin-bottom: 14px; border-radius: 16px; color: #e6eeff;
   background: radial-gradient(700px 240px at 12% -20%, #2a5bd7 0%, transparent 60%), linear-gradient(120deg, #0b1d4f, #13306f 55%, #0b2459); box-shadow: 0 18px 40px #0b1d4f33; position: relative; overflow: hidden; }
 .ch-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(130,170,255,.06) 1px, transparent 1px) 0 0/100% 28px, linear-gradient(90deg, rgba(130,170,255,.06) 1px, transparent 1px) 0 0/28px 100%; pointer-events: none; }
 .ch-eyebrow { font-size: 10px; letter-spacing: 3px; color: #8fb1ff; }
