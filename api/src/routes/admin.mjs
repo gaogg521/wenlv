@@ -1,6 +1,6 @@
 import { q, one, count, tx, BizError } from '../db.mjs'
 import { cfg, cfgAll, cfgNum, cfgArr, loadConfig, configName } from '../config.mjs'
-import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from '../auth.mjs'
+import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword, isForbiddenPassword } from '../auth.mjs'
 import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
@@ -197,6 +197,8 @@ const admin = {
     const { username, password } = req.body
     const u = await one('SELECT * FROM admin_user WHERE username = ? AND status = 1', [username || ''])
     if (!u || !verifyPassword(password || '', u.password_hash)) throw new BizError(1002, '账号或密码错误')
+    // 生产环境不接受代码里写死的默认口令：运行 node scripts/admin-reset-password.mjs <账号> 换一个随机临时密码
+    if (isForbiddenPassword(password)) throw new BizError(1003, '默认密码不能在生产环境登录，请联系管理员重置密码')
     // MFA（C-02/C-03）：单账号强制 > 单账号豁免 > 全局策略（admin.mfa.mode: off/optional/required）。
     // 全局策略是敏感参数，变更走参数中心双人复核（安全中心三档卡片提交提案，不由本接口直接改）。
     const mfaMode = String((await cfgAll())['admin.mfa.mode'] || '"optional"')

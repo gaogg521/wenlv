@@ -8,7 +8,7 @@ import { routes } from './routes.mjs'
 import { q, one, count } from './db.mjs'
 import { matchRouteModule } from './domain/admin-modules.mjs'
 import { requireModule } from './routes/_shared.mjs'
-import { hashPassword } from './auth.mjs'
+import { hashPassword, initialAdminPassword, isProduction } from './auth.mjs'
 import { isLive } from './domain/wxpay.mjs'
 import { serveBadgeArt } from './domain/badge-art.mjs'
 
@@ -29,19 +29,23 @@ async function bootstrap() {
   // 后台超管种子（首次启动；密码 ADMIN_INIT_PASSWORD，默认 admin123，登录后必须修改）
   const c = await one('SELECT COUNT(*) c FROM admin_user')
   if (Number(c.c) === 0) {
-    const pw = process.env.ADMIN_INIT_PASSWORD || 'admin123'
-    await q(`INSERT INTO admin_user (username, password_hash, role, display_name) VALUES
-      ('admin', ?, 'super', '超级管理员'),
-      ('finance', ?, 'finance', '财务'),
-      ('ops', ?, 'ops', '运营')`, [hashPassword(pw), hashPassword(pw), hashPassword(pw)])
-    console.log('[boot] 后台账号已种入：admin / finance / ops（初始密码 ' + pw + '，上线后立即修改）')
+    const { pw, generated } = initialAdminPassword()
+    const mustChange = generated ? 1 : 0
+    await q(`INSERT INTO admin_user (username, password_hash, role, display_name, must_change_pwd) VALUES
+      ('admin', ?, 'super', '超级管理员', ?),
+      ('finance', ?, 'finance', '财务', ?),
+      ('ops', ?, 'ops', '运营', ?)`, [hashPassword(pw), mustChange, hashPassword(pw), mustChange, hashPassword(pw), mustChange])
+    console.log('[boot] 后台账号已种入：admin / finance / ops（初始密码 ' + pw + (generated ? '，随机生成且只显示这一次，首次登录必须修改）' : '，上线后立即修改）'))
   }
   // 城市合伙人演示账号（幂等，独立于首启种子块）
-  const cityPw = process.env.CITY_PARTNER_PASSWORD || 'city123'
-  await q(`INSERT INTO admin_user (username, password_hash, role, display_name, scope_city) VALUES
-    ('city310118', ?, 'city_partner', '青浦城市合伙人·演示', '310118') ON DUPLICATE KEY UPDATE username = VALUES(username)`,
-    [hashPassword(cityPw)])
-  console.log('[boot] 城市合伙人演示账号：city310118（仅可见 310118 青浦数据）')
+  // 生产环境不种这个演示账号（除非明确配了 CITY_PARTNER_PASSWORD）：默认口令写在代码里，等于公开
+  if (!isProduction() || process.env.CITY_PARTNER_PASSWORD) {
+    const cityPw = process.env.CITY_PARTNER_PASSWORD || 'city123'
+    await q(`INSERT INTO admin_user (username, password_hash, role, display_name, scope_city) VALUES
+      ('city310118', ?, 'city_partner', '青浦城市合伙人·演示', '310118') ON DUPLICATE KEY UPDATE username = VALUES(username)`,
+      [hashPassword(cityPw)])
+    console.log('[boot] 城市合伙人演示账号：city310118（仅可见 310118 青浦数据）')
+  }
   // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）
   try {
     const { seedContent } = await import('../db/seed-content.mjs')
