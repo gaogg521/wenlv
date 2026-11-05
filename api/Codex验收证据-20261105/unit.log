@@ -1,0 +1,74 @@
+
+> wanderlust-api@1.0.0 test
+> node scripts/check-syntax.mjs && node test/import-paths.mjs && node test/web3-core.mjs && node test/refund-policy.mjs && node test/secrets-key.mjs && node test/wording-guard.mjs && node test/mfa-senders.mjs && node test/miniapp-map.mjs && node test/mobile.mjs && node test/member-badge.mjs && node test/tbaas.mjs && node test/antchain-open.mjs && node test/web3-chain-ui.mjs && node test/chain-contract-guard.mjs
+
+237/237 个文件语法通过
+✓ src 下 478 处相对 import 均可解析
+== A Merkle ==
+  ✓ v2 1 片叶子：每条 proof 都能重算回根
+  ✓ v2 2 片叶子：每条 proof 都能重算回根
+  ✓ v2 3 片叶子：每条 proof 都能重算回根
+  ✓ v2 5 片叶子：每条 proof 都能重算回根
+  ✓ v2 7 片叶子：每条 proof 都能重算回根
+  ✓ v2 8 片叶子：每条 proof 都能重算回根
+  ✓ v2 13 片叶子：每条 proof 都能重算回根
+  ✓ v2 64 片叶子：每条 proof 都能重算回根
+  ✓ v2 100 片叶子：每条 proof 都能重算回根
+  ✓ v2 堵住"复制末节点"碰撞：[a,b,c] 与 [a,b,c,c] 根不同
+  ✓ v2 堵住"内部节点冒充叶子"的第二原像
+  ✓ 篡改任一叶 / 任一步兄弟 / 方向 → 验证失败
+  ✓ 非法输入直接拒绝，而不是算出一个值
+  ✓ v1 历史批次仍可验证（兼容）
+== B 业务日 ==
+  ✓ UTC 23:30 = 北京次日 07:30，业务日取北京日期
+== C EVM 锚定终局 ==
+  ✓ 提交后只到"已提交·待确认"(5)，不是"已锚定"(2)
+  ✓ 确认数不足保持 5；达标后置 2 并记录确认数
+  ✓ 链上内容与根不符 → 作废回到 3（可重试），绝不记为已锚定
+  ✓ 回执 status=0x0（交易执行失败）→ 回到 3
+  ✓ 失败批次重试后可正常锚定
+  ✓ 已锚定批次不可回退（数据库触发器）
+  ✓ 缺 EVM_RPC_URL 时不算真实接入（只能发、不能证）
+
+22 项通过
+== 退改梯度 ==
+  ✓ 日历天数
+  ✓ ≥7 天：免手续费，全额
+  ✓ 边界 6 天落入 10% 档
+  ✓ 边界 3 天仍是 10%
+  ✓ 2 天 → 30%
+  ✓ 1 天 → 30%
+  ✓ 出发当天：不允许自助退款
+  ✓ 已出发：不允许
+  ✓ 手续费四舍五入到分，退款+手续费=实付
+  ✓ 实付 0（全旅豆抵扣）也可退，手续费 0
+  ✓ 配置 d0 后当天可退
+  ✓ 100% 档位不允许自助退款
+  ✓ 配置对象形式（JSON 列）也能解析
+  ✓ 非法配置直接报错，不按 0 放行
+  ✓ 游客说明文案
+
+15 项通过
+  ✓ 未设置 SECRETS_KEY 时由 JWT_SECRET 派生
+  ✓ 设置合法 SECRETS_KEY 时优先使用
+  ✓ SECRETS_KEY 格式错误直接报错，不静默回落
+  ✓ "current" 输出的密钥设为 SECRETS_KEY 后可解开原有密文
+  ✓ 换了密钥解不开（GCM 校验失败而不是返回乱码）
+
+5 项通过
+小程序用语检查：静态扫描 mini-a/mini-b；运行时 44 个接口（商户端已登录）
+✓ 未发现区块链/虚拟资产类用语
+== C-06 腾讯云短信 ==
+  ✓ TC3 签名请求形态：Authorization/动作/模板参数/E.164 手机号
+  ✓ 真实发送：假端点收到 TC3 请求并返回 Ok
+  ✓ 网关错误必须抛错（不静默成功）
+  ✓ 业务失败（超限等）必须抛错
+  ✓ 非 JSON 响应必须抛错
+  ✓ 凭据不完整直接抛错
+== C-07 SMTP ==
+  ✓ SMTP 会话：AUTH LOGIN → 信封 → DATA（UTF-8 主题 base64、正文含验证码与有效期）
+  ✓ 错误密码必须抛错（不静默成功）
+  ✓ 连接拒绝必须抛错
+  ✓ 配置不完整直接抛错
+
+10 项 C-06/C-07 发送器测试通过
