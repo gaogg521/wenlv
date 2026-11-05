@@ -122,7 +122,7 @@ const open = {
       providers: chain.listProviders().map((p) => ({
         id: p.id, label: p.label, docs: p.docs, capabilities: p.capabilities, mode: p.mode,
       })),
-      switchRule: '设置环境变量 CHAIN_PROVIDER=chaingen|tbaas|antchain|antchainopen|evm|noop 即可切换；业务与页面代码零改动',
+      switchRule: '设置环境变量 CHAIN_PROVIDER=chaingen|tbaas|antchain|antchainopen|antchaincontract|evm|noop 即可切换；业务与页面代码零改动',
       assets: { channels: Object.entries(asset.CHANNELS).map(([k, v]) => ({ id: k, allowed: v.allowed, label: v.label })) },
     }
   },

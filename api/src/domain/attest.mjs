@@ -150,7 +150,8 @@ export async function anchorToChain(batchId) {
   if (!b) throw new Error('批次不存在')
   if (Number(b.status) === 2) return { batchId, skipped: true, reason: '已锚定' }
   if (Number(b.status) === 5) return { batchId, skipped: true, reason: '已提交，等待链上确认' }
-  if (Number(b.status) === 4 && chain.providerId() === 'tbaas') return { batchId, skipped: true, reason: '需人工核对原交易，禁止自动重新提交' }
+  // 合约模式同理：人工状态可能是"根其实已写进合约、只是这笔交易不是写入它的那笔"，自动重提会让合约序号错位
+  if (Number(b.status) === 4 && ['tbaas', 'antchaincontract'].includes(chain.providerId())) return { batchId, skipped: true, reason: '需人工核对原交易，禁止自动重新提交' }
   if (chain.chainMode() === 'noop') {
     return { batchId, anchored: false, mode: 'noop', reason: '未配置链：存证停留在已打包' }
   }
@@ -194,7 +195,8 @@ async function markAnchored(batchId, txRef, block, confirmations, reused = false
 }
 
 // 这些问题重试不会变好：同一笔会得到同一结果，白重试 5 次只是把问题藏起来 → 直接转人工
-const TERMINAL_CHAIN_ERR = new Set(['CONTENT_MISMATCH', 'TX_HASH_MISMATCH', 'NOT_ON_CHAIN'])
+// 合约模式（antchaincontract）的几类同理：合约拒绝写入 / 根已在合约里 / 合约里的记录与批次不符 / 缺提交时的状态
+const TERMINAL_CHAIN_ERR = new Set(['CONTENT_MISMATCH', 'TX_HASH_MISMATCH', 'NOT_ON_CHAIN', 'CONTRACT_REVERT', 'ROOT_ALREADY_ANCHORED', 'ROOT_STATE_MISMATCH', 'BAD_STATE'])
 
 async function markManual(b, e) {
   await q('UPDATE attest_batch SET status = 4, last_err = ? WHERE id = ?', [String(e.message).slice(0, 255), b.id])
@@ -247,7 +249,7 @@ async function confirmRows(rows) {
   for (const b of rows) {
     try {
       const c = await chain.confirm({ txRef: b.chain_tx_ref, root: b.merkle_root, prevRoot: b.prev_root, bizDate: b.biz_date,
-        provider: b.chain_provider, submittedAt: b.submitted_at, content: b.chain_content || undefined })
+        provider: b.chain_provider, submittedAt: b.submitted_at, content: b.chain_content || undefined, leafCount: b.leaf_count })
       if (c.final) out.push(await markAnchored(b.id, b.chain_tx_ref, c.block, c.confirmations ?? null))
       else {
         await q('UPDATE attest_batch SET confirmations = ?, last_err = ? WHERE id = ?',

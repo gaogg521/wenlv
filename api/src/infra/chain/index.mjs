@@ -28,11 +28,12 @@ import chaingen from './chaingen.mjs'
 import tbaas from './tbaas.mjs'
 import antchain from './antchain.mjs'
 import antchainopen from './antchain-open.mjs'
+import antchaincontract from './antchain-open-contract.mjs'
 import evm, { NETWORKS } from './evm.mjs'
 import fisco from './fisco.mjs'
 import gateway, { PRESETS as GATEWAY_PRESETS } from './gateway.mjs'
 
-export const PROVIDERS = { noop, mock, chaingen, tbaas, antchain, antchainopen, fisco, gateway, evm }
+export const PROVIDERS = { noop, mock, chaingen, tbaas, antchain, antchainopen, antchaincontract, fisco, gateway, evm }
 export { NETWORKS, GATEWAY_PRESETS }
 
 /**
@@ -79,6 +80,16 @@ export const CATALOG = {
   mock: { group: 'dev', vendor: '内存自测链', protocol: { transport: '进程内', sign: '无', mode: '同步', contract: '—' }, keys: [] },
   noop: { group: 'dev', vendor: '未接入', protocol: { transport: '—', sign: '—', mode: '批次停在"已打包·待锚定"', contract: '—' }, keys: [] },
 }
+// 蚂蚁链开放联盟链的第二个入口：合约模式。与上面的 antchainopen（内置存证 DEPOSIT）共用同一套凭据字段
+// （两张卡填哪张都行，存的是同一批 ANTOPEN_*），只多合约相关几项、少 DEPOSIT 的 gas。生产环境再二选一。
+CATALOG.antchaincontract = { group: 'alliance', vendor: '蚂蚁数字科技 · 开放联盟链（合约）',
+  protocol: { transport: 'HTTPS REST（握手换 token，30 分钟）', sign: '握手同「内置存证」；写合约由托管账户在链上签名', mode: '提交 writeRoot → 回执 + getRoot 反查确认',
+    contract: '需先部署落根合约 WanderlustRootStore（不可逆）；链强制序号 +1 / 前根接上 / 同根幂等；读也走交易（耗 gas）；与内置存证共用凭据' },
+  keys: [...CATALOG.antchainopen.keys.filter((k) => k.key !== 'ANTOPEN_GAS'),
+    K('ANTOPEN_CONTRACT_NAME', '合约名', { required: true, ph: 'WanderlustRootStore（部署时用的名字）' }),
+    K('ANTOPEN_CONTRACT_GAS', '合约调用 gas 上限', { ph: '500000（默认）；按实测调。偏低会读写失败' }),
+    K('ANTOPEN_CONTRACT_STRICT', '确认时用 getRoot 反查', { ph: '1（默认，多一笔读调用）/ 0（只看回执）' }),
+    K('ANTOPEN_CONTRACT_BYTES', 'bytes32 入参格式', { ph: '0x（默认）/ hex / base64；文档没写清，部署后真机核对' })] }
 export const providerById = (id) => PROVIDERS[id] || null
 
 const has = (...keys) => keys.every((k) => !!E[k])
