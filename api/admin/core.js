@@ -153,10 +153,13 @@ async function boot() {
     return acc
   }, [])
   const allowed = new Set(ADMIN_CAPABILITIES.modules || [])
+  // 合并入口：子页（attest / pointassets / chainassets）作为页签并入父页，侧栏只留父级；父级无权限时子页仍单独显示。
+  // 隐藏的子页按钮仍留在 DOM 里（深链接、标题、权限判断都照旧），只是不占侧栏位置。
+  const mergedUnder = (k) => (typeof TRUST_MERGE !== 'undefined' && TRUST_MERGE[k] && allowed.has(TRUST_MERGE[k]) ? TRUST_MERGE[k] : '')
   $('#nav').innerHTML = NAV.map(([g, items]) => {
     items = items.filter(([k]) => allowed.has(k))
     if (!items.length) return ''
-    return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.length}</small></summary>` + items.map(([k,n,ic]) => `<button class="nav-item" data-p="${k}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${n}</span></button>`).join('') + '</details>'
+    return `<details class="nav-section" ${g === '经营总览' ? 'open' : ''}><summary class="nav-group">${g}<small class="nav-count">${items.filter(([k]) => !mergedUnder(k)).length}</small></summary>` + items.map(([k,n,ic]) => { const m = mergedUnder(k); const label = (typeof TRUST_LABEL !== 'undefined' && TRUST_LABEL[k]) || n; const alias = (typeof TRUST_ALIAS !== 'undefined' && TRUST_ALIAS[k]) || ''; return `<button class="nav-item${m ? ' nav-merged' : ''}" ${m ? 'hidden' : ''} data-p="${k}" data-alias="${alias}" onclick="go('${k}')">${ICONS[ic] || ''}<span>${label}</span></button>` }).join('') + '</details>'
   }).join('')
   fetch('/c/health').then((r) => r.json()).then((j) => { window.PAY_MOCK = j.data.payMode === 'MOCK'; $('#paymode').textContent = '支付通道：' + (j.data.payMode === 'MOCK' ? '联调 MOCK' : '微信支付 V3 ✓') }).catch(() => {})
   // 恢复地址栏里的页面（无权限或无效时回到第一个可见栏目）；hash 可带查询串（如 #orders?kw=x&page=2，T03 筛选恢复）

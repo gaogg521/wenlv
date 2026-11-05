@@ -46,7 +46,26 @@ const ADMIN_PAGE_OPERATIONS = {
   system: ['运维处理', '查看健康、任务与告警，按需触发后台任务；业务资料到相应业务页维护。', []],
 }
 
+// 可信存证页签：侧栏只留 4 个入口，合并的子页在页面顶部以页签并排（页面重绘不会丢，因为页签在 #app 之外）
+const TRUST_MERGE = { attest: 'web3dash', pointassets: 'vc', chainassets: 'chainhub' }                       // 子页 → 父页
+const TRUST_LABEL = { web3dash: '存证总览', vc: '数字身份与账户', chainhub: '链接入' }                          // 侧栏显示名
+const TRUST_ALIAS = { web3dash: '链路总览 存证中心 链路视图', vc: '数字身份 积分发行台账 旅豆账户 身份档案', chainhub: '链接入中心 链与资产 多链能力' } // 搜索别名
+const TRUST_TABS = [
+  ['web3dash', [['web3dash', '链路视图'], ['attest', '存证中心']]],
+  ['vc', [['vc', '身份与凭证'], ['pointassets', '旅豆发行台账']]],
+  ['chainhub', [['chainhub', '链接入中心'], ['chainassets', '链与资产']]],
+]
 function renderPageOperations(key) {
+  const grp = TRUST_TABS.find(([, tabs]) => tabs.some(([k]) => k === key))
+  if (grp) {
+    const have = new Set([...document.querySelectorAll('#nav [data-p]')].map((el) => el.dataset.p))
+    const tabs = grp[1].filter(([k]) => have.has(k))
+    if (tabs.length > 1) {
+      const root = document.getElementById('pageOperations'); root.hidden = false
+      root.innerHTML = `<div class="trust-tabs" role="tablist">${tabs.map(([k, n]) => `<button class="trust-tab ${k === key ? 'on' : ''}" role="tab" aria-selected="${k === key}" onclick="go('${k}')">${esc(n)}</button>`).join('')}<span class="trust-tabs-hint">${esc((ADMIN_PAGE_OPERATIONS[key] || [])[1] || '')}</span></div>`
+      return
+    }
+  }
   const root = document.getElementById('pageOperations'), info = ADMIN_PAGE_OPERATIONS[key]
   if (!info) { root.hidden = true; return }
   root.hidden = false

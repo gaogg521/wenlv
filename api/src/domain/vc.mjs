@@ -227,6 +227,72 @@ export async function revoke(issueId, reason, by) {
   return { revoked: true, id: Number(issueId) }
 }
 
+/**
+ * 身份档案列表：一个用户 = 一个数字身份(DID) = 至多一个旅豆账户 + 若干徽章 / 行程 / 凭证。
+ * 数字身份与旅豆账户以 user_id 一一关联；列表里把两边放在同一行，避免"台账里 24 个账户、数字身份里 0 个持有人"这种脱节。
+ * DID 由 HMAC 稳定派生（幂等），本页用到的用户在这里顺手确保已派生。
+ */
+export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
+  page = Math.max(1, Number(page) || 1); size = Math.min(100, Math.max(1, Number(size) || 20))
+  const where = [], args = []
+  kw = String(kw || '').trim()
+  if (kw) {
+    if (/^\d+$/.test(kw)) { where.push('(u.id = ? OR u.nickname LIKE ?)'); args.push(Number(kw), '%' + kw + '%') }
+    else { where.push('(u.nickname LIKE ? OR u.did_ref = ?)'); args.push('%' + kw + '%', kw) }
+  }
+  const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
+  const total = Number((await one(`SELECT COUNT(*) n FROM user_account u ${w}`, args)).n) || 0
+  const rows = await q(`SELECT u.id, u.nickname, u.did_ref, u.member_level, u.growth_value, u.status, u.created_at,
+      b.balance, b.lifetime,
+      (SELECT COUNT(*) FROM user_badge ub WHERE ub.user_id = u.id) badges,
+      (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND o.status IN (40,50)) trips,
+      (SELECT COUNT(*) FROM vc_issue v WHERE v.user_id = u.id AND v.revoked_at IS NULL AND v.expires_at > NOW(3)) vc_active,
+      (SELECT MAX(v.issued_at) FROM vc_issue v WHERE v.user_id = u.id) vc_last
+    FROM user_account u LEFT JOIN bean_account b ON b.user_id = u.id ${w} ORDER BY u.id LIMIT ${size} OFFSET ${(page - 1) * size}`, args)
+  const lvs = await member.levels()
+  const out = []
+  for (const r of rows) {
+    const did = r.did_ref || await userDid(r.id)
+    out.push({
+      userId: Number(r.id), nickname: r.nickname || ('用户' + r.id), did,
+      levelNo: Number(r.member_level || 1), levelName: (lvs.find((l) => l.lv === Number(r.member_level || 1)) || lvs[0]).name,
+      growth: Number(r.growth_value) || 0, status: Number(r.status),
+      beanBalance: r.balance == null ? null : Number(r.balance), beanLifetime: r.lifetime == null ? null : Number(r.lifetime),
+      badges: Number(r.badges) || 0, trips: Number(r.trips) || 0, vcActive: Number(r.vc_active) || 0, vcLast: r.vc_last || null,
+    })
+  }
+  const agg = await one(`SELECT (SELECT COUNT(*) FROM user_account) users, (SELECT COUNT(*) FROM bean_account WHERE user_id < 999999000000) bean_accounts,
+    (SELECT COUNT(DISTINCT user_id) FROM vc_issue WHERE revoked_at IS NULL AND expires_at > NOW(3)) vc_holders`)
+  return { total, page, size, rows: out, summary: { users: Number(agg.users), beanAccounts: Number(agg.bean_accounts), vcHolders: Number(agg.vc_holders) } }
+}
+
+/** 单个身份的完整档案（后台可看；凭证本身仍只含最小披露字段）：等级 / 行程 / 城市 / 徽章 / 旅豆账户与流水 / 凭证记录 */
+export async function identityDetail(userId) {
+  userId = Number(userId)
+  const u = await one('SELECT id, nickname, member_level, growth_value, status, created_at FROM user_account WHERE id = ?', [userId])
+  if (!u) throw new Error('用户不存在')
+  const did = await userDid(userId)
+  const claims = await claimsOf(userId, 'travel')
+  const lvs = await member.levels()
+  const cur = lvs.find((l) => l.lv === Number(u.member_level || 1)) || lvs[0], next = lvs.find((l) => l.lv === cur.lv + 1)
+  const acct = await one('SELECT id, balance, lifetime FROM bean_account WHERE user_id = ?', [userId])
+  const ledger = acct ? await q(`SELECT tx_no, direction, amount, after_bal, biz_type, biz_ref, memo, created_at FROM bean_ledger
+      WHERE account_id = ? ORDER BY id DESC LIMIT 12`, [acct.id]) : []
+  const trips = await q(`SELECT o.order_no, o.status, o.city_code, p.title, COALESCE(o.completed_at, o.paid_at) at FROM orders o
+      JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ? AND o.status IN (40,50) ORDER BY o.id DESC LIMIT 20`, [userId])
+  const cities = await q(`SELECT city_code, COUNT(*) n FROM orders WHERE user_id = ? AND status IN (40,50) GROUP BY city_code ORDER BY n DESC`, [userId])
+  const badges = await q(`SELECT b.name, b.rule_desc, ub.granted_at, ub.ref FROM user_badge ub JOIN badge b ON b.id = ub.badge_id
+      WHERE ub.user_id = ? ORDER BY ub.granted_at DESC`, [userId])
+  const vcs = await q('SELECT id, scope, issued_at, expires_at, revoked_at FROM vc_issue WHERE user_id = ? ORDER BY id DESC LIMIT 10', [userId])
+  return {
+    userId, nickname: u.nickname || ('用户' + userId), did, claims,
+    level: { no: cur.lv, name: cur.name, growth: Number(u.growth_value) || 0, from: cur.min, to: next ? next.min : null, nextName: next ? next.name : null },
+    memberSince: u.created_at,
+    bean: acct ? { balance: Number(acct.balance), lifetime: Number(acct.lifetime), ledger } : null,
+    trips, cities, badges, vcs,
+  }
+}
+
 /** 后台概览 */
 export async function stats() {
   const k = await issuerKey()

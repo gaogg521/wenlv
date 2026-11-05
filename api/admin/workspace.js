@@ -100,8 +100,9 @@
     closeModal()
     document.body.classList.remove('nav-open')
     document.getElementById('menuToggle').setAttribute('aria-expanded', 'false')
-    allowedItems().forEach(el => { el.classList.toggle('on', el.dataset.p === key); el.setAttribute('aria-current', el.dataset.p === key ? 'page' : 'false') })
-    const active = allowedItems().find(el => el.dataset.p === key)
+    const navKey = (typeof TRUST_MERGE !== 'undefined' && TRUST_MERGE[key] && allowedItems().some(el => el.dataset.p === TRUST_MERGE[key])) ? TRUST_MERGE[key] : key   // 合并进页签的子页 → 高亮父级
+    allowedItems().forEach(el => { el.classList.toggle('on', el.dataset.p === navKey); el.setAttribute('aria-current', el.dataset.p === navKey ? 'page' : 'false') })
+    const active = allowedItems().find(el => el.dataset.p === navKey)
     if (active) active.closest('details').open = true
     document.getElementById('crumb').textContent = (NAV.find(([, items]) => items.some(([k]) => k === key))?.[0] || '工作台') + ' / ' + titleFor(key)
     document.getElementById('pageTitle').textContent = titleFor(key)
@@ -274,7 +275,7 @@
     document.querySelectorAll('#nav details').forEach(section => {
       let visible = 0
       const group = NAV.find(([g]) => section.querySelector('summary').textContent.startsWith(g))?.[0] || ''
-      section.querySelectorAll('[data-p]').forEach(button => { button.hidden = !(group + ' ' + button.textContent).toLowerCase().includes(needle); if (!button.hidden) visible++ })
+      section.querySelectorAll('[data-p]').forEach(button => { button.hidden = button.classList.contains('nav-merged') || !(group + ' ' + button.textContent + ' ' + (button.dataset.alias || '')).toLowerCase().includes(needle); if (!button.hidden) visible++ })
       section.hidden = !visible; if (needle && visible) section.open = true; count += visible
       if (!needle && navBeforeSearch) section.open = navBeforeSearch.get(section) || !!section.querySelector('[aria-current="page"]')
     })

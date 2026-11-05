@@ -316,7 +316,7 @@ const web3 = {
     const cap = await one('SELECT * FROM bean_global_cap ORDER BY id DESC LIMIT 1')
     const byBiz = await q(`SELECT biz_type, SUM(CASE WHEN direction = 1 THEN amount ELSE 0 END) issued,
       SUM(CASE WHEN direction = 2 THEN amount ELSE 0 END) burned FROM bean_ledger GROUP BY biz_type ORDER BY biz_type`)
-    const holders = await one('SELECT COUNT(*) c FROM bean_account')
+    const holders = await one('SELECT COUNT(*) c FROM bean_account WHERE user_id < 999999000000')   // 只数真实用户户：排除预算 / 平台哨兵户
     return { budgets, globalCap: cap, byBiz, holders: Number(holders.c) || 0,
       note: '积分按预算批次发行，年度总量受 global_cap 哨兵约束（双分录账本，严禁超发）' }
   },
@@ -492,6 +492,17 @@ const web3 = {
     const v = await vc.issue(userId, scope)
     await tx(async (c) => audit(c, 'admin:' + a.name, 'vc', 'issue', 'vc-' + v.jti, null, { userId, scope }))
     return v
+  },
+  // 身份档案：数字身份(DID) ↔ 旅豆账户 ↔ 徽章 / 行程 / 凭证，按 user_id 一一关联
+  'GET /admin/web3/identities': async (req) => {
+    await requireAdmin(req)
+    return await vc.identities({ q: req.query?.q, page: req.query?.page, size: req.query?.size })
+  },
+  'GET /admin/web3/identity/:userId': async (req) => {
+    await requireAdmin(req)
+    const id = Number(req.params.userId)
+    if (!Number.isInteger(id) || id <= 0) throw new BizError(1001, '用户 id 不合法')
+    try { return await vc.identityDetail(id) } catch (e) { if (/用户不存在/.test(e.message)) throw new BizError(1004, '用户不存在'); throw e }
   },
   'POST /admin/web3/vc/:id/revoke': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
