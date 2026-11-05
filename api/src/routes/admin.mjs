@@ -296,6 +296,28 @@ const admin = {
       mode: String((await cfgAll())['admin.mfa.mode'] || 'optional').replace(/"/g, ''),
       pendingReview: pending ? { id: pending.id, newValue: String(pending.new_value).replace(/"/g, ''), proposer: pending.proposer } : null }
   },
+  // M-03：真实通道发送测试——从安全中心发起，结果记入 channel_probe（脱敏目标），状态机据此转 verified/fault。
+  // 保存配置 ≠ 真实可送达；"最近联调通过"只能由这里或登录自然发送的真实受理产生。
+  'POST /admin/security/channels/:channel/test': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const mfa = await import('../infra/mfa.mjs')
+    const channel = String(req.params.channel)
+    if (!['sms', 'email'].includes(channel)) throw new BizError(1001, '通道必须是 sms 或 email')
+    const target = String(req.body?.target || '').trim()
+    if (!target) throw new BizError(1001, '请填写真实测试收件目标（手机号或邮箱）')
+    let before = await mfa.channelStatus()
+    if (!before[channel].configured) throw new BizError(1001, '该通道凭据未配置，请先在集成中心保存')
+    try {
+      await mfa.sendCode(target, channel, 'probe')
+    } catch (e) {
+      const after = await mfa.channelStatus()
+      throw new BizError(5001, '发送失败：' + e.message + '（最近状态：' + after[channel].state + '）')
+    }
+    const after = await mfa.channelStatus()
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'security', 'probe', 'channel:' + channel, null, { target: mfa.maskTarget(target), state: after[channel].state }))
+    return { sent: true, state: after[channel].state, lastProbe: after[channel].lastProbe,
+      note: '已发起真实发送（服务商受理）。请在收件端确认收到并完成一次验证码校验，才能视为真实收件通过' }
+  },
   // C-02 / D-02：全局 MFA 三档走敏感参数双人复核（admin.mfa.mode sensitive=1），此处只提交提案，
   // 由另一位超管在参数中心「参数审批」通过后才生效（approve 内 loadConfig(true) 热刷新）
   'POST /admin/security/mfa-mode': async (req) => {

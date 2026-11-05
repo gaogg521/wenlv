@@ -15,6 +15,7 @@ const call = async (tok, method, path, body) => (await fetch(base + path, {
   body: body ? JSON.stringify(body) : undefined,
 })).json()
 const superTok = jwtSign({ end: 'admin', role: 'super', name: 'MFA回归-超管' })
+const tok = (role) => jwtSign({ end: 'admin', role, name: 'MFA回归-' + role })
 const ok = (r) => { assert.equal(r.code, 0, r.msg); return r.data }
 let passed = 0
 const test = async (name, fn) => { await fn(); passed++; console.log('  ✓ ' + name) }
@@ -128,6 +129,21 @@ try {
     assert.equal(chn.pendingReview.newValue, 'off', 'channels 返回待复核提案')
     const modeBefore = await one("SELECT v FROM rule_config WHERE k='admin.mfa.mode'")
     assert.ok(!modeBefore || String(modeBefore.v).includes('optional'), 'rule_config 仍是旧值或未落行（未绕过复核）')
+  })
+
+  await test('M-03：通道状态五态字段齐全——未配置即 unconfigured，探针记录只含脱敏目标', async () => {
+    const ch = ok(await call(superTok, 'GET', '/admin/security/channels'))
+    for (const c of ['totp', 'sms', 'email']) {
+      assert.ok(ch[c] && typeof ch[c].state === 'string', c + ' 有 state 字段')
+      assert.ok(['unconfigured', 'mock', 'ready', 'verified', 'fault'].includes(ch[c].state), c + ' state 在五态内：' + ch[c].state)
+    }
+    assert.equal(ch.totp.state, 'verified', 'TOTP 无需外部凭据')
+    if (ch.email && ch.email.lastProbe) {
+      assert.ok(!/@[^@]*$/.test(ch.email.lastProbe.target_masked) || /\*/.test(ch.email.lastProbe.target_masked), '探针目标为脱敏值')
+      assert.ok(!/[0-9]{6}/.test(ch.email.lastProbe.detail || ''), '探针摘要不含验证码')
+    }
+    const denied = await call(tok('finance'), 'GET', '/admin/security/channels')
+    assert.equal(denied.code, 1003, '非授权角色不能读通道状态')
   })
 
   await test('U-02：must_change_pwd 接口层强制——未改密只能改密，改后重新登录', async () => {

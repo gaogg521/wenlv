@@ -169,6 +169,15 @@ window.accountPermModal = async (id, username) => {
     <details open><summary class="nav-group">按分组设置</summary>
     ${groups.map((g) => `<div style="margin:10px 0"><b>${esc(g)}</b><table>${d.modules.filter((m) => m.group === g).map((m) => sel(m.key, m)).join('')}</table></div>`).join('')}
     </details>
+    ${(() => {
+      const acts = d.actions || []
+      if (!acts.length) return ''
+      const yes = acts.filter((a) => a.allowed), no = acts.filter((a) => !a.allowed)
+      const li = (a) => `<tr><td><code>${esc(a.key)}</code></td><td>${esc(a.label)}</td><td>${a.allowed ? '<span class="pill ok">可办</span>' : '<span class="pill off">不可办</span>'}</td></tr>`
+      return `<details><summary class="nav-group">动作能力（授予模块后这些仍按角色决定）</summary>
+      <p class="td-sub">模块决定"能看哪些页面"；登记打款、批量打款、联调完成、导出、任务干预等动作另有角色限制，不随模块授权放开。下表是该账号角色下的实际可用动作：</p>
+      <table><thead><tr><th>动作</th><th>所需角色</th><th>该账号</th></tr></thead><tbody>${yes.map(li).join('')}${no.map(li).join('')}</tbody></table></details>`
+    })()}
     <div class="field" style="margin-top:10px"><label>授权/收回原因 *（4–200 字，进入审计）</label><input id="apReason" maxlength="200" placeholder="例如：临时协助风控核查"></div>
     <div id="apErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountPermSubmit(${id}, '${esc(username)}')">保存权限</button>`)

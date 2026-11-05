@@ -377,7 +377,16 @@ const web3 = {
       FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id < 999999000000 GROUP BY l.biz_type`)
     const sideOf = new Map(userSide.map((r) => [Number(r.biz_type), r]))
     for (const x of byBiz) { const u = sideOf.get(Number(x.biz_type)); x.userIn = u ? Number(u.user_in) : 0; x.userOut = u ? Number(u.user_out) : 0; x.entries = u ? Number(u.n) : 0 }
+    // P-13：四个口径分开给——预算登记累计 / 账本业务发放累计 / 期初导入累计 / 历史来源待核对差额。
+    // 差额>0 表示历史上存在预算已登记但账本不可逐笔追溯的发放（旧演示数据）；如实展示，不回拨、不伪造补账。
+    const flow = await bean.flow()
+    const budgetGranted = budgets.reduce((s, b) => s + Number(b.granted || 0), 0)
+    const bizGranted = Number(flow.granted) - Number(flow.openingImported)
+    const gap = Math.max(0, budgetGranted - bizGranted)
     return { budgets, globalCap: cap, byBiz, holders: Number(holders.c) || 0, userBalance: Number(holders.bal) || 0, userLifetime: Number(holders.life) || 0,
+      calibers: { budgetGranted, bizGranted, openingImported: Number(flow.openingImported), retained: Number(flow.granted), gap,
+        note: gap > 0 ? '预算登记累计高于账本可逐笔追溯的业务发放，差额属历史演示数据、来源待核对；拿到真实历史凭据后按正式迁移/冲正流程处理，不直接改余额、不伪造补账。修前快照与处理审计见 audit_log（引用 demo-bean-repair-v1）'
+          : '预算登记与账本逐笔一致' },
       note: '积分按预算批次发行，年度总量受 global_cap 哨兵约束（双分录账本，严禁超发）' }
   },
 
