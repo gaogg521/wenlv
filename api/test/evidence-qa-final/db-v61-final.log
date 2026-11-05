@@ -1,0 +1,52 @@
+
+> wanderlust-api@1.0.0 test:db
+> node test/tbaas.mjs && node test/web3-core.mjs && node test/web3-integrity.mjs && node test/refund-e2e.mjs && node test/entity-engine.mjs && node test/chain-hub.mjs && node test/business-rules.mjs && node test/content-review.mjs && node test/people.mjs && node test/mobile-freeze.mjs && node test/partners.mjs && node test/scenics.mjs && node test/content-dashboard.mjs && node test/partner-performance.mjs && node test/content-governance.mjs && node test/cross-end.mjs && node test/admin-operations.mjs && node test/admin-coprofit.mjs && node test/admin-accounts.mjs && node test/admin-mfa.mjs && node test/admin-modules.mjs && node test/admin-versions.mjs && node test/admin-reschedule.mjs && node test/admin-reschedule-qa.mjs && node test/admin-pages-sweep.mjs && node test/admin-receipt-roundtrip.mjs && node test/admin-module-deny.mjs && node test/admin-orders-search.mjs && node test/admin-tickets.mjs && node test/admin-userops.mjs && node test/admin-riskcases.mjs && node test/admin-fundworkbench.mjs && node test/admin-reviewqueue.mjs && node test/admin-userpicker-bulktag.mjs && node test/attest-search.mjs && node test/consent.mjs
+
+== TBaaS 适配器 ==
+  ✓ 缺通道与链 ID 时不可用；配了任一个即可
+  ✓ Fabric 形态（默认）：数组入参 + ChannelId，旧响应 Response.Txid 照常解析
+  ✓ 长安链形态：Action/版本/地域可配，入参是字符串键值对象，交易号取自 Response.Result.TxId
+  ✓ Result.Code 不为 0 视为合约执行失败，不记成功
+  ✓ Response.Error 与缺交易号照旧报错
+  ✓ 入参模板：非对象报错，值一律转成字符串
+  ✓ 离线自检仍通过
+  ✓ 体验网络按 TxID 回查并等待终局；Fabric 不声明确认能力
+  ✓ 错误回执不得记终局：失败、交易号错、缺 Code、无效块高
+  ✓ 只读探测确实调用查询接口、base64 解码且不提交交易
+  ✓ 正式网络确认必须核对回执以及合约记录中的根、交易号、前根与日期
+  ✓ 并发请求间隔至少 1 秒，失败后队列仍可继续且不重发写交易
+  ✓ 隔离库：提交仅进入 5；指定批次确认进入 2，另一批次保持 5
+  ✓ 隔离库：重复确认已终局批次不再发请求；待确认空块高保持 5
+  ✓ 隔离库：待确认期间改成不支持确认的配置，不得直接当成功
+  ✓ 隔离库：TBaaS 回查失败保留交易号，不触发重复提交
+  ✓ 隔离库：TBaaS 提交结果未知转人工，重复调用不会再次提交
+
+17 项通过
+== A Merkle ==
+  ✓ v2 1 片叶子：每条 proof 都能重算回根
+  ✓ v2 2 片叶子：每条 proof 都能重算回根
+  ✓ v2 3 片叶子：每条 proof 都能重算回根
+  ✓ v2 5 片叶子：每条 proof 都能重算回根
+  ✓ v2 7 片叶子：每条 proof 都能重算回根
+  ✓ v2 8 片叶子：每条 proof 都能重算回根
+  ✓ v2 13 片叶子：每条 proof 都能重算回根
+  ✓ v2 64 片叶子：每条 proof 都能重算回根
+  ✓ v2 100 片叶子：每条 proof 都能重算回根
+  ✓ v2 堵住"复制末节点"碰撞：[a,b,c] 与 [a,b,c,c] 根不同
+  ✓ v2 堵住"内部节点冒充叶子"的第二原像
+  ✓ 篡改任一叶 / 任一步兄弟 / 方向 → 验证失败
+  ✓ 非法输入直接拒绝，而不是算出一个值
+  ✓ v1 历史批次仍可验证（兼容）
+== B 业务日 ==
+  ✓ UTC 23:30 = 北京次日 07:30，业务日取北京日期
+== C EVM 锚定终局 ==
+  ✓ 提交后只到"已提交·待确认"(5)，不是"已锚定"(2)
+  ✓ 确认数不足保持 5；达标后置 2 并记录确认数
+  ✓ 链上内容与根不符 → 作废回到 3（可重试），绝不记为已锚定
+  ✓ 回执 status=0x0（交易执行失败）→ 回到 3
+  ✓ 失败批次重试后可正常锚定
+  ✓ 已锚定批次不可回退（数据库触发器）
+  ✓ 缺 EVM_RPC_URL 时不算真实接入（只能发、不能证）
+
+22 项通过
+Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76

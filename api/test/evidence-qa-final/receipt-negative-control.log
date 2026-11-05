@@ -1,0 +1,11 @@
+file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/[eval1]:1
+import assert from'node:assert/strict';const orig=assert.equal;assert.equal=(a,b,m)=>{if(m==='往返字节数一致')throw Error('Codex intentional failure control');return orig(a,b,m)};await import('./test/admin-receipt-roundtrip.mjs')
+                                                                                                             ^
+
+Error: Codex intentional failure control
+    at assert.equal (file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/[eval1]:1:110)
+    at file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/test/admin-receipt-roundtrip.mjs:54:10
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+Node.js v24.13.0
+Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76

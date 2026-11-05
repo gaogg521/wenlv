@@ -1,0 +1,25 @@
+  ✓ 队列聚合：note 队列含夹具待审笔记；finance/risk/city 拒绝
+  ✓ V-07：待办总数独立计数，前 20 条是显示窗口
+  ✓ 认领互斥：review 认领后 super 被拒；本人幂等；释放后可再认领；无判定权角色不能认领
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: 模块未授权（reviewqueue），请联系超级管理员在「后台账号 → 权限」调整
+
+1003 !== 0
+
+    at ok (file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/test/admin-reviewqueue.mjs:18:28)
+    at file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/test/admin-reviewqueue.mjs:87:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async test (file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/test/admin-reviewqueue.mjs:20:36)
+    at async file:///C:/Users/allenzhao/Desktop/%E6%96%87%E6%97%85%E9%A1%B9%E7%9B%AE/wenlv-qa-finish-codex/api/test/admin-reviewqueue.mjs:75:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1003,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.13.0

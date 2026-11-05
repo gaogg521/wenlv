@@ -1,0 +1,1 @@
+QA-06 浏览器文件选择通过：真实 input[type=file] 选择 PDF → 上传 → 落库 receipt_url → 下载字节一致（1039B）
