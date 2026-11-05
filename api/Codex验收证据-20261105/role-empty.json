@@ -1,0 +1,14 @@
+{
+  "databaseRows": 0,
+  "effective": [
+    "dash",
+    "audit",
+    "system",
+    "integrations",
+    "chainhub",
+    "web3dash",
+    "attest",
+    "features",
+    "terms"
+  ]
+}
