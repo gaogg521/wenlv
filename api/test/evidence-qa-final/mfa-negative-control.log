@@ -1,0 +1,17 @@
+== C-06 腾讯云短信 ==
+  ✗ TC3 签名请求形态：Authorization/动作/模板参数/E.164 手机号 
+     Codex intentional failure control
+  ✗ 真实发送：假端点收到 TC3 请求并返回 Ok 
+     Codex intentional failure control
+  ✓ 网关错误必须抛错（不静默成功）
+  ✓ 业务失败（超限等）必须抛错
+  ✓ 非 JSON 响应必须抛错
+  ✓ 凭据不完整直接抛错
+== C-07 SMTP ==
+  ✗ SMTP 会话：AUTH LOGIN → 信封 → DATA（UTF-8 主题 base64、正文含验证码与有效期） 
+     Codex intentional failure control
+  ✓ 错误密码必须抛错（不静默成功）
+  ✓ 连接拒绝必须抛错
+  ✓ 配置不完整直接抛错
+
+7/10 项 C-06/C-07 发送器测试通过

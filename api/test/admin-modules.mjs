@@ -25,7 +25,7 @@ const test = async (name, fn) => { await fn(); passed++; console.log('  ✓ ' + 
 // readonly/sre/dev 为 D-01 显式默认（原缺省放行全菜单属缺陷，不作为基线）。
 const BASELINE = {
   ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'taskcash'],
-  finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash'],
+  finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
   review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],
   city_partner: ['dash', 'orders', 'tickets', 'products', 'merchants', 'settlements', 'cases', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases'],
@@ -178,6 +178,10 @@ try {
     for (const [method, path] of hidden) {
       for (const role of ['ops', 'finance', 'review', 'risk']) {
         const r = await call(tok(role), method, path)
+        if (role === 'finance' && ['/admin/config', '/admin/config/history'].includes(path)) {
+          assert.equal(r.code, 0, '财务参数复核模块已由V61明确授予')
+          continue
+        }
         assert.equal(r.code, 1003, `${role} 直调 ${path} 应 1003，实际 ${r.code} ${r.msg || ''}`)
       }
       const cityR = await call(jwtSign({ end: 'admin', role: 'city_partner', name: '直调-无城' }), method, path)

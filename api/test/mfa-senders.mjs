@@ -7,8 +7,8 @@ import net from 'node:net'
 import { buildRequest, sendSms } from '../src/infra/sms-tencent.mjs'
 import { sendMail } from '../src/infra/smtp.mjs'
 
-let pass = 0
-const t = (name, fn) => fn().then(() => { pass++; console.log('  ✓', name) })
+let pass = 0, TOTAL = 0
+const t = (name, fn) => { TOTAL++; return fn().then(() => { pass++; console.log('  ✓', name) }).catch((e) => { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 }) }
 
 const CRED = { secretId: 'AKIDtest', secretKey: 'secret-test-key', sdkAppId: '1400000000', signName: '向往的自由', templateId: '2000001' }
 
@@ -132,5 +132,7 @@ await t('配置不完整直接抛错', async () => {
 })
 smtpServer.close()
 
-console.log(`\n${pass} 项 C-06/C-07 发送器测试通过`)
-process.exitCode = pass >= 11 ? 0 : 1
+// QA-05：可靠失败计数——用计划用例总数判定，不写死魔法数字 11（本套件实际 10 项）；
+// 断言失败不静默、不吞异常：逐用例 catch 记失败，此处按真实通过数决定退出码
+console.log(`\n${pass}/${TOTAL} 项 C-06/C-07 发送器测试通过`)
+process.exitCode = pass === TOTAL ? 0 : 1

@@ -182,9 +182,10 @@ if ((!process.env.DB_NAME || PROTECTED.includes(process.env.DB_NAME)) && process
   })
   // 清理：测试批次不留在库里（已锚定的批次触发器禁止回退，但允许删除）
   await q(`DELETE FROM attest_batch WHERE merkle_kind = 'test'`)
-  srv.close()
-  const { pool } = await import('../src/db.mjs').catch(() => ({}))
-  if (pool?.end) await pool.end()
+  srv.closeAllConnections()
+  await new Promise((resolve) => srv.close(resolve))
+  const { closeDb } = await import('../src/db.mjs')
+  await closeDb()
 }
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
-process.exit(process.exitCode || 0)
+// 正常释放句柄后自然退出；Windows上强制exit会触发libuv关闭断言。

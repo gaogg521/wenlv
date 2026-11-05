@@ -266,6 +266,9 @@ window.rescheduleSubmit = async (orderNo) => {
   } catch (e) { $('#rsErr').textContent = e.message }
 }
 const RS_ST_PILL = { 0: '<span class="pill warn">待审批</span>', 1: '<span class="pill s20">待执行</span>', 2: '<span class="pill off">已驳回</span>', 3: '<span class="pill ok">已执行</span>', 4: '<span class="pill off">已撤回</span>', 5: '<span class="pill s70">执行失败</span>' }
+const rescheduleIsApplicant = (r) => r.applicant_uid != null
+  ? ME?.uid == null || Number(r.applicant_uid) === Number(ME.uid)
+  : r.applicant === 'admin:' + (ME?.displayName || ME?.username || '')
 window.rescheduleDrawer = async (orderNo) => {
   const d = await api('GET', '/admin/reschedules?kw=' + encodeURIComponent(orderNo) + '&pageSize=20')
   drawer('改期记录 · ' + esc(orderNo), `
@@ -276,8 +279,8 @@ window.rescheduleDrawer = async (orderNo) => {
       <td>${RS_ST_PILL[r.status] || r.status}${r.exec_note ? '<div class="td-sub">' + esc(r.exec_note) + '</div>' : ''}</td>
       <td class="td-sub">${esc(r.applicant || '')}${r.approver ? '<br>审批：' + esc(r.approver) : ''}</td>
       <td><div class="td-actions">
-        ${Number(r.status) === 0 && ME?.role === 'super' && r.applicant !== 'admin:' + (ME?.displayName || ME?.username || '') ? `<button class="btn primary sm" onclick="rescheduleVerdict(${r.id}, 1, '${esc(orderNo)}')">通过</button><button class="btn danger sm" onclick="rescheduleVerdict(${r.id}, 0, '${esc(orderNo)}')">驳回</button>` : ''}
-        ${Number(r.status) === 0 && (r.applicant === 'admin:' + (ME?.displayName || ME?.username || '') || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${esc(orderNo)}')">撤回</button>` : ''}
+        ${Number(r.status) === 0 && ME?.role === 'super' && !rescheduleIsApplicant(r) ? `<button class="btn primary sm" onclick="rescheduleVerdict(${r.id}, 1, '${esc(orderNo)}')">通过</button><button class="btn danger sm" onclick="rescheduleVerdict(${r.id}, 0, '${esc(orderNo)}')">驳回</button>` : ''}
+        ${Number(r.status) === 0 && (rescheduleIsApplicant(r) || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${esc(orderNo)}')">撤回</button>` : ''}
         ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${esc(orderNo)}')">执行换团</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : emptyBox('该订单暂无改期申请')}
     <p class="td-sub">执行时服务端会再次校验订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)

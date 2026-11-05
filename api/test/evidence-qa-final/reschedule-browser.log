@@ -1,0 +1,1 @@
+[{"check":"browser apply → own approve hidden → distinct UID same name approves → execute → inventory readback","pass":true,"order":{"session_id":24,"version":1},"inventory":[{"id":23,"booked":0},{"id":24,"booked":2}]}]

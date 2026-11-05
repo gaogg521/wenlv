@@ -75,11 +75,15 @@ export async function requireModule(req, moduleKey) {
   const p = await requireAdmin(req)
   const { CITY_DENY_MODULES } = await import('../domain/modules.mjs')
   const { accountModules } = await import('../domain/admin-modules.mjs')
-  if (p.role === 'city_partner' && CITY_DENY_MODULES.includes(moduleKey)) {
-    throw new BizError(1003, '城市账号不可使用该模块（' + moduleKey + '）')
+  const resolved = moduleKey && typeof moduleKey === 'object' && !Array.isArray(moduleKey)
+    ? moduleKey[p.role] || moduleKey.default : moduleKey
+  const keys = Array.isArray(resolved) ? resolved : [resolved]
+  const permittedKeys = p.role === 'city_partner' ? keys.filter((k) => !CITY_DENY_MODULES.includes(k)) : keys
+  if (!permittedKeys.length) {
+    throw new BizError(1003, '城市账号不可使用该模块（' + keys.join('/') + '）')
   }
   const set = await accountModules(p.uid, p.role)
-  if (!set.has(moduleKey)) throw new BizError(1003, '模块未授权（' + moduleKey + '），请联系超级管理员在「后台账号 → 权限」调整')
+  if (!permittedKeys.some((k) => set.has(k))) throw new BizError(1003, '模块未授权（' + keys.join('/') + '），请联系超级管理员在「后台账号 → 权限」调整')
   return p
 }
 
