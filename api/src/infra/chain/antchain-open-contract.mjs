@@ -17,7 +17,7 @@
 // 这一对值连同合约名记进 chain_content，确认时据此核对。旧的 DEPOSIT 批次仍按旧入口核验（chain_provider 不同）。
 //
 // ⚠ 以下几点文档没写清、离线无法验证，必须部署后在真实链上核对（见交接文档）：
-//   1) bytes32 参数在 inputParamListStr 里怎么表示（"0x…" / 裸 hex / base64）→ ANTOPEN_CONTRACT_BYTES 可切换
+//   1) bytes32 参数在 inputParamListStr 里怎么表示 → 真机已核对：base64（默认）；0x/裸 hex 被链拒绝（405 value length must be 32）。ANTOPEN_CONTRACT_BYTES 可切换用于排查
 //   2) QUERYRECEIPT 返回（真机已核对，2026-11-05）：扁平 JSON，字段 blockNumber/code/gasUsed/hash/logs/output/result/txFinish/txSuccess；
 //      成功 = result===0，output 是 base64；txSuccess/txFinish 在读调用上恒为 false，不要用。仍兼容 transactionReceipt 嵌套
 //   3) 同一 orderId 重复调用的行为（DEPOSIT 实测是静默返回首次那笔；这里 orderId 含 seq 与前根，换了状态就换号）
@@ -41,7 +41,7 @@ const cenv = () => ({
   name: E.ANTOPEN_CONTRACT_NAME || '',
   gas: Number(E.ANTOPEN_CONTRACT_GAS) > 0 ? Number(E.ANTOPEN_CONTRACT_GAS) : 500000,
   strict: !['0', 'false', 'off'].includes(String(E.ANTOPEN_CONTRACT_STRICT ?? '1').toLowerCase()),
-  bytes: ['0x', 'hex', 'base64'].includes(E.ANTOPEN_CONTRACT_BYTES) ? E.ANTOPEN_CONTRACT_BYTES : '0x',
+  bytes: ['0x', 'hex', 'base64'].includes(E.ANTOPEN_CONTRACT_BYTES) ? E.ANTOPEN_CONTRACT_BYTES : 'base64',   // 真机实测：只有 base64 被接受（0x/hex 报 405 value length must be 32）
   // 读调用等回执的轮询：次数 × 间隔（间隔另外受全局 TPS 队列约束）
   pollTries: Number(E.ANTOPEN_CONTRACT_POLL_TRIES) > 0 ? Number(E.ANTOPEN_CONTRACT_POLL_TRIES) : 8,
   pollMs: E.ANTOPEN_CONTRACT_POLL_MS != null && E.ANTOPEN_CONTRACT_POLL_MS !== '' ? Number(E.ANTOPEN_CONTRACT_POLL_MS) : 1500,
@@ -53,8 +53,8 @@ function missing() {
   return m
 }
 
-/** bytes32 入参的表示：文档没写清，三种都留着，部署后真机核对 */
-export function fmtBytes32(hex64, fmt = '0x') {
+/** bytes32 入参的表示。真机实测（2026-11-05）：**只有 base64（44 字符）被接受**；'0x…' 与裸 hex 都报 405 "value length must be 32"。其余两种留着只为排查 */
+export function fmtBytes32(hex64, fmt = 'base64') {
   const h = String(hex64 || '')
   if (!HASH64.test(h)) throw new Error('bytes32 必须是 64 位十六进制：' + scrub(h))
   const low = h.toLowerCase()
@@ -62,7 +62,7 @@ export function fmtBytes32(hex64, fmt = '0x') {
 }
 
 /** writeRoot 的入参数组（JSON 串由调用处 stringify）；数值类参数用 number，字节类用字符串 */
-export function writeRootArgs({ root, prevRoot, bizDate, leafCount, seq }, fmt = '0x') {
+export function writeRootArgs({ root, prevRoot, bizDate, leafCount, seq }, fmt = 'base64') {
   const biz = Number(dateNum(bizDate))
   if (!Number.isInteger(biz) || biz < 20200101 || biz > 29991231) throw hard('BAD_ARGS', 'bizDate 必须是 yyyy-mm-dd（合约要求 2020~2999 年）')
   if (!Number.isInteger(leafCount) || leafCount <= 0) throw hard('BAD_ARGS', 'leafCount 必须是正整数')
@@ -132,6 +132,20 @@ export function decodeOutput(outputB64, types) {
   })
 }
 
+/**
+ * 合约回滚的原因：回执 output 是标准 Error(string)（选择子 08c379a0 + 偏移 + 长度 + 文本），真机实测
+ * （序号跳号 → result=10201，output 解出 "seq must be lastSeq+1"）。解不出就返回空串，不影响判定。
+ */
+export function revertReason(outputB64) {
+  try {
+    const hex = Buffer.from(String(outputB64 || ''), 'base64').toString('hex')
+    if (!hex.startsWith('08c379a0')) return ''
+    const body = hex.slice(8), off = Number(BigInt('0x' + body.slice(0, 64))) * 2
+    const len = Number(BigInt('0x' + body.slice(off, off + 64)))
+    return Buffer.from(body.slice(off + 64, off + 64 + len * 2), 'hex').toString('utf8').replace(/[^ -~]/g, '').slice(0, 120)
+  } catch { return '' }
+}
+
 /** 读调用：发交易 → 轮询回执 → 解析返回值。回执 result≠0 说明合约拒绝了这次调用 */
 async function readContract(sig, args, outs, tag) {
   const orderId = `wlr_${tag}_${Date.now().toString(36)}${(rnd++).toString(36)}`
@@ -143,7 +157,7 @@ async function readContract(sig, args, outs, tag) {
     rc = await getReceipt(tx)
   }
   if (!rc) throw new Error(`antchain-contract 读调用 ${sig} 等回执超时（交易 ${tx}）`)
-  if (rc.result !== 0) throw hard('CONTRACT_REVERT', `antchain-contract 读调用 ${sig} 被合约拒绝（result=${rc.result}）：合约名/部署/gas 是否正确`)
+  if (rc.result !== 0) throw hard('CONTRACT_REVERT', `antchain-contract 读调用 ${sig} 被合约拒绝（result=${rc.result}${revertReason(rc.output) ? '，原因：' + revertReason(rc.output) : ''}）：合约名/部署/gas 是否正确`)
   return decodeOutput(rc.output, outs)
 }
 
@@ -218,7 +232,7 @@ export default {
     const rc = await getReceipt(txRef)
     if (!rc) return pending('回执')
     if (rc.result !== 0) {
-      throw hard('CONTRACT_REVERT', `antchain-contract 合约拒绝了这笔写入（result=${rc.result}）：常见原因是链头已变（序号/前根对不上）或 gas 不足；重试会重新读链头，请人工确认后重提`)
+      throw hard('CONTRACT_REVERT', `antchain-contract 合约拒绝了这笔写入（result=${rc.result}${revertReason(rc.output) ? '，原因：' + revertReason(rc.output) : ''}）：常见原因是链头已变（序号/前根对不上）或 gas 不足；重试会重新读链头，请人工确认后重提`)
     }
     const out = decodeOutput(rc.output, OUT.writeRoot)
     if (!Array.isArray(out) || out[0] !== true) {
@@ -251,7 +265,8 @@ export default {
   selfTest() {
     const root = 'ab'.repeat(32)
     const a = writeRootArgs({ root, prevRoot: '', bizDate: '2026-11-05', leafCount: 12, seq: 1 })
-    const ok = a.length === 5 && a[0] === '0x' + root && a[1] === '0x' + ZERO && a[2] === 20261105 && a[3] === 12 && a[4] === 1
+    const b64 = (h) => Buffer.from(h, 'hex').toString('base64')
+    const ok = a.length === 5 && a[0] === b64(root) && a[1] === b64(ZERO) && a[2] === 20261105 && a[3] === 12 && a[4] === 1
       && fmtBytes32(root, 'hex') === root && Buffer.from(fmtBytes32(root, 'base64'), 'base64').toString('hex') === root
       && SIG.writeRoot.split(',').length === 5 && OUT.getRoot.length === 5 && OUT.head.length === 3
     return { ok, detail: { writeRoot: SIG.writeRoot, bytes32: cenv().bytes, contract: cenv().name || '（未配置）' } }

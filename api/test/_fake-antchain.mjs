@@ -9,13 +9,14 @@ import crypto from 'node:crypto'
 
 export const ZERO = '0'.repeat(64)
 const send = (res, o) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(o)) }
-const b32 = (v) => {                       // 三种 bytes32 表示都认，统一成 64 位小写 hex
-  const s = String(v)
-  if (/^0x[0-9a-f]{64}$/i.test(s)) return s.slice(2).toLowerCase()
-  if (/^[0-9a-f]{64}$/i.test(s)) return s.toLowerCase()
-  if (/^[A-Za-z0-9+/]{43}=$/.test(s)) return Buffer.from(s, 'base64').toString('hex')
-  return null
+// bytes32 入参：真机实测只认 base64（44 字符，解出 32 字节）；'0x…'/裸 hex 报 405 "value length must be 32"
+const b32 = (v) => (/^[A-Za-z0-9+/]{43}=$/.test(String(v)) ? Buffer.from(String(v), 'base64').toString('hex') : null)
+// 回滚回执：真机实测 result=10201，output 是标准 Error(string)
+const errOut = (reason) => {
+  const t = Buffer.from(reason, 'utf8'), pad = (h) => h.padEnd(Math.ceil(h.length / 64) * 64, '0')
+  return Buffer.from('08c379a0' + (32).toString(16).padStart(64, '0') + t.length.toString(16).padStart(64, '0') + pad(t.toString('hex')), 'hex').toString('base64')
 }
+const REVERT = 10201
 
 export async function startFake({ publicKey }) {
   const st = {
@@ -58,10 +59,11 @@ export async function startFake({ publicKey }) {
     }
     if (sig === 'writeRoot(bytes32,bytes32,uint64,uint32,uint32)') {
       const [root, prev, bizDate, leafCount, seq] = [b32(args[0]), b32(args[1]), args[2], args[3], args[4]]
-      if (st.forceRevert) { st.forceRevert = false; tx.receipt = { result: 1, output: '' }; return }
-      if (!root || !prev) { tx.receipt = { result: 1, output: '' }; return }
+      if (st.forceRevert) { st.forceRevert = false; tx.receipt = { result: REVERT, output: errOut('only owner') }; return }
+      if (!root || !prev) { tx.receipt = { result: REVERT, output: errOut('bad bytes32') }; return }
       if (st.roots.has(root)) { tx.receipt = { result: 0, output: out([false]) }; return }          // 幂等：同根返回 false
-      if (seq !== st.seq + 1 || prev !== st.lastRoot) { tx.receipt = { result: 1, output: '' }; return } // 序号/前根对不上 → 回滚
+      if (seq !== st.seq + 1) { tx.receipt = { result: REVERT, output: errOut('seq must be lastSeq+1') }; return }
+      if (prev !== st.lastRoot) { tx.receipt = { result: REVERT, output: errOut('prevRoot mismatch') }; return } // 序号/前根对不上 → 回滚
       st.roots.set(root, { prev, bizDate, leafCount, seq, at: 1700000000 + st.height })
       st.seq = seq; st.lastRoot = root; st.total += 1
       tx.receipt = { result: 0, output: out([true]) }
@@ -99,6 +101,9 @@ export async function startFake({ publicKey }) {
         }
         if (j.method === 'CALLCONTRACTBIZASYNC') {
           if (String(j.account) !== 'acct' || !j.contractName) return send(res, { success: false, code: '204', data: 'account config invalid' })
+          // bytes32 入参格式校验（真机行为）：写/按根读的 bytes32 必须是 base64，否则发交易阶段就被拒（还没上链、不耗 gas）
+          const bargs = JSON.parse(j.inputParamListStr || '[]'), nb = { 'writeRoot(bytes32,bytes32,uint64,uint32,uint32)': 2, 'getRoot(bytes32)': 1 }[j.methodSignature] || 0
+          if (bargs.slice(0, nb).some((x) => !b32(x))) return send(res, { success: false, code: '405', data: 'value length must be 32' })
           const tx = mkTx(j, 'call')
           const isWrite = j.methodSignature === 'writeRoot(bytes32,bytes32,uint64,uint32,uint32)'
           // 丢弃 / 延迟出块只针对写交易：读（head / getRoot）要立即可取，否则连"先读链头"都过不去

@@ -28,7 +28,7 @@ if (!/^[0-9a-f]+$/i.test(bin) || bin.length % 2) problems.push('bin 不是合法
 const miss = antopenMissing()
 if (miss.length) problems.push('缺配置：' + miss.join('、'))
 
-const name = opt('--name', 'WanderlustRootStoreV3')   // V1（seq 读出 2087900645）、V2（senderIsOwner=false，写不了）均已于 2026-11-05 部署且有缺陷，换新名字
+const name = opt('--name', 'WanderlustRootStoreV3')   // V1、V2 已部署但有缺陷（见指南），V3 才是可用的
 const gas = Number(opt('--gas', '2000000'))
 const fmt = opt('--code-format', 'hex')
 if (!['hex', 'base64'].includes(fmt)) problems.push('--code-format 只能是 hex 或 base64')

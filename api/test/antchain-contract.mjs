@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import contract, { SIG, OUT, fmtBytes32, writeRootArgs, contractContent, parseContractContent, decodeOutput } from '../src/infra/chain/antchain-open-contract.mjs'
+import contract, { SIG, OUT, fmtBytes32, writeRootArgs, contractContent, parseContractContent, decodeOutput, revertReason } from '../src/infra/chain/antchain-open-contract.mjs'
 import { startFake, ZERO } from './_fake-antchain.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -29,6 +29,7 @@ const conf = (extra = {}) => { reset(); Object.assign(process.env, { ANTOPEN_RES
 const fresh = () => { Object.assign(st, { seq: 0, lastRoot: ZERO, total: 0, autoMine: true, forceRevert: false, dropNext: false, getRootOverride: null, noReceipt: false }); st.roots.clear(); st.calls.length = 0; st.pending.length = 0
   st.orders.clear(); st.txs.clear() }   // orderId 去重表和交易表也要清：否则复用同一个根的用例会悄悄吃上一轮的结果
 const R = (c) => c.repeat(64), D = '2026-11-05'
+const B64 = (hex) => Buffer.from(hex, 'hex').toString('base64')   // 真机只认 base64 的 bytes32
 const writes = () => st.calls.filter((c) => c.sig === SIG.writeRoot)
 
 console.log('== 蚂蚁链合约模式 ==')
@@ -45,11 +46,11 @@ try {
     reset(); const r = await contract.anchor({ root: R('a'), leafCount: 1, bizDate: D })
     assert.equal(r.txRef, null); assert.equal(r.mode, 'noop')
   })
-  await t('入参编码：bytes32 三种格式可切换；日期/叶数/序号越界直接拒绝（合约会 revert 的在适配器就拦下）', () => {
-    assert.equal(fmtBytes32(R('a')), '0x' + R('a')); assert.equal(fmtBytes32(R('A'), 'hex'), R('a'))
-    assert.equal(Buffer.from(fmtBytes32(R('a'), 'base64'), 'base64').toString('hex'), R('a'))
+  await t('入参编码：bytes32 默认 base64（真机只认它），0x/hex 仅留作排查；日期/叶数/序号越界直接拒绝（合约会 revert 的在适配器就拦下）', () => {
+    assert.equal(fmtBytes32(R('a')), B64(R('a'))); assert.equal(fmtBytes32(R('a'), '0x'), '0x' + R('a')); assert.equal(fmtBytes32(R('A'), 'hex'), R('a'))
+    assert.equal(Buffer.from(fmtBytes32(R('a'), 'base64'), 'base64').toString('hex'), R('a')); assert.match(fmtBytes32(R('a')), /^[A-Za-z0-9+/]{43}=$/)
     assert.throws(() => fmtBytes32('xyz'), /64 位十六进制/)
-    assert.deepEqual(writeRootArgs({ root: R('a'), prevRoot: '', bizDate: D, leafCount: 12, seq: 1 }), ['0x' + R('a'), '0x' + ZERO, 20261105, 12, 1])
+    assert.deepEqual(writeRootArgs({ root: R('a'), prevRoot: '', bizDate: D, leafCount: 12, seq: 1 }), [B64(R('a')), B64(ZERO), 20261105, 12, 1])
     for (const bad of [{ bizDate: '2019-01-01' }, { bizDate: 'x' }, { leafCount: 0 }, { leafCount: 1.5 }, { seq: 0 }, { seq: 2 ** 32 }]) {
       assert.throws(() => writeRootArgs({ root: R('a'), prevRoot: '', bizDate: D, leafCount: 1, seq: 1, ...bad }), (e) => e.code === 'BAD_ARGS')
     }
@@ -72,7 +73,7 @@ try {
     const w = writes(); assert.equal(w.length, 1)
     const b = w[0].body
     assert.equal(b.method, 'CALLCONTRACTBIZASYNC'); assert.equal(b.contractName, 'WanderlustRootStore'); assert.equal(b.methodSignature, SIG.writeRoot)
-    assert.deepEqual(JSON.parse(b.inputParamListStr), ['0x' + R('a'), '0x' + ZERO, 20261105, 12, 1]); assert.equal(b.outTypes, '["bool"]')
+    assert.deepEqual(JSON.parse(b.inputParamListStr), [B64(R('a')), B64(ZERO), 20261105, 12, 1]); assert.equal(b.outTypes, '["bool"]')
     assert.equal(b.gas, 500000); assert.equal(b.tenantid, 'TEN1'); assert.equal(b.account, 'acct'); assert.equal(b.mykmsKeyId, 'kms-1')
     assert.ok(st.calls.some((c) => c.sig === SIG.head), '没有先读链头')
     assert.equal(st.calls.filter((c) => c.method === 'PARSEOUTPUT').length, 0, '真机 PARSEOUTPUT 不支持 bytes32，适配器必须本地解析返回值，不能再调它')
@@ -106,7 +107,7 @@ try {
   await t('独立起链：第二批用合约自己的链头（seq=2、prevRoot=上一根），不理会库里批次的 prev_root（那条链有 DEPOSIT 时代的批次接不上）', async () => {
     const r = await contract.anchor({ root: R('b'), prevRoot: R('7'), leafCount: 3, bizDate: D })
     assert.equal(parseContractContent(r.content).seq, 2); assert.equal(parseContractContent(r.content).prev, R('a'))
-    assert.deepEqual(JSON.parse(writes()[1].body.inputParamListStr).slice(0, 2), ['0x' + R('b') === '' ? '' : '0x' + R('b'), '0x' + R('a')])
+    assert.deepEqual(JSON.parse(writes()[1].body.inputParamListStr).slice(0, 2), [B64(R('b')), B64(R('a'))])
     assert.equal(st.seq, 2); assert.equal(st.lastRoot, R('b'))
   })
   await t('确认（strict 默认）：交易在块里 + 回执成功 + writeRoot=true + getRoot 反查字段一致 → 已锚定', async () => {
@@ -185,13 +186,29 @@ try {
     assert.equal(r.ok, true); assert.match(r.detail, /当前块高 \d+/); assert.match(r.detail, /seq=4/); assert.match(r.detail, /已写 4 批/)
     assert.equal(writes().length, 0, '探测不该写合约')
   })
-  await t('bytes32 格式可切到 hex / base64，调用形态随之改变（真机核对后切换）', async () => {
-    for (const [fmt, re] of [['hex', /^[0-9a-f]{64}$/], ['base64', /^[A-Za-z0-9+/]{43}=$/]]) {
+  await t('bytes32 入参格式（真机实测）：默认 base64 通过；0x / 裸 hex 被链在发交易阶段拒绝（405 value length must be 32），不耗 gas、不上链', async () => {
+    conf(); fresh()
+    await contract.anchor({ root: R('6'), leafCount: 1, bizDate: D })
+    const args = JSON.parse(writes()[0].body.inputParamListStr)
+    assert.match(args[0], /^[A-Za-z0-9+/]{43}=$/); assert.match(args[1], /^[A-Za-z0-9+/]{43}=$/); assert.equal(st.seq, 1)
+    for (const fmt of ['0x', 'hex']) {
       conf({ ANTOPEN_CONTRACT_BYTES: fmt }); fresh()
-      await contract.anchor({ root: R('6'), leafCount: 1, bizDate: D })
-      const args = JSON.parse(writes()[0].body.inputParamListStr)
-      assert.match(args[0], re); assert.match(args[1], re); assert.equal(st.seq, 1, fmt + ' 格式替身没认出来')
+      await assert.rejects(() => contract.anchor({ root: R('6'), leafCount: 1, bizDate: D }), /405.*value length must be 32/)
+      assert.equal(st.seq, 0, fmt + ' 不该写进合约')
     }
+    conf({ ANTOPEN_CONTRACT_BYTES: 'bogus' }); fresh()   // 乱填 → 回到默认 base64
+    await contract.anchor({ root: R('6'), leafCount: 1, bizDate: D }); assert.equal(st.seq, 1)
+  })
+  await t('回滚原因解码：用真机回执原文（序号跳号，result=10201）解出 "seq must be lastSeq+1"；解不出时返回空串', () => {
+    const real = 'CMN5oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVzZXEgbXVzdCBiZSBsYXN0U2VxKzEAAAAAAAAAAAAAAA=='
+    assert.equal(revertReason(real), 'seq must be lastSeq+1')
+    assert.equal(revertReason(''), ''); assert.equal(revertReason('AAAA'), ''); assert.equal(revertReason('CMN5oA=='), '')
+  })
+  await t('确认：合约回滚时错误信息带出链上原因（便于人工判断是序号错位还是别的）', async () => {
+    conf(); fresh()
+    st.forceRevert = true   // 替身：下一笔写入回滚，回执 result=10201、output=Error("only owner")
+    const c = await contract.anchor({ root: R('9'), leafCount: 1, bizDate: D })
+    await assert.rejects(() => contract.confirm({ txRef: c.txRef, root: R('9'), bizDate: D, leafCount: 1, content: c.content }), (e) => e.code === 'CONTRACT_REVERT' && /原因：only owner/.test(e.message))
   })
   await t('两个入口共用同一份令牌：交替使用只握手一次（免费版 TPS=1，队列与令牌是共享的）', async () => {
     conf(); fresh(); st.handshakes = 0
