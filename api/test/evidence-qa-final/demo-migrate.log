@@ -1,0 +1,64 @@
+
+> wanderlust-api@1.0.0 migrate
+> node scripts/migrate.mjs
+
+skip   V1__init_schema.sql
+skip   V2__seed_rule_config.sql
+skip   V3__admin_user.sql
+skip   V4__sys_and_withdraw.sql
+skip   V5__scope_and_verify.sql
+skip   V6__mfa.sql
+skip   V7__app_secret.sql
+skip   V8__review_and_media.sql
+skip   V9__settlement_link.sql
+skip   V10__group_rebook_earlybird.sql
+skip   V11__offline_verify_conflict.sql
+skip   V12__p2_tasks_invite_apply_insurance.sql
+skip   V13__faq_banner.sql
+skip   V14__phrase_rate_kyc_cocreate.sql
+skip   V17__settlement_payment_evidence.sql
+skip   V18__attest_integrity.sql
+skip   V19__vc_identity.sql
+skip   V20__asset_issue.sql
+skip   V21__risk_notify.sql
+skip   V22__resource_pool.sql
+skip   V23__creator_pool.sql
+skip   V24__rich_forms.sql
+skip   V25__anchor_finality_merkle_v2.sql
+skip   V26__refund_fee.sql
+skip   V27__entity_profile.sql
+skip   V28__entity_profile_2.sql
+skip   V29__chain_provider.sql
+skip   V30__site_config.sql
+skip   V31__refund_fee_settlement.sql
+skip   V32__settlement_split_params.sql
+skip   V33__merchant_notice_default.sql
+skip   V34__content_review.sql
+skip   V35__task_entries.sql
+skip   V36__content_reports_appeals.sql
+skip   V37__legacy_note_appeals.sql
+skip   V38__phone_sealed_columns.sql
+skip   V39__bean_rebate_deferred.sql
+skip   V40__member_levels_badge_set.sql
+skip   V41__badge_kinds_city_country_trusted.sql
+skip   V42__merchant_levels_badges.sql
+skip   V43__coprofit_pay_ledger.sql
+skip   V44__admin_account_lifecycle.sql
+skip   V45__orders_search_index.sql
+skip   V46__aftersales_tickets.sql
+skip   V47__user_ops_entitlement.sql
+skip   V48__risk_cases.sql
+skip   V49__review_queue.sql
+skip   V50__chain_content.sql
+skip   V51__risk_case_identity.sql
+skip   V52__review_claim_uid.sql
+skip   V53__admin_mfa_flags.sql
+skip   V54__admin_role_module.sql
+skip   V55__admin_user_module.sql
+skip   V56__master_data_version.sql
+skip   V57__order_reschedule.sql
+skip   V58__merchant_version.sql
+apply  V59__reschedule_uid.sql
+apply  V60__admin_role_config.sql
+apply  V61__finance_config_module.sql
+完成 3 个迁移

@@ -1,0 +1,91 @@
+{
+  "orders": {
+    "count": 1482,
+    "sha256": "5094853fcd4329b606e142cb173a7b6991ed4e2d368ba99ac5d381125d68326b"
+  },
+  "user_account": {
+    "count": 40,
+    "sha256": "4fb9dce01e91a1170201aadf6cff11f434956c0279391c4a66e3f60376aaf0fa"
+  },
+  "admin_user": {
+    "count": 5,
+    "sha256": "409f18172dc81d10e7d8440d09875044b6644eedc29fb924633e4b1b9fc0c1f3"
+  },
+  "tour_product": {
+    "count": 6,
+    "sha256": "26c8c7c3f96cdb33da6a1b099adc4969970a16d1d64f7f152a30ab48ac0c91a1"
+  },
+  "content_note": {
+    "count": 20,
+    "sha256": "0863f58237ecff08526021f13d3ee1d6218445fecfec57a04114b0e52e02a23e"
+  },
+  "app_secret": {
+    "count": 12,
+    "sha256": "6d45a0ecf6206c5192515f89d17d0d8225f5b69f4d29be622d1f58fe6140ca06"
+  },
+  "rule_config": {
+    "count": 50,
+    "sha256": "d47c7ba862c21979f0b4d545ecd4a366f6548c56d1cb1f324de39707a355fa87"
+  },
+  "migrations": [
+    "V1__init_schema.sql",
+    "V10__group_rebook_earlybird.sql",
+    "V11__offline_verify_conflict.sql",
+    "V12__p2_tasks_invite_apply_insurance.sql",
+    "V13__faq_banner.sql",
+    "V14__phrase_rate_kyc_cocreate.sql",
+    "V17__settlement_payment_evidence.sql",
+    "V18__attest_integrity.sql",
+    "V19__vc_identity.sql",
+    "V2__seed_rule_config.sql",
+    "V20__asset_issue.sql",
+    "V21__risk_notify.sql",
+    "V22__resource_pool.sql",
+    "V23__creator_pool.sql",
+    "V24__rich_forms.sql",
+    "V25__anchor_finality_merkle_v2.sql",
+    "V26__refund_fee.sql",
+    "V27__entity_profile.sql",
+    "V28__entity_profile_2.sql",
+    "V29__chain_provider.sql",
+    "V3__admin_user.sql",
+    "V30__site_config.sql",
+    "V31__refund_fee_settlement.sql",
+    "V32__settlement_split_params.sql",
+    "V33__merchant_notice_default.sql",
+    "V34__content_review.sql",
+    "V35__task_entries.sql",
+    "V36__content_reports_appeals.sql",
+    "V37__legacy_note_appeals.sql",
+    "V38__phone_sealed_columns.sql",
+    "V39__bean_rebate_deferred.sql",
+    "V4__sys_and_withdraw.sql",
+    "V40__member_levels_badge_set.sql",
+    "V41__badge_kinds_city_country_trusted.sql",
+    "V42__merchant_levels_badges.sql",
+    "V43__coprofit_pay_ledger.sql",
+    "V44__admin_account_lifecycle.sql",
+    "V45__orders_search_index.sql",
+    "V46__aftersales_tickets.sql",
+    "V47__user_ops_entitlement.sql",
+    "V48__risk_cases.sql",
+    "V49__review_queue.sql",
+    "V5__scope_and_verify.sql",
+    "V50__chain_content.sql",
+    "V51__risk_case_identity.sql",
+    "V52__review_claim_uid.sql",
+    "V53__admin_mfa_flags.sql",
+    "V54__admin_role_module.sql",
+    "V55__admin_user_module.sql",
+    "V56__master_data_version.sql",
+    "V57__order_reschedule.sql",
+    "V58__merchant_version.sql",
+    "V59__reschedule_uid.sql",
+    "V6__mfa.sql",
+    "V60__admin_role_config.sql",
+    "V61__finance_config_module.sql",
+    "V7__app_secret.sql",
+    "V8__review_and_media.sql",
+    "V9__settlement_link.sql"
+  ]
+}
