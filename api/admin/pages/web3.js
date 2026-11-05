@@ -23,10 +23,10 @@ async function attest() {
       <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">已锚定</div><div class="v" style="font-size:18px">${anch}</div><div class="s">链上已确认</div></div></div>
     </div>
     <div class="att-ops"><span class="att-ops-l">手动运行</span>
-      <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">① 打包（出 Merkle 根）</button>
+      ${adminCan('system.jobRun') ? `<button class="btn ghost sm" onclick="runJob('attest-pack','attest')">① 打包（出 Merkle 根）</button>
       <button class="btn ghost sm" onclick="runJob('attest-anchor','attest')">② 补锚（按 seq 升序）</button>
       <button class="btn ghost sm" onclick="runJob('bean-day-close','attest')">③ 封存昨日旅豆账本</button>
-      <button class="btn ghost sm" onclick="runJob('attest-reconcile','attest')">④ 六条不变式对账</button>
+      <button class="btn ghost sm" onclick="runJob('attest-reconcile','attest')">④ 六条不变式对账</button>` : '<span class="muted">打包 / 补锚 / 封存 / 对账由超级管理员或运维执行（本页保持只读视图）</span>'}
       <span class="muted">${real ? '已接入' + esc((d.chain && d.chain.label) || '当前链') + '：补锚将真实上链' : 'NOOP：①后停留在「已打包·待锚定」，②不会产生假交易号'}</span>
     </div>
     <div class="att-ops"><span class="att-ops-l">单号验证</span><input id="vref" placeholder="输入订单号验证（如 WL20261024…）" style="width:320px">

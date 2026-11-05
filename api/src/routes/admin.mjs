@@ -6,8 +6,8 @@ import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
 import { maskApplyMobile, publicOrderPhone, sealMobile } from '../infra/mobile.mjs'
-import { ADMIN_ACTIONS } from '../domain/admin-capabilities.mjs'
-import { MODULES, effectiveModules } from '../domain/modules.mjs'
+import { ADMIN_ACTIONS, actionRoles } from '../domain/admin-capabilities.mjs'
+import { MODULES, effectiveModules, ROLE_HOME } from '../domain/modules.mjs'
 import * as refund from '../domain/refund.mjs'
 import * as group from '../domain/group.mjs'
 import * as wxpay from '../domain/wxpay.mjs'
@@ -190,7 +190,8 @@ const admin = {
     // （角色默认经 V54 矩阵表，可在「后台账号 → 角色默认权限」调整；账号级三态叠加 admin_user_module）。
     // 前端菜单不再写死 access 表；未知角色默认拒绝（空集合），readonly/sre/dev 不再缺省放行全菜单。
     const { accountModules } = await import('../domain/admin-modules.mjs')
-    return { role: a.role, scopeCity: a.scopeCity || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES }
+    // P-09：角色默认落地页随 capabilities 下发；不在有效集合内由前端回落第一个可用栏目
+    return { role: a.role, scopeCity: a.scopeCity || null, homeModule: ROLE_HOME[a.role] || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES }
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
@@ -1043,7 +1044,7 @@ const admin = {
     return await q(`SELECT s.*, m.name merchant_name FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
   },
   'POST /admin/settlements/generate': async (req) => {
-    await requireAdmin(req, ['super', 'finance'])
+    await requireAdmin(req, actionRoles('settle.pay'))
     const period = String(req.body.period || '') || settlementPeriod() // ISO 周，如 2026-W45
     if (!/^[\w-]{4,12}$/.test(period)) throw new BizError(1001, '结算周期格式不正确（如 2026-W45）')
     const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
@@ -1067,7 +1068,7 @@ const admin = {
     })
   },
   'POST /admin/settlements/:id/payment': async (req) => {
-    const a = await requireAdmin(req, ['super', 'finance'])
+    const a = await requireAdmin(req, actionRoles('settle.pay'))
     const ref = String(req.body.paymentRef || '').trim()
     const note = String(req.body.note || '').trim()
     if (ref.length < 6 || ref.length > 128 || !note || note.length > 500) throw new BizError(1001, '请填写真实支付流水号及回单核对说明')
@@ -1104,7 +1105,9 @@ const admin = {
     const handled = req.query.handled == null || req.query.handled === '' ? null : Number(req.query.handled)
     if (handled != null && [0, 1].includes(handled)) { conds.push('handled = ?'); args.push(handled); filters.handled = handled }
     const kw = String(req.query.kw || '').trim()
-    if (kw) { conds.push('(type LIKE ? OR detail LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
+    // P-08：risk_event 的事件类型列是 kind（不是 type）——旧代码 kw 分支一直是坏的（默认列表成功掩盖了它）；
+    // 关键词同时搜事件类型与说明，与处理状态、分页可任意组合
+    if (kw) { conds.push('(kind LIKE ? OR detail LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%'); filters.kw = kw }
     const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
     const total = Number((await one(`SELECT COUNT(*) n FROM risk_event ${W}`, args)).n)
     const rows = await q(`SELECT * FROM risk_event ${W} ORDER BY id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
@@ -1112,7 +1115,9 @@ const admin = {
   },
   // R-05：审计日志服务端分页契约（审计表无界增长，不能只取前 100 条装作全部）
   'GET /admin/audit-logs': async (req) => {
-    await requireAdmin(req, ['super', 'finance', 'risk'])
+    // P-03：运维/开发默认有脱敏只读审计视图（菜单已含 audit，接口旧白名单同步补齐，消除整页失败）；
+    // 审计是只读 GET，无写入路径；密钥修改、账号/安全策略仍严格限权
+    await requireAdmin(req, ['super', 'finance', 'risk', 'sre', 'dev'])
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 30)))
     const conds = [], args = [], filters = {}
@@ -1412,7 +1417,8 @@ const admin = {
 
   // 观察期完成（生产=定时任务；联调=手动触发）
   'POST /admin/dev/complete': async (req) => {
-    await requireAdmin(req)
+    // P-04：联调完成按钮与前端共用 ADMIN_ACTIONS.order.complete——只读观察者等角色后端同样拒绝
+    await requireAdmin(req, actionRoles('order.complete'))
     const { orderNo } = req.body
     const o = await order.byNo(orderNo)
     if (!o || o.status !== 40) throw new BizError(2002, '订单不在已核销状态')

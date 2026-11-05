@@ -62,10 +62,11 @@
       ${req.length ? `<div class="ch-prog"><i style="width:${Math.round(done / req.length * 100)}%"></i></div><div class="ch-prog-t">必填 ${done}/${req.length}${p.missing.length ? ' · 缺 ' + p.missing.map(E).join(' / ') : ''}</div>` : `<div class="ch-prog-t">${E(p.note || p.docs || '')}</div>`}
       ${st[2] || st[5] ? `<div class="ch-prog-t">已锚定 ${st[2] || 0} 批 · 待确认 ${st[5] || 0} 批</div>` : ''}
       <footer>
-        ${p.keys.length ? `<button class="btn primary sm" onclick="chConfig('${p.id}')">配置接入</button>` : ''}
+        ${p.keys.length && ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn primary sm" onclick="chConfig('${p.id}')">配置接入</button>` : ''}
         ${p.hasSelfTest ? `<button class="btn ghost sm" onclick="chSelfTest('${p.id}')">离线自检</button>` : ''}
         ${p.hasProbe ? `<button class="btn ghost sm" onclick="chProbe('${p.id}')">连通性探测</button>` : ''}
-        ${!p.current ? `<button class="btn ghost sm" onclick="chActivate('${p.id}')">设为当前链</button>` : ''}
+        ${!p.current && ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn ghost sm" onclick="chActivate('${p.id}')">设为当前链</button>` : ''}
+        ${ADMIN_CAPABILITIES.role !== 'super' ? '<span class="td-sub">凭据与链切换仅超级管理员；本页提供只读视图与诊断</span>' : ''}
       </footer>
       <div class="ch-result" id="chr_${p.id}"></div>
     </article>`
@@ -86,7 +87,7 @@
           : `<input id="chk_${k.key}" ${k.secret ? 'type="password" autocomplete="new-password"' : ''} value="${k.secret ? '' : E(k.value)}" placeholder="${E(k.secret && k.configured ? '已保存 ' + (k.hint || '') + '，留空不修改' : (k.ph || ''))}">`}
         <p class="muted" style="margin-top:4px">${k.configured ? (k.source === 'admin' ? '后台已保存' + (k.updatedBy ? ' · ' + E(k.updatedBy) : '') : '来自环境变量') : '未配置'}</p></div>`).join('')}
       <div class="field"><label>我方回调地址（异步出块时提供给对方）</label><input readonly value="${E(p.callbackUrl)}" onclick="this.select()"></div>
-      <div class="row" style="margin-top:8px"><button class="btn primary" onclick="chSave('${id}')">加密保存</button><span class="muted">保存后立即生效；所有修改写入审计日志</span></div>`)
+      <div class="row" style="margin-top:8px">${ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn primary" onclick="chSave('${id}')">加密保存</button>` : ''}<span class="muted">保存后立即生效；所有修改写入审计日志</span></div>`)
   }
   window.chPreset = async (id) => {
     try { const r = await api('POST', '/admin/chain/preset/' + id, { preset: $('#ch_preset').value }); toast('已套用 ' + r.applied.length + ' 项'); hub = await api('GET', '/admin/chain/hub'); chConfig(id) }

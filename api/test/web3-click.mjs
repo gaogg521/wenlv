@@ -32,6 +32,9 @@ ctx.toast = (m, err) => toasts.push({ m, err: !!err })
 ctx.$ = (sel) => (sel === '#app' ? app : mkEl())
 ctx.api = (m, url) => { calls.push(url); const v = apiData[url.split('?')[0]]; return Promise.resolve(typeof v === 'function' ? v(url) : (v ?? {})) }
 ctx.go = noop
+// P-03/P-04 后 web3.js 的办理按钮按 adminCan('system.jobRun') 门控；沙箱按超管渲染（与真实浏览器 core.js 全局一致）
+ctx.adminCan = () => true
+ctx.ADMIN_CAPABILITIES = { role: 'super', modules: [], actions: {} }
 ctx.bizTag = (x) => String(x || '')
 ctx.BIZ_CN = {}
 ctx.skel = () => ''

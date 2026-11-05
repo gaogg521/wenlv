@@ -141,9 +141,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ code: 'FAIL', message: '支付通知校验失败' }))
     }
-    if (e && e.code) return json(res, e.code, { message: e.message, fieldErrors: e.data && e.data.fieldErrors })
-    console.error('[err]', req.method, pathname, e)
-    json(res, 9000, { message: '系统错误：' + e.message }, 500)
+    // P-08：业务错误（BizError）code 是数字；MySQL 驱动错误的 code 是 'ER_*' 字符串——
+    // 若只判 truthy 会把 SQL 细节当业务消息回显，必须收紧为整数 code 才走业务分支
+    if (e && e.code && Number.isInteger(e.code)) return json(res, e.code, { message: e.message, fieldErrors: e.data && e.data.fieldErrors })
+    // P-08：非业务异常（SQL/网络等）不得把内部细节回显给客户端——完整堆栈只进服务端日志，
+    // 客户端拿到中文可理解的信息 + 追踪号，可凭追踪号在服务端日志定位同一条记录
+    const traceId = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+    console.error('[err]', traceId, req.method, pathname, e)
+    json(res, 9000, { message: '系统错误，请稍后重试；如持续出现请联系管理员并提供追踪号 ' + traceId }, 500)
   }
 })
 

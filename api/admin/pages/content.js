@@ -53,10 +53,16 @@ async function tasks() {
   window.__taskQ = window.__taskQ || { page: 1 }
   const Q = window.__taskQ
   window.__taskSt = window.__taskSt === undefined ? '' : window.__taskSt
-  const [d, cashRows] = await Promise.all([
+  // P-06：现金加奖是财务指标——无 taskcash 模块（如审核员）不调用资金接口、不显示可点的"待打款 0"；
+  // 有权限但加载失败时如实显示错误态，与真实零数据区分（不再把 1003/断网吞成空列表）。
+  const hasTaskcash = (ADMIN_CAPABILITIES.modules || []).includes('taskcash')
+  const [d, cashState] = await Promise.all([
     api('GET', '/admin/content-tasks?' + new URLSearchParams({ page: Q.page, status: window.__taskSt, kw: Q.kw || '', pageSize: 20 }).toString()),
-    api('GET', '/admin/task-cash').catch(() => []),
+    hasTaskcash
+      ? api('GET', '/admin/task-cash').then((r) => ({ rows: r, err: null })).catch((e) => ({ rows: [], err: e }))
+      : Promise.resolve(null),
   ])
+  const cashRows = cashState ? cashState.rows : []
   const list = d.rows, stats = d.stats, sums = d.sums
   const pages = Math.max(1, Math.ceil(d.total / d.pageSize))
   const N = (v) => Number(v || 0)
@@ -65,6 +71,12 @@ async function tasks() {
     : (N(t.max_participants) && N(t.taken) >= N(t.max_participants)) ? 'full' : 'open'
   const ST = { open: '<span class="pill warn">招募中</span>', full: '<span class="pill s20">名额已满</span>', ended: '<span class="pill off">已截止</span>', off: '<span class="pill off">已下线</span>' }
   const cashPending = cashRows.filter((r) => Number(r.cash_status) === 1)
+  // 无 taskcash：静态提示卡（不给手型与错误办理文案）；加载失败：错误态；正常：可点下钻
+  const cashCard = !hasTaskcash
+    ? `<div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v">—</div><div class="s">现金奖励由财务在「现金加奖打款」登记</div></div></div>`
+    : cashState.err
+      ? `<div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="color:#b42318">!</div><div class="s">打款数据加载失败：${esc(cashState.err.message)}</div></div></div>`
+      : `<div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="去现金加奖打款" onclick="go('taskcash')"><i class="go-arrow">↗</i><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>`
   const TABS = [['', '全部', stats.all], ['review', '有待审', stats.review], ['open', '招募中', stats.open], ['off', '已下线', stats.off]]
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
@@ -72,7 +84,7 @@ async function tasks() {
     <div class="kpi"><div class="ico">✍️</div><div><div class="l">创作中</div><div class="v" style="font-size:20px">${sums.doing}</div><div class="s">已领取未投稿 / 驳回待修改</div></div></div>
     <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：有待审投稿的任务" onclick="window.__taskSt='review';window.__taskQ.page=1;tasks()"><i class="go-arrow">↗</i><div class="ico">🔎</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sums.reviewing}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
     <div class="kpi"><div class="ico">✅</div><div><div class="l">已通过</div><div class="v" style="font-size:20px">${sums.passed}</div><div class="s">旅豆已发放</div></div></div>
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="去现金加奖打款" onclick="go('taskcash')"><i class="go-arrow">↗</i><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>
+    ${cashCard}
   </div>
   <div class="card">
     <div class="card-head"><h2>约稿任务</h2>

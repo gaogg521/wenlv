@@ -179,7 +179,7 @@ async function settlements() {
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
-      <button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button></div>
+      ${adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>'}</div>
     <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
       退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
     ${rows.length ? rows.map((s) => {
@@ -190,7 +190,7 @@ async function settlements() {
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
-          ${s.status === 1 ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
+          ${s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
       ${Number(s.total_amount) > 0 ? `<div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>` : '<p class="muted" style="margin:0">本期无完成订单，仅计入退改手续费</p>'}
       ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}

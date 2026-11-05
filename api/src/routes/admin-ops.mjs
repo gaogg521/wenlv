@@ -29,6 +29,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
+import { actionRoles } from '../domain/admin-capabilities.mjs'
 
 // 以 co_profit_pay 有效流水（status=1）为唯一事实源，重算分润单的已付额与结清状态。
 // 冲正流水是负向金额，SUM 天然抵扣；调用方必须已持有 co_profit 行锁并在事务内。
@@ -109,7 +110,8 @@ const adminSys = {
   },
 
   'POST /admin/system/jobs/:name/run': async (req) => {
-    await requireAdmin(req, ['super', 'sre'])
+    // P-03/P-04：与页面按钮共用 system.jobRun 规则（开发账号看不到也可调用的假按钮）
+    await requireAdmin(req, actionRoles('system.jobRun'))
     const { name } = req.params
     const { closeTimeout } = await import('../domain/order.mjs')
     const { settleDue } = await import('../domain/promo.mjs')

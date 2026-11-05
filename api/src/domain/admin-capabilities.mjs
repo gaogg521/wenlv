@@ -28,6 +28,11 @@ export const ADMIN_ACTIONS = {
   'export.scenics': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.suppliers': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.creators': { roles: ['super', 'ops', 'review'], label: '超级管理员、运营或审核员' },
+  // P-04：办理按钮与后端动作共用同一权限来源——只读观察者等角色不再看到可点击的办理入口
+  'order.complete': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务（联调按钮，生产禁用）' },
+  'settle.pay': { roles: ['super', 'finance'], label: '超级管理员或财务' },
+  // P-03/P-04：手动任务干预（存证打包/补锚/日终封存/关单/佣金放行等全库动作）= 超管或运维；开发只读
+  'system.jobRun': { roles: ['super', 'sre'], label: '超级管理员或运维' },
 }
 
 export function actionRoles(action) {
