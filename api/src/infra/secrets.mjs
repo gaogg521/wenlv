@@ -50,6 +50,18 @@ export async function secretsHealth() {
   return { keySource, stored: Object.keys(cache).length + undecryptable.length, undecryptable: [...undecryptable] }
 }
 
+/**
+ * 某条凭据的状态：'ok' 能读到 / 'missing' 库里确实没有 / 'undecryptable' 库里有但当前主密钥解不开。
+ * 区分后两种是为了"自动生成型"密钥（发行方签名密钥、DID 盐）：missing 才允许首次生成，
+ * undecryptable 必须失败关闭——否则一次配置错误（换了 JWT_SECRET / SECRETS_KEY）就会把原密钥覆盖掉。
+ */
+export async function secretStatus(key) {
+  const c = await load()
+  if (key in c && c[key]) return 'ok'
+  if (undecryptable.includes(key)) return 'undecryptable'
+  return process.env[key] ? 'ok' : 'missing'
+}
+
 /** 读取：缓存→库→环境变量（.env 迁移兼容） */
 export async function getSecret(key) {
   const c = await load()

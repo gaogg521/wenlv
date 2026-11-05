@@ -188,13 +188,29 @@ tbody tr:last-child td { border-bottom: none; }
 .chain-btn { font-size: 12px; color: #dcebff; background: rgba(80,130,255,.18); border: 1px solid rgba(110,160,255,.4); border-radius: 8px; padding: 4px 12px; }
 .chain-btn:hover { background: rgba(80,130,255,.32); }
 .chain-track { position: relative; display: flex; align-items: flex-start; min-width: max-content; padding: 14px 18px 6px; }
+/* S 型排布：整行铺满、奇数行反向、行尾 U 形转弯；最后一行不拉伸 */
+.chain-track.snake { display: block; min-width: 0; padding: 14px 0 6px; }
+.chain-row { position: relative; display: flex; align-items: flex-start; padding: 0 46px; --te: 59px; }
+.chain-row .chain-link { flex: 1 1 var(--lk, 52px); max-width: none; min-width: 32px; }
+.chain-row.last .chain-link { flex: 0 1 110px; min-width: var(--lk, 52px); }
+.chain-row.rev { flex-direction: row-reverse; }
+.chain-row.rev .chain-link { transform: scaleX(-1); }
+.chain-row.turn-branch { --te: 133px; }
+.chain-row.turn-r::after, .chain-row.turn-l::after { content: ''; position: absolute; top: 59px; width: 30px; height: calc(100% + var(--te) - 59px); border: 2px dashed var(--cl); pointer-events: none; }
+.chain-row.turn-r::after { right: 8px; border-left: none; border-radius: 0 16px 16px 0; }
+.chain-row.turn-l::after { left: 8px; border-right: none; border-radius: 16px 0 0 16px; }
+.chain-row.turn-r::before, .chain-row.turn-l::before { position: absolute; top: calc(100% + var(--te) - 11px); color: #7fb0ff; font-size: 15px; line-height: 1; pointer-events: none; z-index: 1; }
+.chain-row.turn-r::before { content: '◂'; right: 38px; }
+.chain-row.turn-l::before { content: '▸'; left: 38px; }
+.chain-track.dense .chain-node { padding: 2px 4px 6px; }
+.chain-track.dense .blk-title { font-size: 12px; }
 .chain-legend { position: relative; display: flex; align-items: center; gap: 16px; padding: 8px 18px 14px; font-size: 11.5px; color: #8ea3d4; flex-wrap: wrap; }
 .chain-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .chain-legend .lg.blue { background: rgba(70,125,255,.5); border: 1px solid #7fb0ff; }
 .chain-legend .lg.gold { background: rgba(251,191,36,.4); border: 1px solid #fcd34d; }
 .chain-legend .lg.green { background: rgba(34,197,94,.4); border: 1px solid #4ade80; }
 .chain-legend .lg.dash { background: transparent; border: 1px dashed #6f86c4; }
-.chain-node { width: 188px; flex: none; cursor: pointer; border-radius: 10px; padding: 4px 8px 8px; transition: .15s; }
+.chain-node { width: var(--nw, 188px); flex: none; cursor: pointer; border-radius: 10px; padding: 4px 8px 8px; transition: .15s; }
 .chain-node:hover { background: rgba(90,140,255,.08); }
 .chain-node.active { background: rgba(90,140,255,.14); outline: 1px solid rgba(127,176,255,.45); box-shadow: 0 0 18px rgba(96,165,250,.25); }
 .chain-node.branch { margin-top: 74px; }

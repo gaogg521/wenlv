@@ -3,6 +3,7 @@
   const E = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   const GROUPS = [['alliance', '联盟链', '政务 / 景区 / 金融场景的主流选择：许可制节点，只写指纹'], ['public', '公链', '境外业务与可流通权益：托管签名，私钥不进本服务'], ['dev', '开发与测试', '自测链与未接入状态']]
   const CAP = [['anchor', '存证锚定'], ['confirm', '终局确认'], ['queryByRoot', '按根查重'], ['assets', '资产发行'], ['did', '数字身份']]
+  const PRIORITY = ['antchainopen', 'antchaincontract', 'tbaas']   // 联盟链页置顶：蚂蚁链开放联盟链（内置存证 / 合约模式）与腾讯云 TBaaS
   let hub = null, tab = 'alliance'
 
   window.chainhub = async function chainhub() {
@@ -12,7 +13,14 @@
   }
   function render() {
     const cur = hub.providers.find((p) => p.current)
+    // 联盟链页：已真机实测的三家（蚂蚁链两个入口 + 腾讯云 TBaaS）固定排最前，其余是模板 / 未实测
     const list = hub.providers.filter((p) => p.group === tab)
+    const rank = (p) => { const i = PRIORITY.indexOf(p.id); return i < 0 ? 99 : i }
+    list.sort((a, b) => rank(a) - rank(b))
+    const gridHtml = tab === 'alliance'
+      ? '<div class="ch-sec">已真机实测 · 优先使用</div>' + list.filter((p) => rank(p) < 99).map(card).join('')
+        + (list.some((p) => rank(p) === 99) ? '<div class="ch-sec">其他联盟链 · 接口模板 / 未用真实凭据实测</div>' + list.filter((p) => rank(p) === 99).map(card).join('') : '')
+      : list.map(card).join('')
     $('#app').innerHTML = `
     <section class="ch-hero">
       <div class="ch-hero-main">
@@ -27,13 +35,14 @@
       </div>
     </section>
     <div class="ch-tabs">${GROUPS.map(([g, n, d]) => `<button class="ch-tab ${tab === g ? 'on' : ''}" onclick="chTab('${g}')"><b>${n}</b><small>${d}</small></button>`).join('')}</div>
-    <div class="ch-grid">${list.map(card).join('')}</div>
+    <div class="ch-grid">${gridHtml}</div>
     <section class="card ch-docs">
       <div class="card-head"><h3>对接约定</h3><span class="muted">与任何一家链对接时，先把这几件事说清楚</span></div>
       <div class="ch-docs-grid">
-        <div><h4>上链的只有指纹</h4><p>Merkle 根（64 位十六进制）、前一批根、叶子数、业务日期、批次类型。订单金额、姓名、手机号、身份证号等一律不上链。</p></div>
-        <div><h4>我方提供的端口</h4><p>提交：由我方主动调用对方接口。<br>异步回调：<code>POST /callback/chain/{链标识}</code>，按该链签名规则验签，回调体 <code>{ txRef, root, blockHeight }</code>。<br>公开复核：<code>/verify</code>、<code>/open/verify/order/{单号}</code>。</p></div>
-        <div><h4>状态与幂等</h4><p>已打包 → 已提交·待确认 → 已锚定。需要确认的链核验回执、确认数与交易内容后才记为已锚定；切换当前链后，旧批次仍回原链核验。</p></div>
+        <div><h4>上链的只有指纹</h4><p>Merkle 根（64 位十六进制）、前一批根、叶子数、业务日期、批次类型。蚂蚁链「内置存证」入口的原文另带主体、链标识、时间戳与签名（<code>wl-anchor/2</code>）；合约入口只写根 / 前根 / 业务日 / 叶数 / 序号。订单金额、姓名、手机号、身份证号等一律不上链。开放联盟链是<b>共享公开链</b>，上链内容所有人可见、不可删除。</p></div>
+        <div><h4>我方提供的端口</h4><p>提交：由我方主动调用对方接口；蚂蚁链、腾讯云 TBaaS 靠我方回查回执确认，<b>不需要对方回调</b>。<br>异步回调（网关类异步链才用）：<code>POST /callback/chain/{链标识}</code>，按该链签名规则验签，回调体 <code>{ txRef, root, blockHeight }</code>。<br>公开复核：<code>/verify</code>、<code>/open/verify/order/{单号}</code>。</p></div>
+        <div><h4>状态与幂等</h4><p>已打包 → 已提交·待确认 → 已锚定。需要确认的链核验回执、确认数与交易内容后才记为已锚定；同一业务号对方按首次那笔去重，重试不会重复上链。硬错误（合约回滚、根已存在、内容不符、超时查无此交易）直接转「人工处理」，不空转重试，人工状态不会被自动重提。切换当前链后，旧批次仍回原链核验。</p></div>
+        <div><h4>蚂蚁链两个入口怎么选</h4><p><b>内置存证（DEPOSIT）</b>：无需部署，已真机打通，顺序由我方保证，默认入口。<br><b>合约模式</b>：需先部署落根合约（<b>不可逆</b>），链强制序号 +1 / 前根接上，可按根 <code>getRoot</code> 反查。测试合约名 <code>WanderlustRootStoreV3</code>（上面已有测试根），<b>生产请另部署新合约名</b>；V1 / V2 有缺陷已废弃。两者共用同一套凭据与 TPS=1 队列，生产前二选一。</p></div>
         <div><h4>需要对方确认</h4><ol>${hub.checklist.map((x) => `<li>${E(x)}</li>`).join('')}</ol></div>
       </div>
     </section>`

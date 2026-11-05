@@ -231,12 +231,12 @@ export function beanDayReportDoc(v, baseUrl) {
       { k: '业务日期', v: v.bizDate },
       { k: '账本笔数', v: Number(v.leafCount) + ' 笔（借贷双向合计）', mono: false },
       { k: '记账口径', v: '双分录：每笔业务同时记借贷两条', mono: false },
-      { k: '封存规则', v: '借贷恒等（Σ借 = Σ贷）方允许封存', mono: false },
+      { k: '封存规则', v: '双分录平衡（借方合计 = 贷方合计）方允许封存', mono: false },
     ],
     finger: [
-      { k: 'Σ贷（发放）', v: String(v.creditSum) + ' 豆' },
-      { k: 'Σ借（消耗）', v: String(v.debitSum) + ' 豆' },
-      { k: '借贷恒等', v: v.balanced ? '成立（差额 0）' : '不成立', mono: false, warn: !v.balanced },
+      { k: '贷方分录合计', v: String(v.creditSum) + ' 豆' },
+      { k: '借方分录合计', v: String(v.debitSum) + ' 豆' },
+      { k: '双分录平衡', v: v.balanced ? '成立（差额 0）' : '不成立', mono: false, warn: !v.balanced },
       { k: 'Merkle 根', v: v.merkleRoot || '—' },
       { k: '前一日根', v: v.prevRoot || '链起点', small: true },
       { k: '锚定状态', v: anchorState(v), mono: false, warn: !v.chainRef },
@@ -246,12 +246,12 @@ export function beanDayReportDoc(v, baseUrl) {
     pathHint: '账本以「日终根」为证明单元：根一旦封存，该日全部流水即被固定。',
     pathEmpty: '任意一笔流水均可经平台接口单独出具包含路径；本页只呈现日终根，不逐条展开。',
     steps: [
-      '打开上方二维码或链接，查看该日账本的 Σ贷 / Σ借 与日终根',
-      'Σ贷 = Σ借 说明账本自洽：没有凭空的豆被创造出来（对应「严禁超发」）',
+      '打开上方二维码或链接，查看该日账本的贷方 / 借方分录合计与日终根',
+      '贷方合计 = 借方合计（双分录平衡）说明账本内部一致、没有单边记账；借方含预算池等对手分录，不等于用户消费，发行上限由预算与总量闸门另行控制',
       v.chainRef ? '持「链上编号」到链数根链上浏览器查询该日终根' : '待锚定：链接入完成后，链上编号自动出现在此证明中',
     ],
     notes: [
-      '本证明用于向审计、政府与投资方说明：平台旅豆的发行与消耗逐日自洽、可追溯。',
+      '本证明用于向审计、政府与投资方说明：平台旅豆账本逐日双分录平衡、日终根已固定、可追溯；它证明账本一致性，不单独证明发行额度。',
       '账本明细留存于平台数据库，不含个人身份与金额归属。',
     ],
   }

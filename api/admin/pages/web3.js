@@ -44,7 +44,7 @@ async function attest() {
   <div id="blockDetail"></div>
   <div class="card">
     <div class="card-head"><h3>旅豆账本日终封存</h3><span class="muted">借贷恒等（Σ借=Σ贷）才允许封存 —— 「严禁超发」的唯一外部证明</span></div>
-    ${(d.dayRoots || []).length ? `<table><thead><tr><th>业务日</th><th>叶数</th><th>Σ贷（发放）</th><th>Σ借（消耗）</th><th>恒等</th><th>Merkle 根</th><th>对外</th></tr></thead><tbody>
+    ${(d.dayRoots || []).length ? `<table><thead><tr><th>业务日</th><th>叶数</th><th>贷方分录合计</th><th>借方分录合计</th><th>恒等</th><th>Merkle 根</th><th>对外</th></tr></thead><tbody>
       ${d.dayRoots.map((r) => `<tr><td class="num">${esc(String(r.biz_date).slice(0, 10))}</td><td class="num">${Number(r.leaf_count)}</td>
         <td class="num">${Number(r.credit_sum)}</td><td class="num">${Number(r.debit_sum)}</td>
         <td>${Number(r.debit_sum) === Number(r.credit_sum) ? '<span class="pill ok">恒等</span>' : '<span class="pill s70">不平</span>'}</td>
@@ -90,7 +90,7 @@ async function vcPage() {
   <div class="card">
     <div class="card-head"><h2>数字身份 · 可携出旅行凭证</h2><span class="muted">${esc(d.policy)}</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🪪</div><div><div class="l">已签发</div><div class="v" style="font-size:18px">${d.total}</div><div class="s">持有人 ${d.holders}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🪪</div><div><div class="l">已签发</div><div class="v" style="font-size:18px">${d.total}</div><div class="s">已领取 ${d.holders} 位 · 可签发 ${d.eligible ?? '—'} 位用户</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">有效</div><div class="v" style="font-size:18px">${d.active}</div><div class="s">未过期未吊销</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdecea">⛔</div><div><div class="l">已吊销</div><div class="v" style="font-size:18px">${d.revoked}</div><div class="s">吊销即时生效</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdf3e0">🔑</div><div><div class="l">公钥指纹</div><div class="v mono" style="font-size:12px">${esc(String(d.keyFingerprint).slice(0, 16))}…</div><div class="s">Ed25519</div></div></div>
@@ -100,6 +100,11 @@ async function vcPage() {
       <a class="btn ghost sm" style="margin-left:auto" target="_blank" rel="noopener" href="/vc">打开验签台</a>
       <a class="btn ghost sm" target="_blank" rel="noopener" href="/open/vc/issuer">公钥 JWKS</a></div>
     <div class="muted" style="margin-top:8px">凭证只含旅行事实（等级/成长区间/入会年月/行程数/城市数/徽章名），姓名手机号身份证订单号金额<strong>从不下发</strong>；第三方可凭公钥离线验签。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>凭证长什么样</h3><span class="muted">用户拿到的是一张只含旅行事实的身份卡。下方是示例（非真实用户）；在「最近签发」里点「卡片」可看真实凭证</span></div>
+    <div id="vcCardBox">${vcCardSvg(VC_SAMPLE, { sample: true })}</div>
   </div>
 
   <div class="card">
@@ -123,10 +128,54 @@ async function vcPage() {
         <td class="td-sub">${esc(String(v.issued_at).slice(5, 19))}</td>
         <td class="td-sub">${esc(String(v.expires_at).slice(5, 19))}</td>
         <td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td>
-        <td>${v.revoked_at ? '—' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
+        <td><button class="btn ghost sm" onclick="showVcCard(${v.id})">卡片</button> ${v.revoked_at ? '' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('尚未签发过凭证：上方选一个用户签发即可')}
   </div>`
   window.__vcLast = ''
+  window.__vcRecent = d.recent || []
+}
+
+const VC_SAMPLE = { level: '探索者', levelNo: 3, growthBand: '1000–2999', memberSince: '2026-03', scope: 'travel', trips: 12, cities: 5, badges: ['初访古镇', '山海行者', '夜游达人'] }
+
+/** 数字身份卡（SVG）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额 */
+function vcCardSvg(claims, meta = {}) {
+  let c = claims
+  if (typeof c === 'string') { try { c = JSON.parse(c) } catch { c = {} } }
+  c = c || {}
+  const travel = c.scope === 'travel'
+  const status = meta.status || (meta.sample ? '示例' : '')
+  let x = 28, y = 214, chips = ''
+  for (const b of (c.badges || []).slice(0, 8)) {
+    const w = String(b).length * 13 + 22
+    if (x + w > 492) { x = 28; y += 30 }
+    chips += `<rect x="${x}" y="${y - 16}" width="${w}" height="23" rx="11.5" fill="rgba(245,210,122,.16)" stroke="rgba(245,210,122,.55)"/><text x="${x + w / 2}" y="${y}" text-anchor="middle" font-size="12" fill="#f5d27a">${esc(b)}</text>`
+    x += w + 8
+  }
+  const stat = (lx, label, val) => `<text x="${lx}" y="150" font-size="26" font-weight="700" fill="#fff">${esc(val)}</text><text x="${lx}" y="172" font-size="12" fill="rgba(255,255,255,.62)">${esc(label)}</text>`
+  const h = Math.max(300, y + 62)
+  return `<svg viewBox="0 0 520 ${h}" style="width:100%;max-width:520px;height:auto;border-radius:14px;box-shadow:0 8px 24px rgba(15,42,74,.25)" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="数字身份卡">
+    <defs><linearGradient id="vcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2a4a"/><stop offset="1" stop-color="#0e6b5c"/></linearGradient></defs>
+    <rect width="520" height="${h}" rx="14" fill="url(#vcg)"/>
+    <circle cx="452" cy="64" r="46" fill="none" stroke="rgba(245,210,122,.35)" stroke-width="2"/><circle cx="452" cy="64" r="34" fill="none" stroke="rgba(245,210,122,.2)" stroke-width="1"/>
+    <text x="452" y="70" text-anchor="middle" font-size="18" font-weight="700" fill="#f5d27a">Lv.${esc(c.levelNo ?? '-')}</text>
+    <text x="28" y="40" font-size="13" fill="rgba(255,255,255,.7)" letter-spacing="2">向往的自由 · 旅行身份凭证</text>
+    <text x="28" y="88" font-size="34" font-weight="700" fill="#fff">${esc(c.level || '—')}</text>
+    <text x="28" y="112" font-size="12" fill="rgba(255,255,255,.62)">成长区间 ${esc(c.growthBand || '—')} · 入会 ${esc(c.memberSince || '—')}</text>
+    ${travel ? stat(28, '完成行程', c.trips ?? 0) + stat(150, '到访城市', c.cities ?? 0) + stat(272, '荣誉徽章', (c.badges || []).length) : '<text x="28" y="150" font-size="13" fill="rgba(255,255,255,.62)">基础凭证：仅含等级与入会时间</text>'}
+    ${chips}
+    <line x1="28" y1="${h - 46}" x2="492" y2="${h - 46}" stroke="rgba(255,255,255,.18)"/>
+    <text x="28" y="${h - 26}" font-size="11" fill="rgba(255,255,255,.6)">${meta.did ? 'DID ' + esc(String(meta.did).slice(0, 26)) + '…' : '最小披露：不含姓名 / 手机号 / 身份证 / 订单号 / 金额'}${meta.exp ? ' · 有效期至 ' + esc(String(meta.exp).slice(0, 10)) : ''}</text>
+    ${status ? `<text x="492" y="${h - 26}" text-anchor="end" font-size="12" font-weight="700" fill="#7ce0b5">${esc(status)}</text>` : ''}
+  </svg>`
+}
+
+function showVcCard(id) {
+  const v = (window.__vcRecent || []).find((x) => Number(x.id) === Number(id))
+  const box = document.getElementById('vcCardBox')
+  if (!v || !box) return
+  const status = v.revoked_at ? '已吊销' : (new Date(v.expires_at) > new Date() ? '有效' : '已过期')
+  box.innerHTML = `<div class="muted" style="margin-bottom:8px">凭证 #${esc(v.id)} · ${esc(v.nickname || '用户' + v.user_id)}</div>${vcCardSvg(v.claims, { did: v.did, exp: v.expires_at, status })}`
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function issueVc() {
@@ -140,6 +189,7 @@ async function issueVc() {
       <div class="card" style="margin-top:12px;background:#f0faf7">
         <div class="row" style="margin:0"><span class="pill ok">已签发</span>
           <span class="muted">${esc(r.did)} · 有效期至 ${esc(String(r.expiresAt).slice(0, 19))}</span></div>
+        <div style="margin-top:10px">${vcCardSvg(r.claims, { did: r.did, exp: r.expiresAt, status: '有效' })}</div>
         <textarea readonly style="width:100%;height:88px;margin-top:10px;font-family:monospace;font-size:11px">${esc(r.jwt)}</textarea>
         <div class="row" style="margin-top:8px"><button class="btn ghost sm" onclick="copyVc()">复制凭证</button>
           <button class="btn primary sm" onclick="openVerifyVc()">去验签</button></div>
@@ -457,6 +507,45 @@ function pipelineHtml(batches, queue, demo) {
   </div>`
 }
 
+/**
+ * 链路视图的 S 型（蛇形）排布：一行放不下就折行，奇数行从右往左，行尾用 U 形虚线转弯接到下一行行首，
+ * 所以不管多少个区块都能一眼看全（不再靠横向滚动）。区块很多（>18）自动进入紧凑模式（节点变窄）。
+ * 行容量按面板宽度算：容量 n 满足 n*节点宽 + (n-1)*最小连线宽 ≤ 可用宽度（两侧各留 46px 给转弯）。
+ */
+function chainTrackWidth() {
+  const app = document.getElementById('app')
+  return Math.max(560, ((app && app.clientWidth) || 1200) - 36)
+}
+function chainTrackHTML(descs, W) {
+  if (!descs.length) return '<div class="chain-track"><div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div></div>'
+  const dense = descs.length > 18
+  const nw = dense ? 140 : 188, minLink = dense ? 40 : 52
+  const per = Math.max(2, Math.floor((W - 92 + minLink) / (nw + minLink)))
+  const rows = []
+  for (let i = 0; i < descs.length; i += per) rows.push(descs.slice(i, i + per))
+  const html = rows.map((row, r) => {
+    const inner = []
+    row.forEach((d, i) => { if (i) inner.push(blockLinkHTML(row[i - 1].branch, d.branch)); inner.push(d.html) })
+    const rev = r % 2 === 1, last = r === rows.length - 1
+    const turn = last ? '' : (rev ? ' turn-l' : ' turn-r') + (rows[r + 1][0].branch ? ' turn-branch' : '')
+    return `<div class="chain-row${rev ? ' rev' : ''}${last ? ' last' : ''}${turn}">${inner.join('')}</div>`
+  }).join('')
+  return `<div class="chain-track snake${dense ? ' dense' : ''}" style="--nw:${nw}px;--lk:${minLink}px" data-rows="${rows.length}" data-per="${per}">${html}</div>`
+}
+/** 窗口尺寸变了：只重排链路（不重新请求接口） */
+function chainRelayout() {
+  const el = document.querySelector('#chainViz .chain-track'); if (!el || !window.__chainDescs) return
+  const next = chainTrackHTML(window.__chainDescs, chainTrackWidth())
+  const tmp = document.createElement('div'); tmp.innerHTML = next
+  const n = tmp.firstElementChild
+  if (n && n.dataset.per !== el.dataset.per) el.replaceWith(n)
+}
+if (typeof window.addEventListener === 'function' && !window.__chainResizeBound) {
+  window.__chainResizeBound = true
+  let t = null
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(chainRelayout, 180) })
+}
+
 async function web3dash() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
@@ -468,19 +557,16 @@ async function web3dash() {
   const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
   const lastSeq = batches.length ? batches[batches.length - 1].seq : 0
   window.__chainMap = Object.fromEntries(batches.map((b) => [b.id, b]))
-  const nodes = []
-  batches.forEach((b, i) => {
-    if (i) nodes.push(blockLinkHTML(Number(batches[i - 1].is_day_close) === 1, Number(b.is_day_close) === 1))
-    nodes.push(blockNodeHTML(b))
-  })
+  const descs = []   // 链路节点描述：branch=账本日终（下沉一档的分支块），连线与换行由 chainTrackHTML 统一生成
+  batches.forEach((b) => descs.push({ html: blockNodeHTML(b), branch: Number(b.is_day_close) === 1 }))
   if (Number(pendingN) > 0) {
-    nodes.push(blockLinkHTML(batches.length ? Number(batches[batches.length - 1].is_day_close) === 1 : false, false))
-    nodes.push(`<div class="chain-node ghost" role="presentation" aria-disabled="true"
+    descs.push({ branch: false, html: `<div class="chain-node ghost" role="presentation" aria-disabled="true"
       title="待打包队列：还没出根，所以点不开。到「存证中心」点「① 打包」出根后，这里才会变成可点的区块">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
       <div class="blk-title" style="opacity:.75">下一区块</div>
       <div class="blk-line" style="opacity:.7">小时级打包 · #${lastSeq + 1}</div>
-      <div class="blk-line"><span class="node-lock">待打包 · 暂不可点</span></div></div>`)
+      <div class="blk-line"><span class="node-lock">待打包 · 暂不可点</span></div></div>` })
   }
+  window.__chainDescs = descs
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
   $('#app').innerHTML = `
   <div class="chain-panel" id="chainViz">
@@ -498,7 +584,7 @@ async function web3dash() {
       <button class="chain-btn" onclick="web3dash()">刷新 ↻</button>
     </div>
     ${demo ? '<div class="chain-demo-note">演示模式：以下为模拟数据，仅预览多节点链路形态，不代表真实链上状态</div>' : ''}
-    <div class="chain-track">${nodes.join('') || '<div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div>'}</div>
+    ${chainTrackHTML(descs, chainTrackWidth())}
     ${pipelineHtml(batches, (c && c.queue) || [], demo)}
     <div class="chain-divider"></div>
     <div class="flow-head">
@@ -848,7 +934,7 @@ async function pointassets() {
   <div class="card">
     <div class="card-head"><h2>积分发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">持有人数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">旅豆账户数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）· 与「数字身份」的凭证持有人是两个口径</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🛡</div><div><div class="l">年度总量哨兵</div><div class="v" style="font-size:18px">${d.globalCap ? (d.globalCap.cap_total || d.globalCap.total || '—') : '—'}</div><div class="s">严禁超发 · 双分录平衡</div></div></div>
     </div>

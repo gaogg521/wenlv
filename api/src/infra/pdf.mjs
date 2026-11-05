@@ -54,8 +54,8 @@ export function pngToPdf(pngBuf, opt = {}) {
   obj(5, `<< /Length ${content.length} >>`, content)
 
   const info = []
-  if (opt.title) info.push(`/Title (${pdfStr(opt.title)})`)
-  if (opt.author) info.push(`/Author (${pdfStr(opt.author)})`)
+  if (opt.title) info.push(`/Title ${pdfText(opt.title)}`)
+  if (opt.author) info.push(`/Author ${pdfText(opt.author)}`)
   info.push(`/Producer (wanderlust-attest)`, `/CreationDate (D:${pdfDate()})`)
   obj(6, `<< ${info.join(' ')} >>`)
 
@@ -71,7 +71,17 @@ export function pngToPdf(pngBuf, opt = {}) {
 const A4_W_IN = 8.27
 const A4_H_IN = 11.69
 
-const pdfStr = (s) => String(s).replace(/[\\()]/g, (c) => '\\' + c).replace(/[^\x20-\x7E]/g, '?')
+/**
+ * PDF 文本字符串：纯 ASCII 用 (…)；含中文等非 ASCII 必须用 UTF-16BE + BOM 的十六进制串 <FEFF…>。
+ * 旧实现把所有非 ASCII 替换成 '?'，结果文档标题（阅读器标题栏 / 浏览器标签）显示成 "????? ? ????"。
+ */
+export function pdfText(str) {
+  const s = String(str)
+  if (/^[\x20-\x7E]*$/.test(s)) return '(' + s.replace(/[\\()]/g, (c) => '\\' + c) + ')'
+  const le = Buffer.from(s, 'utf16le')
+  for (let i = 0; i + 1 < le.length; i += 2) { const t = le[i]; le[i] = le[i + 1]; le[i + 1] = t }   // LE → BE
+  return '<FEFF' + le.toString('hex').toUpperCase() + '>'
+}
 
 function pdfDate() {
   const d = new Date()
