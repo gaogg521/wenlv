@@ -1,0 +1,30 @@
+[
+  {
+    "role": "readonly",
+    "check": "visible settlement write button",
+    "result": {
+      "code": 1003,
+      "msg": "权限不足（readonly）",
+      "data": null,
+      "traceId": "tmw39gfqk"
+    }
+  },
+  {
+    "role": "readonly",
+    "check": "visible order complete button",
+    "result": {
+      "code": 1003,
+      "msg": "模块未授权（system），请联系超级管理员在「后台账号 → 权限」调整",
+      "data": null,
+      "traceId": "tmw39gg1u"
+    }
+  },
+  {
+    "role": "risk",
+    "check": "risk keyword search",
+    "result": {
+      "ok": false,
+      "message": "Unknown column 'type' in 'where clause'"
+    }
+  }
+]

@@ -317,11 +317,14 @@ export async function reconcile() {
 
   // 按"旅豆事务号"计，不按流水行数计：一笔发放/抵扣都是双分录两行，用行数会误判成漏埋点
   const missed = await one(`
-    SELECT (SELECT COUNT(DISTINCT tx_no) FROM bean_ledger) ledger,
-           (SELECT COUNT(*) FROM attest_event WHERE biz_type IN ('bean_grant','bean_deduct')) attested`)
+    SELECT COUNT(*) ledger, COALESCE(SUM(EXISTS (
+      SELECT 1 FROM attest_event e WHERE e.biz_type IN ('bean_grant','bean_deduct')
+        AND e.biz_ref = CONCAT('bt-', l.tx_no)
+        AND JSON_UNQUOTE(JSON_EXTRACT(e.canonical, '$.txNo')) = l.tx_no
+    )),0) attested FROM (SELECT DISTINCT tx_no FROM bean_ledger) l`)
   const ratio = Number(missed.ledger) === 0 ? 1 : Number(missed.attested) / Number(missed.ledger)
   checks.push({ id: 'I6', name: '旅豆流水均有存证(≥95%)', ok: ratio >= 0.95,
-    detail: { ledger: Number(missed.ledger), attested: Number(missed.attested), ratio: Number(ratio.toFixed(3)) } })
+    detail: { ledger: Number(missed.ledger), attested: Number(missed.attested), missing: Number(missed.ledger)-Number(missed.attested), ratio: Number(ratio.toFixed(3)) } })
 
   const failed = checks.filter((x) => !x.ok)
   if (failed.length) {

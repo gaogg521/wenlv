@@ -1,0 +1,300 @@
+{
+  "dryRun": true,
+  "dates": [
+    {
+      "id": 152,
+      "before": "2026-10-13 10:30:01.072",
+      "after": "2026-11-04 10:30:01.071",
+      "txNo": "DEMO-BT-mw1i17ry-0"
+    },
+    {
+      "id": 154,
+      "before": "2026-10-20 10:30:01.075",
+      "after": "2026-10-14 10:30:01.074",
+      "txNo": "DEMO-BT-mw1i17ry-1"
+    },
+    {
+      "id": 156,
+      "before": "2026-10-23 10:30:01.078",
+      "after": "2026-10-13 10:30:01.077",
+      "txNo": "DEMO-BT-mw1i17ry-2"
+    },
+    {
+      "id": 158,
+      "before": "2026-10-11 10:30:01.083",
+      "after": "2026-10-14 10:30:01.082",
+      "txNo": "DEMO-BT-mw1i17ry-3"
+    },
+    {
+      "id": 160,
+      "before": "2026-10-05 10:30:01.087",
+      "after": "2026-10-06 10:30:01.086",
+      "txNo": "DEMO-BT-mw1i17ry-4"
+    },
+    {
+      "id": 162,
+      "before": "2026-10-27 10:30:01.091",
+      "after": "2026-11-04 10:30:01.090",
+      "txNo": "DEMO-BT-mw1i17ry-5"
+    },
+    {
+      "id": 164,
+      "before": "2026-11-02 10:30:01.094",
+      "after": "2026-10-23 10:30:01.093",
+      "txNo": "DEMO-BT-mw1i17ry-6"
+    },
+    {
+      "id": 166,
+      "before": "2026-10-15 10:30:01.098",
+      "after": "2026-10-17 10:30:01.097",
+      "txNo": "DEMO-BT-mw1i17ry-7"
+    },
+    {
+      "id": 168,
+      "before": "2026-10-07 10:30:01.102",
+      "after": "2026-11-02 10:30:01.101",
+      "txNo": "DEMO-BT-mw1i17ry-8"
+    },
+    {
+      "id": 170,
+      "before": "2026-10-19 10:30:01.105",
+      "after": "2026-10-12 10:30:01.104",
+      "txNo": "DEMO-BT-mw1i17ry-9"
+    },
+    {
+      "id": 172,
+      "before": "2026-10-16 10:30:01.107",
+      "after": "2026-10-06 10:30:01.106",
+      "txNo": "DEMO-BT-mw1i17ry-10"
+    },
+    {
+      "id": 174,
+      "before": "2026-10-08 10:30:01.110",
+      "after": "2026-10-21 10:30:01.109",
+      "txNo": "DEMO-BT-mw1i17ry-11"
+    },
+    {
+      "id": 176,
+      "before": "2026-10-09 10:30:01.114",
+      "after": "2026-10-13 10:30:01.112",
+      "txNo": "DEMO-BT-mw1i17ry-12"
+    },
+    {
+      "id": 178,
+      "before": "2026-11-03 10:30:01.117",
+      "after": "2026-10-07 10:30:01.116",
+      "txNo": "DEMO-BT-mw1i17ry-13"
+    },
+    {
+      "id": 180,
+      "before": "2026-10-24 10:30:01.121",
+      "after": "2026-10-14 10:30:01.120",
+      "txNo": "DEMO-BT-mw1i17ry-14"
+    },
+    {
+      "id": 182,
+      "before": "2026-10-23 10:30:01.123",
+      "after": "2026-10-15 10:30:01.123",
+      "txNo": "DEMO-BT-mw1i17ry-15"
+    },
+    {
+      "id": 184,
+      "before": "2026-10-30 10:30:01.127",
+      "after": "2026-10-25 10:30:01.127",
+      "txNo": "DEMO-BT-mw1i17ry-16"
+    },
+    {
+      "id": 186,
+      "before": "2026-10-07 10:30:01.132",
+      "after": "2026-10-16 10:30:01.131",
+      "txNo": "DEMO-BT-mw1i17ry-17"
+    }
+  ],
+  "missing": [
+    {
+      "txNo": "DEMO-BT-mw1i17ry-0",
+      "accountId": 35,
+      "amount": 113
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-1",
+      "accountId": 1,
+      "amount": 181
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-2",
+      "accountId": 20,
+      "amount": 142
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-3",
+      "accountId": 5,
+      "amount": 58
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-4",
+      "accountId": 5,
+      "amount": 264
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-5",
+      "accountId": 36,
+      "amount": 215
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-6",
+      "accountId": 15,
+      "amount": 198
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-7",
+      "accountId": 37,
+      "amount": 175
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-8",
+      "accountId": 38,
+      "amount": 107
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-9",
+      "accountId": 11,
+      "amount": 222
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-10",
+      "accountId": 38,
+      "amount": 95
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-11",
+      "accountId": 16,
+      "amount": 160
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-12",
+      "accountId": 1,
+      "amount": 181
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-13",
+      "accountId": 35,
+      "amount": 242
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-14",
+      "accountId": 11,
+      "amount": 70
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-15",
+      "accountId": 18,
+      "amount": 191
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-16",
+      "accountId": 39,
+      "amount": 107
+    },
+    {
+      "txNo": "DEMO-BT-mw1i17ry-17",
+      "accountId": 40,
+      "amount": 300
+    }
+  ],
+  "opening": [
+    {
+      "accountId": 1,
+      "userId": 1,
+      "amount": 976,
+      "balance": 1616,
+      "lifetime": 1816
+    },
+    {
+      "accountId": 2,
+      "userId": 2,
+      "amount": 488,
+      "balance": 488,
+      "lifetime": 488
+    },
+    {
+      "accountId": 5,
+      "userId": 12,
+      "amount": 293,
+      "balance": 615,
+      "lifetime": 615
+    },
+    {
+      "accountId": 6,
+      "userId": 15,
+      "amount": 334,
+      "balance": 334,
+      "lifetime": 334
+    },
+    {
+      "accountId": 7,
+      "userId": 16,
+      "amount": 1914,
+      "balance": 1914,
+      "lifetime": 1914
+    },
+    {
+      "accountId": 8,
+      "userId": 17,
+      "amount": 1161,
+      "balance": 1161,
+      "lifetime": 1161
+    },
+    {
+      "accountId": 9,
+      "userId": 18,
+      "amount": 460,
+      "balance": 460,
+      "lifetime": 460
+    },
+    {
+      "accountId": 11,
+      "userId": 13,
+      "amount": 763,
+      "balance": 1055,
+      "lifetime": 1055
+    },
+    {
+      "accountId": 15,
+      "userId": 6,
+      "amount": 204,
+      "balance": 402,
+      "lifetime": 402
+    },
+    {
+      "accountId": 16,
+      "userId": 7,
+      "amount": 284,
+      "balance": 444,
+      "lifetime": 444
+    },
+    {
+      "accountId": 18,
+      "userId": 4,
+      "amount": 475,
+      "balance": 666,
+      "lifetime": 666
+    },
+    {
+      "accountId": 20,
+      "userId": 5,
+      "amount": 611,
+      "balance": 753,
+      "lifetime": 753
+    },
+    {
+      "accountId": 21,
+      "userId": 14,
+      "amount": 95,
+      "balance": 95,
+      "lifetime": 95
+    }
+  ],
+  "issuedBefore": 478,
+  "issuedAfter": 15847
+}

@@ -5,7 +5,7 @@ import { attest as attestCore } from './attest.mjs'
 import { isUserFrozen } from './promo.mjs'
 import * as member from './member.mjs'
 
-export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7 }
+export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7, LEGACY_OPENING: 8 }
 export const SENTINEL_PLATFORM = 999999000001n
 export const SENTINEL_BUDGET = 999999000009n
 
@@ -163,12 +163,14 @@ export async function flow() {
   // 哨兵对手方不参与统计，否则扣回的对手方会被误计为"发放"。
   const r = await one(`SELECT
     (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
-      WHERE l.direction = 1 AND l.biz_type IN (1,2,3,7) AND a.user_id < 999999000000) granted,
+      WHERE l.direction = 1 AND l.biz_type IN (1,2,3,7,8) AND a.user_id < 999999000000) granted,
+    (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE l.direction = 1 AND l.biz_type = 8 AND a.user_id < 999999000000) opening_imported,
     (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
       WHERE l.direction = 2 AND l.biz_type IN (4,6,7) AND a.user_id < 999999000000) debited,
     (SELECT COALESCE(SUM(l.amount),0) FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
       WHERE l.direction = 1 AND l.biz_type = 5 AND a.user_id < 999999000000) reversed`)
-  return { granted: Number(r.granted), consumed: Number(r.debited) - Number(r.reversed) }
+  return { granted: Number(r.granted), openingImported: Number(r.opening_imported), consumed: Number(r.debited) - Number(r.reversed) }
 }
 
 /** 日终试算：真实用户户 balance==Σcredit-Σdebit；全账本 Σ贷==Σ借 */
