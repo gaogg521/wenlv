@@ -1,0 +1,8 @@
+{
+  "nodePid": 29384,
+  "revision": "f6a3ecafa6bb75a18b81bd8c762cc3a8687c0093",
+  "port": 8080,
+  "database": "wanderlust",
+  "envFile": ".env",
+  "launcherPid": 23752
+}
