@@ -9,15 +9,15 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
+        "internalType": "bytes32",
         "name": "from",
-        "type": "address"
+        "type": "bytes32"
       },
       {
         "indexed": true,
-        "internalType": "address",
+        "internalType": "bytes32",
         "name": "to",
-        "type": "address"
+        "type": "bytes32"
       }
     ],
     "name": "OwnerChanged",
@@ -156,12 +156,12 @@
   },
   {
     "inputs": [],
-    "name": "owner",
+    "name": "ownerKey",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "bytes32",
         "name": "",
-        "type": "address"
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -215,9 +215,9 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "next",
-        "type": "address"
+        "internalType": "bytes32",
+        "name": "nextKey",
+        "type": "bytes32"
       }
     ],
     "name": "transferOwnership",
