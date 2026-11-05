@@ -277,6 +277,7 @@ function dxDonutCard(ins, c) {
 function dxMiniCard(wxd, c) {
   const list = wxd && wxd.list || [], ok = list.length && !wxd.mock
   const head = `<div class="dx-hd"><h3>小程序访问</h3><span class="dx-tag period" title="微信按日产出数据，最长展示 30 天，当日数据次日可见">${esc(c.rangeCn)}</span>${ok ? `<span class="dx-hint">${list[0].date.slice(5)}${list.length > 1 ? ' ~ ' + list[list.length - 1].date.slice(5) : ''}</span>` : ''}</div>`
+  if (wxd?.unavailable) return `<section class="dx-card">${head}<div class="dx-ph"><p>当前角色无小程序访问数据权限</p></div></section>`
   if (!ok) return `<section class="dx-card">${head}<div class="dx-ph"><i>${DX_ICON.plug}</i><p>尚未接入微信数据分析</p><span>在「集成中心」配置小程序 AppSecret 后，这里显示真实 PV / UV（不展示模拟曲线）</span><button class="btn ghost sm" onclick="go('integrations')">去集成中心 →</button></div></section>`
   const pv = list.reduce((s, t) => s + t.visitPv, 0), uv = list.reduce((s, t) => s + t.visitUv, 0)
   return `<section class="dx-card">${head}<div class="dx-mini-n"><div><span>访问次数 PV</span><b>${dxInt(pv)}</b></div><div><span>访客数 UV</span><b>${dxInt(uv)}</b></div></div>
@@ -309,7 +310,9 @@ async function dash() {
       api('GET', '/admin/dash/kpi?' + qs),
       api('GET', '/admin/dash/insights?' + qs).catch(() => null),
       api('GET', '/admin/orders').catch(() => []),
-      api('GET', '/admin/wxdata/visit-trend?days=' + wxDays).catch(() => ({ mock: true, list: [] })),
+      ['super', 'ops', 'city_partner'].includes(ME?.role)
+        ? api('GET', '/admin/wxdata/visit-trend?days=' + wxDays).catch(() => ({ mock: true, list: [] }))
+        : Promise.resolve({ unavailable: true, list: [] }),
     ])
     if (seq !== window.__dashSeq) return
     const hour = new Date().getHours()

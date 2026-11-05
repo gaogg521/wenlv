@@ -106,7 +106,7 @@ async function completeOrder(no) {
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
   const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
-    api('GET', '/admin/suppliers').catch(() => []), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
+    ADMIN_CAPABILITIES.modules.includes('suppliers') ? api('GET', '/admin/suppliers').catch(() => []) : Promise.resolve([]), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
