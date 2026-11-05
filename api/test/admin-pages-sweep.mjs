@@ -1,8 +1,13 @@
-// R-04 普查矩阵回归：七身份 × 有效模块 × 模块主接口全 200（菜单可见=接口可达）。
+// R-04 普查矩阵回归（QA-07 整改版）：七身份 × 有效模块 × 模块主接口全 200（菜单可见=接口可达）。
+// Codex 复验整改：套件自建七角色夹具账号（含 sweep-* 与 city 演示账号的兜底创建），不依赖旧库遗留；
+// finally 精确清理本次创建的账号；全新隔离库从迁移、seed 到本套件开箱即跑。
 // 普查曾发现 3 个"菜单可见接口拒"缺陷（risk+entitlements、readonly+partners/partnerperf）并已修复。
-import { closeDb } from '../src/db.mjs'
 import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/admin-pages-sweep.mjs')
+import assert from 'node:assert/strict'
+import { q, one, closeDb } from '../src/db.mjs'
+import { hashPassword } from '../src/auth.mjs'
+
 const base = 'http://127.0.0.1:' + (process.env.PORT || 18095)
 const call = async (m, p, t) => (await fetch(base + p, { method: m, headers: { authorization: 'Bearer ' + t } })).json()
 const PRIMARY = {
@@ -22,28 +27,59 @@ const PRIMARY = {
   accounts: '/admin/accounts', cases: '/admin/risk-cases?page=1', config: '/admin/config',
   features: '/admin/features', integrations: '/admin/integrations', system: '/admin/system/overview',
 }
+const stamp = 'SWP' + Math.random().toString(36).slice(2, 8)
+// 七身份：super/admin 恒在；其余本套件自建（含城市账号，绑 310118 与种子演示口径一致）
 const ROLES = [
-  ['super', 'admin', 'admin123'], ['ops', 'ops', 'admin123'], ['finance', 'finance', 'admin123'],
-  ['review', 'review', 'admin123'], ['risk', 'sweep-risk', 'admin123'], ['readonly', 'sweep-readonly', 'admin123'],
-  ['city_partner', 'city310118', 'city123'],
+  ['super', 'admin', 'admin123', null, false],
+  ['ops', 'ops', 'admin123', null, false],
+  ['finance', 'finance', 'admin123', null, false],
+  ['review', 'review', 'admin123', null, false],
+  ['risk', 'sweep-risk-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
+  ['readonly', 'sweep-readonly-' + stamp, 'Sweep!' + stamp + 'A1', null, true],
+  ['city_partner', 'sweep-city-' + stamp, 'Sweep!' + stamp + 'A1', '310118', true],
 ]
+const made = []
 const results = []
 let pass = 0, fail = 0
-for (const [role, username, password] of ROLES) {
-  const l = await (await fetch(base + '/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) })).json()
-  if (l.code !== 0) { results.push({ role, fatal: '登录失败: ' + l.msg }); fail++; continue }
-  const T = l.data.token
-  const cap = await call('GET', '/admin/capabilities', T)
-  for (const mod of cap.data.modules) {
-    const api = PRIMARY[mod]
-    if (!api) { results.push({ role, mod, note: 'no-primary' }); continue }
-    const r = await call('GET', api, T)
-    const okr = r.code === 0
-    if (okr) pass++; else fail++
-    results.push({ role, mod, api, code: r.code, ok: okr, msg: okr ? undefined : r.msg })
+try {
+  for (const [role, username, password, scopeCity, mine] of ROLES) {
+    if (mine) {
+      const exists = await one('SELECT id FROM admin_user WHERE username = ?', [username])
+      if (!exists) {
+        await q('INSERT INTO admin_user (username, display_name, password_hash, role, scope_city, status, token_epoch) VALUES (?,?,?,?,?,1,1)',
+          [username, username + '显示名', hashPassword(password), role, scopeCity])
+      }
+      made.push(username)
+    }
   }
+  // 也要确保 admin/ops/finance/review 在全新库存在（seed:scenario 首启种子创建；若缺失则补）
+  for (const [role, username, password] of ROLES.slice(0, 4)) {
+    const u = await one('SELECT id, password_hash FROM admin_user WHERE username = ?', [username])
+    if (!u) { await q('INSERT INTO admin_user (username, display_name, password_hash, role, status, token_epoch) VALUES (?,?,?,?,1,1)', [username, username, hashPassword(password), role]); made.push(username) }
+  }
+  for (const [role, username, password] of ROLES) {
+    const l = await (await fetch(base + '/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }) })).json()
+    if (l.code !== 0) { results.push({ role, fatal: '登录失败: ' + l.msg }); fail++; continue }
+    const T = l.data.token
+    const cap = await call('GET', '/admin/capabilities', T)
+    for (const mod of cap.data.modules) {
+      const api = PRIMARY[mod]
+      if (!api) { results.push({ role, mod, note: 'no-primary' }); continue }
+      const r = await call('GET', api, T)
+      const okr = r.code === 0
+      if (okr) pass++; else fail++
+      results.push({ role, mod, api, code: r.code, ok: okr, msg: okr ? undefined : r.msg })
+    }
+  }
+  console.log(`R-04 矩阵普查（QA-07 自建夹具）：${pass} 通过 / ${fail} 失败`)
+  for (const r of results) if (r.ok === false) console.log('  FAIL', r.role, r.mod, r.api, '->', r.code, r.msg)
+  if (fail) process.exitCode = 1
+} finally {
+  // 精确清理：只删本套件创建的账号与其审计（admin/ops 等公共账号不动）
+  for (const username of made) {
+    await q('DELETE FROM admin_user WHERE username = ?', [username]).catch(() => {})
+    await q("DELETE FROM audit_log WHERE module='account' AND biz_ref = ?", ['admin-' + username]).catch(() => {})
+  }
+  await closeDb().catch(() => {})
+  process.exitCode = process.exitCode || (fail ? 1 : 0)
 }
-console.log(`R-04 矩阵普查：${pass} 通过 / ${fail} 失败`)
-for (const r of results) if (r.ok === false) console.log('  FAIL', r.role, r.mod, r.api, '->', r.code, r.msg)
-await closeDb().catch(() => {})
-process.exitCode = fail ? 1 : 0

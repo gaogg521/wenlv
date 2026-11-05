@@ -7,7 +7,8 @@ import { hashPassword, verifyPassword } from '../auth.mjs'
 import crypto from 'node:crypto'
 
 // 可分配角色（sre/dev 是历史遗留系统角色，不在授权矩阵开放新建）
-export const ACCOUNT_ROLES = ['super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly']
+// QA-04：sre/dev 是历史遗留系统角色但参与模块矩阵（role-modules 可编辑）——允许创建以便撤权验证与运维分配
+export const ACCOUNT_ROLES = ['super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev']
 const ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号' }
 
 const activeSuperCount = async () => Number((await one("SELECT COUNT(*) n FROM admin_user WHERE role = 'super' AND status = 1")).n)
@@ -216,7 +217,9 @@ const adminAccounts = {
     const rows = await q('SELECT role, module_key FROM admin_role_module')
     const byRole = {}
     for (const r of rows) (byRole[r.role] = byRole[r.role] || []).push(r.module_key)
-    return { roles: ['ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev'], modules: mods.MODULES, byRole, cityDeny: mods.CITY_DENY_MODULES }
+    // QA-04：已显式配置过的角色（空集合语义生效）；前端提示这些角色"空即无模块"
+    const configured = (await q('SELECT role FROM admin_role_config')).map((r) => r.role)
+    return { roles: ['ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev'], modules: mods.MODULES, byRole, cityDeny: mods.CITY_DENY_MODULES, configured }
   },
 
   // 改角色默认：影响该角色全部有效账号（epoch+1 下次登录生效）；城市不可授予名单同样约束；super 恒全部不可改
@@ -235,6 +238,8 @@ const adminAccounts = {
     await tx(async (c) => {
       if (on) await c.q('INSERT IGNORE INTO admin_role_module (role, module_key, level, updated_by) VALUES (?,?,?,?)', [role, moduleKey, 'manage', 'admin:' + a.name])
       else await c.q('DELETE FROM admin_role_module WHERE role = ? AND module_key = ?', [role, moduleKey])
+      // QA-04：首次显式配置即打标记——此后该角色以矩阵表为准（全部撤空 = 空集合保持空，不回退基线）
+      await c.q('INSERT IGNORE INTO admin_role_config (role, updated_by) VALUES (?,?)', [role, 'admin:' + a.name])
       // 影响该角色全部有效账号：旧会话失效（重新登录读到新集合），并清模块集合缓存
       const r = await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE role = ? AND status = 1', [role])
       await audit(c, 'admin:' + a.name, 'account', 'role-module', 'role-' + role,

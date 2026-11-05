@@ -447,9 +447,9 @@ const admin = {
     }
     const reqNo = 'RS' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + String(Date.now() % 100000).padStart(5, '0') + String(Math.floor(Math.random() * 90) + 10)
     const id = await tx(async (c) => {
-      const rid = await c.ins(`INSERT INTO order_reschedule (req_no, order_id, order_no, from_session_id, to_session_id, qty, price_diff, diff_bean, reason, applicant)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [reqNo, o.id, o.order_no, o.session_id, to.id, Number(o.qty), priceDiff, bean, why, 'admin:' + a.name])
+      const rid = await c.ins(`INSERT INTO order_reschedule (req_no, order_id, order_no, from_session_id, to_session_id, qty, price_diff, diff_bean, reason, applicant, applicant_uid)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [reqNo, o.id, o.order_no, o.session_id, to.id, Number(o.qty), priceDiff, bean, why, 'admin:' + a.name, a.uid ?? null])
       await audit(c, 'admin:' + a.name, 'order', 'reschedule-apply', 'reschedule-' + rid,
         { orderNo: o.order_no, fromSession: o.session_id }, { toSession: to.id, priceDiff, diffBean: bean, reason: why })
       return rid
@@ -486,10 +486,17 @@ const admin = {
     const r = await one('SELECT * FROM order_reschedule WHERE id = ? FOR UPDATE', [req.params.id])
     if (!r) throw new BizError(1004, '改期申请不存在')
     if (Number(r.status) !== 0) throw new BizError(2002, '该申请已处理，请刷新')
-    if (r.applicant === 'admin:' + a.name) throw new BizError(1003, '双人复核：审批人不能与申请人相同')
+    // QA-01：身份按不可变 UID 比较；申请已记录 UID 而令牌无 uid（仅测试夹具可能）→ fail-closed 拒绝；
+    // 存量行（uid NULL）回退名字比较。同一账号改显示名/两个账号同名都不能绕过或误拒。
+    const isSelf = r.applicant_uid != null
+      ? (a.uid == null || Number(r.applicant_uid) === Number(a.uid))
+      : r.applicant === 'admin:' + a.name
+    if (isSelf) throw new BizError(1003, '双人复核：审批人不能与申请人相同')
     await tx(async (c) => {
-      await c.q('UPDATE order_reschedule SET status = ?, approver = ?, approve_note = ? WHERE id = ? AND status = 0',
-        [pass ? 1 : 2, 'admin:' + a.name, note || null, r.id])
+      // 条件更新 + 影响行数校验：并发审批只有一win（与案件结案同语义）
+      const n = await c.q('UPDATE order_reschedule SET status = ?, approver = ?, approver_uid = ?, approve_note = ? WHERE id = ? AND status = 0',
+        [pass ? 1 : 2, 'admin:' + a.name, a.uid ?? null, note || null, r.id])
+      if (n.affectedRows !== 1) throw new BizError(2002, '该申请刚被他人处理，请刷新')
       await audit(c, 'admin:' + a.name, 'order', pass ? 'reschedule-approve' : 'reschedule-reject', 'reschedule-' + r.id,
         { status: 0 }, { status: pass ? 1 : 2, note: note || null })
     })
@@ -498,11 +505,22 @@ const admin = {
 
   'POST /admin/reschedules/:id/execute': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
-    const r = await one('SELECT * FROM order_reschedule WHERE id = ?', [req.params.id])
-    if (!r) throw new BizError(1004, '改期申请不存在')
-    if (Number(r.status) !== 1) throw new BizError(2002, '仅「待执行」申请可执行')
     try {
+      let result = null
       await tx(async (c) => {
+        // QA-02：事务内锁定申请行并重检状态（申请状态读取不能再在事务外）——
+        // 并发执行在此串行化，只有第一个看到 status=1 的事务能通过条件更新独占转移
+        const r = await c.one('SELECT * FROM order_reschedule WHERE id = ? FOR UPDATE', [req.params.id])
+        if (!r) throw new BizError(1004, '改期申请不存在')
+        if (Number(r.status) !== 1) {
+          // 已成功的并发重入返回幂等结果（不报错、不重复执行）；其他状态按原语义拒绝
+          if (Number(r.status) === 3) { result = { status: 3, idempotent: true }; return }
+          throw new BizError(2002, '仅「待执行」申请可执行')
+        }
+        // 状态转移先独占（条件更新校验影响行数）——后续库存/金额/旅豆/事件只在独占成功后执行
+        const claim = await c.q('UPDATE order_reschedule SET status = 3, executed_at = NOW(3), exec_note = ? WHERE id = ? AND status = 1',
+          ['执行中', r.id])
+        if (claim.affectedRows !== 1) { result = { status: Number(r.status), idempotent: Number(r.status) === 3 }; if (result.idempotent) return; throw new BizError(2002, '仅「待执行」申请可执行') }
         const o = await c.one('SELECT * FROM orders WHERE id = ? FOR UPDATE', [r.order_id])
         if (!o || ![20, 30].includes(Number(o.status))) throw new BizError(2002, '订单状态已变化（已核销/退款中/关闭），不能改期，请驳回或登记失败')
         const to = await c.one('SELECT * FROM tour_session WHERE id = ? FOR UPDATE', [r.to_session_id])
@@ -524,14 +542,17 @@ const admin = {
             JSON.stringify(`改期换团：${r.from_session_id} → ${r.to_session_id}（${r.req_no}，价差 ${r.price_diff} 分，旅豆抵扣 ${r.diff_bean} 分）`)])
         await audit(c, 'admin:' + a.name, 'order', 'reschedule-execute', 'reschedule-' + r.id,
           { status: 1 }, { status: 3, orderNo: r.order_no, fromSession: r.from_session_id, toSession: r.to_session_id, priceDiff: r.price_diff, diffBean: r.diff_bean })
-        await c.q('UPDATE order_reschedule SET status = 3, executed_at = NOW(3), exec_note = ? WHERE id = ?',
+        // 执行成功后的终态备注（此时状态已被独占为 3，只补备注，不改状态）
+        await c.q('UPDATE order_reschedule SET exec_note = ? WHERE id = ?',
           [Number(r.price_diff) > 0 ? '待补款 ' + fen2yuan(r.price_diff) + '（走财务登记，未虚构到账）' : (Number(r.price_diff) < 0 ? '应退差 ' + fen2yuan(-r.price_diff) + '（走既有退款流程）' : '同价换团完成'), r.id])
+        result = { status: 3 }
       })
-      return { status: 3 }
+      return result
     } catch (e) {
-      // 执行失败整体回滚后登记失败态（不占在途唯一键），人工核对后可重新发起申请
+      // QA-02：失败登记不得覆盖已成功/已终态的状态——只有仍处于「待执行(1)」才登记失败(5)；
+      // 竞态里申请已被独占为 3 时，失败登记不落（该申请实际已被并发方成功执行）
       if (e && e.code) {
-        await q('UPDATE order_reschedule SET status = 5, exec_note = ? WHERE id = ?', [String(e.message).slice(0, 300), r.id])
+        await q("UPDATE order_reschedule SET status = 5, exec_note = ? WHERE id = ? AND status = 1", [String(e.message).slice(0, 300), req.params.id])
       }
       throw e
     }

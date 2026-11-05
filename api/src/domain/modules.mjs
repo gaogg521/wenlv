@@ -35,7 +35,7 @@ export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 
  */
 export const ROLE_DEFAULT_MODULES = {
   ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'taskcash'],
-  finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash'],
+  finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
   review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],
   city_partner: ['dash', 'orders', 'tickets', 'products', 'merchants', 'settlements', 'cases', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases'],
