@@ -125,10 +125,47 @@ const web3 = {
     if (!d) return { found: false }
     const b = d.batch_id ? await one('SELECT * FROM attest_batch WHERE id = ?', [d.batch_id]) : null
     const anchored = b && Number(b.status) === 2 && b.chain_tx_ref && !String(b.chain_tx_ref).startsWith('NOOP')
+    // P-14 四类计数：把该日的分录按真实业务口径拆开，不能把对手分录当用户消耗。
+    // 口径（与日终封存同源）：按 DATE(created_at) 归日；真实用户户 = user_id < 999999000000
+    //（≥ 该值是预算池/平台哨兵户，它们的借贷是每笔发放/调整的对手分录，不是用户收入或消费）；
+    // 每条分录按行计入唯一一类（同时给金额合计与行数），分类间不重不漏：
+    //   发放=贷方 1/2/3（消费返豆/任务/内容）；期初导入=贷方 8；退款冲正=贷方 5；抵扣=借方 4；
+    //   其他调整=用户户 6/7（过期回收、人工调整，双向）；对手分录=哨兵户全部借贷。
+    // 自检：用户贷方+对手贷方=当日 Σ贷（借方同理），不一致时页面如实标"对不上"。
+    const c = await one(`SELECT
+      COALESCE(SUM(CASE WHEN l.direction=1 AND l.biz_type IN (1,2,3) AND a.user_id < 999999000000 THEN l.amount ELSE 0 END),0) g_amt,
+      COUNT(CASE WHEN l.direction=1 AND l.biz_type IN (1,2,3) AND a.user_id < 999999000000 THEN 1 END) g_n,
+      COALESCE(SUM(CASE WHEN l.direction=1 AND l.biz_type=8 AND a.user_id < 999999000000 THEN l.amount ELSE 0 END),0) o_amt,
+      COUNT(CASE WHEN l.direction=1 AND l.biz_type=8 AND a.user_id < 999999000000 THEN 1 END) o_n,
+      COALESCE(SUM(CASE WHEN l.direction=1 AND l.biz_type=5 AND a.user_id < 999999000000 THEN l.amount ELSE 0 END),0) r_amt,
+      COUNT(CASE WHEN l.direction=1 AND l.biz_type=5 AND a.user_id < 999999000000 THEN 1 END) r_n,
+      COALESCE(SUM(CASE WHEN l.direction=2 AND l.biz_type=4 AND a.user_id < 999999000000 THEN l.amount ELSE 0 END),0) d_amt,
+      COUNT(CASE WHEN l.direction=2 AND l.biz_type=4 AND a.user_id < 999999000000 THEN 1 END) d_n,
+      COALESCE(SUM(CASE WHEN l.biz_type IN (6,7) AND a.user_id < 999999000000 AND l.direction=1 THEN l.amount ELSE 0 END),0) x_cr,
+      COALESCE(SUM(CASE WHEN l.biz_type IN (6,7) AND a.user_id < 999999000000 AND l.direction=2 THEN l.amount ELSE 0 END),0) x_dr,
+      COUNT(CASE WHEN l.biz_type IN (6,7) AND a.user_id < 999999000000 THEN 1 END) x_n,
+      COALESCE(SUM(CASE WHEN l.direction=1 AND a.user_id >= 999999000000 THEN l.amount ELSE 0 END),0) cp_cr,
+      COALESCE(SUM(CASE WHEN l.direction=2 AND a.user_id >= 999999000000 THEN l.amount ELSE 0 END),0) cp_dr
+      FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+      WHERE DATE(l.created_at) = ?`, [date])
+    const N = (x) => Number(x || 0)
+    const userCredit = N(c.g_amt) + N(c.o_amt) + N(c.r_amt) + N(c.x_cr)
+    const userDebit = N(c.d_amt) + N(c.x_dr)
+    const categories = {
+      userGranted: { amount: N(c.g_amt), count: N(c.g_n) },
+      openingImported: { amount: N(c.o_amt), count: N(c.o_n) },
+      refundReversed: { amount: N(c.r_amt), count: N(c.r_n) },
+      userDebited: { amount: N(c.d_amt), count: N(c.d_n) },
+      otherAdjust: { credit: N(c.x_cr), debit: N(c.x_dr), count: N(c.x_n) },
+      counterparty: { credit: N(c.cp_cr), debit: N(c.cp_dr) },
+      userCreditTotal: userCredit, userDebitTotal: userDebit,
+      reconciled: userCredit + N(c.cp_cr) === Number(d.credit_sum) && userDebit + N(c.cp_dr) === Number(d.debit_sum),
+    }
     return {
       found: true, bizDate: d.biz_date, leafCount: Number(d.leaf_count),
       debitSum: Number(d.debit_sum), creditSum: Number(d.credit_sum),
       balanced: Number(d.debit_sum) === Number(d.credit_sum),
+      categories,
       merkleRoot: d.merkle_root, prevRoot: d.prev_root,
       chainRef: anchored ? b.chain_tx_ref : null, anchoredAt: anchored ? b.anchored_at : null,
       note: '借贷恒等(Σ借=Σ贷) 成立后才允许封存；prevRoot 指向上一封存日，形成不可回改的账本链',

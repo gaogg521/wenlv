@@ -79,6 +79,21 @@ export async function setSecret(key, value, by) {
     [key, enc(value), value.length <= 4 ? '****' : '****' + value.slice(-4), by || ''])
   await load(true)
 }
+/**
+ * 自动生成型密钥的原子首写（P-15 并发保护）：只在库里确实没有该键时写入，已存在则整行不动（密文字节不变）。
+ * 并发首次初始化时双方都插入，先落库者获胜；返回插入后库里实际存着的明文——调用方必须沿用返回值，
+ * 丢弃自己生成的候选值，保证"任何时刻对外签名用的都是最终落库的那把钥匙"。
+ * 读不回（理论上仅在主密钥同时被更换的极端场景）返回 ''，调用方必须失败关闭，不得回退用自己的候选值。
+ */
+export async function setSecretIfAbsent(key, value, by) {
+  await q(`INSERT INTO app_secret (k, enc_value, hint, updated_by) VALUES (?,?,?,?)
+           ON DUPLICATE KEY UPDATE k = k`,
+    [key, enc(value), value.length <= 4 ? '****' : '****' + value.slice(-4), by || ''])
+  await load(true)
+  const row = await one('SELECT enc_value FROM app_secret WHERE k = ?', [key])
+  if (!row) return ''
+  try { return decWith(master, row.enc_value) } catch { return '' }
+}
 export async function delSecret(key) {
   await q('DELETE FROM app_secret WHERE k = ?', [key])
   await load(true)

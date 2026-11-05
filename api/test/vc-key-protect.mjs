@@ -72,6 +72,33 @@ await t('恢复正确配置：kid / 公钥不变，旧凭证仍可验', async ()
   assert.equal(r.out.v.valid, true, JSON.stringify(r.out.v))
   assert.equal(await raw('VC_ISSUER_KEY'), keyBefore); assert.equal(await raw('VC_DID_PEPPER'), pepperBefore)
 })
+// P-15 验收补的并发场景：真正无密钥时多个进程同时首次初始化，必须原子——先落库者获胜，
+// 输者沿用已落库密钥（不是覆盖它），因此并发期间签出的每张凭证都能被最终公钥验签。
+await t('setSecretIfAbsent 语义：已存在时不改一字节，返回已落库值', async () => {
+  const r = await run(GOOD, `const s = await import('./src/infra/secrets.mjs')
+    out.a = await s.setSecretIfAbsent('VC_P15_PROBE', 'first-value', 'test')
+    out.b = await s.setSecretIfAbsent('VC_P15_PROBE', 'second-value', 'test')
+    await s.delSecret('VC_P15_PROBE')`)
+  assert.ok(r.out && !r.out.err, JSON.stringify(r))
+  assert.equal(r.out.a, 'first-value'); assert.equal(r.out.b, 'first-value')
+})
+await t('并发首次初始化：N 进程同时签发，kid 一致、密文唯一、每张凭证都能验', async () => {
+  await q("DELETE FROM app_secret WHERE k IN ('VC_ISSUER_KEY', 'VC_DID_PEPPER')")
+  await q('DELETE FROM vc_issue')
+  const N = 4
+  const rs = await Promise.all(Array.from({ length: N }, () =>
+    run(GOOD, `out.i = await vc.issue(${user.id}, 'basic'); out.j = await vc.issuerJwks()`)))
+  for (const [i, r] of rs.entries()) assert.ok(r.out && !r.out.err, '#' + i + ' 应成功：' + JSON.stringify(r))
+  const kids = new Set(rs.map((r) => r.out.j.kid))
+  assert.equal(kids.size, 1, '并发初始化后 kid 必须唯一：' + [...kids].join(','))
+  const stored = await raw('VC_ISSUER_KEY')
+  for (const [i, r] of rs.entries()) {
+    const v = await run(GOOD, `out.v = await vc.verify(${JSON.stringify(r.out.i.jwt)})`)
+    assert.ok(v.out && v.out.v && v.out.v.valid === true, '#' + i + ' 并发期间签出的凭证必须可验：' + JSON.stringify(v.out))
+  }
+  assert.ok(stored, '密文应已落库')
+})
+
 // 收尾：这个测试用自己的 JWT_SECRET 生成了发行方密钥；留在库里会让后面按默认密钥运行的套件（以及演示服务）解不开它。
 // 清掉两项自动生成型密钥与已派生的 DID / 凭证记录，让后续套件按自己的密钥重新初始化（只在隔离库做，开头有守卫）。
 await q("DELETE FROM app_secret WHERE k IN ('VC_ISSUER_KEY', 'VC_DID_PEPPER')")
