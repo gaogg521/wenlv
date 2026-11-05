@@ -209,7 +209,7 @@
     // P-05：目标栏目不在本人有效模块集合内的跳转入口不是"能点的卡片"——统一摘除手型/箭头/悬停/键盘可达，
     // 保留静态信息与文案。后端 requireModule 1003 兜底不变；不给错误的办理文案（"去办理"箭头随之消失）。
     root.querySelectorAll('[onclick*="go("]').forEach(el => {
-      const m = (el.getAttribute('onclick') || '').match(/go\('([^'?/]+)/)
+      const m = (el.getAttribute('onclick') || '').match(/go\('([^'?/]+)/)
       if (!m) return
       if (allowedItems().some(item => item.dataset.p === m[1])) return
       el.classList.remove('go')
@@ -245,7 +245,8 @@
   window.addEventListener('unhandledrejection', event => {
     if (TOKEN && event.reason instanceof Error) { event.preventDefault(); toast(event.reason.message || '操作失败，请重试', true) }
   })
-  new MutationObserver(() => enhanceTables(app)).observe(app, { childList: true, subtree: true })
+  // attributes+onclick 过滤：页面二次渲染用 setAttribute 晚挂 onclick 时也能触发增强（P-05 摘除依赖它）
+  new MutationObserver(() => enhanceTables(app)).observe(app, { childList: true, subtree: true, attributes: true, attributeFilter: ['onclick'] })
 
   // 弹窗打开时补齐 dialog 语义并移入焦点；关闭（#modalRoot 清空）后把焦点还给打开前的元素。
   new MutationObserver(() => {
