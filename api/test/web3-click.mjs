@@ -87,6 +87,22 @@ await t('事件动态表的业务单号可点（你的截图里正是这张表�
   assert.match(sec, /onclick="openEvent\(&quot;badge&quot;,&quot;mbadge-2-71&quot;,7,this\)"/)
 })
 
+await t('存证总览的顺序：总览与检索在最前，其后链路视图 → 区块详情 → 流水线 → 事件动态', async () => {
+  await run('web3dash()')
+  const h = app.innerHTML
+  const seq = ['<h2>链上总览</h2>', 'id="attestQ"', 'id="attestResult"', '锚定批次', 'id="chainViz"', 'id="blockDetail"', '<h3>上链流水线</h3>', '链上事件动态'].map((k) => [k, h.indexOf(k)])
+  for (const [k, i] of seq) assert.ok(i >= 0, '缺少：' + k)
+  for (let i = 1; i < seq.length; i++) assert.ok(seq[i - 1][1] < seq[i][1], seq[i - 1][0] + ' 应排在 ' + seq[i][0] + ' 前面')
+})
+await t('检索只有一个入口；单流程的说明只出现一次（原来有两个 flowMeta，文字跑到检索行里）；流水线默认折叠', async () => {
+  await run('web3dash()')
+  const h = app.innerHTML
+  assert.equal((h.match(/id="flowMeta"/g) || []).length, 1)
+  assert.ok(!h.includes('id="flowNo"'), '单流程不该再有第二个输入框')
+  assert.match(h, /<details class="card pipe-fold" {2}ontoggle/, '流水线应默认收起')
+  assert.match(h, /id="flowSec" class="flow-sec" hidden/, '没追踪订单时单流程区不占位')
+})
+
 console.log('== 验证结果：三态，不再把“待打包”说成“验证通过” ==')
 const mkAnchor = () => { const chips = []; const parent = { querySelectorAll: () => ({ forEach: (f) => chips.splice(0).forEach(() => f({ remove: noop })) }) }; return { parentNode: parent, insertAdjacentHTML: (_, h) => chips.push(h), chips } }
 const verify = async (resp) => { toasts = []; apiData['/admin/attest/verify'] = resp; const a = mkAnchor(); await run('verifyEventInline')('order', 'X', 0, a); return { toast: toasts[0], chip: a.chips[0] || '' } }

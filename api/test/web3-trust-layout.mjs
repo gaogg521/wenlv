@@ -124,4 +124,13 @@ await t('core.js / workspace.js 接线：隐藏合并子页但保留在 DOM；�
   assert.match(ws, /const navKey = .*TRUST_MERGE/); assert.match(ws, /button\.classList\.contains\('nav-merged'\)/); assert.match(ws, /button\.dataset\.alias/)
 })
 
+await t('侧栏每个模块配的图标都真实存在（数字身份配了不存在的 kyc，侧栏一直没图）', () => {
+  const coreSrc = fs.readFileSync(path.join(ADMIN, 'core.js'), 'utf8')
+  const iconSrc = coreSrc.slice(coreSrc.indexOf('const ICONS = {'), coreSrc.indexOf('// 按"谁在什么场景'))
+  const icons = new Set([...iconSrc.matchAll(/^\s*(\w+): '<svg/gm)].map((m) => m[1]))
+  const used = MODULE_GROUPS.flatMap(([, items]) => items.map(([k, , ic]) => [k, ic]))
+  assert.ok(used.length > 40, '模块清单没解析出来')
+  assert.deepEqual(used.filter(([, ic]) => !icons.has(ic)).map(([k, ic]) => k + '→' + ic), [])
+})
+
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

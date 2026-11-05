@@ -91,7 +91,10 @@ async function vcPage() {
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>数字身份 · 可携出旅行凭证</h2><span class="muted">${esc(d.policy)}</span></div>
-    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="vc-hero">
+    <div id="vcCardBox">${vcHeroCard(d.recent || [])}</div>
+    <div class="vc-hero-side">
+    <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px">
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🪪</div><div><div class="l">已签发</div><div class="v" style="font-size:18px">${d.total}</div><div class="s">已领取 ${d.holders} 位 · 可签发 ${d.eligible ?? '—'} 位用户</div></div></div>
       <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">有效</div><div class="v" style="font-size:18px">${d.active}</div><div class="s">未过期未吊销</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdecea">⛔</div><div><div class="l">已吊销</div><div class="v" style="font-size:18px">${d.revoked}</div><div class="s">吊销即时生效</div></div></div>
@@ -102,6 +105,7 @@ async function vcPage() {
       <a class="btn ghost sm" style="margin-left:auto" target="_blank" rel="noopener" href="/vc">打开验签台</a>
       <a class="btn ghost sm" target="_blank" rel="noopener" href="/open/vc/issuer">公钥 JWKS</a></div>
     <div class="muted" style="margin-top:8px">凭证只含旅行事实（等级/成长区间/入会年月/行程数/城市数/徽章名），姓名手机号身份证订单号金额<strong>从不下发</strong>；第三方可凭公钥离线验签。</div>
+    </div></div>
   </div>
 
   <div class="card">
@@ -109,22 +113,6 @@ async function vcPage() {
     <div class="row" style="margin-bottom:10px"><input id="idq" placeholder="昵称 / 用户 id / DID" style="width:260px" onkeydown="if(event.key==='Enter')vcIdentityList(1)">
       <button class="btn primary sm" onclick="vcIdentityList(1)">查询</button></div>
     <div id="idList">${idListHtml(idn)}</div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3>凭证长什么样</h3><span class="muted">用户拿到的是一张只含旅行事实的身份卡。下方是示例（非真实用户）；在「最近签发」里点「卡片」可看真实凭证</span></div>
-    <div id="vcCardBox">${vcCardSvg(VC_SAMPLE, { sample: true, uid: 0 })}</div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h3>代用户签发（演示 / 客服）</h3><span class="muted">签完可直接复制凭证去验签台验证</span></div>
-    <div class="row">
-      <input id="vcUid" type="number" placeholder="用户 id" style="width:120px">
-      <select id="vcScope"><option value="travel">travel（含行程/城市/徽章）</option><option value="basic">basic（仅等级/入会）</option></select>
-      <button class="btn primary sm" onclick="issueVc()">签发</button>
-      <button class="btn ghost sm" onclick="openVerifyVc()">用当前凭证打开验签台</button>
-    </div>
-    <div id="vcOut"></div>
   </div>
 
   <div class="card">
@@ -139,12 +127,30 @@ async function vcPage() {
         <td>${v.revoked_at ? '<span class="pill s70">已吊销</span>' : (new Date(v.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill off">已过期</span>')}</td>
         <td><button class="btn ghost sm" onclick="showVcCard(${v.id})">卡片</button> <button class="btn ghost sm" onclick="vcIdentity(${v.user_id})">档案</button> ${v.revoked_at ? '' : `<button class="btn ghost sm" onclick="revokeVc(${v.id})">吊销</button>`}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('尚未签发过凭证：上方选一个用户签发即可')}
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>代用户签发（演示 / 客服）</h3><span class="muted">签完可直接复制凭证去验签台验证</span></div>
+    <div class="row">
+      <input id="vcUid" type="number" placeholder="用户 id" style="width:120px">
+      <select id="vcScope"><option value="travel">travel（含行程/城市/徽章）</option><option value="basic">basic（仅等级/入会）</option></select>
+      <button class="btn primary sm" onclick="issueVc()">签发</button>
+      <button class="btn ghost sm" onclick="openVerifyVc()">用当前凭证打开验签台</button>
+    </div>
+    <div id="vcOut"></div>
   </div>`
   window.__vcLast = ''
   window.__vcRecent = d.recent || []
 }
 
 const VC_SAMPLE = { level: '探索者', levelNo: 3, growthBand: '1000–2999', memberSince: '2026-03', scope: 'travel', trips: 12, cities: 5, badges: ['初访古镇', '山海行者', '夜游达人'] }
+
+/** 页面顶部的卡片：优先最近一张有效的真实凭证（数字可点）；一张都没有才放示例 */
+function vcHeroCard(recent) {
+  const v = recent.find((x) => !x.revoked_at && new Date(x.expires_at) > new Date())
+  if (!v) return `<div class="muted" style="margin-bottom:8px">示例卡片（非真实用户）：还没有有效凭证，在下方身份档案里点「签发」</div>${vcCardSvg(VC_SAMPLE, { sample: true, uid: 0 })}`
+  return `<div class="muted" style="margin-bottom:8px">最近签发 · ${esc(v.nickname || '用户' + v.user_id)} · 点卡片上的数字看明细</div>${vcCardSvg(v.claims, { did: v.did, exp: v.expires_at, status: '有效', uid: v.user_id })}`
+}
 
 /** 数字身份卡（SVG）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额。
  *  meta.uid 给了就可点：等级 / 行程 / 城市 / 徽章 都能点开看明细（uid=0 是示例卡，点了只提示） */
@@ -206,10 +212,14 @@ const fmtN = (n) => Number(n || 0).toLocaleString()
 function idListHtml(r) {
   const pages = Math.max(1, Math.ceil(r.total / r.size))
   const lvTag = (x) => `<span class="pill off">Lv.${x.levelNo} ${esc(x.levelName)}</span>`
+  // 有头像用头像，没有就用昵称首字 + 按 id 取色；只接受 http(s) 或站内路径
+  const ava = (x) => (/^(https?:\/\/|\/)/.test(String(x.avatar || ''))
+    ? `<img class="id-ava" src="${esc(x.avatar)}" alt="" loading="lazy">`
+    : `<span class="id-ava" style="background:hsl(${(Number(x.userId) * 47) % 360},45%,46%)">${esc(String(x.nickname || '?').slice(0, 1))}</span>`)
   return `<div class="muted" style="margin-bottom:8px">用户 <b>${r.summary.users}</b> · 旅豆账户 <b>${r.summary.beanAccounts}</b>（尚未产生旅豆的用户没有账户） · 持有效凭证 <b>${r.summary.vcHolders}</b> 位</div>
   ${r.rows.length ? `<table><thead><tr><th>用户</th><th>数字身份 DID</th><th>等级</th><th>旅豆账户（余额 / 累计）</th><th>徽章</th><th>行程</th><th>凭证</th><th>操作</th></tr></thead><tbody>
     ${r.rows.map((x) => `<tr>
-      <td class="td-main">${esc(x.nickname)}<div class="td-sub">#${x.userId}${x.status === 1 ? '' : ' · 非正常'}</div></td>
+      <td class="td-main"><div class="id-user">${ava(x)}<div>${esc(x.nickname)}<div class="td-sub">#${x.userId}${x.status === 1 ? '' : ' · 非正常'}</div></div></div></td>
       <td class="td-sub">${hashCopy(x.did, String(x.did).slice(0, 20) + '…')}</td>
       <td>${lvTag(x)}</td>
       <td>${x.beanBalance == null ? '<span class="muted">未开户</span>' : `<button class="ref-link" type="button" title="看旅豆流水" onclick="vcIdentity(${x.userId},'bean')"><b>${fmtN(x.beanBalance)}</b> / ${fmtN(x.beanLifetime)} 豆</button>`}</td>
@@ -591,7 +601,7 @@ const PIPE_STEP = (done, label, sub, bad) => `<span class="pipe-step ${bad ? 'ba
   <i>${bad ? '!' : done ? '✓' : '·'}</i><b>${label}</b>${sub ? `<em>${sub}</em>` : ''}</span>`
 function pipelineHtml(batches, queue, demo) {
   const pending = (queue || []).reduce((s, r) => s + Number(r.pending || 0), 0)
-  const rows = (batches || []).slice(0, 8).map((b) => {
+  const rows = (batches || []).slice(-8).reverse().map((b) => {   // batches 按 seq 升序：要看的是最新的 8 批
     const st = Number(b.status)
     const hasRoot = st >= 1
     const hasTx = !!b.chain_tx_ref
@@ -613,7 +623,6 @@ function pipelineHtml(batches, queue, demo) {
   }).join('')
   return `<div class="pipe">
     <div class="pipe-head">
-      <span class="chain-name" style="font-size:13px">🧾 上链流水线 · 真实流转路径</span>
       <span class="muted">事件产生 → 本地 Merkle 打包 → 提交上链 → 出块 → 确认锚定；prev_root 把每批串成链</span>
       <span class="chip" style="margin-left:auto">在途 ${pending} 条待打包</span>
     </div>
@@ -660,8 +669,8 @@ if (typeof window.addEventListener === 'function' && !window.__chainResizeBound)
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(chainRelayout, 180) })
 }
 
-async function web3dash() {
-  $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+async function web3dash(opt = {}) {
+  if (!opt.silent) $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
   const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center')])
   const demo = !!window.__demoChain
@@ -683,7 +692,32 @@ async function web3dash() {
   }
   window.__chainDescs = descs
   const auto = window.__chainAuto === undefined ? (window.__chainAuto = true) : window.__chainAuto
+  // 自动刷新要无感：检索框里没提交的字、已展开的检索结果 / 区块详情都原样留住，页面不因重画而跳动
+  const qEl = document.getElementById('attestQ')
+  const typed = qEl ? (qEl.value ?? '') : (window.__attestQ || '')
+  const keepHtml = (id) => (opt.silent ? ((document.getElementById(id) || {}).innerHTML || '') : '')
+  const keepResult = keepHtml('attestResult'), keepBlock = keepHtml('blockDetail')
+  const chainDone = batches.filter((b) => Number(b.status) === 2).length
+  const chainBad = batches.filter((b) => [3, 4].includes(Number(b.status))).length
   $('#app').innerHTML = `
+  <div class="card chain-ov">
+    <div class="card-head"><h2>链上总览</h2><span class="muted">${esc(d.chainMode)} · 小程序内=旅豆积分，对外=链上权益凭证</span></div>
+    <div class="as-bar">
+      <input id="attestQ" class="as-input" value="${esc(typed)}" placeholder="订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID"
+        onkeydown="if(event.key==='Enter')attestSearch()">
+      <button class="btn primary" onclick="attestSearch()">检索</button>
+      <button class="btn ghost" onclick="loadFlowSample()">看一条真实单的六步</button>
+    </div>
+    <div class="as-hint">输入订单号会同时展开这单的六步。也能查旅豆流水 <code>bt-…</code>、结算单 <code>settle-…</code>、凭证 <code>pass-1</code>、用户 <code>user:12</code></div>
+    <div id="attestResult"></div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin:14px 0 0">
+      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">锚定批次</div><div class="v" style="font-size:18px">${d.anchoredBatches}/${d.batches}</div><div class="s">Merkle 小时级打包</div></div></div>
+      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:#e8effd">🔗</div><div><div class="l">链上事件</div><div class="v" style="font-size:18px">${d.anchoredEvents}/${d.events}</div><div class="s">待打包 ${d.pendingEvents}</div></div></div>
+      <div class="kpi go" ${dxKey} title="去徽章管理" onclick="go('badges')"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">🏅</div><div><div class="l">勋章发放</div><div class="v" style="font-size:18px">${d.badgeGrants}</div><div class="s">发放即入存证队列</div></div></div>
+      <div class="kpi go" ${dxKey} title="去旅豆发行台账" onclick="go('pointassets')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🫘</div><div><div class="l">累计发放旅豆</div><div class="v" style="font-size:18px">${d.beanGranted}</div><div class="s">已消耗 ${d.beanConsumed}</div></div></div>
+    </div>
+    <div class="row" style="margin-top:10px">${(d.trustPath || []).map((t) => `<span class="pill off">${esc(t)}</span>`).join('<span class="muted">→</span>')}<span class="muted" style="margin-left:auto">上链的只有哈希指纹+时间戳，业务数据全在 MySQL（数据库是事实来源，链是审计锚点）</span></div>
+  </div>
   <div class="chain-panel" id="chainViz">
     <div class="chain-glow"></div>
     <div class="chain-head">
@@ -691,7 +725,6 @@ async function web3dash() {
       ${demo ? '<span class="chip demo">演示数据</span>' : ''}
       <span class="chip">适配器 ${esc((d.chain && d.chain.label) || '—')}</span>
       <span class="chip">区块高度 <b>#${lastSeq}</b></span>
-      <span class="chip">链上事件 <b>${anchorN}/${totalN}</b></span>
       <span class="chip">待打包 <b>${pendingN}</b></span>
       <span style="flex:1"></span>
       <label class="chain-auto"><input type="checkbox" id="chainAuto" ${auto ? 'checked' : ''} onchange="window.__chainAuto=this.checked;chainTimerSetup()"> 30s 自动刷新</label>
@@ -699,30 +732,16 @@ async function web3dash() {
       <button class="chain-btn" onclick="web3dash()">刷新 ↻</button>
     </div>
     ${demo ? '<div class="chain-demo-note">演示模式：以下为模拟数据，仅预览多节点链路形态，不代表真实链上状态</div>' : ''}
+    <div id="flowSec" class="flow-sec" hidden>
+      <div class="flow-head">
+        <span class="chain-name" style="font-size:13px">🧭 单流程视角 · 一单六锚</span>
+        <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
+        <button class="chain-btn" onclick="flowClose()">收起</button>
+      </div>
+      <div id="flowTrack"></div>
+      <div class="chain-divider"></div>
+    </div>
     ${chainTrackHTML(descs, chainTrackWidth())}
-    ${pipelineHtml(batches, (c && c.queue) || [], demo)}
-    <div class="chain-divider"></div>
-    <div class="flow-head">
-      <span class="chain-name" style="font-size:13px">🔎 存证检索</span>
-      <input id="attestQ" class="flow-input" style="min-width:330px"
-        placeholder="订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID"
-        onkeydown="if(event.key==='Enter')attestSearch()">
-      <button class="chain-btn" onclick="attestSearch()">检索 ↗</button>
-      <button class="chain-btn" onclick="loadFlowSample()">看一条真实单的六步</button>
-      <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
-    </div>
-    <div id="attestSearchHint" class="chain-legend" style="border:0;padding:2px 0 8px">
-      可查：订单号 · 批次 <code>#12</code> · 交易哈希（64 位）· Merkle 根 / 前根 · 载荷哈希 · 凭证 <code>pass-1</code> · 旅豆流水 <code>bt-…</code> · 结算单 <code>settle-…</code> · 手机号 · 用户ID <code>user:12</code> · DID
-      <span class="muted" style="color:#7f92bd">｜合约地址查不到：当前走链上内置存证（DEPOSIT），链上标识就是交易哈希与根，没有合约地址</span>
-    </div>
-    <div id="attestResult"></div>
-    <div class="flow-head" style="margin-top:6px">
-      <span class="chain-name" style="font-size:13px">🧭 单流程视角 · 一单六锚</span>
-      <input id="flowNo" class="flow-input" placeholder="订单号（如 WL202610311650904810）" onkeydown="if(event.key==='Enter')loadFlow()">
-      <button class="chain-btn" onclick="loadFlow()">追踪此单 ↗</button>
-      <span id="flowMeta" style="flex:1;font-size:12px;color:#9db1e2"></span>
-    </div>
-    <div id="flowTrack"></div>
     <div class="chain-legend">
       <span><i class="lg blue"></i>业务存证块</span><span><i class="lg gold"></i>账本日终封存块（分支）</span>
       <span><i class="lg green"></i>已锚定</span><span><i class="lg dash"></i>待打包队列</span>
@@ -730,16 +749,10 @@ async function web3dash() {
     </div>
   </div>
   <div id="blockDetail"></div>
-  <div class="card">
-    <div class="card-head"><h2>链上总览 · 双层口径</h2><span class="muted">${esc(d.chainMode)} · 小程序内=旅豆积分，对外=链上权益凭证</span></div>
-    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">锚定批次</div><div class="v" style="font-size:18px">${d.anchoredBatches}/${d.batches}</div><div class="s">Merkle 小时级打包</div></div></div>
-      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:#e8effd">🔗</div><div><div class="l">链上事件</div><div class="v" style="font-size:18px">${d.anchoredEvents}/${d.events}</div><div class="s">待打包 ${d.pendingEvents}</div></div></div>
-      <div class="kpi go" ${dxKey} title="去徽章管理" onclick="go('badges')"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">🏅</div><div><div class="l">勋章发放</div><div class="v" style="font-size:18px">${d.badgeGrants}</div><div class="s">发放即入存证队列</div></div></div>
-      <div class="kpi go" ${dxKey} title="去积分发行台账" onclick="go('pointassets')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🫘</div><div><div class="l">累计发放</div><div class="v" style="font-size:18px">${d.beanGranted}</div><div class="s">已消耗 ${d.beanConsumed}</div></div></div>
-    </div>
-    <div class="row" style="margin-top:10px">${(d.trustPath || []).map((t, i) => `<span class="pill ${i ? 'off' : 'ok'}">${esc(t)}</span>`).join('<span class="muted">→</span>')}<span class="muted" style="margin-left:auto">上链的只有哈希指纹+时间戳，业务数据全在 MySQL（数据库是事实来源，链是审计锚点）</span></div>
-  </div>
+  <details class="card pipe-fold" ${window.__pipeOpen ? 'open' : ''} ontoggle="window.__pipeOpen=this.open">
+    <summary><h3>上链流水线</h3><span class="muted">共 ${batches.length} 批 · 已确认 ${chainDone} 批${chainBad ? ` · <b style="color:#b42318">${chainBad} 批异常</b>` : ''} · 点开看每批走到哪一段</span></summary>
+    ${pipelineHtml(batches, (c && c.queue) || [], demo)}
+  </details>
   <div class="card">
     <div class="card-head"><h3>链上事件动态</h3><button class="btn ghost sm" onclick="go('attest')">进入存证中心 ›</button></div>
     <table><thead><tr><th>类型</th><th>业务单号</th><th>状态</th><th>时间</th></tr></thead><tbody>
@@ -748,6 +761,8 @@ async function web3dash() {
       <td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td></tr>`).join('') || '<tr><td colspan="4" class="td-sub">暂无事件</td></tr>'}
     </tbody></table>
   </div>`
+  if (keepResult) document.getElementById('attestResult').innerHTML = keepResult
+  if (keepBlock) document.getElementById('blockDetail').innerHTML = keepBlock
   if (window.__flowShown && window.__flowData) renderFlow(window.__flowData)
   // 刷新后把用户正看着的区块/步骤原样恢复：自动刷新不该把人的操作抹掉
   if (window.__attestQ) attestSearch({ silent: true })
@@ -760,7 +775,9 @@ function chainTimerSetup() {
   if (!window.__chainAuto) return
   window.__chainTimer = setInterval(() => {
     if (!document.getElementById('chainViz')) { clearInterval(window.__chainTimer); window.__chainTimer = null; return }
-    web3dash()
+    // 正在检索框里打字就不刷；自动刷新走静默模式，不闪骨架屏、不丢滚动位置
+    if (document.activeElement && document.activeElement.id === 'attestQ') return
+    web3dash({ silent: true })
   }, 30000)
 }
 async function openBlock(id, opt = {}) {
@@ -856,14 +873,14 @@ async function verifyEventInline(bizType, bizRef, id, anchor) {
 const FLOW_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>', '<span class="dpill ok">已锚定</span>']
 function flowStepHTML(s, i) {
   const e = s.ev
-  if (!e) return `<div class="chain-node ghost" style="width:150px" aria-disabled="true"
+  if (!e) return `<div class="chain-node ghost" aria-disabled="true"
     title="这一步还没入存证队列，所以点不开；业务发生后会自动出现在这里">
     ${cube3d('gray', { ghost: true, sm: true, label: '待产生' })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div>
     <div class="blk-line"><span class="node-lock">待产生 · 暂不可点</span></div></div>`
   const st = Number(e.status)
   const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
-  return `<div class="chain-node" style="width:150px" id="fnode-${i}" role="button" tabindex="0"
+  return `<div class="chain-node" id="fnode-${i}" role="button" tabindex="0"
     aria-label="第 ${i + 1} 步 ${esc(s.label || '')}，点击查看本步证明"
     onclick="openFlowStep(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFlowStep(${i})}"
     onmouseenter="chainTip(event, 'f', ${i})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'f', ${i})" onblur="chainTipHide()">
@@ -920,6 +937,7 @@ function renderFlow(d) {
   })
   const track = document.getElementById('flowTrack')
   const marks = flowMarkChain()
+  const sec = document.getElementById('flowSec'); if (sec) sec.hidden = false
   if (track) track.innerHTML = `<div class="chain-track flow">${parts.join('')}</div>
     ${marks.length ? `<div class="flow-blocks">这一单落在链路视图的 <b>${marks.length}</b> 个区块里：${marks.map((m) => `<button class="ref-link" type="button" onclick="focusBlock(${m.id})">区块 #${Number(m.seq)} <em>${esc(m.tags.join(' '))}</em></button>`).join('')}<span class="muted">点一下定位到上方对应区块</span></div>` : ''}`
 }
@@ -935,7 +953,7 @@ function attestResultHtml(r) {
   const cap = r.capability || {}
   if (empty) {
     return `<div class="card" style="background:#fff8ec">
-      <div class="card-head"><h3>没查到「${esc(r.q)}」</h3><span class="muted">换一种标识试试</span></div>
+      <div class="card-head"><h3>没查到「${esc(r.q)}」</h3><span class="muted">换一种标识试试 <button class="btn ghost sm" onclick="attestClear()">收起</button></span></div>
       <div class="muted" style="line-height:1.9">可查：${(cap.canSearch || []).map((x) => `<code>${esc(x)}</code>`).join(' · ')}</div>
       <div class="muted" style="margin-top:6px">提示：单号要完整；批次写 <code>#12</code> 或 <code>batch:12</code>；哈希是 64 位，可从区块详情里「复制」。</div>
       ${cap.noContract ? `<div class="muted" style="margin-top:6px;color:#98712a">${esc(cap.noContract)}</div>` : ''}
@@ -946,7 +964,7 @@ function attestResultHtml(r) {
     const o = r.order
     obj.push(`<span class="pill ok">订单</span> <b>${esc(o.orderNo)}</b>
       <span class="muted">${esc(o.productName || '')} · ¥${(Number(o.amountPay) / 100).toFixed(2)} · 状态 ${esc(String(o.status))}</span>
-      <button class="btn ghost sm" onclick="document.getElementById('flowNo').value='${esc(o.orderNo)}';loadFlow()">看这单的六步 ›</button>`)
+      <button class="btn ghost sm" onclick="loadFlow(${w3Arg(o.orderNo)},{scroll:true})">看这单的六步 ›</button>`)
   }
   if (r.user) {
     const u = r.user
@@ -980,13 +998,18 @@ function attestResultHtml(r) {
     </tr>`).join('')
   return `<div class="card">
     <div class="card-head"><h3>检索「${esc(r.q)}」</h3>
-      <span class="muted">按${(r.matched || []).map((x) => `<code>${esc(x)}</code>`).join(' / ')}命中 · 链 ${esc((r.chain && r.chain.label) || '—')}</span></div>
+      <span class="muted">按${(r.matched || []).map((x) => `<code>${esc(x)}</code>`).join(' / ')}命中 · 链 ${esc((r.chain && r.chain.label) || '—')} <button class="btn ghost sm" onclick="attestClear()">收起</button></span></div>
     ${obj.length ? `<div class="sr-obj">${obj.join('')}</div>` : ''}
     ${batches ? `<div class="sr-sec">命中的批次（${(r.batches || []).length}）</div>${batches}` : ''}
     ${evs ? `<div class="sr-sec">命中的存证事件（${(r.events || []).length}）</div>
       <table><thead><tr><th>类型</th><th>业务单号</th><th>版本</th><th>状态</th><th>批次</th><th>载荷指纹</th><th>时间</th><th></th></tr></thead><tbody>${evs}</tbody></table>` : ''}
     ${cap.noContract ? `<div class="muted" style="margin-top:8px;color:#98712a">${esc(cap.noContract)}</div>` : ''}
   </div>`
+}
+function attestClear() {
+  window.__attestQ = ''
+  const el = document.getElementById('attestQ'); if (el) el.value = ''
+  const box = document.getElementById('attestResult'); if (box) box.innerHTML = ''
 }
 async function attestSearch(opt = {}) {
   const el = document.getElementById('attestQ')
@@ -997,28 +1020,31 @@ async function attestSearch(opt = {}) {
   if (!box) return
   if (!opt.silent) box.innerHTML = `<div class="card">${skel(2)}</div>`
   try {
-    box.innerHTML = attestResultHtml(await api('GET', '/admin/attest/search?q=' + encodeURIComponent(v)))
+    const r = await api('GET', '/admin/attest/search?q=' + encodeURIComponent(v))
+    box.innerHTML = attestResultHtml(r)
+    if (r.order && !opt.silent) loadFlow(r.order.orderNo)   // 搜到订单：不用再点一次，六步直接展开、区块直接标出来
   } catch (e) {
     box.innerHTML = `<div class="card" style="background:#fff8ec"><b>检索失败</b><div class="muted">${esc(e.message)}</div></div>`
   }
 }
 
-async function loadFlow() {
-  const no = (document.getElementById('flowNo')?.value || '').trim()
+async function loadFlow(orderNo, opt = {}) {
+  const no = String(orderNo || '').trim()
   if (!no) return toast('请输入订单号', true)
   try {
     renderFlow(await api('GET', '/admin/attest/flow/' + encodeURIComponent(no)))
+    if (opt.scroll) { const sec = document.getElementById('flowSec'); if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
   } catch (e) {
     // 后端口径是"订单不存在"，运营看不出是单号错了还是系统坏了 → 补上下文
-    toast(/订单不存在|1004/.test(e.message) ? `没找到订单 ${no}：核对单号，或点「演示完整流程」看形态` : e.message, true)
+    toast(/订单不存在|1004/.test(e.message) ? `没找到订单 ${no}：核对单号是否完整` : e.message, true)
   }
 }
 /** 看一条真实单的六步：取最近一笔有订单存证的真实订单；一笔都没有才退回演示数据（并明说） */
 async function loadFlowSample() {
+  if (window.__demoChain) return loadFlowDemo()   // 正在看演示链：就看落在演示链上的那一单
   try {
     const c = await api('GET', '/admin/attest/center')
-    const o = (c.recent || []).find((e) => e.biz_type === 'order')
-    if (o) { const el = document.getElementById('flowNo'); if (el) el.value = o.biz_ref; return loadFlow() }
+    if (c.latestOrder) return loadFlow(c.latestOrder, { scroll: true })
   } catch (e) { /* 取不到就走演示 */ }
   toast('还没有真实订单的存证，先用演示数据看形态')
   loadFlowDemo()
@@ -1042,6 +1068,12 @@ async function loadFlowDemo() {
   }
   window.__flowShown = true
   if (!window.__demoChain) { window.__demoChain = true; await web3dash() } else renderFlow(window.__flowData)
+}
+/** 收起单流程：连同链路视图上的步骤角标一起清掉 */
+function flowClose() {
+  window.__flowData = null; window.__flowShown = false; window.__openFlowStep = undefined
+  const sec = document.getElementById('flowSec'); if (sec) sec.hidden = true
+  flowMarkChain()
 }
 function openFlowStep(i, opt = {}) {
   const d = window.__flowData

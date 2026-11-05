@@ -242,7 +242,7 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
   }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
   const total = Number((await one(`SELECT COUNT(*) n FROM user_account u ${w}`, args)).n) || 0
-  const rows = await q(`SELECT u.id, u.nickname, u.did_ref, u.member_level, u.growth_value, u.status, u.created_at,
+  const rows = await q(`SELECT u.id, u.nickname, u.avatar_url, u.did_ref, u.member_level, u.growth_value, u.status, u.created_at,
       b.balance, b.lifetime,
       (SELECT COUNT(*) FROM user_badge ub WHERE ub.user_id = u.id) badges,
       (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND o.status IN (40,50)) trips,
@@ -254,7 +254,7 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
   for (const r of rows) {
     const did = r.did_ref || await userDid(r.id)
     out.push({
-      userId: Number(r.id), nickname: r.nickname || ('用户' + r.id), did,
+      userId: Number(r.id), nickname: r.nickname || ('用户' + r.id), avatar: r.avatar_url || null, did,
       levelNo: Number(r.member_level || 1), levelName: (lvs.find((l) => l.lv === Number(r.member_level || 1)) || lvs[0]).name,
       growth: Number(r.growth_value) || 0, status: Number(r.status),
       beanBalance: r.balance == null ? null : Number(r.balance), beanLifetime: r.lifetime == null ? null : Number(r.lifetime),
