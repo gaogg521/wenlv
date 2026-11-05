@@ -1,5 +1,6 @@
 <block wx:if="{{d}}">
-  <view class="hero">
+  <view class="hero {{d.profile.card ? 'tier-' + d.profile.card.tier : ''}}">
+    <view class="tier-row" wx:if="{{d.profile.card}}"><text>向往的自由 · {{d.profile.card.series}}</text><text class="tier-name">{{d.profile.card.tierName}}</text></view>
     <view class="sub2">{{lex.did}} · Travel ID</view>
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
     <view class="sub2">{{d.profile.levelName}} · 成长值 {{d.profile.growth}}</view>

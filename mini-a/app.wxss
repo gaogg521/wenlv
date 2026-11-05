@@ -357,3 +357,17 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .mh-bd image { width: 84rpx; height: 84rpx; }
 .mh-bn { font-size: 21rpx; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mh-br { font-size: 18rpx; color: var(--sub); }
+
+/* 身份卡卡种：普卡 / 金卡 / 白金卡 / 钻石卡 / 黑金卡，和后台卡面同一套颜色 */
+.tier-row { display: flex; justify-content: space-between; align-items: center; font-size: 22rpx; margin-bottom: 18rpx; position: relative; opacity: .95; }
+.tier-name { font-size: 28rpx; font-weight: 800; letter-spacing: 4rpx; }
+.hero.tier-classic { background: linear-gradient(135deg, #0f2a4a, #0e6b5c) !important; }
+.hero.tier-gold { background: linear-gradient(135deg, #a9772a, #e3bd6a 40%, #f6e3a4 70%, #b98a35) !important; color: #2b1b05; }
+.hero.tier-platinum { background: linear-gradient(135deg, #8e9aa7, #dbe2e8 40%, #f8fafb 70%, #aab5bf) !important; color: #16212c; }
+.hero.tier-diamond { background: linear-gradient(135deg, #0d1645, #22378c 45%, #3f6fd1 75%, #17255f) !important; color: #fff; }
+.hero.tier-black { background: linear-gradient(135deg, #050506, #1b1814 45%, #2b261e 75%, #09090a) !important; color: #f6e7bb; }
+.hero.tier-gold .hi, .hero.tier-gold .sub2 { color: #2b1b05; }
+.hero.tier-platinum .hi, .hero.tier-platinum .sub2 { color: #16212c; }
+.hero.tier-black .hi { color: #f6e7bb; }
+.hero.tier-black .sub2 { color: #dcb862; }
+.hero.tier-black .tier-name { color: #dcb862; }

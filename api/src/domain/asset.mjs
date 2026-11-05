@@ -62,7 +62,7 @@ export async function issue({ kind, userId, channel = 'ecosystem', meta = {}, to
   // 能力闸门：这条链压根不支持发资产 → 明确报错（不许"看起来发了"）
   if (!caps.assets) {
     await record({ ...row, status: 2, err: `${provider.label} 不支持资产发行` })
-    throw new Error(`${provider.label} 不支持资产发行（capabilities.assets=false）；请把 CHAIN_PROVIDER 切到支持资产的链（tbaas / antchain / evm）`)
+    throw new Error(`${provider.label} 不支持资产发行（capabilities.assets=false）；请到「链接入中心」切换到支持资产的链（腾讯云 TBaaS / 蚂蚁链鲸探 / EVM）`)
   }
 
   // 未配凭据：落台账待发行，不造假

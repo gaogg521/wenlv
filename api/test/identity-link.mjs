@@ -98,6 +98,54 @@ await t('旅豆台账按业务汇总：用户侧入账 / 出账 / 笔数与账�
   const bal = await one('SELECT COALESCE(SUM(balance), 0) b, COALESCE(SUM(lifetime), 0) l FROM bean_account WHERE user_id < 999999000000')
   assert.equal(pa.userBalance, Number(bal.b)); assert.equal(pa.userLifetime, Number(bal.l))
 })
+console.log('== 角色凭证与批量签发 ==')
+await t('角色凭证：有身份才能签；验签通过、不含金额与手机号；失去身份后验签失败', async () => {
+  const row = await one('SELECT p.user_id, p.tier, p.status FROM promoter p JOIN user_account u ON u.id = p.user_id WHERE p.status = 1 AND u.status = 1 LIMIT 1')
+  assert.ok(row, '需要一个生效的推广服务商（先 seed）')
+  const uid = Number(row.user_id)
+  const v = ok(await call('POST', '/admin/web3/vc/issue', { userId: uid, scope: 'promoter' }, A))
+  assert.equal(v.claims.role, 'promoter'); assert.equal(v.claims.levelNo, Math.min(Number(row.tier), 3))
+  assert.ok(!/gmv|rate|score|mobile|phone|¥/i.test(JSON.stringify(v.claims)), '推广凭证不能带业绩、佣金和手机号')
+  const r1 = ok(await call('POST', '/open/vc/verify', { jwt: v.jwt })); assert.equal(r1.valid, true, r1.reason)
+  assert.ok(r1.notDisclosed.includes('佣金比例')); assert.ok(r1.types.includes('WanderlustRoleCredential'))
+  await q('UPDATE promoter SET status = 2 WHERE user_id = ?', [uid])
+  try {
+    const r2 = ok(await call('POST', '/open/vc/verify', { jwt: v.jwt }))
+    assert.equal(r2.valid, false); assert.match(r2.reason, /不再具备该身份/)
+  } finally { await q('UPDATE promoter SET status = ? WHERE user_id = ?', [row.status, uid]) }
+  const plain = await one(`SELECT u.id FROM user_account u WHERE NOT EXISTS (SELECT 1 FROM merchant_staff s WHERE s.user_id = u.id AND s.status = 1) LIMIT 1`)
+  const bad = await call('POST', '/admin/web3/vc/issue', { userId: plain.id, scope: 'merchant' }, A)
+  assert.equal(bad.code, 1001); assert.match(bad.msg, /没有商户身份/)
+})
+await t('批量签发：预览数 = 实际签发数；再查为 0；已有有效凭证的不重复签；范围不合法被拒', async () => {
+  assert.equal((await call('GET', '/admin/web3/vc/batch?scope=xx', null, A)).code, 1001)
+  assert.equal((await call('POST', '/admin/web3/vc/batch', { scope: 'xx' }, A)).code, 1001)
+  const p = ok(await call('GET', '/admin/web3/vc/batch?scope=promoter', null, A))
+  const before = Number((await one("SELECT COUNT(*) n FROM vc_issue WHERE scope = 'promoter'")).n)
+  const r = ok(await call('POST', '/admin/web3/vc/batch', { scope: 'promoter' }, A))
+  assert.equal(r.issued, Math.min(p.pending, p.max)); assert.deepEqual(r.failed, [])
+  assert.equal(Number((await one("SELECT COUNT(*) n FROM vc_issue WHERE scope = 'promoter'")).n), before + r.issued)
+  assert.equal(ok(await call('GET', '/admin/web3/vc/batch?scope=promoter', null, A)).pending, r.remaining)
+  const again = ok(await call('POST', '/admin/web3/vc/batch', { scope: 'promoter' }, A))
+  if (!r.remaining) assert.equal(again.issued, 0, '第二次不该重复签')
+  assert.notEqual((await call('POST', '/admin/web3/vc/batch', { scope: 'promoter' })).code, 0, '未登录要拒绝')
+})
+await t('存证中心默认 20 批，batchLimit 可放大但有上限', async () => {
+  const total = Number((await one('SELECT COUNT(*) n FROM attest_batch')).n)
+  assert.equal(ok(await call('GET', '/admin/attest/center', null, A)).batches.length, Math.min(total, 20))
+  assert.equal(ok(await call('GET', '/admin/attest/center?batchLimit=9999', null, A)).batches.length, Math.min(total, 200))
+  assert.equal(ok(await call('GET', '/admin/attest/center?batchLimit=-1', null, A)).batches.length, Math.min(total, 20))
+})
+await t('小程序身份接口带卡种：只有卡种和系列名，与等级规则一致，不含存证用语', async () => {
+  const { cardTierOf, TIER_NAMES } = await import('../src/domain/card-tier.mjs')
+  const u = await one("SELECT id, mini_a_openid, member_level FROM user_account WHERE mini_a_openid LIKE 'mock-openid-%' LIMIT 1")
+  const tok = ok(await call('POST', '/c/auth/login', { code: String(u.mini_a_openid).replace(/^mock-openid-/, '') })).token
+  const card = ok(await call('GET', '/c/identity', null, tok)).profile.card
+  const total = (ok(await call('GET', '/admin/web3/vc', null, A)).cardScale).traveler.levels.length
+  const lv = Number((await one('SELECT member_level FROM user_account WHERE id = ?', [u.id])).member_level)
+  assert.equal(card.tier, cardTierOf(lv, total)); assert.equal(card.tierName, TIER_NAMES[card.tier]); assert.equal(card.series, '行者系列')
+  assert.deepEqual(Object.keys(card).sort(), ['series', 'tier', 'tierName'])
+})
 await t('错误输入：不存在的用户 → 1004；非法 id → 1001；未登录 → 拒绝', async () => {
   assert.equal((await call('GET', '/admin/web3/identity/99999999', null, A)).code, 1004)
   assert.equal((await call('GET', '/admin/web3/identity/abc', null, A)).code, 1001)

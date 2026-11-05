@@ -20,6 +20,7 @@ import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
 import * as merchantLevel from '../domain/merchant-level.mjs'
+import { cardOf } from '../domain/card-tier.mjs'
 import * as badgeArt from '../domain/badge-art.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
@@ -98,7 +99,7 @@ const m = {
         description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0, owned: !!got, granted_at: got ? got.granted_at : null,
         progress: got ? null : badgeDomain.merchantProgressOf(b, lvl.metrics, lvl.lv), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1 } : null }
     }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
-    return { level: lvl, badges, fresh, groups: badgeArt.MERCHANT_CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })) }
+    return { level: lvl, card: cardOf('merchant', lvl.lv, (lvl.levels || []).length), badges, fresh, groups: badgeArt.MERCHANT_CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })) }
   },
 
   'GET /m/qrcode': async (req) => {

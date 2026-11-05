@@ -137,5 +137,11 @@ await t('未封存日仍返回 found=false；分类统计不改变根与合计',
   assert.ok(again.merkleRoot, '根仍存在')
 })
 
+// 收尾：夹具是直接写账本的，不带存证事件；留在库里会让后面的存证完整性对账（test:chain）失败
+await q('DELETE FROM bean_ledger WHERE tx_no LIKE ?', [TX + '%'])
+for (const day of Object.values(DAYS)) {
+  await q('DELETE FROM bean_day_root WHERE biz_date = ?', [day])
+  await q(`DELETE FROM attest_batch WHERE biz_date = ? AND merkle_kind = 'bean_day'`, [day])
+}
 console.log(`${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 await closeDb().catch(() => {})

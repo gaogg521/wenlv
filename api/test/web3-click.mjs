@@ -114,6 +114,14 @@ await t('检索只有一个入口；单流程的说明只出现一次（原来�
   assert.match(h, /id="flowSec" class="flow-sec" hidden/, '没追踪订单时单流程区不占位')
 })
 
+await t('链路视图只画了一部分时给出「再看更早」，并按累加的数量取数', async () => {
+  const keep = apiData['/admin/web3/overview']
+  apiData['/admin/web3/overview'] = { ...keep, batches: 99 }
+  await run('web3dash()')
+  assert.match(app.innerHTML, /共 99 批/); assert.match(app.innerHTML, /onclick="chainMore\(\)"/)
+  apiData['/admin/web3/overview'] = keep
+})
+
 console.log('== 验证结果：三态，不再把“待打包”说成“验证通过” ==')
 const mkAnchor = () => { const chips = []; const parent = { querySelectorAll: () => ({ forEach: (f) => chips.splice(0).forEach(() => f({ remove: noop })) }) }; return { parentNode: parent, insertAdjacentHTML: (_, h) => chips.push(h), chips } }
 const verify = async (resp) => { toasts = []; apiData['/admin/attest/verify'] = resp; const a = mkAnchor(); await run('verifyEventInline')('order', 'X', 0, a); return { toast: toasts[0], chip: a.chips[0] || '' } }
@@ -173,7 +181,10 @@ apiData['/admin/web3/chain'] = { preflight: [{ id: 'antchainopen', label: '蚂�
 await t('多链能力矩阵与预埋体检里的链名可点，直达链接入中心；台账交易号可整串复制', async () => {
   await run('chainAssetsPage()')
   const html = app.innerHTML
-  assert.equal((html.match(/onclick="go\('chainhub'\)"/g) || []).length, 3, '切换说明 + 矩阵 + 体检各一个入口')
+  assert.match(html, /只做存证，现在不能发行资产/, '当前链不支持时要说清楚')
+  assert.match(html, /onclick="issueAsset\(\)" disabled/, '当前链不支持时发行按钮要禁用')
+  assert.ok(!/<h2>链与资产<\/h2>/.test(html), '卡片标题不要和页面标题重复')
+  assert.equal((html.match(/onclick="go\('chainhub'\)"/g) || []).length, 4, '切换说明 + 发行提示 + 矩阵 + 体检各一个入口')
   assert.ok(!html.includes('CHAIN_PROVIDER='), '切换链早就能在链接入中心做，不该再让人改环境变量')
   assert.ok(html.indexOf('发行一件资产') < html.indexOf('多链能力矩阵'), '资产操作排在链能力前面')
   assert.match(html, /<details class="card pipe-fold">\s*<summary><h3>预埋体检/, '预埋体检应折叠')
@@ -184,7 +195,7 @@ apiData['/admin/web3/point-assets'] = { holders: 1, userBalance: 90, userLifetim
 await t('旅豆台账：按真实用户汇总，期初导入不再显示成「类型8」，额度进度看得到，借贷不平会标出来', async () => {
   await run('pointassets()')
   const h = app.innerHTML
-  assert.match(h, /<h2>旅豆发行台账<\/h2>/); assert.ok(!h.includes('类型8')); assert.match(h, /期初余额导入/); assert.match(h, /下单抵扣/)
+  assert.ok(!h.includes('类型8')); assert.match(h, /期初余额导入/); assert.match(h, /下单抵扣/)
   assert.match(h, /100 \/ 1,000/, '额度进度'); assert.match(h, /width:10%/)
   assert.match(h, />−10</, '抵扣净额为负'); assert.match(h, />\+60</, '期初导入净额为正')
   assert.equal((h.match(/>平衡</g) || []).length, 2); assert.equal((h.match(/>不平</g) || []).length, 1)
