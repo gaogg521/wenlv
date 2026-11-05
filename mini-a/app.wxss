@@ -359,7 +359,7 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .mh-br { font-size: 18rpx; color: var(--sub); }
 
 /* 身份卡卡种：普卡 / 金卡 / 白金卡 / 钻石卡 / 黑金卡，和后台卡面同一套颜色 */
-.tier-row { display: flex; justify-content: space-between; align-items: center; font-size: 22rpx; margin-bottom: 18rpx; position: relative; opacity: .95; }
+.tier-row { display: flex; justify-content: space-between; align-items: center; font-size: 22rpx; margin-bottom: 18rpx; padding-right: 170rpx; position: relative; opacity: .95; }
 .tier-name { font-size: 28rpx; font-weight: 800; letter-spacing: 4rpx; }
 .hero.tier-classic { background: linear-gradient(135deg, #0f2a4a, #0e6b5c) !important; }
 .hero.tier-gold { background: linear-gradient(135deg, #a9772a, #e3bd6a 40%, #f6e3a4 70%, #b98a35) !important; color: #2b1b05; }
