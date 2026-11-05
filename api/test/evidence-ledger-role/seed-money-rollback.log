@@ -1,0 +1,1 @@
+PASS native grant on seed connection rolls back user/account/cap/ledger/event transaction
