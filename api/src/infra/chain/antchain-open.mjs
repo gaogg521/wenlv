@@ -211,6 +211,9 @@ async function getToken(force = false) {
  * 带 token 的业务调用。token 失效（code 202）时刷新后重试一次——token 错误是在执行前被拒的，重试不会重复上链。
  * soft=true 时业务失败不抛错，原样返回，由调用方按 code 判断（如 404=未上链）。
  */
+// 供「合约模式」适配器（antchain-open-contract.mjs）复用：令牌缓存、串行队列（免费版 TPS=1）都在这里，
+// 两个入口共用同一份，才不会各开一条队列把 TPS 打爆。只导出，不改任何行为。
+export { env as antopenEnv, missing as antopenMissing, api as antopenApi, hard, scrub, HASH64, dateNum }
 async function api(path, makeBody, { soft = false } = {}) {
   for (let attempt = 0; ; attempt++) {
     const token = await getToken(attempt > 0)

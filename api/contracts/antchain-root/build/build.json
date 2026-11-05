@@ -1,0 +1,13 @@
+{
+  "contract": "WanderlustRootStore",
+  "solc": "0.6.12+commit.27d51765.Emscripten.clang",
+  "optimizer": {
+    "enabled": true,
+    "runs": 200
+  },
+  "sourceFile": "WanderlustRootStore.sol",
+  "sourceSha256": "cfd699d8506e67a620f377fd89358a2458498b15f76581a0d636389157443b8a",
+  "binSha256": "550556a48ecb5ab95385407ae8f781527ba28346056c92943d78c2d338ac3857",
+  "binBytes": 2073,
+  "note": "部署用 bin（创建字节码，hex，无 0x 前缀）。源码改动后必须重新编译，api/test/antchain-contract.mjs 会校验 sourceSha256。部署不可逆。"
+}

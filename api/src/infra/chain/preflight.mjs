@@ -35,6 +35,12 @@ export const ASK = {
     '免费版 TPS=1 / 燃料额度够不够批量补锚；生产是否升级专业版',
     '开放联盟链是公开共享链：content 明文可见，是否允许只写 Merkle 根与业务日',
   ],
+  antchaincontract: [
+    '合约是否已部署、部署时用的合约名（ANTOPEN_CONTRACT_NAME）；部署不可逆，源码改了要换合约名/地址',
+    'bytes32 入参在 inputParamListStr 里怎么表示（0x… / 裸 hex / base64）——文档没写清，部署后真机核对',
+    'QUERYRECEIPT 回执里成功标志与 output 的字段名；读调用也是交易，单次耗多少 gas',
+    '合约链独立起链（创世 prevRoot=0），不接 DEPOSIT 时代批次的前根——是否接受这种口径',
+  ],
   evm: [
     'relayer 的接口形状（当前按 POST {relayer}/tx，Bearer token）',
     '落根交易目标地址（EVM_ANCHOR_TO）与是否要求写合约事件',
