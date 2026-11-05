@@ -1,0 +1,129 @@
+[
+  {
+    "check": "same uid renamed self approval",
+    "accountId": 27,
+    "before": {
+      "code": 1003,
+      "msg": "双人复核：审批人不能与申请人相同",
+      "data": null,
+      "traceId": "tmw2yauay"
+    },
+    "after": {
+      "code": 0,
+      "msg": "ok",
+      "data": {
+        "status": 1,
+        "note": "已通过，可执行换团（执行时再校验名额与订单状态）"
+      },
+      "traceId": "tmw2yauc9"
+    },
+    "pass": false
+  },
+  {
+    "check": "concurrent execute exactly once",
+    "before": [
+      {
+        "id": 25,
+        "booked": 10
+      },
+      {
+        "id": 26,
+        "booked": 0
+      }
+    ],
+    "execution": [
+      {
+        "code": 0,
+        "msg": "ok",
+        "data": {
+          "status": 3
+        },
+        "traceId": "tmw2yaucl"
+      },
+      {
+        "code": 0,
+        "msg": "ok",
+        "data": {
+          "status": 3
+        },
+        "traceId": "tmw2yaucr"
+      },
+      {
+        "code": 0,
+        "msg": "ok",
+        "data": {
+          "status": 3
+        },
+        "traceId": "tmw2yaucv"
+      },
+      {
+        "code": 0,
+        "msg": "ok",
+        "data": {
+          "status": 3
+        },
+        "traceId": "tmw2yaud1"
+      }
+    ],
+    "after": [
+      {
+        "id": 25,
+        "booked": 2
+      },
+      {
+        "id": 26,
+        "booked": 8
+      }
+    ],
+    "order": {
+      "session_id": 26,
+      "version": 4
+    },
+    "request": {
+      "status": 3,
+      "exec_note": "同价换团完成"
+    },
+    "pass": false
+  },
+  {
+    "check": "N007 kw list",
+    "result": {
+      "code": 0,
+      "msg": "ok",
+      "data": {
+        "rows": [
+          {
+            "id": 6,
+            "req_no": "RS202611058998644",
+            "order_id": 311,
+            "order_no": "CXRS1793847189864",
+            "from_session_id": 25,
+            "to_session_id": 26,
+            "qty": 2,
+            "price_diff": 0,
+            "diff_bean": 0,
+            "status": 3,
+            "reason": "独立验收改期身份与并发",
+            "applicant": "admin:CXRS1793847189864admin",
+            "approver": "admin:CXRS1793847189864改名",
+            "approve_note": "同账号改名后自批应拒绝",
+            "executed_at": "2026-11-05 10:53:10.066",
+            "exec_note": "同价换团完成",
+            "created_at": "2026-11-05 10:53:09.987",
+            "active_one": null,
+            "product_title": "朱家角剧本游 · 江南谜案",
+            "order_status": 20,
+            "statusCn": "已执行"
+          }
+        ],
+        "total": 1,
+        "page": 1,
+        "pageSize": 20,
+        "filters": {
+          "kw": "CXRS1793847189864"
+        }
+      },
+      "traceId": "tmw2yaud4"
+    }
+  }
+]

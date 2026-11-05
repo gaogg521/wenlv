@@ -1,0 +1,32 @@
+{
+  "core.js": {
+    "status": 200,
+    "same": true
+  },
+  "pages/trade.js": {
+    "status": 200,
+    "same": true
+  },
+  "pages/people.js": {
+    "status": 200,
+    "same": true
+  },
+  "demo": [
+    {
+      "orders": 1482,
+      "users": 40,
+      "admins": 5
+    }
+  ],
+  "migration": [
+    {
+      "version": "V58__merchant_version.sql"
+    }
+  ],
+  "tagAudit": [
+    {
+      "action": "tag-add",
+      "biz_ref": "user-55"
+    }
+  ]
+}
