@@ -311,9 +311,9 @@ async function renderBean(d) {
     <div class="big">
       <div class="icon" style="background:${ok ? 'var(--brand)' : '#b42318'}">${ok ? '✓' : '!'}</div>
       <div style="flex:1">
-        <b>${ok ? '账本自洽：Σ贷 = Σ借' : '账本不平，请勿采信'}</b>
+        <b>${ok ? '双分录平衡：贷方合计 = 借方合计' : '账本不平，请勿采信'}</b>
         <span>${ok
-          ? '该日发放与消耗的数额相等，没有凭空的旅豆被创造出来 —— 这是"严禁超发"的账本证据。'
+          ? '该日每笔流水都是一借一贷两条分录，贷方分录合计与借方分录合计相等，说明账本内部一致、没有单边记账。注意：借方里包含预算池等对手分录，不等于用户实际消费；发行上限由预算与年度总量闸门另行控制，本页不据此认定"未超发"。'
           : '借贷差额不为零，账本存在异常。'}</span>
       </div>
     </div>
@@ -324,9 +324,9 @@ async function renderBean(d) {
     <h2>封存记录</h2>
     <div class="row"><div class="k">业务日期</div><div class="v mono">${esc(d.bizDate)}</div></div>
     <div class="row"><div class="k">账本笔数</div><div class="v">${esc(d.leafCount)} 笔</div></div>
-    <div class="row"><div class="k">Σ贷（发放）</div><div class="v mono">${esc(d.creditSum)} 豆</div></div>
-    <div class="row"><div class="k">Σ借（消耗）</div><div class="v mono">${esc(d.debitSum)} 豆</div></div>
-    <div class="row"><div class="k">借贷恒等</div><div class="v">${ok ? '成立（差额 0）' : '不成立'}</div></div>
+    <div class="row"><div class="k">贷方分录合计</div><div class="v mono">${esc(d.creditSum)} 豆</div></div>
+    <div class="row"><div class="k">借方分录合计</div><div class="v mono">${esc(d.debitSum)} 豆</div></div>
+    <div class="row"><div class="k">双分录平衡</div><div class="v">${ok ? '成立（差额 0）' : '不成立'}</div></div>
   </div>
 
   <div class="card">

@@ -10,7 +10,7 @@
 import crypto from 'node:crypto'
 import { q, one } from '../db.mjs'
 import { attest } from './attest.mjs'
-import { getSecret, setSecret } from '../infra/secrets.mjs'
+import { getSecret, setSecret, secretStatus } from '../infra/secrets.mjs'
 import * as member from './member.mjs'
 
 const KEY_NAME = 'VC_ISSUER_KEY'
@@ -30,8 +30,12 @@ async function levelBand(lv) {
 
 /** 取（或首次生成并加密落库）issuer 私钥。私钥只在服务端，永不出接口 */
 async function issuerKey() {
-  const raw = await getSecret(KEY_NAME)
-  if (raw) {
+  // 三种情况必须分开（P-15）：库里确实没有 → 首次生成；有但解不开 / 解开但结构无效 → 失败关闭，绝不覆盖。
+  // 浏览数字身份页、公开读公钥（/open/vc/issuer）、常规重启都会走到这里，不能因此隐式轮换已有密钥。
+  const st = await secretStatus(KEY_NAME)
+  if (st === 'undecryptable') throw new Error(KEY_NAME + ' 已存在但无法用当前主密钥解密：请检查 JWT_SECRET / SECRETS_KEY 是否与历史一致。已拒绝自动生成新密钥，原密文未改动')
+  if (st === 'ok') {
+    const raw = await getSecret(KEY_NAME)
     try {
       const k = JSON.parse(raw)
       return {
@@ -41,7 +45,7 @@ async function issuerKey() {
         pubJwk: k.pubJwk,
         createdAt: k.createdAt,
       }
-    } catch { /* 结构坏了就重建 */ }
+    } catch { throw new Error(KEY_NAME + ' 已解密但结构无效：已拒绝自动生成新密钥覆盖，请人工检查（原密文未改动）') }
   }
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519')
   const did = process.env.VC_ISSUER_DID || DEFAULT_ISSUER
@@ -56,6 +60,8 @@ async function issuerKey() {
 
 /** DID 派生盐：稳定、独立于 JWT_SECRET（改 JWT 密钥不应让全体 DID 失效） */
 async function pepper() {
+  const st = await secretStatus(PEPPER_NAME)
+  if (st === 'undecryptable') throw new Error(PEPPER_NAME + ' 已存在但无法用当前主密钥解密：已拒绝重新生成（重新生成会让全体 DID 变化），原密文未改动')
   let p = await getSecret(PEPPER_NAME)
   if (!p) {
     p = crypto.randomBytes(32).toString('hex')
@@ -228,13 +234,14 @@ export async function stats() {
     SUM(CASE WHEN revoked_at IS NOT NULL THEN 1 ELSE 0 END) revoked,
     SUM(CASE WHEN expires_at > NOW(3) AND revoked_at IS NULL THEN 1 ELSE 0 END) active,
     COUNT(DISTINCT user_id) holders FROM vc_issue`)
-  const recent = await q(`SELECT v.id, v.user_id, v.did, v.scope, v.issued_at, v.expires_at, v.revoked_at,
+  const eligible = await one('SELECT COUNT(*) n FROM user_account')   // 可签发用户：与旅豆账户数、凭证持有人是三个口径，后台页分别标注
+  const recent = await q(`SELECT v.id, v.user_id, v.did, v.scope, v.claims, v.issued_at, v.expires_at, v.revoked_at,
       u.nickname FROM vc_issue v JOIN user_account u ON u.id = v.user_id ORDER BY v.id DESC LIMIT 20`)
   return {
     issuer: k.did, kid: k.kid,
     keyFingerprint: crypto.createHash('sha256').update(JSON.stringify(k.pubJwk)).digest('hex').slice(0, 32),
     total: Number(agg.total) || 0, active: Number(agg.active) || 0,
-    revoked: Number(agg.revoked) || 0, holders: Number(agg.holders) || 0,
+    revoked: Number(agg.revoked) || 0, holders: Number(agg.holders) || 0, eligible: Number(eligible.n) || 0,
     recent,
     policy: '有效期 ' + VC_TTL_DAYS + ' 天 · 可即时吊销 · 最小披露（不含 PII）',
   }
