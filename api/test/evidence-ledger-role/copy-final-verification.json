@@ -1,0 +1,79 @@
+{
+  "flow": {
+    "granted": 11557,
+    "openingImported": 8058,
+    "consumed": 200
+  },
+  "trial": {
+    "perOk": true,
+    "globalOk": true,
+    "credit": 11757,
+    "debit": 11757
+  },
+  "reconcile": {
+    "at": "2026-11-05T08:06:45.526Z",
+    "ok": true,
+    "checks": [
+      {
+        "id": "I1",
+        "name": "历史日根的叶数与账本一致",
+        "ok": true,
+        "detail": {
+          "mismatch": 0,
+          "sealedDays": 2
+        }
+      },
+      {
+        "id": "I2",
+        "name": "日终根借贷恒等",
+        "ok": true,
+        "detail": {
+          "bad": 0
+        }
+      },
+      {
+        "id": "I3",
+        "name": "存证队列不堵塞(>2h)",
+        "ok": true,
+        "detail": {
+          "stuck": 0
+        }
+      },
+      {
+        "id": "I4",
+        "name": "存证链不断(prev_root)",
+        "ok": true,
+        "detail": {
+          "broken": 0
+        }
+      },
+      {
+        "id": "I5",
+        "name": "无假上链记录",
+        "ok": true,
+        "detail": {
+          "fake": 0
+        }
+      },
+      {
+        "id": "I7",
+        "name": "已提交批次 6 小时内得到链上确认",
+        "ok": true,
+        "detail": {
+          "stale": 0
+        }
+      },
+      {
+        "id": "I6",
+        "name": "旅豆流水均有存证(≥95%)",
+        "ok": true,
+        "detail": {
+          "ledger": 34,
+          "attested": 34,
+          "missing": 0,
+          "ratio": 1
+        }
+      }
+    ]
+  }
+}

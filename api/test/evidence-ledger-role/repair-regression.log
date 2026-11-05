@@ -1,0 +1,1 @@
+PASS balance, all daily totals, idempotent repair, exact transaction coverage, orphan-event negative control

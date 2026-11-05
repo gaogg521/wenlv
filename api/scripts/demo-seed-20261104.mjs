@@ -2,12 +2,14 @@
 // 目标：经营概览/各栏目真实感数据——每栏目 ≥10 条。只 INSERT，不改既有行；
 // 订单走状态机语义直接落库（演示库无真实支付），旅豆走账本双记（保持借贷平衡）。
 import mysql from 'mysql2/promise'
+import { grant, BIZ } from '../src/domain/bean.mjs'
+import { closeDb } from '../src/db.mjs'
 
-if (process.env.ALLOW_DEMO_SEED !== '1' || process.env.DB_NAME !== 'wanderlust') {
+if (process.env.ALLOW_DEMO_SEED !== '1' || !(process.env.DB_NAME === 'wanderlust' || process.env.DB_NAME?.startsWith('wanderlust_qa_'))) {
   console.error('拒绝运行：本脚本只允许 ALLOW_DEMO_SEED=1 且 DB_NAME=wanderlust（演示库）时执行')
   process.exit(1)
 }
-const c = await mysql.createConnection({ host: '127.0.0.1', port: 3306, user: 'root', password: 'root', database: 'wanderlust' })
+const c = await mysql.createConnection({ host: process.env.DB_HOST || '127.0.0.1', port: Number(process.env.DB_PORT || 3306), user: process.env.DB_USER || 'root', password: process.env.DB_PASS || 'root', database: process.env.DB_NAME })
 const q = async (sql, a = []) => (await c.query(sql, a))[0]
 const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const ri = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
@@ -15,6 +17,7 @@ const stamp = Date.now().toString(36)
 let created = { users: [], orders: [], notes: [], tasks: [], risk: [], coCreators: [], profits: [], withdrawals: [], scenics: [], suppliers: [], banners: [], faqs: [], sessions: [] }
 
 try {
+  await c.beginTransaction()
   // ---------- 1. 用户（补到 ≥ 20）----------
   const { nicknames: NN } = { nicknames: ['青浦晨跑者小林', '姑苏评弹爱好者', '湖畔亲子日记', '古镇摄影社阿伟', '瑜伽旅修师安安', '周末徒步团·老周', '茶山拾光·小满', '水乡食记·阿玲', '汉服出行·糖糖', '江南骑行队·大鹏', '亲子研学·贝壳妈', '日落收集者·屿'] }
   for (const n of NN) {
@@ -100,24 +103,16 @@ try {
 
   // ---------- 6. 旅豆预算内补发 + 账本（借贷平衡）----------
   const budget = (await q('SELECT id, total, granted FROM bean_budget WHERE status = 1 ORDER BY id LIMIT 1'))[0]
-  const sentinelB = (await q("SELECT id FROM bean_account WHERE user_id = 999999000009"))[0]?.id
-    || (await q('INSERT INTO bean_account (user_id) VALUES (999999000009)')).insertId
-  let granted = Number(budget.granted)
+  const connection = {
+    q, one: async (sql, args = []) => (await q(sql, args))[0] || null,
+    ins: async (sql, args = []) => (await q(sql, args)).insertId,
+    upd: async (sql, args = []) => (await q(sql, args)).affectedRows,
+  }
   for (let i = 0; i < 18; i++) {
     const uid = rnd(users)
     const amt = ri(50, 300)
-    const acc = (await q('SELECT id FROM bean_account WHERE user_id = ?', [uid]))[0]?.id
-      || (await q('INSERT INTO bean_account (user_id) VALUES (?)', [uid])).insertId
-    const bal = Number(((await q('SELECT balance FROM bean_account WHERE id = ?', [acc]))[0] || { balance: 0 }).balance)
-    const txNo = 'DEMO-BT-' + stamp + '-' + i
-    await c.query('INSERT INTO bean_ledger (tx_no, account_id, direction, amount, after_bal, biz_type, biz_ref, budget_id, created_at) VALUES (?,?,1,?,?,?,?,?,NOW(3) - INTERVAL ? DAY)',
-      [txNo, acc, amt, bal + amt, 1, 'DEMO-GRANT-' + i, budget.id, ri(0, 30)])
-    await c.query('INSERT INTO bean_ledger (tx_no, account_id, direction, amount, after_bal, biz_type, biz_ref, budget_id, created_at) VALUES (?,?,2,?,?,?,?,?,NOW(3) - INTERVAL ? DAY)',
-      [txNo, sentinelB, amt, granted + amt, 1, 'DEMO-GRANT-' + i, budget.id, ri(0, 30)])
-    await c.query('UPDATE bean_account SET balance = balance + ?, lifetime = lifetime + ? WHERE id = ?', [amt, amt, acc])
-    granted += amt
+    await grant(uid, amt, BIZ.REBATE, 'DEMO-GRANT-' + stamp + '-' + i, budget.id, connection)
   }
-  await c.query('UPDATE bean_budget SET granted = ? WHERE id = ?', [granted, budget.id])
 
   // ---------- 7. 笔记（≥14 条，多为已发布带赞）----------
   const NOTE_TITLES = [
@@ -250,33 +245,13 @@ try {
     共创人: created.coCreators.length, 分润单: created.profits.length,
     提现: created.withdrawals.length, 轮播: created.banners.length, FAQ: created.faqs.length,
   }
+  await c.commit()
   console.log('演示数据写入完成：', JSON.stringify(summary))
 } catch (e) {
   console.error('失败，回滚本次写入……', e.message)
-  // 按创建的反序删除（外层在前）
-  try {
-    if (created.orders.length) await c.query('DELETE FROM travel_pass WHERE order_id IN (?)', [created.orders])
-    if (created.orders.length) await c.query('DELETE FROM orders WHERE id IN (?)', [created.orders])
-    if (created.profits.length) { await c.query('DELETE FROM co_profit_pay WHERE co_profit_id IN (?)', [created.profits]); await c.query('DELETE FROM co_profit WHERE id IN (?)', [created.profits]) }
-    if (created.coCreators.length) await c.query('DELETE FROM co_creator WHERE id IN (?)', [created.coCreators])
-    if (created.tasks.length) { await c.query('DELETE FROM content_task_entry WHERE task_id IN (?)', [created.tasks]); await c.query('DELETE FROM content_task WHERE id IN (?)', [created.tasks]) }
-    if (created.notes.length) await c.query('DELETE FROM content_note WHERE id IN (?)', [created.notes])
-    if (created.risk.length) { await c.query('UPDATE risk_case rc JOIN risk_case_record r ON r.case_id = rc.id SET rc.handled = 0 WHERE rc.source_id IN (?)', [created.risk]).catch(() => {}); await c.query('DELETE FROM risk_case_record WHERE case_id IN (SELECT id FROM risk_case WHERE source_id IN (?))', [created.risk]).catch(() => {}); await c.query('DELETE FROM risk_case WHERE source_id IN (?)', [created.risk]).catch(() => {}) }
-    if (created.risk.length) await c.query('DELETE FROM risk_event WHERE id IN (?)', [created.risk])
-    if (created.withdrawals.length) await c.query('DELETE FROM promoter_withdraw WHERE id IN (?)', [created.withdrawals])
-    if (created.sessions.length) await c.query('DELETE FROM tour_session WHERE id IN (?)', [created.sessions])
-    if (created.scenics.length) await c.query('DELETE FROM scenic_spot WHERE id IN (?)', [created.scenics])
-    if (created.suppliers.length) await c.query('DELETE FROM supplier WHERE id IN (?)', [created.suppliers])
-    if (created.banners.length) await c.query('DELETE FROM banner WHERE id IN (?)', [created.banners])
-    if (created.faqs.length) await c.query('DELETE FROM faq WHERE id IN (?)', [created.faqs])
-    if (created.users.length) {
-      await c.query('DELETE FROM bean_ledger WHERE biz_ref LIKE ?', ['DEMO-GRANT-%'])
-      await c.query('DELETE FROM bean_account WHERE user_id IN (?)', [created.users])
-      await c.query('DELETE FROM user_account WHERE id IN (?)', [created.users])
-    }
-    console.log('回滚完成')
-  } catch (e2) { console.error('回滚也失败，请手工检查：', e2.message) }
-  process.exit(1)
+  await c.rollback()
+  process.exitCode = 1
 } finally {
   await c.end()
+  await closeDb()
 }

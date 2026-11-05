@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 Page({
-  data: { bean: null, ledger: [], level: 1, levels: [], levelPct: 0, levelHint: '', levelName: '', levelArt: '', glyph: { 1: '返', 2: '任', 3: '文', 4: '抵', 5: '退', 6: '期', 7: '调' }, bizName: { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '滚动过期', 7: '风控调整' } },
+  data: { bean: null, ledger: [], level: 1, levels: [], levelPct: 0, levelHint: '', levelName: '', levelArt: '', glyph: { 1: '返', 2: '任', 3: '文', 4: '抵', 5: '退', 6: '期', 7: '调', 8: '初' }, bizName: { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '滚动过期', 7: '风控调整', 8: '期初余额导入' } },
   retry() { this.onShow() },
   onShow() {
     this.setData({ error: '' })

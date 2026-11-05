@@ -1,0 +1,48 @@
+{
+  "status": {
+    "totp": {
+      "configured": true,
+      "deliverable": true
+    },
+    "sms": {
+      "configured": false,
+      "deliverable": false
+    },
+    "email": {
+      "configured": false,
+      "deliverable": false
+    }
+  },
+  "fields": {
+    "SMS_TENCENT_SECRET_ID": {
+      "present": false
+    },
+    "SMS_TENCENT_SECRET_KEY": {
+      "present": false
+    },
+    "SMS_TENCENT_SDKAPPID": {
+      "present": false
+    },
+    "SMS_TENCENT_SIGN": {
+      "present": false
+    },
+    "SMS_TENCENT_TEMPLATE_ID": {
+      "present": false
+    },
+    "SMTP_HOST": {
+      "present": false
+    },
+    "SMTP_PORT": {
+      "present": false
+    },
+    "SMTP_USER": {
+      "present": false
+    },
+    "SMTP_PASS": {
+      "present": false
+    },
+    "SMTP_FROM": {
+      "present": false
+    }
+  }
+}
