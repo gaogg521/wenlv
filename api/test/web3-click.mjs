@@ -78,6 +78,17 @@ await t('最近事件：业务单号可点；已入批的事件带批次入口�
   assert.ok(!/openBlock\(0\)|openBlock\(null\)/.test(html), '没有批次的事件不能挂一个打不开的批次入口')
 })
 
+await t('存证中心：业务环节进度放进一张表，按累计排序、颜色与区块一致；状态汇总是加总出来的', async () => {
+  const keep = apiData['/admin/attest/center']
+  apiData['/admin/attest/center'] = { ...keep, chainMode: 'real', queue: [{ biz_type: 'order', pending: 1, packed: 1, anchored: 8, total: 10 }, { biz_type: 'pass_verify', pending: 0, packed: 0, anchored: 30, total: 30 }] }
+  await run('attest()')
+  const h = app.innerHTML
+  assert.ok(h.indexOf('background:#c084fc') > 0 && h.indexOf('background:#c084fc') < h.indexOf('background:#fbbf24'), '累计多的排前面，且用业务色')
+  assert.match(h, /存证事件<\/div><div class="v"[^>]*>40</); assert.match(h, /已锚定 95%/)
+  assert.match(h, /att-warn">1</, '有待打包要高亮')
+  assert.ok(!h.includes('att-kpi'), '不再是九宫格卡片')
+  apiData['/admin/attest/center'] = keep
+})
 console.log('== 链路总览·链上事件动态 ==')
 apiData['/admin/web3/overview'] = { chain: { label: '蚂蚁链开放联盟链' }, chainMode: 'real', batches: 2, anchoredBatches: 2, events: 3, anchoredEvents: 2, pendingEvents: 1, badgeGrants: 0, beanGranted: 0, beanConsumed: 0, trustPath: [], recentEvents: EV }
 await t('事件动态表的业务单号可点（你的截图里正是这张表点不进去）', async () => {
@@ -162,10 +173,22 @@ apiData['/admin/web3/chain'] = { preflight: [{ id: 'antchainopen', label: '蚂�
 await t('多链能力矩阵与预埋体检里的链名可点，直达链接入中心；台账交易号可整串复制', async () => {
   await run('chainAssetsPage()')
   const html = app.innerHTML
-  assert.equal((html.match(/onclick="go\('chainhub'\)"/g) || []).length, 2, '矩阵 + 体检各一个入口')
+  assert.equal((html.match(/onclick="go\('chainhub'\)"/g) || []).length, 3, '切换说明 + 矩阵 + 体检各一个入口')
+  assert.ok(!html.includes('CHAIN_PROVIDER='), '切换链早就能在链接入中心做，不该再让人改环境变量')
+  assert.ok(html.indexOf('发行一件资产') < html.indexOf('多链能力矩阵'), '资产操作排在链能力前面')
+  assert.match(html, /<details class="card pipe-fold">\s*<summary><h3>预埋体检/, '预埋体检应折叠')
   assert.match(html, /onclick="event\.stopPropagation\(\);copyText\([^"]*d{64}/, '台账交易号不能复制')
 })
-apiData['/admin/web3/point-assets'] = { holders: 1, budgets: [{ id: 5, name: '首批', total: 100, granted: 40, returned: 0, status: 1 }], globalCap: null, byBiz: [] }
+apiData['/admin/web3/point-assets'] = { holders: 1, userBalance: 90, userLifetime: 100, budgets: [{ id: 5, name: '首批', total: 100, granted: 40, returned: 0, status: 1 }], globalCap: { cap_total: 1000, issued_sum: 100, year: 2026 },
+  byBiz: [{ biz_type: 8, issued: '60', burned: '60', userIn: 60, userOut: 0, entries: 2 }, { biz_type: 4, issued: '10', burned: '10', userIn: 0, userOut: 10, entries: 1 }, { biz_type: 2, issued: '5', burned: '4', userIn: 5, userOut: 0, entries: 1 }] }
+await t('旅豆台账：按真实用户汇总，期初导入不再显示成「类型8」，额度进度看得到，借贷不平会标出来', async () => {
+  await run('pointassets()')
+  const h = app.innerHTML
+  assert.match(h, /<h2>旅豆发行台账<\/h2>/); assert.ok(!h.includes('类型8')); assert.match(h, /期初余额导入/); assert.match(h, /下单抵扣/)
+  assert.match(h, /100 \/ 1,000/, '额度进度'); assert.match(h, /width:10%/)
+  assert.match(h, />−10</, '抵扣净额为负'); assert.match(h, />\+60</, '期初导入净额为正')
+  assert.equal((h.match(/>平衡</g) || []).length, 2); assert.equal((h.match(/>不平</g) || []).length, 1)
+})
 await t('积分发行台账的发行批次可点，去预算管理', async () => {
   await run('pointassets()')
   assert.match(app.innerHTML, /<tr class="click-row"[^>]*onclick="go\('budgets'\)"/)

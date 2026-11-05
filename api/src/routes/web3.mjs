@@ -331,8 +331,14 @@ const web3 = {
     const cap = await one('SELECT * FROM bean_global_cap ORDER BY id DESC LIMIT 1')
     const byBiz = await q(`SELECT biz_type, SUM(CASE WHEN direction = 1 THEN amount ELSE 0 END) issued,
       SUM(CASE WHEN direction = 2 THEN amount ELSE 0 END) burned FROM bean_ledger GROUP BY biz_type ORDER BY biz_type`)
-    const holders = await one('SELECT COUNT(*) c FROM bean_account WHERE user_id < 999999000000')   // 只数真实用户户：排除预算 / 平台哨兵户
-    return { budgets, globalCap: cap, byBiz, holders: Number(holders.c) || 0,
+    const holders = await one('SELECT COUNT(*) c, COALESCE(SUM(balance), 0) bal, COALESCE(SUM(lifetime), 0) life FROM bean_account WHERE user_id < 999999000000')   // 只数真实用户户：排除预算 / 平台哨兵户
+    // 同一笔分录借贷各记一次，全账本汇总两边永远相等（那是平衡校验，不是业务量）。业务量要只看真实用户户那一侧。
+    const userSide = await q(`SELECT l.biz_type, SUM(CASE WHEN l.direction = 1 THEN l.amount ELSE 0 END) user_in,
+      SUM(CASE WHEN l.direction = 2 THEN l.amount ELSE 0 END) user_out, COUNT(*) n
+      FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id < 999999000000 GROUP BY l.biz_type`)
+    const sideOf = new Map(userSide.map((r) => [Number(r.biz_type), r]))
+    for (const x of byBiz) { const u = sideOf.get(Number(x.biz_type)); x.userIn = u ? Number(u.user_in) : 0; x.userOut = u ? Number(u.user_out) : 0; x.entries = u ? Number(u.n) : 0 }
+    return { budgets, globalCap: cap, byBiz, holders: Number(holders.c) || 0, userBalance: Number(holders.bal) || 0, userLifetime: Number(holders.life) || 0,
       note: '积分按预算批次发行，年度总量受 global_cap 哨兵约束（双分录账本，严禁超发）' }
   },
 

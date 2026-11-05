@@ -12,6 +12,7 @@ import { q, one } from '../db.mjs'
 import { attest } from './attest.mjs'
 import { getSecret, setSecret, secretStatus } from '../infra/secrets.mjs'
 import * as member from './member.mjs'
+import * as merchantLevel from './merchant-level.mjs'
 
 const KEY_NAME = 'VC_ISSUER_KEY'
 const PEPPER_NAME = 'VC_DID_PEPPER'
@@ -242,7 +243,10 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
   }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : ''
   const total = Number((await one(`SELECT COUNT(*) n FROM user_account u ${w}`, args)).n) || 0
-  const rows = await q(`SELECT u.id, u.nickname, u.avatar_url, u.did_ref, u.member_level, u.growth_value, u.status, u.created_at,
+  const rows = await q(`SELECT u.id, u.nickname, u.avatar_url, u.did_ref, u.creator_tag, u.member_level,
+      (SELECT p.tier FROM promoter p WHERE p.user_id = u.id AND p.status = 1) promoter_tier,
+      (SELECT m.level FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id WHERE s.user_id = u.id AND s.status = 1 ORDER BY s.role DESC LIMIT 1) merchant_level,
+      EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id AND c.status = 2) has_notes, u.growth_value, u.status, u.created_at,
       b.balance, b.lifetime,
       (SELECT COUNT(*) FROM user_badge ub WHERE ub.user_id = u.id) badges,
       (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id AND o.status IN (40,50)) trips,
@@ -255,6 +259,7 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
     const did = r.did_ref || await userDid(r.id)
     out.push({
       userId: Number(r.id), nickname: r.nickname || ('用户' + r.id), avatar: r.avatar_url || null, did,
+      roles: [...(isCreator(r.creator_tag, r.has_notes) ? ['creator'] : []), ...(r.promoter_tier != null ? ['promoter'] : []), ...(r.merchant_level != null ? ['merchant'] : [])],
       levelNo: Number(r.member_level || 1), levelName: (lvs.find((l) => l.lv === Number(r.member_level || 1)) || lvs[0]).name,
       growth: Number(r.growth_value) || 0, status: Number(r.status),
       beanBalance: r.balance == null ? null : Number(r.balance), beanLifetime: r.lifetime == null ? null : Number(r.lifetime),
@@ -264,6 +269,61 @@ export async function identities({ q: kw = '', page = 1, size = 20 } = {}) {
   const agg = await one(`SELECT (SELECT COUNT(*) FROM user_account) users, (SELECT COUNT(*) FROM bean_account WHERE user_id < 999999000000) bean_accounts,
     (SELECT COUNT(DISTINCT user_id) FROM vc_issue WHERE revoked_at IS NULL AND expires_at > NOW(3)) vc_holders`)
   return { total, page, size, rows: out, summary: { users: Number(agg.users), beanAccounts: Number(agg.bean_accounts), vcHolders: Number(agg.vc_holders) } }
+}
+
+/* ---- 卡面体系的数据：各角色的等级清单与人数（卡种由前端按「第几级 / 共几级」算），以及单个用户的其他角色身份 ---- */
+const PROMOTER_LEVELS = [{ lv: 1, name: '基础服务商' }, { lv: 2, name: '优选服务商' }, { lv: 3, name: '金牌服务商' }]
+const CREATOR_LEVELS = [{ lv: 1, name: '普通创作者' }, { lv: 2, name: '签约创作者' }, { lv: 3, name: '优质创作者' }]
+const CREATOR_RANK = { none: 1, limited: 1, signed: 2, star: 3 }
+const isCreator = (tag, hasNotes) => (tag && tag !== 'none') || !!Number(hasNotes)
+
+export async function cardScale() {
+  const toMap = (rows) => Object.fromEntries(rows.map((r) => [String(r.k), Number(r.n)]))
+  const withN = (levels, m) => levels.map((l) => ({ lv: l.lv, name: l.name, n: m[String(l.lv)] || 0 }))
+  const creators = toMap(await q(`SELECT u.creator_tag k, COUNT(*) n FROM user_account u
+    WHERE u.creator_tag <> 'none' OR EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id AND c.status = 2) GROUP BY u.creator_tag`))
+  const creatorByRank = {}
+  for (const [tag, n] of Object.entries(creators)) creatorByRank[CREATOR_RANK[tag] || 1] = (creatorByRank[CREATOR_RANK[tag] || 1] || 0) + n
+  return {
+    traveler: { levels: withN(await member.levels(), toMap(await q('SELECT member_level k, COUNT(*) n FROM user_account GROUP BY member_level'))) },
+    creator: { levels: withN(CREATOR_LEVELS, creatorByRank) },
+    promoter: { levels: withN(PROMOTER_LEVELS, toMap(await q('SELECT tier k, COUNT(*) n FROM promoter WHERE status = 1 GROUP BY tier'))) },
+    merchant: { levels: withN(await merchantLevel.levels(), toMap(await q('SELECT level k, COUNT(*) n FROM merchant WHERE status = 1 GROUP BY level'))) },
+  }
+}
+
+/** 该用户除旅行者外的角色身份卡（后台展示；不写进可携出的凭证） */
+async function roleCards(userId) {
+  const cards = []
+  const u = await one('SELECT creator_tag FROM user_account WHERE id = ?', [userId])
+  const yuan = (fen) => { const y = Number(fen || 0) / 100; return '¥' + (y >= 10000 ? (y / 10000).toFixed(1).replace(/\.0$/, '') + '万' : y.toLocaleString('zh-CN', { maximumFractionDigits: 0 })) }
+  const c = await one(`SELECT (SELECT COUNT(*) FROM content_note n WHERE n.user_id = ? AND n.status = 2) notes,
+    (SELECT COUNT(*) FROM content_task_entry t WHERE t.user_id = ? AND t.status = 3) tasks,
+    (SELECT COUNT(*) FROM review r WHERE r.user_id = ?) reviews`, [userId, userId, userId])
+  if (isCreator(u && u.creator_tag, c.notes)) {
+    const rank = CREATOR_RANK[u.creator_tag] || 1
+    cards.push({ role: 'creator', rank, total: CREATOR_LEVELS.length, levelName: CREATOR_LEVELS[rank - 1].name, sub: u.creator_tag === 'limited' ? '内容创作身份 · 当前限流' : '内容创作身份',
+      stats: [{ label: '发布内容', val: Number(c.notes) }, { label: '完成约稿', val: Number(c.tasks) }, { label: '真实评价', val: Number(c.reviews) }] })
+  }
+  const p = await one('SELECT tier, rate_bp, valid_gmv_90d, service_score FROM promoter WHERE user_id = ? AND status = 1', [userId])
+  if (p) {
+    const rank = Math.min(Number(p.tier) || 1, PROMOTER_LEVELS.length)
+    cards.push({ role: 'promoter', rank, total: PROMOTER_LEVELS.length, levelName: PROMOTER_LEVELS[rank - 1].name, sub: '一级推广 · 无层级',
+      stats: [{ label: '近 90 天 GMV', val: yuan(p.valid_gmv_90d) }, { label: '服务分', val: String(p.service_score) }, { label: '佣金比例', val: Number(p.rate_bp) / 100 + '%' }] })
+  }
+  const staff = await q('SELECT s.role, m.id, m.name, m.level FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id WHERE s.user_id = ? AND s.status = 1 ORDER BY s.role DESC LIMIT 3', [userId])
+  if (staff.length) {
+    const lvs = await merchantLevel.levels()
+    const ROLE = { 1: '核销员', 2: '店长', 3: '老板' }
+    for (const s of staff) {
+      const met = await merchantLevel.metrics(s.id)
+      const badge = await one('SELECT COUNT(*) n FROM merchant_badge WHERE merchant_id = ?', [s.id])
+      const lv = lvs.find((l) => l.lv === Number(s.level)) || lvs[0]
+      cards.push({ role: 'merchant', rank: lv.lv, total: lvs.length, levelName: lv.name, sub: String(s.name).slice(0, 18) + ' · ' + (ROLE[s.role] || '店员'),
+        stats: [{ label: '完成订单', val: met.orders }, { label: '综合评分', val: met.rating10 ? (met.rating10 / 10).toFixed(1) : '—' }, { label: '商户徽章', val: Number(badge.n) }] })
+    }
+  }
+  return cards
 }
 
 /** 单个身份的完整档案（后台可看；凭证本身仍只含最小披露字段）：等级 / 行程 / 城市 / 徽章 / 旅豆账户与流水 / 凭证记录 */
@@ -290,6 +350,7 @@ export async function identityDetail(userId) {
     memberSince: u.created_at,
     bean: acct ? { balance: Number(acct.balance), lifetime: Number(acct.lifetime), ledger } : null,
     trips, cities, badges, vcs,
+    roleCards: await roleCards(userId),
   }
 }
 
@@ -309,6 +370,7 @@ export async function stats() {
     total: Number(agg.total) || 0, active: Number(agg.active) || 0,
     revoked: Number(agg.revoked) || 0, holders: Number(agg.holders) || 0, eligible: Number(eligible.n) || 0,
     recent,
+    cardScale: await cardScale(),
     policy: '有效期 ' + VC_TTL_DAYS + ' 天 · 可即时吊销 · 最小披露（不含 PII）',
   }
 }

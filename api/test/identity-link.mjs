@@ -59,6 +59,45 @@ await t('档案详情：行程 / 徽章 / 旅豆流水与库一致；流水首�
   assert.equal(d.did, (await one('SELECT did_ref FROM user_account WHERE id = ?', [withBean.id])).did_ref)
   const text = JSON.stringify(d.claims); assert.ok(!/mobile|phone|openid|unionid/i.test(text), '凭证声明里不能出现手机号 / openid 等')
 })
+console.log('== 卡面体系的数据 ==')
+await t('卡面等级清单：旅行者人数合计 = 用户数；推广 / 创作者 3 级，等级名来自配置', async () => {
+  const s = ok(await call('GET', '/admin/web3/vc', null, A)).cardScale
+  const users = Number((await one('SELECT COUNT(*) n FROM user_account')).n)
+  assert.equal(s.traveler.levels.reduce((a, l) => a + l.n, 0), users, '等级被配置改小时这里会暴露')
+  assert.equal(s.promoter.levels.length, 3); assert.equal(s.creator.levels.length, 3); assert.ok(s.merchant.levels.length >= 1)
+  const active = Number((await one('SELECT COUNT(*) n FROM promoter WHERE status = 1')).n)
+  assert.equal(s.promoter.levels.reduce((a, l) => a + l.n, 0), active, '只数生效的推广服务商')
+})
+await t('有其他角色的用户：列表带角色标记，档案带对应身份卡；卡上不出现手机号', async () => {
+  const p = await one('SELECT user_id FROM promoter WHERE status = 1 AND user_id IN (SELECT id FROM user_account) LIMIT 1')
+  const m = await one('SELECT user_id FROM merchant_staff WHERE status = 1 AND user_id IN (SELECT id FROM user_account) LIMIT 1')
+  assert.ok(p || m, '需要至少一个推广服务商或商户店员（先 seed）')
+  for (const [row, role] of [[p, 'promoter'], [m, 'merchant']]) {
+    if (!row) continue
+    const uid = Number(row.user_id)
+    const d = ok(await call('GET', '/admin/web3/identity/' + uid, null, A))
+    const c = d.roleCards.find((x) => x.role === role)
+    assert.ok(c, role + ' 身份卡缺失'); assert.ok(c.rank >= 1 && c.rank <= c.total); assert.ok(c.levelName); assert.equal(c.stats.length, 3)
+    assert.ok(!/1[3-9]\d{9}/.test(JSON.stringify(c)), '身份卡不能带手机号')
+    const r = ok(await call('GET', '/admin/web3/identities?size=5&q=' + uid, null, A))
+    assert.ok(r.rows.find((x) => x.userId === uid).roles.includes(role), '列表没标 ' + role)
+  }
+  const plain = await one(`SELECT u.id FROM user_account u WHERE u.creator_tag = 'none'
+    AND NOT EXISTS (SELECT 1 FROM promoter p WHERE p.user_id = u.id AND p.status = 1) AND NOT EXISTS (SELECT 1 FROM merchant_staff s WHERE s.user_id = u.id AND s.status = 1)
+    AND NOT EXISTS (SELECT 1 FROM content_note c WHERE c.user_id = u.id AND c.status = 2) LIMIT 1`)
+  if (plain) assert.deepEqual(ok(await call('GET', '/admin/web3/identity/' + plain.id, null, A)).roleCards, [], '纯旅行者不该多出身份卡')
+})
+await t('旅豆台账按业务汇总：用户侧入账 / 出账 / 笔数与账本一致，且不含预算 / 平台户', async () => {
+  const pa = ok(await call('GET', '/admin/web3/point-assets', null, A))
+  const rows = await q(`SELECT l.biz_type, SUM(CASE WHEN l.direction = 1 THEN l.amount ELSE 0 END) i, SUM(CASE WHEN l.direction = 2 THEN l.amount ELSE 0 END) o, COUNT(*) n
+    FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id < 999999000000 GROUP BY l.biz_type`)
+  for (const x of pa.byBiz) {
+    const r = rows.find((y) => Number(y.biz_type) === Number(x.biz_type))
+    assert.equal(x.userIn, r ? Number(r.i) : 0); assert.equal(x.userOut, r ? Number(r.o) : 0); assert.equal(x.entries, r ? Number(r.n) : 0)
+  }
+  const bal = await one('SELECT COALESCE(SUM(balance), 0) b, COALESCE(SUM(lifetime), 0) l FROM bean_account WHERE user_id < 999999000000')
+  assert.equal(pa.userBalance, Number(bal.b)); assert.equal(pa.userLifetime, Number(bal.l))
+})
 await t('错误输入：不存在的用户 → 1004；非法 id → 1001；未登录 → 拒绝', async () => {
   assert.equal((await call('GET', '/admin/web3/identity/99999999', null, A)).code, 1004)
   assert.equal((await call('GET', '/admin/web3/identity/abc', null, A)).code, 1001)

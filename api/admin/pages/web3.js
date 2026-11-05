@@ -9,26 +9,40 @@ async function attest() {
   const STMAP = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>',
     '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定失败重试</span>', '<span class="pill s70">人工处理</span>']
   const real = (d.chain && d.chain.mode) === 'real'
+  const queue = (d.queue || []).slice().sort((x, y) => Number(y.total) - Number(x.total))
+  const sum = (k) => queue.reduce((s, x) => s + Number(x[k] || 0), 0)
+  const tot = sum('total'), pend = sum('pending'), pack = sum('packed'), anch = sum('anchored')
+  const pct = (n, all) => (all ? Math.round(n / all * 100) : 0)
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>存证中心</h2><span class="muted">${esc(d.chainMode)}</span></div>
-    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-      ${(d.queue || []).map((qq) => `<div class="kpi att-kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div>
-        <div style="flex:1;min-width:0"><div class="l">${BIZ_CN[qq.biz_type] || esc(qq.biz_type)}</div><div class="v" style="font-size:18px">${Number(qq.total)} <small style="font-size:12px;font-weight:400;color:var(--sub)">条事件</small></div>
-        <div class="att-bar" title="已锚定占累计"><i style="width:${Number(qq.total) ? Math.round(Number(qq.anchored) / Number(qq.total) * 100) : 0}%"></i></div>
-        <div class="s att-st"><span class="${Number(qq.pending) ? 'warn' : ''}">待打包 ${Number(qq.pending)}</span><span>已打包 ${Number(qq.packed || 0)}</span><span class="ok">已锚定 ${Number(qq.anchored)}</span></div></div></div>`).join('') || '<div class="kpi"><div class="s">暂无事件</div></div>'}
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">📚</div><div><div class="l">存证事件</div><div class="v" style="font-size:18px">${tot}</div><div class="s">已锚定 ${pct(anch, tot)}%</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fdf3e0">📥</div><div><div class="l">待打包</div><div class="v" style="font-size:18px${pend ? ';color:#b7791f' : ''}">${pend}</div><div class="s">小时级打包</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">已打包·待锚定</div><div class="v" style="font-size:18px">${pack}</div><div class="s">根已生成</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">已锚定</div><div class="v" style="font-size:18px">${anch}</div><div class="s">链上已确认</div></div></div>
     </div>
-    <div class="row" style="margin-top:10px">
+    <div class="att-ops"><span class="att-ops-l">手动运行</span>
       <button class="btn ghost sm" onclick="runJob('attest-pack','attest')">① 打包（出 Merkle 根）</button>
       <button class="btn ghost sm" onclick="runJob('attest-anchor','attest')">② 补锚（按 seq 升序）</button>
       <button class="btn ghost sm" onclick="runJob('bean-day-close','attest')">③ 封存昨日旅豆账本</button>
       <button class="btn ghost sm" onclick="runJob('attest-reconcile','attest')">④ 六条不变式对账</button>
       <span class="muted">${real ? '已接入' + esc((d.chain && d.chain.label) || '当前链') + '：补锚将真实上链' : 'NOOP：①后停留在「已打包·待锚定」，②不会产生假交易号'}</span>
     </div>
-    <div class="row" style="margin-top:6px"><input id="vref" placeholder="输入订单号验证（如 WL20261024…）" style="width:320px">
+    <div class="att-ops"><span class="att-ops-l">单号验证</span><input id="vref" placeholder="输入订单号验证（如 WL20261024…）" style="width:320px">
       <button class="btn primary sm" onclick="verifyAttest()">验证</button>
-      <span class="muted">公开验证口（无登录只读）：/open/verify/order/{单号} · /open/verify/bean-day/{日期} —— 给景区 / 政府 / 投资人的「一网可信」窗口</span></div>
+      <span class="muted">公开验证口（无登录只读）：/open/verify/order/{单号} · /open/verify/bean-day/{日期}</span></div>
     <div id="vout"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>各业务环节的存证进度</h3><span class="muted">颜色与链路视图的区块一致</span></div>
+    ${queue.length ? `<table class="att-table"><thead><tr><th>业务环节</th><th>累计</th><th style="width:34%">已锚定占比</th><th>待打包</th><th>已打包</th><th>已锚定</th></tr></thead><tbody>
+      ${queue.map((x) => { const t = Number(x.total), a = Number(x.anchored), p = Number(x.pending); return `<tr>
+        <td class="td-main"><i class="biz-dot" style="background:${bizColor(x.biz_type)}"></i>${esc(BIZ_CN[x.biz_type] || x.biz_type)}</td>
+        <td class="num">${t}</td>
+        <td><div class="att-bar" title="已锚定 ${a} / ${t}"><i style="width:${pct(a, t)}%;background:${bizColor(x.biz_type)}"></i></div><span class="td-sub">${pct(a, t)}%</span></td>
+        <td class="num${p ? ' att-warn' : ''}">${p}</td><td class="num">${Number(x.packed || 0)}</td><td class="num">${a}</td></tr>` }).join('')}
+    </tbody></table>` : emptyBox('还没有存证事件')}
   </div>
   <div class="card">
     <div class="card-head"><h3>存证批次（Merkle 根 · 链式前根）</h3><span class="muted">prev_root 指向上批根：改任一批必须改其后所有批次，而最新根在链上</span></div>
@@ -88,6 +102,7 @@ async function vcPage() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/web3/vc')
   const idn = await api('GET', '/admin/web3/identities?size=12&page=1')
+  window.__cardScale = d.cardScale || null   // 卡种按「第几级 / 共几级」算，先于渲染就位
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>数字身份 · 可携出旅行凭证</h2><span class="muted">${esc(d.policy)}</span></div>
@@ -106,6 +121,11 @@ async function vcPage() {
       <a class="btn ghost sm" target="_blank" rel="noopener" href="/open/vc/issuer">公钥 JWKS</a></div>
     <div class="muted" style="margin-top:8px">凭证只含旅行事实（等级/成长区间/入会年月/行程数/城市数/徽章名），姓名手机号身份证订单号金额<strong>从不下发</strong>；第三方可凭公钥离线验签。</div>
     </div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>卡面图鉴</h3><span class="muted">角色决定系列，等级决定卡种：最高一级是黑金卡，等级名和人数都取自当前配置</span></div>
+    <div id="vcGallery">${vcGalleryHtml('traveler')}</div>
   </div>
 
   <div class="card">
@@ -152,45 +172,150 @@ function vcHeroCard(recent) {
   return `<div class="muted" style="margin-bottom:8px">最近签发 · ${esc(v.nickname || '用户' + v.user_id)} · 点卡片上的数字看明细</div>${vcCardSvg(v.claims, { did: v.did, exp: v.expires_at, status: '有效', uid: v.user_id })}`
 }
 
-/** 数字身份卡（SVG）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额。
+/* ---- 卡面体系：角色决定系列（图案 / 徽记 / 边条色），等级决定卡种（材质），和银行卡的普卡到黑金卡一个思路 ---- */
+const CARD_ROLES = {
+  traveler: { name: '行者系列', en: 'TRAVELER', label: '旅行者', unit: '人', color: '#2dd4bf', base: ['#0f2a4a', '#0e6b5c'] },
+  creator: { name: '创作者系列', en: 'CREATOR', label: '创作者', unit: '人', color: '#e879f9', base: ['#2e1a52', '#86307a'] },
+  promoter: { name: '推广服务系列', en: 'PROMOTER', label: '推广服务商', unit: '位', color: '#60a5fa', base: ['#12305f', '#2a6fb5'] },
+  merchant: { name: '商户系列', en: 'MERCHANT', label: '商户', unit: '家', color: '#fb923c', base: ['#54210e', '#c2501f'] },
+}
+const CARD_TIERS = {
+  classic: { name: '普卡', en: 'CLASSIC', ink: '#ffffff', sub: 'rgba(255,255,255,.7)', accent: '#d6e6f5', line: 'rgba(255,255,255,.16)', ok: '#7ce0b5', chip: ['#e6ebef', '#98a3ad'] },
+  gold: { name: '金卡', en: 'GOLD', bg: ['#a9772a', '#e3bd6a', '#f6e3a4', '#b98a35'], ink: '#2b1b05', sub: 'rgba(43,27,5,.74)', accent: '#4a2e07', line: 'rgba(74,46,7,.24)', ok: '#14532d', chip: ['#fff4cc', '#a97c25'] },
+  platinum: { name: '白金卡', en: 'PLATINUM', bg: ['#8e9aa7', '#dbe2e8', '#f8fafb', '#aab5bf'], ink: '#16212c', sub: 'rgba(22,33,44,.7)', accent: '#2c3f50', line: 'rgba(44,63,80,.2)', ok: '#14532d', chip: ['#ffffff', '#8f9ba6'] },
+  diamond: { name: '钻石卡', en: 'DIAMOND', bg: ['#0d1645', '#22378c', '#3f6fd1', '#17255f'], ink: '#ffffff', sub: 'rgba(214,232,255,.78)', accent: '#bfeaff', line: 'rgba(191,234,255,.2)', ok: '#7ce0b5', chip: ['#e8f7ff', '#7fb2d9'] },
+  black: { name: '黑金卡', en: 'BLACK', bg: ['#050506', '#1b1814', '#2b261e', '#09090a'], ink: '#f6e7bb', sub: 'rgba(246,231,187,.66)', accent: '#dcb862', line: 'rgba(220,184,98,.26)', ok: '#9fe3bf', chip: ['#f4dc90', '#94742a'] },
+}
+const CARD_TIER_ORDER = ['classic', 'gold', 'platinum', 'diamond', 'black']
+/** 等级 → 卡种：最高一级固定是黑金卡，其余从普卡往上排；等级数在参数中心改了，卡种自动跟着变 */
+function cardTierOf(rank, total) {
+  const n = Math.max(1, Number(total) || 4), r = Math.min(Math.max(1, Number(rank) || 1), n)
+  if (n > 1 && r === n) return 'black'
+  return CARD_TIER_ORDER[Math.min(r - 1, 3)]
+}
+function cardTotal(role) {
+  const s = (window.__cardScale || {})[role]
+  return s && s.levels ? s.levels.length : (role === 'traveler' || role === 'merchant' ? 4 : 3)
+}
+const CARD_EMBLEM = {
+  traveler: '<circle r="13" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M0-10 3.2 0 0 10-3.2 0z" fill="currentColor"/><path d="M-10 0h3M7 0h3" stroke="currentColor" stroke-width="1.4"/>',
+  creator: '<path d="M0 13-8-3-3-12h6l5 9zM0 13V1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cy="-1" r="2" fill="currentColor"/>',
+  promoter: '<circle r="3.4" fill="currentColor"/><path d="M-7-7a10 10 0 0 0 0 14M7-7a10 10 0 0 1 0 14M-11.5-11.5a16 16 0 0 0 0 23M11.5-11.5a16 16 0 0 1 0 23" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  merchant: '<path d="M-12-4-9-11H9l3 7c0 2.6-4 2.6-4 0 0 2.6-4 2.6-4 0 0 2.6-4 2.6-4 0 0 2.6-4 2.6-4 0 0 2.6-4 2.6-4 0zM-10-1v12h20V-1M-3 11V4h6v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+}
+/** 系列底纹：一眼能分出角色；线条颜色跟着卡种走 */
+function cardPattern(role, t, id) {
+  const l = t.line
+  if (role === 'creator') return `<g fill="none" stroke="${l}" stroke-width="1.4"><path d="M-10 262C90 196 170 306 280 244S460 190 540 252"/><path d="M-10 222C90 156 170 266 280 204S460 150 540 212"/><path d="M-10 182C90 116 170 226 280 164S460 110 540 172"/><path d="M-10 142C90 76 170 186 280 124S460 70 540 132"/></g>`
+  if (role === 'promoter') return `<g fill="none" stroke="${l}" stroke-width="1.2">${[70, 120, 170, 220, 270, 320].map((r) => `<circle cx="520" cy="20" r="${r}"/>`).join('')}</g><g fill="${l}"><circle cx="400" cy="150" r="3.5"/><circle cx="330" cy="70" r="3"/><circle cx="470" cy="230" r="3"/><circle cx="300" cy="200" r="2.5"/></g>`
+  if (role === 'merchant') return `<defs><pattern id="${id}m" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M26 0H0V26" fill="none" stroke="${l}" stroke-width="1"/></pattern></defs><rect x="250" width="270" height="328" fill="url(#${id}m)"/>`
+  return `<g fill="none" stroke="${l}" stroke-width="1.2">${[70, 110, 150, 190, 230, 270].map((r) => `<circle cx="440" cy="310" r="${r}"/>`).join('')}<path d="M24 292C140 214 244 318 408 150" stroke-dasharray="3 6" stroke-width="1.6"/></g><circle cx="408" cy="150" r="3.5" fill="${l}"/>`
+}
+/** 卡种质感：普卡素面；金卡拉丝反光；白金细条纹；钻石切面；黑金描金框 */
+function cardFinish(tier, t, id) {
+  if (tier === 'gold') return '<polygon points="60,0 230,0 90,328 -80,328" fill="#fff" opacity=".2"/><polygon points="270,0 310,0 170,328 130,328" fill="#fff" opacity=".14"/>'
+  if (tier === 'platinum') return `<defs><pattern id="${id}p" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V5" stroke="#fff" stroke-width="1" opacity=".4"/></pattern></defs><rect width="520" height="328" fill="url(#${id}p)"/><polygon points="120,0 260,0 120,328 -20,328" fill="#fff" opacity=".28"/>`
+  if (tier === 'diamond') return '<g fill="#fff"><polygon points="300,0 420,0 360,120" opacity=".1"/><polygon points="420,0 520,0 520,110 360,120" opacity=".06"/><polygon points="240,120 360,120 300,0" opacity=".05"/><polygon points="360,120 520,110 520,250 430,328 300,250" opacity=".08"/><polygon points="240,120 360,120 300,250" opacity=".12"/><polygon points="0,328 170,328 240,120 90,160" opacity=".04"/></g>'
+  if (tier === 'black') return `<defs><pattern id="${id}b" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V7" stroke="${t.accent}" stroke-width=".6" opacity=".14"/></pattern></defs><rect width="520" height="328" fill="url(#${id}b)"/><rect x="12" y="12" width="496" height="304" rx="12" fill="none" stroke="${t.accent}" stroke-width="1" opacity=".6"/>`
+  return ''
+}
+let __vcCardSeq = 0   // 同页多张卡时渐变 id 不能重名，否则后面的卡会用上第一张的颜色
+/** 画一张卡。o：role / tier / levelName / levelNo / sub / stats[{k,label,val}] / chips / note / did / exp / foot / status / uid / sample */
+function cardFace(o) {
+  const role = CARD_ROLES[o.role] ? o.role : 'traveler'
+  const R = CARD_ROLES[role], tier = CARD_TIERS[o.tier] ? o.tier : 'classic', t = CARD_TIERS[tier]
+  const id = 'vc' + (++__vcCardSeq)
+  const stops = (t.bg || R.base)
+  const hit = (k, x, y, w, h, inner) => {
+    if (o.uid == null || !k) return inner
+    const u = Number(o.uid) || 0
+    return `<g class="vc-hit" role="button" tabindex="0" aria-label="查看${k}明细" onclick="vcStatOpen(${u},'${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();vcStatOpen(${u},'${k}')}"><rect class="hitbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="transparent"/>${inner}</g>`
+  }
+  const statX = [28, 150, 272]
+  const stats = (o.stats || []).slice(0, 3).map((s, i) => hit(s.k, statX[i] - 8, 174, 116, 50, `<text x="${statX[i]}" y="200" font-size="24" font-weight="700" fill="${t.ink}">${esc(s.val)}</text><text x="${statX[i]}" y="217" font-size="11" fill="${t.sub}">${esc(s.label)}${o.uid != null && s.k ? ' ›' : ''}</text>`)).join('')
+  let x = 28, chips = ''
+  const names = (o.chips || []).map(String)
+  let shown = 0
+  for (const b of names) {
+    const w = b.length * 12 + 20
+    if (x + w > 420) break
+    chips += `<rect x="${x}" y="233" width="${w}" height="21" rx="10.5" fill="none" stroke="${t.accent}" stroke-opacity=".6"/><text x="${x + w / 2}" y="248" text-anchor="middle" font-size="11" fill="${t.accent}">${esc(b)}</text>`
+    x += w + 6; shown++
+  }
+  if (shown < names.length) chips += `<text x="${x + 2}" y="248" font-size="11" fill="${t.sub}">+${names.length - shown}</text>`
+  const dead = o.status === '已吊销' || o.status === '已过期'
+  const footText = o.foot || (o.did ? 'DID ' + String(o.did).slice(0, 26) + '…' : '最小披露：不含姓名 / 手机号 / 身份证 / 订单号 / 金额')
+  return `<svg class="vc-card" data-role="${role}" data-tier="${tier}" viewBox="0 0 520 328" style="width:100%;max-width:520px;height:auto;border-radius:18px;box-shadow:0 10px 26px rgba(15,23,42,.28)" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(t.name)} · ${esc(R.label)} · ${esc(o.levelName || '')}">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">${stops.map((c, i) => `<stop offset="${stops.length > 1 ? i / (stops.length - 1) : 0}" stop-color="${c}"/>`).join('')}</linearGradient>
+      <linearGradient id="${id}c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.chip[0]}"/><stop offset="1" stop-color="${t.chip[1]}"/></linearGradient>
+      <clipPath id="${id}k"><rect width="520" height="328" rx="18"/></clipPath></defs>
+    <g clip-path="url(#${id}k)"${dead ? ' style="filter:grayscale(.92)"' : ''}>
+      <rect width="520" height="328" fill="url(#${id})"/>
+      ${cardPattern(role, t, id)}${cardFinish(tier, t, id)}
+      <rect width="7" height="328" fill="${R.color}"/>
+      <text x="28" y="35" font-size="13" font-weight="700" fill="${t.ink}" letter-spacing="1">向往的自由 · ${esc(R.name)}</text>
+      <text x="28" y="50" font-size="9" fill="${t.sub}" letter-spacing="2">${R.en} IDENTITY</text>
+      <text x="492" y="36" text-anchor="end" font-size="16" font-weight="700" fill="${t.accent}" letter-spacing="2">${esc(t.name)}</text>
+      <text x="492" y="50" text-anchor="end" font-size="9" fill="${t.sub}" letter-spacing="2">${t.en}</text>
+      <g><rect x="28" y="64" width="44" height="33" rx="6" fill="url(#${id}c)"/><path d="M28 75h14M28 86h14M58 75h14M58 86h14M42 64v33M58 64v33" stroke="rgba(0,0,0,.28)" stroke-width="1" fill="none"/></g>
+      ${hit('level', 20, 104, 310, 62, `<text x="28" y="136" font-size="30" font-weight="700" fill="${t.ink}">${esc(o.levelName || '—')}</text>
+        <text x="28" y="157" font-size="12" fill="${t.sub}">${esc(o.sub || '')}${o.uid != null && o.sub ? ' ›' : ''}</text>`)}
+      ${hit('level', 406, 66, 92, 92, `<circle cx="452" cy="112" r="38" fill="none" stroke="${t.accent}" stroke-opacity=".55" stroke-width="1.5"/><circle cx="452" cy="112" r="30" fill="none" stroke="${t.accent}" stroke-opacity=".25"/>
+        <g transform="translate(452 100) scale(.82)" style="color:${t.accent}">${CARD_EMBLEM[role]}</g><text x="452" y="133" text-anchor="middle" font-size="13" font-weight="700" fill="${t.accent}">Lv.${esc(o.levelNo ?? '-')}</text>`)}
+      ${stats || (o.note ? `<text x="28" y="200" font-size="13" fill="${t.sub}">${esc(o.note)}</text>` : '')}
+      ${names.length ? hit(o.chipKey || '', 20, 228, 480, 30, chips) : ''}
+      <line x1="28" y1="270" x2="492" y2="270" stroke="${t.line}"/>
+      <text x="28" y="295" font-size="11" fill="${t.sub}" letter-spacing=".5">${esc(footText)}${o.exp ? ' · 有效期至 ' + esc(String(o.exp).slice(0, 10)) : ''}</text>
+      ${o.status && !dead ? `<text x="492" y="295" text-anchor="end" font-size="12" font-weight="700" fill="${o.status === '有效' ? t.ok : t.sub}">${esc(o.status)}</text>` : ''}
+    </g>
+    ${dead ? `<g transform="rotate(-12 260 160)"><rect x="170" y="128" width="180" height="58" rx="8" fill="rgba(180,35,24,.12)" stroke="#d92d20" stroke-width="3"/><text x="260" y="168" text-anchor="middle" font-size="30" font-weight="700" fill="#d92d20" letter-spacing="6">${esc(o.status)}</text></g>` : ''}
+  </svg>`
+}
+
+/** 旅行身份凭证（行者系列）：只画凭证里的旅行事实（等级 / 入会 / 行程 / 城市 / 徽章），不含姓名手机号身份证订单号金额。
  *  meta.uid 给了就可点：等级 / 行程 / 城市 / 徽章 都能点开看明细（uid=0 是示例卡，点了只提示） */
 function vcCardSvg(claims, meta = {}) {
   let c = claims
   if (typeof c === 'string') { try { c = JSON.parse(c) } catch { c = {} } }
   c = c || {}
   const travel = c.scope === 'travel'
-  const status = meta.status || (meta.sample ? '示例' : '')
-  const hit = (k, x, y, w, h, inner) => {
-    if (meta.uid == null) return inner
-    const u = Number(meta.uid) || 0
-    return `<g class="vc-hit" role="button" tabindex="0" aria-label="查看${k}明细" onclick="vcStatOpen(${u},'${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();vcStatOpen(${u},'${k}')}"><rect class="hitbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="transparent"/>${inner}</g>`
-  }
-  let x = 28, y = 214, chips = ''
-  const names = (c.badges || []).slice(0, 8)
-  for (const b of names) {
-    const w = String(b).length * 13 + 22
-    if (x + w > 492) { x = 28; y += 30 }
-    chips += `<rect x="${x}" y="${y - 16}" width="${w}" height="23" rx="11.5" fill="rgba(245,210,122,.16)" stroke="rgba(245,210,122,.55)"/><text x="${x + w / 2}" y="${y}" text-anchor="middle" font-size="12" fill="#f5d27a">${esc(b)}</text>`
-    x += w + 8
-  }
-  const badgeBottom = y + 10
-  const stat = (k, lx, label, val) => hit(k, lx - 8, 122, 118, 62, `<text x="${lx}" y="150" font-size="26" font-weight="700" fill="#fff">${esc(val)}</text><text x="${lx}" y="172" font-size="12" fill="rgba(255,255,255,.62)">${esc(label)} ›</text>`)
-  const h = Math.max(300, y + 62)
-  return `<svg viewBox="0 0 520 ${h}" style="width:100%;max-width:520px;height:auto;border-radius:14px;box-shadow:0 8px 24px rgba(15,42,74,.25)" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="数字身份卡">
-    <defs><linearGradient id="vcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2a4a"/><stop offset="1" stop-color="#0e6b5c"/></linearGradient></defs>
-    <rect width="520" height="${h}" rx="14" fill="url(#vcg)"/>
-    <text x="28" y="40" font-size="13" fill="rgba(255,255,255,.7)" letter-spacing="2">向往的自由 · 旅行身份凭证</text>
-    ${hit('level', 20, 52, 300, 70, `<text x="28" y="88" font-size="34" font-weight="700" fill="#fff">${esc(c.level || '—')}</text>
-      <text x="28" y="112" font-size="12" fill="rgba(255,255,255,.62)">成长区间 ${esc(c.growthBand || '—')} · 入会 ${esc(c.memberSince || '—')} ›</text>`)}
-    ${hit('level', 396, 14, 108, 100, `<circle cx="452" cy="64" r="46" fill="none" stroke="rgba(245,210,122,.35)" stroke-width="2"/><circle cx="452" cy="64" r="34" fill="none" stroke="rgba(245,210,122,.2)" stroke-width="1"/>
-      <text x="452" y="70" text-anchor="middle" font-size="18" font-weight="700" fill="#f5d27a">Lv.${esc(c.levelNo ?? '-')}</text>`)}
-    ${travel ? stat('trips', 28, '完成行程', c.trips ?? 0) + stat('cities', 150, '到访城市', c.cities ?? 0) + stat('badges', 272, '荣誉徽章', (c.badges || []).length) : '<text x="28" y="150" font-size="13" fill="rgba(255,255,255,.62)">基础凭证：仅含等级与入会时间</text>'}
-    ${names.length ? hit('badges', 20, 190, 480, badgeBottom - 190, chips) : ''}
-    <line x1="28" y1="${h - 46}" x2="492" y2="${h - 46}" stroke="rgba(255,255,255,.18)"/>
-    <text x="28" y="${h - 26}" font-size="11" fill="rgba(255,255,255,.6)">${meta.did ? 'DID ' + esc(String(meta.did).slice(0, 26)) + '…' : '最小披露：不含姓名 / 手机号 / 身份证 / 订单号 / 金额'}${meta.exp ? ' · 有效期至 ' + esc(String(meta.exp).slice(0, 10)) : ''}</text>
-    ${status ? `<text x="492" y="${h - 26}" text-anchor="end" font-size="12" font-weight="700" fill="#7ce0b5">${esc(status)}</text>` : ''}
-  </svg>`
+  return cardFace({
+    role: 'traveler', tier: meta.tier || cardTierOf(c.levelNo, cardTotal('traveler')),
+    levelName: c.level || '—', levelNo: c.levelNo, sub: `成长区间 ${c.growthBand || '—'} · 入会 ${c.memberSince || '—'}`,
+    stats: travel ? [{ k: 'trips', label: '完成行程', val: c.trips ?? 0 }, { k: 'cities', label: '到访城市', val: c.cities ?? 0 }, { k: 'badges', label: '荣誉徽章', val: (c.badges || []).length }] : [],
+    note: travel ? '' : '基础凭证：仅含等级与入会时间', chips: c.badges || [], chipKey: 'badges',
+    did: meta.did, exp: meta.exp, status: meta.status || (meta.sample ? '示例' : ''), uid: meta.uid,
+  })
 }
+/** 其他角色的身份卡（创作者 / 推广服务商 / 商户）：后台展示用，不在可携出凭证里，卡面上明说 */
+function roleCardSvg(card) {
+  return cardFace({ role: card.role, tier: cardTierOf(card.rank, card.total), levelName: card.levelName, levelNo: card.rank, sub: card.sub,
+    stats: card.stats || [], foot: '后台身份卡 · 不含在可携出凭证内' })
+}
+
+/* ---- 卡面图鉴：每个角色系列的全部卡种；用不上的卡种标「预留」 ---- */
+const CARD_DEMO = {
+  traveler: { stats: [{ label: '完成行程', val: 12 }, { label: '到访城市', val: 5 }, { label: '荣誉徽章', val: 3 }], chips: ['初访古镇', '山海行者'], sub: '成长区间 · 入会时间' },
+  creator: { stats: [{ label: '发布内容', val: 36 }, { label: '完成约稿', val: 8 }, { label: '真实评价', val: 21 }], sub: '内容创作身份' },
+  promoter: { stats: [{ label: '有效 GMV', val: '¥12.8万' }, { label: '服务分', val: '4.9' }, { label: '佣金比例', val: '8%' }], sub: '一级推广 · 无层级' },
+  merchant: { stats: [{ label: '有效订单', val: 268 }, { label: '综合评分', val: '4.8' }, { label: '商户徽章', val: 6 }], sub: '朱家角示例门店 · 老板' },
+}
+function vcGalleryHtml(role) {
+  const scale = window.__cardScale || {}
+  const levels = (scale[role] && scale[role].levels) || []
+  const total = levels.length || cardTotal(role)
+  const used = new Map()
+  for (let r = 1; r <= total; r++) used.set(cardTierOf(r, total), levels[r - 1] || { lv: r, name: 'Lv.' + r, n: 0 })
+  const R = CARD_ROLES[role], D = CARD_DEMO[role]
+  const tiles = CARD_TIER_ORDER.map((tier) => {
+    const lv = used.get(tier)
+    return `<div class="vc-tile ${lv ? '' : 'reserved'}">${cardFace({ role, tier, levelName: lv ? lv.name : CARD_TIERS[tier].name, levelNo: lv ? lv.lv : '-', sub: D.sub, stats: D.stats, chips: D.chips || [], foot: '卡面示例', status: lv ? '' : '预留' })}
+      <div class="vc-tile-t"><span class="tier-chip t-${tier}">${CARD_TIERS[tier].name}</span>${lv ? `<span>Lv.${Number(lv.lv)} ${esc(lv.name)}</span><b>${Number(lv.n) || 0} ${R.unit}</b>` : '<span class="muted">预留：等级加到 5 级后启用</span>'}</div></div>`
+  }).join('')
+  return `<div class="trust-tabs" style="margin-bottom:12px">${Object.entries(CARD_ROLES).map(([k, v]) => `<button class="trust-tab ${k === role ? 'on' : ''}" type="button" onclick="vcGallery('${k}')">${esc(v.label)}</button>`).join('')}</div>
+    <div class="vc-tiles">${tiles}</div>`
+}
+function vcGallery(role) { const el = document.getElementById('vcGallery'); if (el) el.innerHTML = vcGalleryHtml(role) }
 
 /** 点卡片上的数字：真实用户 → 打开身份档案并定位到对应一节；示例卡 → 只提示 */
 function vcStatOpen(uid, k) {
@@ -211,7 +336,8 @@ function showVcCard(id) {
 const fmtN = (n) => Number(n || 0).toLocaleString()
 function idListHtml(r) {
   const pages = Math.max(1, Math.ceil(r.total / r.size))
-  const lvTag = (x) => `<span class="pill off">Lv.${x.levelNo} ${esc(x.levelName)}</span>`
+  const lvTag = (x) => { const tier = cardTierOf(x.levelNo, cardTotal('traveler')); return `<span class="tier-chip t-${tier}">${CARD_TIERS[tier].name}</span> <span class="td-sub">Lv.${x.levelNo} ${esc(x.levelName)}</span>` }
+  const roleTags = (x) => (x.roles || []).map((k) => `<span class="role-tag" style="--c:${CARD_ROLES[k].color}">${esc(CARD_ROLES[k].label)}</span>`).join('')
   // 有头像用头像，没有就用昵称首字 + 按 id 取色；只接受 http(s) 或站内路径
   const ava = (x) => (/^(https?:\/\/|\/)/.test(String(x.avatar || ''))
     ? `<img class="id-ava" src="${esc(x.avatar)}" alt="" loading="lazy">`
@@ -219,7 +345,7 @@ function idListHtml(r) {
   return `<div class="muted" style="margin-bottom:8px">用户 <b>${r.summary.users}</b> · 旅豆账户 <b>${r.summary.beanAccounts}</b>（尚未产生旅豆的用户没有账户） · 持有效凭证 <b>${r.summary.vcHolders}</b> 位</div>
   ${r.rows.length ? `<table><thead><tr><th>用户</th><th>数字身份 DID</th><th>等级</th><th>旅豆账户（余额 / 累计）</th><th>徽章</th><th>行程</th><th>凭证</th><th>操作</th></tr></thead><tbody>
     ${r.rows.map((x) => `<tr>
-      <td class="td-main"><div class="id-user">${ava(x)}<div>${esc(x.nickname)}<div class="td-sub">#${x.userId}${x.status === 1 ? '' : ' · 非正常'}</div></div></div></td>
+      <td class="td-main"><div class="id-user">${ava(x)}<div>${esc(x.nickname)}<div class="td-sub">#${x.userId}${x.status === 1 ? '' : ' · 非正常'}${roleTags(x)}</div></div></div></td>
       <td class="td-sub">${hashCopy(x.did, String(x.did).slice(0, 20) + '…')}</td>
       <td>${lvTag(x)}</td>
       <td>${x.beanBalance == null ? '<span class="muted">未开户</span>' : `<button class="ref-link" type="button" title="看旅豆流水" onclick="vcIdentity(${x.userId},'bean')"><b>${fmtN(x.beanBalance)}</b> / ${fmtN(x.beanLifetime)} 豆</button>`}</td>
@@ -263,8 +389,8 @@ async function vcIdentity(uid, sec) {
   const none = (t) => `<div class="muted" style="padding:6px 0">${t}</div>`
   drawer(esc(d.nickname) + ' · 身份档案', `
     <div class="muted" style="margin-bottom:8px">用户 #${d.userId} · DID <code>${esc(String(d.did).slice(0, 24))}…</code> <button class="copy-chip" type="button" onclick="copyText(${w3Arg(d.did)})">复制</button></div>
-    ${vcCardSvg(d.claims, { uid: d.userId, did: d.did, exp: lastVc && lastVc.expires_at, status: st || '未签发' })}
-    <div class="muted" style="margin:6px 0 12px">点卡片上的等级 / 行程 / 城市 / 徽章，直接跳到对应明细。下面是后台可见的完整档案；凭证本身只含最小披露字段。</div>
+    <div class="vc-wallet">${vcCardSvg(d.claims, { uid: d.userId, did: d.did, exp: lastVc && lastVc.expires_at, status: st || '未签发' })}${(d.roleCards || []).map(roleCardSvg).join('')}</div>
+    <div class="muted" style="margin:6px 0 12px">点旅行身份卡上的等级 / 行程 / 城市 / 徽章，直接跳到对应明细。${(d.roleCards || []).length ? '创作者、推广服务商、商户卡是后台身份展示，不含在可携出凭证内。' : ''}下面是后台可见的完整档案；凭证本身只含最小披露字段。</div>
     <div class="vc-secs">
       ${section('level', '等级与成长', null, `<div class="vc-kv"><span>当前等级</span><b>Lv.${L.no} ${esc(L.name)}</b><span>成长值</span><b>${fmtN(L.growth)}</b>
         <span>等级区间</span><b>${fmtN(L.from)}${L.to == null ? ' 以上' : ' – ' + fmtN(L.to)}</b><span>下一级</span><b>${L.nextName ? esc(L.nextName) + '（还差 ' + fmtN(Math.max(0, L.to - L.growth)) + '）' : '已是最高级'}</b>
@@ -344,36 +470,10 @@ async function chainAssetsPage() {
       <div class="kpi"><div class="ico" style="background:var(--brand-soft)">⛓</div><div><div class="l">已发行</div><div class="v" style="font-size:18px">${d.issued}</div><div class="s">累计 ${d.total}</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdf3e0">⏳</div><div><div class="l">待发行</div><div class="v" style="font-size:18px">${d.pending}</div><div class="s">凭据到位后补发</div></div></div>
       <div class="kpi"><div class="ico" style="background:#fdecea">⚠️</div><div><div class="l">失败</div><div class="v" style="font-size:18px">${d.failed}</div><div class="s">可重试</div></div></div>
-      <div class="kpi"><div class="ico" style="background:#e8effd">🧩</div><div><div class="l">支持资产</div><div class="v" style="font-size:15px">${cap.assets ? '是' : '否'}</div><div class="s">${cap.assets ? '可发行徽章/NFT' : '当前链只做存证'}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e8effd">🧩</div><div><div class="l">当前链能力</div><div class="v" style="font-size:15px">${cap.assets ? '可发行' : '仅存证'}</div><div class="s">${cap.assets ? '可发行徽章/NFT' : '当前链只做存证'}</div></div></div>
     </div>
-    <div class="muted" style="margin-top:10px">切换链：改环境变量 <code>CHAIN_PROVIDER=chaingen|tbaas|antchain|antchainopen|antchaincontract|evm|noop</code> 后重启，业务与页面零改动。当前缺：${(cur.missing || []).length ? '<b>' + esc(cur.missing.join('、')) + '</b>' : '无'}。</div>
+    <div class="muted" style="margin-top:10px">切换当前链、补凭据请到 <button class="ref-link" type="button" onclick="go('chainhub')">链接入中心</button>。${(cur.missing || []).length ? '当前缺：<b>' + esc(cur.missing.join('、')) + '</b>。' : ''}</div>
   </div>
-
-  <div class="card">
-    <div class="card-head"><h3>多链能力矩阵</h3><span class="muted">不同链能做不同的事：联盟链只存证，公链才发资产</span></div>
-    <table><thead><tr><th>链</th><th>存证锚定</th><th>按根反查</th><th>资产发行</th><th>DID</th><th>状态</th><th>说明</th></tr></thead><tbody>
-    ${(d.providers || []).map((p) => `<tr>
-      <td class="td-main"><button class="ref-link" type="button" title="去链接入中心配置这条链" onclick="go('chainhub')">${esc(p.label)}</button>${p.current ? ' <span class="pill ok">当前</span>' : ''}</td>
-      <td>${mark(p.capabilities.anchor)}</td><td>${mark(p.capabilities.queryByRoot)}</td>
-      <td>${mark(p.capabilities.assets)}</td><td>${mark(p.capabilities.did)}</td>
-      <td>${p.mode === 'real' ? '<span class="pill ok">已配置</span>' : '<span class="pill off">缺凭据</span>'}</td>
-      <td class="td-sub">${esc(p.docs || '')}</td></tr>`).join('')}
-    </tbody></table>
-  </div>
-
-  ${(c.preflight || []).length ? `
-  <div class="card">
-    <div class="card-head"><h3>预埋体检</h3><span class="muted">离线自检 · 不需要凭据 · ${(c.summary || {}).ready}/${(c.summary || {}).total} 家通过</span></div>
-    <table><thead><tr><th>链</th><th>离线自检</th><th>凭据</th><th>必问对方</th></tr></thead><tbody>
-    ${(c.preflight || []).filter((p) => p.id !== 'noop' && p.id !== 'mock').map((p) => `<tr>
-      <td class="td-main"><button class="ref-link" type="button" title="去链接入中心补凭据 / 做连通性探测" onclick="go('chainhub')">${esc(p.label)}</button>${p.active ? ' <span class="pill ok">当前</span>' : ''}</td>
-      <td>${p.selfOk ? '<span class="pill ok">通过</span>' : '<span class="pill warn">失败</span>'}</td>
-      <td class="td-sub">${p.missing.length ? '缺 <b>' + esc(p.missing.join('、')) + '</b>' : '<span class="pill ok">齐备</span>'}</td>
-      <td class="td-sub"><details><summary>${p.ask.length} 条</summary><ul style="margin:6px 0 0 16px;padding:0">${p.ask.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details></td>
-    </tr>`).join('')}
-    </tbody></table>
-    <div class="muted" style="margin-top:10px">填空模板：<code>api/config/chains/</code>（链数根 / 腾讯TBaaS / 蚂蚁链鲸探 / EVM公链），每份含「找谁要、接口约定、必问 4 问」。命令行同源：<code>node scripts/chain-preflight.mjs</code></div>
-  </div>` : ''}
 
   <div class="card">
     <div class="card-head"><h3>发行一件资产</h3><span class="muted">微信渠道被硬禁（D10）；不支持资产的链会明确报错</span></div>
@@ -400,7 +500,32 @@ async function chainAssetsPage() {
           ${r.err ? '<div class="td-sub">' + esc(String(r.err).slice(0, 30)) + '</div>' : ''}</td>
         <td>${r.status == 1 ? '—' : `<button class="btn ghost sm" onclick="retryAsset(${r.id})">重试</button>`}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('还没有发行记录：上方选类型与用户发行一件试试')}
-  </div>`
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>多链能力矩阵</h3><span class="muted">不同链能做不同的事：联盟链只存证，公链才发资产</span></div>
+    <table><thead><tr><th>链</th><th>存证锚定</th><th>按根反查</th><th>资产发行</th><th>DID</th><th>状态</th></tr></thead><tbody>
+    ${(d.providers || []).map((p) => `<tr>
+      <td class="td-main" title="${esc(p.docs || '')}"><button class="ref-link" type="button" title="去链接入中心配置这条链" onclick="go('chainhub')">${esc(p.label)}</button>${p.current ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td>${mark(p.capabilities.anchor)}</td><td>${mark(p.capabilities.queryByRoot)}</td>
+      <td>${mark(p.capabilities.assets)}</td><td>${mark(p.capabilities.did)}</td>
+      <td>${p.mode === 'real' ? '<span class="pill ok">已配置</span>' : '<span class="pill off">缺凭据</span>'}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+
+  ${(c.preflight || []).length ? `
+  <details class="card pipe-fold">
+    <summary><h3>预埋体检</h3><span class="muted">离线自检 · 不需要凭据 · ${(c.summary || {}).ready}/${(c.summary || {}).total} 家通过</span></summary>
+    <table><thead><tr><th>链</th><th>离线自检</th><th>凭据</th><th>必问对方</th></tr></thead><tbody>
+    ${(c.preflight || []).filter((p) => p.id !== 'noop' && p.id !== 'mock').map((p) => `<tr>
+      <td class="td-main"><button class="ref-link" type="button" title="去链接入中心补凭据 / 做连通性探测" onclick="go('chainhub')">${esc(p.label)}</button>${p.active ? ' <span class="pill ok">当前</span>' : ''}</td>
+      <td>${p.selfOk ? '<span class="pill ok">通过</span>' : '<span class="pill warn">失败</span>'}</td>
+      <td class="td-sub">${p.missing.length ? '缺 <b>' + esc(p.missing.join('、')) + '</b>' : '<span class="pill ok">齐备</span>'}</td>
+      <td class="td-sub"><details><summary>${p.ask.length} 条</summary><ul style="margin:6px 0 0 16px;padding:0">${p.ask.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></details></td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div class="muted" style="margin-top:10px">填空模板：<code>api/config/chains/</code>（链数根 / 腾讯TBaaS / 蚂蚁链鲸探 / EVM公链），每份含「找谁要、接口约定、必问 4 问」。命令行同源：<code>node scripts/chain-preflight.mjs</code></div>
+  </details>` : ''}`
 }
 
 async function issueAsset() {
@@ -431,15 +556,31 @@ async function retryAsset(id) {
 const BLOCK_ST = ['<span class="dpill warn">待打包</span>', '<span class="dpill info">已打包·待锚定</span>',
   '<span class="dpill ok">已锚定</span>', '<span class="dpill err">锚定重试</span>', '<span class="dpill err">人工处理</span>',
   '<span class="dpill warn">已提交·待确认</span>']
-/** 3D 区块：tone = blue | green | gold | gray；sm = 小号；pulse = 等待链上确认中 */
+/* 业务环节配色（全后台唯一定义）：区块、标签、图例、存证中心都从这里取。 */
+const BIZ_COLOR = {
+  bean_deduct: '#34d399', order: '#fbbf24', pass_issue: '#60a5fa', pass_verify: '#c084fc', bean_grant: '#2dd4bf',
+  settlement: '#fb923c', refund: '#fb7185', badge: '#f472b6', vc_issue: '#67e8f9', vc_revoke: '#67e8f9', did_issue: '#67e8f9', kyc: '#67e8f9', consent: '#67e8f9',
+  commission: '#fdba74', co_profit: '#fdba74', withdraw: '#fdba74', asset_issue: '#a5b4fc',
+}
+const BIZ_COLOR_OTHER = '#94a3b8', DAY_CLOSE_COLOR = '#e2e8f0'
+const bizColor = (t) => BIZ_COLOR[t] || BIZ_COLOR_OTHER
+const CHAIN_LEGEND = [['bean_deduct', '旅豆抵扣'], ['order', '订单支付'], ['pass_issue', '出票'], ['pass_verify', '核销'], ['bean_grant', '返豆'], ['settlement', '结算'], ['refund', '退款冲正'], ['badge', '勋章'], ['vc_issue', '身份 / 实名'], ['commission', '佣金 / 提现'], ['', '其他']]
+/** 十六进制颜色 → 立方体用的四个 CSS 变量 */
+function toneVars(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255
+  return `--edge:${hex};--fill:rgba(${r},${g},${b},.12);--core:rgba(${r},${g},${b},.58);--glow:rgba(${r},${g},${b},.5)`
+}
+/** 3D 区块：tone = gray | red（状态色）；opt.color = 业务主色；opt.faces = 各面颜色（一批含多种业务时六个面轮流上色）；opt.dim = 还没锚定；sm = 小号；pulse = 等待链上确认中 */
 function cube3d(tone, opt = {}) {
-  const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : ''].filter(Boolean).join(' ')
+  const cls = ['cube-zone', tone && tone !== 'blue' ? 't-' + tone : '', opt.sm ? 'sm' : '', opt.pulse ? 'pulse' : '', opt.ghost ? 'ghost' : '', opt.dim ? 'dim' : ''].filter(Boolean).join(' ')
+  const zoneStyle = opt.color ? ` style="${toneVars(opt.color)}"` : ''
+  const faces = opt.faces && opt.faces.length > 1 ? opt.faces : null
   // 特效层全部是 .cube3d 的兄弟节点：不参与 preserve-3d，加光晕/滤镜不会把立方体压平
   // 特效集中在区块本身：面网格 + 棱线流光 + 呼吸内核 + 悬停展开；外围只保留底座涟漪、一圈轨道和瞄准角标
   const fx = opt.ghost ? '' : '<span class="fx-ripple"></span><span class="fx-ripple r2"></span>'
     + '<span class="fx-orbit"><i></i></span>' + '<span class="fx-hud"></span>'
-  return `<div class="${cls}"${opt.label ? '' : ' aria-hidden="true"'}>${fx}<div class="cube3d">`
-    + '<div class="fc"></div>'.repeat(6) + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
+  return `<div class="${cls}"${zoneStyle}${opt.label ? '' : ' aria-hidden="true"'}>${fx}<div class="cube3d">`
+    + Array.from({ length: 6 }, (_, i) => (faces ? `<div class="fc" style="${toneVars(faces[i % faces.length])}"></div>` : '<div class="fc"></div>')).join('') + '<div class="core">' + '<i></i>'.repeat(6) + '</div></div>'
     + (opt.label ? `<div class="ghost-label">${opt.label}</div>` : '') + '</div>'
 }
 // 演示模式：纯前端模拟一条 8 节点的链（含分支/待打包/已锚定），不动真库，仅供形态预览
@@ -452,7 +593,7 @@ function mockChain() {
     merkle_root: root(seq - 1), prev_root: seq === 1 ? null : root(seq - 2), leaf_count: leaves,
     is_day_close: kind === 'day' ? 1 : 0, status, attempt: 0,
     // 演示区块的业务构成：与 mockBlockEvents 同一套取法（按叶序轮转业务类型）
-    mix: kind === 'day' ? { bean_ledger: leaves } : Array.from({ length: leaves }, (_, i) => TYPES[(seq + i) % TYPES.length]).reduce((m, t) => { m[t] = (m[t] || 0) + 1; return m }, {}),
+    mix: kind === 'day' ? {} : Array.from({ length: leaves }, (_, i) => TYPES[(seq + i) % TYPES.length]).reduce((m, t) => { m[t] = (m[t] || 0) + 1; return m }, {}),
     chain_tx_ref: status === 2 ? 'DEMO-TX-' + String(seq).padStart(4, '0') : null,
     anchored_at: status === 2 ? date + ' 09:12:00' : null })
   return [
@@ -480,28 +621,35 @@ function toggleDemoChain() {
 const BLK_SHORT = { order: '订单', pass_issue: '出票', pass_verify: '核销', bean_grant: '返豆', bean_deduct: '抵扣',
   refund: '退款', settlement: '结算', badge: '勋章', vc_issue: '身份凭证', vc_revoke: '凭证吊销', asset_issue: '资产' }
 const FLOW_ORDER = ['bean_deduct', 'order', 'pass_issue', 'pass_verify', 'bean_grant', 'settlement', 'refund']
+/** 批内业务按「主线优先」排：抵扣→订单→出票→核销→返豆→结算→退款；勋章 / 准入 / 审核这类旁路事件数量再多也排在后面 */
+function blockMixSorted(b) {
+  const rank = (k) => { const i = FLOW_ORDER.indexOf(k); return i < 0 ? 99 : i }
+  return Object.entries(b.mix || {}).sort((a, c) => rank(a[0]) - rank(c[0]) || c[1] - a[1])
+}
 function blockMixHTML(b, max = 3) {
   if (Number(b.is_day_close) === 1) return '<div class="blk-mix"><span class="mx day">旅豆账本封存</span></div>'
-  // 业务主线（抵扣→订单→出票→核销→返豆→结算→退款）优先、按流程顺序；勋章/准入/审核这类旁路事件数量再多也排在后面
-  const rank = (k) => { const i = FLOW_ORDER.indexOf(k); return i < 0 ? 99 : i }
-  const ents = Object.entries(b.mix || {}).sort((a, c) => rank(a[0]) - rank(c[0]) || c[1] - a[1])
+  const ents = blockMixSorted(b)
   if (!ents.length) return '<div class="blk-mix"></div>'
   const shown = ents.slice(0, max)
   const rest = ents.slice(max).reduce((s, [, n]) => s + n, 0)
-  return `<div class="blk-mix">${shown.map(([k, n]) => `<span class="mx" title="${esc(BIZ_CN[k] || k)}">${esc(BLK_SHORT[k] || BIZ_CN[k] || k)} <b>${Number(n)}</b></span>`).join('')}${rest ? `<span class="mx more" title="其他业务类型 ${rest} 条">+${rest}</span>` : ''}</div>`
+  return `<div class="blk-mix">${shown.map(([k, n]) => `<span class="mx" style="--c:${bizColor(k)}" title="${esc(BIZ_CN[k] || k)}">${esc(BLK_SHORT[k] || BIZ_CN[k] || k)} <b>${Number(n)}</b></span>`).join('')}${rest ? `<span class="mx more" title="其他业务类型 ${rest} 条">+${rest}</span>` : ''}</div>`
 }
 function blockNodeHTML(b) {
   const dayClose = Number(b.is_day_close) === 1
   const st = Number(b.status)
   const root8 = String(b.merkle_root).slice(0, 8)
-  const tone = st === 0 ? 'gray' : st === 3 ? 'red' : (dayClose ? 'gold' : (st === 2 ? 'green' : 'blue'))
+  // 颜色 = 业务环节；只有两种情况压过业务色：还没打包（灰）、需要人处理（红）。已打包未锚定用半透明区分
+  const alert = st === 3 || st === 4
+  const tone = st === 0 ? 'gray' : alert ? 'red' : ''
+  const colors = dayClose ? [DAY_CLOSE_COLOR] : [...new Set(blockMixSorted(b).map(([k]) => bizColor(k)))]
+  const paint = tone ? {} : { color: colors[0] || BIZ_COLOR_OTHER, faces: colors, dim: st !== 2 }
   const cls = 'chain-node' + (dayClose ? ' branch' : '') + (st === 2 ? ' anchored' : '')
   // role=button + 键盘可达：只靠鼠标的人能点，只用键盘的人也得能开（无障碍不是装饰）
   return `<div class="${cls}" id="bnode-${b.id}" role="button" tabindex="0"
     aria-label="区块 ${Number(b.seq)}${dayClose ? ' 账本日终' : ''}，业务日 ${esc(String(b.biz_date).slice(0, 10))}，${Number(b.leaf_count)} 条事件，点击查看批内事件"
     onclick="openBlock(${b.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBlock(${b.id})}"
     onmouseenter="chainTip(event, 'b', ${b.id})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'b', ${b.id})" onblur="chainTipHide()">
-    ${cube3d(tone, { pulse: st === 5 })}
+    ${cube3d(tone, { pulse: st === 5, ...paint })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
     <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
     <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
@@ -743,9 +891,10 @@ async function web3dash(opt = {}) {
     </div>
     ${chainTrackHTML(descs, chainTrackWidth())}
     <div class="chain-legend">
-      <span><i class="lg blue"></i>业务存证块</span><span><i class="lg gold"></i>账本日终封存块（分支）</span>
-      <span><i class="lg green"></i>已锚定</span><span><i class="lg dash"></i>待打包队列</span>
-      <span class="muted" style="margin-left:auto;color:#7f92bd">prev_root 指向上批根 · 点击区块查看批内事件</span>
+      ${CHAIN_LEGEND.map(([k, n]) => `<span><i class="lg" style="background:${bizColor(k)}66;border:1px solid ${bizColor(k)}"></i>${n}</span>`).join('')}
+      <span><i class="lg" style="background:${DAY_CLOSE_COLOR}66;border:1px solid ${DAY_CLOSE_COLOR}"></i>账本日终（分支）</span>
+      <span><i class="lg dash"></i>待打包</span>
+      <span class="muted" style="margin-left:auto;color:#7f92bd">一批含多种业务时六个面分别上色 · 半透明 = 还没锚定 · 点击区块查看批内事件</span>
     </div>
   </div>
   <div id="blockDetail"></div>
@@ -819,7 +968,7 @@ async function openBlock(id, opt = {}) {
     <table style="margin-top:10px"><thead><tr><th>叶序</th><th>类型</th><th>业务单号</th><th>版本</th><th>payload 指纹</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>
     ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td>${bizTag(esc(e.biz_type))}</td>
       <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no ?? 1)}</td>
-      <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 16))}…</code></td>
+      <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 12))}…</code></td>
       <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
       <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
         : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.id)},this)">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
@@ -879,12 +1028,11 @@ function flowStepHTML(s, i) {
     <div class="blk-title">${s.no} ${esc(s.label)}</div><div class="blk-line">${esc(s.hint)}</div>
     <div class="blk-line"><span class="node-lock">待产生 · 暂不可点</span></div></div>`
   const st = Number(e.status)
-  const tone = st === 2 ? 'green' : (st === 0 ? 'gray' : 'blue')
   return `<div class="chain-node" id="fnode-${i}" role="button" tabindex="0"
     aria-label="第 ${i + 1} 步 ${esc(s.label || '')}，点击查看本步证明"
     onclick="openFlowStep(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openFlowStep(${i})}"
     onmouseenter="chainTip(event, 'f', ${i})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'f', ${i})" onblur="chainTipHide()">
-    ${cube3d(tone, { sm: true })}
+    ${cube3d('', { sm: true, color: bizColor(e.biz_type), dim: st !== 2 })}
     <div class="blk-title">${s.no} ${esc(s.label)}</div>
     <div class="blk-line">${esc(String(e.created_at).slice(5, 16))}</div>
     <div class="blk-line">${batchChip(e)} · ${FLOW_ST[st] || ''}</div>
@@ -930,7 +1078,7 @@ function renderFlow(d) {
   ;(d.refunds || []).forEach((e, j) => {
     parts.push('<div class="chain-link elbow"><i style="top:59px;height:74px;border-top:2px dashed rgba(252,211,77,.5);border-right:2px dashed rgba(252,211,77,.5);border-top-right-radius:12px"></i><b style="top:132px;border-top-color:rgba(252,211,77,.5)"></b><u style="top:122px;color:#fcd34d">▸</u></div>')
     parts.push(`<div class="chain-node branch" id="fnode-r${j}" onclick="openFlowStep('r${j}')">
-      ${cube3d('gold', { sm: true })}
+      ${cube3d('', { sm: true, color: bizColor('refund') })}
       <div class="blk-title">退款冲正</div>
       <div class="blk-line">${esc(e.biz_ref)} · ${yuan(e.amount || 0)}</div>
       <div class="blk-line">${FLOW_ST[Number(e.status)] || ''}</div></div>`)
@@ -1052,17 +1200,17 @@ async function loadFlowSample() {
 /** 演示完整流程：演示单的每一步都落在「演示 · 多节点形态」那条模拟链的区块里（批次号、状态、日期一一对应），两个视图看到的是同一批区块 */
 async function loadFlowDemo() {
   const chainBlk = Object.fromEntries(mockChain().map((b) => [b.seq, b]))
-  const mk = (no, ref, label, hint, seq, t, st) => ({ no, label, hint, ev: { biz_type: label, biz_ref: ref, version_no: 1, status: st, batch_id: chainBlk[seq].id, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: chainBlk[seq].merkle_root } })
+  const mk = (no, ref, label, hint, seq, t, st, type) => ({ no, label, hint, ev: { biz_type: type, biz_ref: ref, version_no: 1, status: st, batch_id: chainBlk[seq].id, payload_hash: 'f0' + String(seq).padStart(2, '0') + 'a1b2c3d4e5f60718', created_at: t, seq, merkle_root: chainBlk[seq].merkle_root } })
   window.__flowData = {
     demo: true,
     order: { orderNo: 'WL20261101DEMO01', status: 50, statusText: '已完成', productName: '朱家角水乡沉浸一日（演示）', qty: 2, amountPay: 39800, beanDeducted: 200, createdAt: '2026-10-28 10:02:11', paidAt: '2026-10-28 10:03:05', completedAt: '2026-10-30 15:40:22' },
     steps: [
-      mk('①', 'bt-DEMO1001', '旅豆抵扣', '下单锁豆', 3, '2026-10-28 10:02:30', Number(chainBlk[3].status)),
-      mk('②', 'WL20261101DEMO01', '支付成功', '订单事实入链', 3, '2026-10-28 10:03:05', Number(chainBlk[3].status)),
-      mk('③', 'pass-901', '出票', '权益凭证 ×2', 4, '2026-10-29 10:03:40', Number(chainBlk[4].status)),
-      mk('④', 'pass-901-1', '核销', '到店扫码', 4, '2026-10-29 11:25:02', Number(chainBlk[4].status)),
-      mk('⑤', 'bt-DEMO1002', '返豆', '消费奖励', 6, '2026-10-30 15:40:22', Number(chainBlk[6].status)),
-      mk('⑥', 'settle-31', '结算', '五口径分账', 7, '2026-10-31 01:00:10', Number(chainBlk[7].status)),
+      mk('①', 'bt-DEMO1001', '旅豆抵扣', '下单锁豆', 3, '2026-10-28 10:02:30', Number(chainBlk[3].status), 'bean_deduct'),
+      mk('②', 'WL20261101DEMO01', '支付成功', '订单事实入链', 3, '2026-10-28 10:03:05', Number(chainBlk[3].status), 'order'),
+      mk('③', 'pass-901', '出票', '权益凭证 ×2', 4, '2026-10-29 10:03:40', Number(chainBlk[4].status), 'pass_issue'),
+      mk('④', 'pass-901-1', '核销', '到店扫码', 4, '2026-10-29 11:25:02', Number(chainBlk[4].status), 'pass_verify'),
+      mk('⑤', 'bt-DEMO1002', '返豆', '消费奖励', 6, '2026-10-30 15:40:22', Number(chainBlk[6].status), 'bean_grant'),
+      mk('⑥', 'settle-31', '结算', '五口径分账', 7, '2026-10-31 01:00:10', Number(chainBlk[7].status), 'settlement'),
     ],
     refunds: [],
   }
@@ -1116,29 +1264,44 @@ function openFlowStep(i, opt = {}) {
 async function pointassets() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const d = await api('GET', '/admin/web3/point-assets')
-  const BIZ = { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '抵扣', 5: '退款冲正', 6: '过期回收', 7: '风控调整' }
-  const capPct = d.globalCap ? Math.min(100, Math.round(Number(d.globalCap.granted || 0) / Math.max(Number(d.globalCap.cap_total || d.globalCap.total || 1), 1) * 100)) : 0
+  const BIZ = { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '过期回收', 7: '风控调整', 8: '期初余额导入' }
+  const cap = d.globalCap || {}
+  const capTotal = Number(cap.cap_total || cap.total || 0), capUsed = Number(cap.issued_sum || cap.granted || 0)
+  const capPct = capTotal ? Math.min(100, capUsed / capTotal * 100) : 0
+  const num = (n) => Number(n || 0).toLocaleString()
+  const biz = d.byBiz || []
+  const signed = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + num(Math.abs(n))
+  const totIn = biz.reduce((s, x) => s + Number(x.userIn || 0), 0), totOut = biz.reduce((s, x) => s + Number(x.userOut || 0), 0), totN = biz.reduce((s, x) => s + Number(x.entries || 0), 0)
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>积分发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
-    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi go" title="去数字身份：按用户看身份档案、旅豆账户与徽章" onclick="go('vc')"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">旅豆账户数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">一户一账（bean_account）· 点开到「数字身份」看每个账户对应的身份档案</div></div></div>
-      <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
-      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🛡</div><div><div class="l">年度总量哨兵</div><div class="v" style="font-size:18px">${d.globalCap ? (d.globalCap.cap_total || d.globalCap.total || '—') : '—'}</div><div class="s">严禁超发 · 双分录平衡</div></div></div>
+    <div class="card-head"><h2>旅豆发行台账</h2><span class="muted">旅豆 = 向往自由链积分资产（D6 外层口径）</span></div>
+    <div class="cap-box">
+      <div class="cap-t"><span>${esc(cap.year || '')} 年度发行额度（严禁超发）</span><b>${num(capUsed)} / ${num(capTotal)}</b></div>
+      <div class="cap-bar"><i style="width:${capPct}%"></i></div>
+      <div class="cap-s">已用 ${capPct.toFixed(capPct < 1 ? 2 : 1)}% · 剩余 ${num(Math.max(0, capTotal - capUsed))} · 账本双分录，超额度发放会被拒绝</div>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0">
+      <div class="kpi go" title="去数字身份：按用户看身份档案、旅豆账户与徽章" onclick="go('vc')"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">👥</div><div><div class="l">旅豆账户数</div><div class="v" style="font-size:18px">${d.holders}</div><div class="s">点开看每个账户的身份档案</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e3f6ec">🫘</div><div><div class="l">用户持有</div><div class="v" style="font-size:18px">${num(d.userBalance)}</div><div class="s">真实用户余额合计</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">用户累计获得</div><div class="v" style="font-size:18px">${num(d.userLifetime)}</div><div class="s">不含预算 / 平台户</div></div></div>
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">📦</div><div><div class="l">发行批次</div><div class="v" style="font-size:18px">${(d.budgets || []).length}</div><div class="s">按批次预算发行</div></div></div>
     </div>
   </div>
   <div class="card">
-    <div class="card-head"><h3>发行批次</h3></div>
-    <table><thead><tr><th>批次</th><th>名称</th><th>额度</th><th>已发放</th><th>回流</th><th>状态</th></tr></thead><tbody>
-    ${(d.budgets || []).map((b) => `<tr class="click-row" ${dxKey} title="去预算管理查看这个批次" onclick="go('budgets')"><td>#${b.id}</td><td>${esc(b.name || '—')}</td><td class="num">${Number(b.total)}</td>
-      <td class="num">${Number(b.granted)}</td><td class="num">${Number(b.returned)}</td>
-      <td>${b.status === 1 ? '<span class="pill ok">启用</span>' : '<span class="pill s70">停用</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="td-sub">暂无批次</td></tr>'}
-    </tbody></table>
+    <div class="card-head"><h3>按业务汇总（真实用户）</h3><span class="muted">只算用户账户这一侧；预算户、平台户不计入。右列是全账本双分录校验</span></div>
+    ${biz.length ? `<table><thead><tr><th>业务</th><th>用户入账</th><th>用户出账</th><th>净额</th><th>笔数</th><th>双分录校验</th></tr></thead><tbody>
+    ${biz.map((x) => { const net = Number(x.userIn || 0) - Number(x.userOut || 0); return `<tr><td class="td-main">${esc(BIZ[x.biz_type] || ('类型' + x.biz_type))}</td>
+      <td class="num">${num(x.userIn)}</td><td class="num">${num(x.userOut)}</td><td class="num" style="color:${net > 0 ? '#17824d' : net < 0 ? '#b42318' : 'inherit'}">${signed(net)}</td><td class="num">${num(x.entries)}</td>
+      <td>${Number(x.issued) === Number(x.burned) ? `<span class="pill ok" title="贷 ${num(x.issued)} = 借 ${num(x.burned)}">平衡</span>` : `<span class="pill s70" title="贷 ${num(x.issued)} ≠ 借 ${num(x.burned)}">不平</span>`}</td></tr>` }).join('')}
+    <tr class="att-total"><td>合计</td><td class="num">${num(totIn)}</td><td class="num">${num(totOut)}</td><td class="num">${signed(totIn - totOut)}</td><td class="num">${num(totN)}</td><td></td></tr>
+    </tbody></table>` : emptyBox('还没有旅豆流水')}
   </div>
   <div class="card">
-    <div class="card-head"><h3>按科目流水汇总（发行/销毁）</h3></div>
-    <table><thead><tr><th>科目</th><th>发行（贷）</th><th>消耗/回收（借）</th></tr></thead><tbody>
-    ${(d.byBiz || []).map((x) => `<tr><td>${BIZ[x.biz_type] || ('类型' + x.biz_type)}</td><td class="num">${Number(x.issued)}</td><td class="num">${Number(x.burned)}</td></tr>`).join('')}
+    <div class="card-head"><h3>发行批次</h3><span class="muted">点一行去预算管理</span></div>
+    <table><thead><tr><th>批次</th><th>名称</th><th>额度</th><th>已发放</th><th style="width:22%">使用进度</th><th>回流</th><th>状态</th></tr></thead><tbody>
+    ${(d.budgets || []).map((b) => { const used = Number(b.total) ? Math.min(100, Number(b.granted) / Number(b.total) * 100) : 0; return `<tr class="click-row" ${dxKey} title="去预算管理查看这个批次" onclick="go('budgets')"><td>#${b.id}</td><td>${esc(b.name || '—')}</td><td class="num">${num(b.total)}</td>
+      <td class="num">${num(b.granted)}</td><td><div class="att-bar"><i style="width:${used}%"></i></div><span class="td-sub">${used.toFixed(used < 1 && used > 0 ? 2 : 0)}%</span></td><td class="num">${num(b.returned)}</td>
+      <td>${b.status === 1 ? '<span class="pill ok">启用</span>' : '<span class="pill s70">停用</span>'}</td></tr>` }).join('') || '<tr><td colspan="7" class="td-sub">暂无批次</td></tr>'}
     </tbody></table>
   </div>`
 }

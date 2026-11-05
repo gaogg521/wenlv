@@ -197,7 +197,7 @@ await t('账本日终块标「旅豆账本封存」，没有构成数据的旧�
 })
 
 await t('演示链的每个业务块自带业务构成，且合计 = 事件数', () => {
-  for (const b of ctx.mockChain()) {
+  for (const b of ctx.mockChain().filter((x) => !Number(x.is_day_close))) {   // 日终批的叶子是旅豆流水，没有业务构成（和真实接口一致）
     const n = Object.values(b.mix).reduce((a, c) => a + c, 0)
     assert.equal(n, Number(b.leaf_count), `演示块 #${b.seq} 构成合计 ${n} ≠ ${b.leaf_count}`)
   }
@@ -283,6 +283,43 @@ await t('身份列表带头像：有图用图，没图用昵称首字；恶意�
   assert.match(html, /<img class="id-ava" src="https:\/\/x\.test\/a\.png"/)
   assert.match(html, /<span class="id-ava"[^>]*>陈<\/span>/)
   assert.ok(!html.includes('javascript:'), '非 http(s) 头像不能进 src')
+})
+
+console.log('== 区块配色：颜色 = 业务环节 ==')
+const facesOf = (html) => [...html.matchAll(/class="fc" style="--edge:(#[0-9a-f]{6})/g)].map((m) => m[1])
+
+await t('只含一种业务的区块整块一个色：抵扣绿、支付金、出票蓝、核销紫', () => {
+  const zone = (type) => ctx.blockNodeHTML({ ...B, mix: { [type]: 3 } })
+  for (const [type, hex] of [['bean_deduct', '#34d399'], ['order', '#fbbf24'], ['pass_issue', '#60a5fa'], ['pass_verify', '#c084fc']]) {
+    assert.match(zone(type), new RegExp('cube-zone[^"]*" style="--edge:' + hex), type)
+    assert.equal(facesOf(zone(type)).length, 0, '单一业务不需要分面上色')
+  }
+})
+await t('一批含多种业务时六个面分别上色，且顺序按业务主线', () => {
+  const faces = facesOf(ctx.blockNodeHTML({ ...B, mix: { badge: 30, pass_issue: 2, order: 3 } }))
+  assert.equal(faces.length, 6)
+  assert.equal(faces.slice(0, 3).join(), '#fbbf24,#60a5fa,#f472b6', '订单→出票→勋章')
+  assert.equal(faces[3], faces[0], '不够六种就循环')
+})
+await t('状态优先：待打包是灰的，需要人处理是红的，已打包未锚定半透明，账本日终银白', () => {
+  assert.match(ctx.blockNodeHTML({ ...B, status: 0, mix: { order: 1 } }), /cube-zone t-gray/)
+  for (const st of [3, 4]) assert.match(ctx.blockNodeHTML({ ...B, status: st, mix: { order: 1 } }), /cube-zone t-red/, '异常不能被业务色盖住')
+  assert.match(ctx.blockNodeHTML({ ...B, status: 1, mix: { order: 1 } }), /cube-zone dim/)
+  assert.ok(!/cube-zone dim/.test(ctx.blockNodeHTML({ ...B, status: 2, mix: { order: 1 } })), '已锚定不该半透明')
+  assert.match(ctx.blockNodeHTML({ ...DAY, mix: {} }), /--edge:#e2e8f0/)
+})
+await t('单流程每一步按业务配色；演示单也用真实业务类型', async () => {
+  const ev = (biz_type, status = 2) => ({ biz_type, biz_ref: 'x', version_no: 1, status, payload_hash: 'f'.repeat(64), created_at: '2026-11-01 10:00:00', seq: 3, batch_id: 7 })
+  assert.match(ctx.flowStepHTML({ no: '①', label: '旅豆抵扣', hint: '', ev: ev('bean_deduct') }, 0), /--edge:#34d399/)
+  assert.match(ctx.flowStepHTML({ no: '④', label: '核销', hint: '', ev: ev('pass_verify') }, 3), /--edge:#c084fc/)
+  assert.match(ctx.flowStepHTML({ no: '②', label: '支付', hint: '', ev: ev('order', 0) }, 1), /cube-zone sm dim" style="--edge:#fbbf24/, '还没锚定：保留业务色，半透明')
+  ctx.window.__demoChain = true; await ctx.loadFlowDemo()
+  assert.equal(ctx.window.__flowData.steps.map((s) => s.ev.biz_type).join(), 'bean_deduct,order,pass_issue,pass_verify,bean_grant,settlement')
+  ctx.window.__demoChain = false; ctx.window.__flowData = null
+})
+await t('环节标签的颜色与区块一致；图例覆盖这些颜色', () => {
+  assert.match(ctx.blockNodeHTML({ ...B, mix: { pass_verify: 2 } }), /class="mx" style="--c:#c084fc"/)
+  assert.match(code, /CHAIN_LEGEND\.map/, '图例要从同一份配色生成')
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
