@@ -2,7 +2,7 @@
 //
 //   node scripts/chain-antopen-deploy.mjs            # 只演练：检查产物与配置、打印将要发什么，不发任何交易
 //   node scripts/chain-antopen-deploy.mjs --yes      # 真部署（不可逆：合约一旦部署不可修改，要换规则只能换新合约名）
-//   可选：--name WanderlustRootStore  --gas 2000000  --code-format hex|base64
+//   可选：--name WanderlustRootStoreV2  --gas 2000000  --code-format hex|base64
 //
 // 凭据只从环境变量读（ANTOPEN_ACCESS_ID / ANTOPEN_ACCESS_KEY / ANTOPEN_ACCOUNT / ANTOPEN_KMS_ID / ANTOPEN_TENANT_ID，可选 ANTOPEN_BIZID），
 // 输出一律脱敏。部署成功后把合约名填进后台「链接入中心 → 蚂蚁链开放联盟链 · 合约模式 → 合约名」，再「设为当前链」。
@@ -28,7 +28,7 @@ if (!/^[0-9a-f]+$/i.test(bin) || bin.length % 2) problems.push('bin 不是合法
 const miss = antopenMissing()
 if (miss.length) problems.push('缺配置：' + miss.join('、'))
 
-const name = opt('--name', 'WanderlustRootStore')
+const name = opt('--name', 'WanderlustRootStoreV2')   // V1 已于 2026-11-05 部署且有缺陷（seq 读出 2087900645），换新名字
 const gas = Number(opt('--gas', '2000000'))
 const fmt = opt('--code-format', 'hex')
 if (!['hex', 'base64'].includes(fmt)) problems.push('--code-format 只能是 hex 或 base64')

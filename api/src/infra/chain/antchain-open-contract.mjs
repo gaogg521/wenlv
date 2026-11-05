@@ -9,7 +9,7 @@
 //   写  CALLCONTRACTBIZASYNC  { orderId, bizid, account, contractName, methodSignature, inputParamListStr, outTypes, mykmsKeyId,
 //                                accessId, token, gas, tenantid } → data = 交易哈希
 //   读  没有独立的只读接口：同样发 CALLCONTRACTBIZASYNC（会产生交易、耗 gas）→ QUERYRECEIPT 取回执 output(base64)
-//       → PARSEOUTPUT（content = output 的 hex，abi = 返回类型 JSON）得到返回值
+//       → 本地按 32 字节字拆 output（decodeOutput）。真机：平台 PARSEOUTPUT 不支持 bytes32，所以不用它
 //
 // 与库里批次链的关系（重要）：合约创世时 lastRoot=0，且强制 prevRoot==lastRoot、seq==lastSeq+1。
 // 库里的批次链在切到合约前已经有 DEPOSIT 时代的批次，它们的 prev_root 接不上合约的链头。
@@ -18,7 +18,8 @@
 //
 // ⚠ 以下几点文档没写清、离线无法验证，必须部署后在真实链上核对（见交接文档）：
 //   1) bytes32 参数在 inputParamListStr 里怎么表示（"0x…" / 裸 hex / base64）→ ANTOPEN_CONTRACT_BYTES 可切换
-//   2) QUERYRECEIPT 返回里成功标志与 output 的字段名/嵌套（本文件按 result===0 + output 解析，兼容 transactionReceipt 嵌套）
+//   2) QUERYRECEIPT 返回（真机已核对，2026-11-05）：扁平 JSON，字段 blockNumber/code/gasUsed/hash/logs/output/result/txFinish/txSuccess；
+//      成功 = result===0，output 是 base64；txSuccess/txFinish 在读调用上恒为 false，不要用。仍兼容 transactionReceipt 嵌套
 //   3) 同一 orderId 重复调用的行为（DEPOSIT 实测是静默返回首次那笔；这里 orderId 含 seq 与前根，换了状态就换号）
 import { E } from './conf.mjs'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -106,14 +107,29 @@ async function getReceipt(txRef) {
   return { result: r.result == null ? null : Number(r.result), output: typeof r.output === 'string' ? r.output : '', block: Number(d.blockNumber ?? r.blockNumber), gasUsed: Number(r.gasUsed ?? d.gasUsed) }
 }
 
-/** receipt.output(base64) → 返回值数组（用平台的 PARSEOUTPUT，不自己写 ABI 解码，免得和链的编码约定对不上） */
-async function parseOutput(outputB64, abi) {
-  const e = antopenEnv()
+/**
+ * receipt.output(base64) → 返回值数组。本地按 ABI 静态类型拆，每个返回值占 32 字节一字。
+ * 不用平台的 PARSEOUTPUT：真机实测它不支持 bytes32（500 "Unsupported function return type: bytes32"），
+ * 而 head() 就返回 bytes32；这里只会用到 bool / uintN / bytes32，都是定长静态类型，拆字足够且可核对。
+ * bool → true/false；uintN → Number（超出安全整数就报错，不静默丢精度）；bytes32 → '0x' + 64 位 hex。
+ */
+export function decodeOutput(outputB64, types) {
   const hex = Buffer.from(String(outputB64 || ''), 'base64').toString('hex')
-  const j = await antopenApi('/api/contract/chainCallForBiz', (token) => ({
-    bizid: e.bizid, method: 'PARSEOUTPUT', vmTypeEnum: 'EVM', content: hex, abi: JSON.stringify(abi), accessId: e.accessId, token,
-  }))
-  try { return JSON.parse(j.data) } catch { throw new Error('antchain-contract 返回值解析结果不是 JSON：' + scrub(j.data)) }
+  if (hex.length !== types.length * 64) throw new Error(`antchain-contract 返回值长度不对：期望 ${types.length} 个 32 字节字，实际 ${hex.length / 64} 个（output=${hex.length ? 'base64 ' + String(outputB64).slice(0, 40) : '空'}）`)
+  return types.map((t, i) => {
+    const w = hex.slice(i * 64, (i + 1) * 64)
+    if (t === 'bytes32') return '0x' + w
+    if (t === 'bool') {
+      if (/^0{63}[01]$/.test(w)) return w.endsWith('1')
+      throw new Error('antchain-contract bool 返回值不是 0/1：' + w.slice(-8))
+    }
+    if (/^uint(8|16|32|64|128|256)?$/.test(t)) {
+      const n = BigInt('0x' + w)
+      if (n > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`antchain-contract ${t} 返回值超出安全整数范围`)
+      return Number(n)
+    }
+    throw new Error('antchain-contract 不支持的返回类型：' + t)
+  })
 }
 
 /** 读调用：发交易 → 轮询回执 → 解析返回值。回执 result≠0 说明合约拒绝了这次调用 */
@@ -128,7 +144,7 @@ async function readContract(sig, args, outs, tag) {
   }
   if (!rc) throw new Error(`antchain-contract 读调用 ${sig} 等回执超时（交易 ${tx}）`)
   if (rc.result !== 0) throw hard('CONTRACT_REVERT', `antchain-contract 读调用 ${sig} 被合约拒绝（result=${rc.result}）：合约名/部署/gas 是否正确`)
-  return await parseOutput(rc.output, outs)
+  return decodeOutput(rc.output, outs)
 }
 
 /** 合约自己的链头：{ seq, root(64hex), count } */
@@ -204,7 +220,7 @@ export default {
     if (rc.result !== 0) {
       throw hard('CONTRACT_REVERT', `antchain-contract 合约拒绝了这笔写入（result=${rc.result}）：常见原因是链头已变（序号/前根对不上）或 gas 不足；重试会重新读链头，请人工确认后重提`)
     }
-    const out = await parseOutput(rc.output, OUT.writeRoot)
+    const out = decodeOutput(rc.output, OUT.writeRoot)
     if (!Array.isArray(out) || out[0] !== true) {
       throw hard('ROOT_ALREADY_ANCHORED', 'antchain-contract 这枚根此前已写入合约（writeRoot 返回 false，本次是幂等空操作）：'
         + '根在链上，但这笔交易不是写入它的那笔，需人工核对原交易后处理')

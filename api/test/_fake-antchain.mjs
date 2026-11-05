@@ -2,8 +2,8 @@
 // 里面跑一份和 WanderlustRootStore.sol 同规则的状态机（序号 +1、前根必须接上、同根幂等返回 false）。
 // 离线测试（antchain-contract.mjs）与数据库端到端（chain-contract-e2e.mjs）共用。
 //
-// 约定（替身自己的，真实链的编码以真机为准）：回执 output = base64(JSON.stringify(返回值数组))；
-// PARSEOUTPUT 把 hex 还原成这个 JSON 原样返回。这样测的是适配器的"管道"（hex 转换、轮询、判定），不是 ABI 编码。
+// 回执与编码按真机（2026-11-05）：回执是扁平 JSON（result/output/gasUsed/blockNumber…），output = base64(每个返回值一个 32 字节 ABI 字)；
+// PARSEOUTPUT 对 bytes32 返回 500（真机实测），适配器已不调用它。读调用也是交易，回滚时回执 output 为空（替身的约定，真机回滚的回执形态未见过）。
 import http from 'node:http'
 import crypto from 'node:crypto'
 
@@ -36,7 +36,13 @@ export async function startFake({ publicKey }) {
     return tx
   }
   const mined = (tx) => { tx.block = ++st.height }
-  const out = (vals) => Buffer.from(JSON.stringify(vals)).toString('base64')
+  // 回执 output：和真机一致，每个返回值一个 32 字节 ABI 字（bool/uint 左补零，bytes32 原样），整体 base64（真机实测 head() 的 output 就是 3 个字）
+  const word = (v) => {
+    if (typeof v === 'boolean') return (v ? 1n : 0n).toString(16).padStart(64, '0')
+    if (typeof v === 'number') return BigInt(v).toString(16).padStart(64, '0')
+    return String(v).replace(/^0x/i, '').padStart(64, '0')        // bytes32：'0x' + 64 位 hex
+  }
+  const out = (vals) => Buffer.from(vals.map(word).join(''), 'hex').toString('base64')
 
   function apply(tx) {
     mined(tx)
@@ -78,8 +84,12 @@ export async function startFake({ publicKey }) {
 
       if (req.url === '/api/contract/chainCallForBiz') {
         if (j.method === 'PARSEOUTPUT') {
-          let v; try { v = Buffer.from(String(j.content), 'hex').toString('utf8'); JSON.parse(v) } catch { return send(res, { success: false, code: '500', data: 'bad output' }) }
-          return send(res, { success: true, code: '200', data: v })
+          // 真机：PARSEOUTPUT 不支持 bytes32（500），其它定长类型按字解析。适配器已不再调用它——测试里断言"没调用"
+          let abi; try { abi = JSON.parse(j.abi) } catch { return send(res, { success: false, code: '500', data: 'bad abi' }) }
+          const bad = abi.find((t) => t === 'bytes32')
+          if (bad) return send(res, { success: false, code: '500', data: 'Unsupported function return type: ' + bad })
+          const hex = String(j.content), vals = abi.map((t, i) => { const n = BigInt('0x' + hex.slice(i * 64, i * 64 + 64)); return t === 'bool' ? n === 1n : Number(n) })
+          return send(res, { success: true, code: '200', data: JSON.stringify(vals) })
         }
         if (st.orders.has(j.orderId)) return send(res, { success: true, code: '200', data: st.orders.get(j.orderId) })   // 同 orderId：静默返回首次那笔（实测）
         if (j.method === 'DEPOSIT') { st.deposits.push(j); const tx = mkTx(j, 'deposit'); if (st.autoMine) apply(tx); else st.pending.push(tx); return send(res, { success: true, code: '200', data: tx.hash }) }

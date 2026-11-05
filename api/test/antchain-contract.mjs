@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import contract, { SIG, OUT, fmtBytes32, writeRootArgs, contractContent, parseContractContent } from '../src/infra/chain/antchain-open-contract.mjs'
+import contract, { SIG, OUT, fmtBytes32, writeRootArgs, contractContent, parseContractContent, decodeOutput } from '../src/infra/chain/antchain-open-contract.mjs'
 import { startFake, ZERO } from './_fake-antchain.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -75,7 +75,26 @@ try {
     assert.deepEqual(JSON.parse(b.inputParamListStr), ['0x' + R('a'), '0x' + ZERO, 20261105, 12, 1]); assert.equal(b.outTypes, '["bool"]')
     assert.equal(b.gas, 500000); assert.equal(b.tenantid, 'TEN1'); assert.equal(b.account, 'acct'); assert.equal(b.mykmsKeyId, 'kms-1')
     assert.ok(st.calls.some((c) => c.sig === SIG.head), '没有先读链头')
-    assert.equal(st.calls.filter((c) => c.method === 'PARSEOUTPUT').length, 1, '链头返回值没经 PARSEOUTPUT 解析')
+    assert.equal(st.calls.filter((c) => c.method === 'PARSEOUTPUT').length, 0, '真机 PARSEOUTPUT 不支持 bytes32，适配器必须本地解析返回值，不能再调它')
+  })
+  await t('返回值本地解码：用真机 head() 的原始回执（V1 合约，2026-11-05）逐字验证——seq 读出 2087900645 这一缺陷也能如实读到', () => {
+    // 真机回执 output（base64），3 个 32 字节字：0x7c72d5e5 / 0 / 0
+    const real = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHxy1eUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    assert.deepEqual(decodeOutput(real, OUT.head), [2087900645, '0x' + ZERO, 0])
+    const w = (h) => Buffer.from(h.padStart(64, '0'), 'hex').toString('base64')
+    assert.deepEqual(decodeOutput(w('1'), ['bool']), [true]); assert.deepEqual(decodeOutput(w('0'), ['bool']), [false])
+    assert.throws(() => decodeOutput(w('2'), ['bool']), /不是 0\/1/)
+    assert.throws(() => decodeOutput(w('1'), ['bool', 'bool']), /长度不对/)             // 少一个字
+    assert.throws(() => decodeOutput('', ['bool']), /长度不对/)                           // 空 output（比如合约回滚后的回执）
+    assert.throws(() => decodeOutput(w('ffffffffffffffffffffffff'), ['uint256']), /超出安全整数/)   // 不静默丢精度
+    assert.throws(() => decodeOutput(w('1'), ['string']), /不支持/)
+    assert.deepEqual(decodeOutput(w('ab'.repeat(32)), ['bytes32']), ['0x' + 'ab'.repeat(32)])
+  })
+  await t('合约存储布局：owner 之外不许有小整数/布尔/地址状态变量（V1 教训：32 字节 msg.sender 的高位会漏进同槽相邻变量）', () => {
+    const src = fs.readFileSync(path.join(CDIR, 'WanderlustRootStore.sol'), 'utf8')
+    const small = [...src.matchAll(/^\s*(uint(?:8|16|32|64|128)|int\d*|bool|address|bytes(?:[1-9]|[12]\d|3[01]))\s+(?:public|private|internal)\s+(\w+)\s*;/gm)].map((m) => m[2])
+    assert.deepEqual(small, ['owner'], '状态变量里除 owner 外还有可打包的小类型：' + small.join(','))
+    assert.match(src, /uint256\s+public\s+lastSeq\s*;/)
   })
   await t('独立起链：第二批用合约自己的链头（seq=2、prevRoot=上一根），不理会库里批次的 prev_root（那条链有 DEPOSIT 时代的批次接不上）', async () => {
     const r = await contract.anchor({ root: R('b'), prevRoot: R('7'), leafCount: 3, bizDate: D })
@@ -204,7 +223,7 @@ try {
     const ok = await run(['--yes'], env)
     assert.equal(ok.code, 0); assert.match(ok.out, /部署成功/); assert.equal(st.deploys.length, 1)
     const d = st.deploys[0]
-    assert.equal(d.method, 'DEPLOYCONTRACTFORBIZ'); assert.equal(d.contractName, 'WanderlustRootStore'); assert.equal(d.gas, 2000000); assert.equal(d.tenantid, 'T')
+    assert.equal(d.method, 'DEPLOYCONTRACTFORBIZ'); assert.equal(d.contractName, 'WanderlustRootStoreV2'); assert.equal(d.gas, 2000000); assert.equal(d.tenantid, 'T')
     assert.equal(d.contractCode, fs.readFileSync(path.join(CDIR, 'build', 'WanderlustRootStore.bin'), 'utf8').trim(), '传的不是编译产物')
     st.deployResult = 5
     const bad = await run(['--yes', '--code-format', 'base64'], { ...env, ANTOPEN_ACCESS_ID: 'ck-dep2' })
