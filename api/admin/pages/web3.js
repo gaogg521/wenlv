@@ -830,13 +830,30 @@ function chainTrackWidth() {
   const app = document.getElementById('app')
   return Math.max(560, ((app && app.clientWidth) || 1200) - 36)
 }
+/**
+ * 排布原则：**行数尽量少、每行尽量多（最多 10 块）**，块缩到「还能看清」为止（中号 108px 起）。
+ * 依次试 1 行、2 行、3 行，第一个能让块不小于中号的方案就用；3 行也放不下（块多、窗口窄）才把块缩到最小号，
+ * 每行放满 10 块；窗口窄到 10 块都放不下时，每行块数按宽度来，行数才会超过 3（手机宽度的兜底）。
+ * 大号（188px，带完整文字）只在块很少时出现；两种宽度的预留不同：大号行内边距 92 + 连线最小 32，缩小档 80 + 14。
+ */
 function chainPlan(n, W) {
-  const perFull = Math.max(2, Math.min(CHAIN_MAX_PER, Math.floor((W - 92 + 52) / (188 + 52))))
-  if (n <= CHAIN_MAX_ROWS * perFull) return { per: perFull, nw: 188, lk: 52, tier: 'full' }
-  const lk = 14   // 缩小档的连线很短：只表示「前一块的根接到后一块」，不需要长
-  const per = Math.max(2, Math.min(CHAIN_MAX_PER, Math.ceil(n / CHAIN_MAX_ROWS), Math.floor((W - 80 + lk) / (70 + lk))))
-  const nw = Math.max(70, Math.min(188, Math.floor((W - 80 - (per - 1) * lk) / per)))
-  return { per, nw, lk, tier: nw >= 160 ? 'full' : nw >= 108 ? 'md' : 'sm' }
+  const fitFull = (per) => Math.floor((W - 92 - (per - 1) * 32) / per)
+  const fitSmall = (per) => Math.floor((W - 80 - (per - 1) * 14) / per)
+  const plan = (per) => {
+    const f = fitFull(per)
+    if (f >= 160) return { per, nw: Math.min(188, f), lk: 32, tier: 'full' }
+    const c = fitSmall(per)
+    return c >= 70 ? { per, nw: Math.min(188, c), lk: 14, tier: c >= 108 ? 'md' : 'sm' } : null
+  }
+  for (let r = 1; r <= CHAIN_MAX_ROWS; r++) {
+    const per = Math.ceil(n / r)
+    if (per > CHAIN_MAX_PER) continue
+    const p = plan(per)
+    if (p && p.nw >= 108) return p
+  }
+  let per = Math.min(CHAIN_MAX_PER, Math.max(2, Math.ceil(n / CHAIN_MAX_ROWS)))
+  while (per > 2 && !plan(per)) per--
+  return plan(per) || { per: 2, nw: 70, lk: 14, tier: 'sm' }
 }
 function chainTrackHTML(descs, W) {
   if (!descs.length) return '<div class="chain-track"><div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div></div>'

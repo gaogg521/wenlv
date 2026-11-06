@@ -37,8 +37,8 @@ const D = (n, branchAt = []) => Array.from({ length: n }, (_, i) => ({ html: `<d
 const rowsOf = (html) => [...html.matchAll(/<div class="chain-row([^"]*)">/g)].map((m) => m[1].trim().split(/\s+/).filter(Boolean))
 
 console.log('== 链路视图 S 型折行 ==')
-await t('8 个块在 1200px：每行 4 个、2 行；第 2 行反向且是最后一行；第 1 行右侧转弯', () => {
-  const html = ctx.chainTrackHTML(D(8), 1200)
+await t('8 个块在 993px：每行 4 个、2 行；第 2 行反向且是最后一行；第 1 行右侧转弯', () => {
+  const html = ctx.chainTrackHTML(D(8), 993)
   assert.match(html, /data-per="4"/); const rows = rowsOf(html)
   assert.equal(rows.length, 2); assert.deepEqual(rows[0], ['turn-r']); assert.deepEqual(rows[1], ['rev', 'last'])
   for (let i = 1; i <= 8; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
@@ -51,20 +51,27 @@ await t('30 个块：每行 10 个、正好 3 行；行反向与转弯左右交�
   assert.ok(rows[0].includes('turn-branch') && rows[1].includes('turn-branch'), '下一行行首是日终块，转弯要多下沉')
   for (let i = 1; i <= 30; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
 })
-await t('高度上限：不同数量 / 宽度下的行数与档位（块少用大块，放不下 3 行才缩小；缩小后每行最多 10 块）', () => {
+await t('排布原则：行数尽量少、每行尽量多（最多 10 块），块缩到刚好还能看清；多少块都不超过 3 行', () => {
   const plan = (n, W) => { const p = ctx.chainPlan(n, W); return { per: p.per, nw: p.nw, tier: p.tier, rows: Math.ceil(n / p.per) } }
-  const sample = [[12, 1200], [13, 1200], [20, 1200], [29, 1050], [30, 1050], [30, 1400], [30, 2400], [8, 1200], [1, 1200]]
-  for (const [n, W] of sample) assert.ok(plan(n, W).rows <= 3, `${n} 块 / ${W}px 超过了 3 行：${JSON.stringify(plan(n, W))}`)
-  for (const [n, W] of sample) assert.ok(plan(n, W).per <= 10, '每行不超过 10')
-  assert.equal(plan(12, 1200).tier, 'full'); assert.equal(plan(12, 1200).nw, 188, '12 块还放得下大块，不缩')
-  assert.equal(plan(20, 1200).per, 7); assert.equal(plan(20, 1200).tier, 'md')
-  assert.equal(plan(30, 1050).per, 10); assert.equal(plan(30, 1050).tier, 'sm'); assert.ok(plan(30, 1050).nw >= 70)
-  assert.ok(plan(30, 1050).nw * 10 + 14 * 9 + 80 <= 1050, '10 块必须真的放得进 1050px')
-  for (const W of [993, 1106, 1300, 1600]) { const p = plan(30, W); assert.equal(p.per, 10, W + 'px 也要排满 10 块'); assert.equal(p.rows, 3); assert.ok(p.nw * 10 + 14 * 9 + 80 <= W, W + 'px 放得进') }
+  const fits = (p, W) => p.tier === 'full' ? p.nw * p.per + 32 * (p.per - 1) + 92 <= W : p.nw * p.per + 14 * (p.per - 1) + 80 <= W
+  // 不变量：常见宽度下任意数量都 ≤ 3 行、每行 ≤ 10 块、放得进面板；块缩到小号只发生在 3 行也放不下中号时
+  for (const W of [993, 1106, 1300, 1600]) for (let n = 1; n <= 30; n++) {
+    const p = plan(n, W)
+    assert.ok(p.rows <= 3 && p.per <= 10, `${n} 块 / ${W}px：${JSON.stringify(p)}`)
+    assert.ok(fits(p, W), `${n} 块 / ${W}px 放不进：${JSON.stringify(p)}`)
+    if (p.tier === 'sm') assert.equal(p.rows, 3, `${n} 块 / ${W}px：只有 3 行也放不下中号才缩到小号`)
+  }
+  // 演示库的 9 块（你截图里那页）：原来 3 行大块高 1082px，现在 2 行
+  assert.equal(plan(9, 1113).rows, 2); assert.equal(plan(9, 1113).tier, 'full')
+  assert.equal(plan(8, 1113).rows, 1, '块不多时一行放完'); assert.equal(plan(1, 1113).rows, 1); assert.equal(plan(5, 1113).rows, 1)
+  assert.equal(plan(12, 1113).rows, 2); assert.equal(plan(20, 1200).rows, 3); assert.equal(plan(20, 1200).per, 7)
+  for (const W of [993, 1106, 1300, 1600]) { const p = plan(30, W); assert.equal(p.per, 10, W + 'px 也要排满 10 块'); assert.equal(p.rows, 3) }
+  // 更少的行数优先：块数相同，面板更宽时行数不会更多
+  for (let n = 1; n <= 30; n++) for (const [x, y] of [[993, 1300], [1300, 1600]]) assert.ok(plan(n, y).rows <= plan(n, x).rows, `${n} 块：面板变宽行数不该变多`)
   const narrow = plan(30, 700)
   assert.ok(narrow.per < 10 && narrow.rows > 3, '窄屏放不下 10 块时按宽度折行（兜底），而不是溢出')
-  assert.ok(narrow.nw * narrow.per + 14 * (narrow.per - 1) + 80 <= 700)
-  assert.match(ctx.chainTrackHTML(D(8), 1200), /tier-full/)
+  assert.ok(fits(narrow, 700))
+  assert.match(ctx.chainTrackHTML(D(8), 993), /tier-full/)
 })
 await t('缩小后纵向尺寸跟着降：连线 / 转弯 / 分支下沉都走 CSS 变量，不写死 59 / 133', () => {
   const link = ctx.blockLinkHTML(false, true)
