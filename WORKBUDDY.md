@@ -56,12 +56,12 @@ node tools/overflow.js
 
 ## wanderlust 小程序（另一条产品线）
 
-本仓库的运行工程（`mini-a` 正式端 / `mini-b` 测试号 / `api` 后端 + 自动化脚本）。
+运行工程包含 `mini-a` 正式端、`mini-b` 测试号和 `api` 后端及自动化脚本。
 
 **调试只有一条命令**：
 
 ```bash
-bash C:/Users/allenzhao/Desktop/文旅项目/wanderlust/debug-cli.sh
+bash ./debug-cli.sh
 ```
 
 换机器、换 Agent、调不通时，**先读** `docs/CLI调试-AI交接手册.md`：
