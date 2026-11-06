@@ -2,9 +2,9 @@
 
 # 「向往的自由」Web3 文旅项目
 
-> **给 WorkBuddy 新会话的开工说明**：本目录是项目唯一工作区。请把会话工作目录设为本路径
-> `C:\Users\allenzhao\Desktop\文旅项目`，然后先读本文件，再读
-> `向往的自由-原型源码/README.md` 与 `向往的自由-原型源码/交接与决策记录.md`。
+> **给 WorkBuddy 新会话的开工说明**：请把会话工作目录设为仓库根目录
+> `C:\Users\allenzhao\Desktop\文旅项目\wanderlust`，然后先读本文件，再读
+> `向往的自由-DOME设计原型源码/README.md` 与 `向往的自由-DOME设计原型源码/交接与决策记录.md`。
 
 ## 一分钟看懂这个项目
 
@@ -13,7 +13,7 @@
 
 ## 主开发目录
 
-**`向往的自由-原型源码/`** ← 所有代码改动都在这里
+**`向往的自由-DOME设计原型源码/`** ← 所有代码改动都在这里
 
 | 路径 | 作用 |
 |---|---|
@@ -26,7 +26,7 @@
 
 ### 标准工作流
 ```bash
-cd "C:/Users/allenzhao/Desktop/文旅项目/向往的自由-原型源码"
+cd "C:/Users/allenzhao/Desktop/文旅项目/wanderlust/向往的自由-DOME设计原型源码"
 # 1. 改 src/ 下的片段
 python build.py                # 重新拼装
 node tools/deepscan.js         # 48 子页全量下钻
@@ -56,15 +56,15 @@ node tools/overflow.js
 
 ## wanderlust 小程序（另一条产品线）
 
-`wanderlust/` 是微信小程序工程（`mini-a` 正式端 / `mini-b` 测试号 / `api` 后端 + 自动化脚本）。
+运行工程包含 `mini-a` 正式端、`mini-b` 测试号和 `api` 后端及自动化脚本。
 
 **调试只有一条命令**：
 
 ```bash
-bash C:/Users/allenzhao/Desktop/文旅项目/wanderlust/debug-cli.sh
+bash ./debug-cli.sh
 ```
 
-换机器、换 Agent、调不通时，**先读** `wanderlust/docs/CLI调试-AI交接手册.md`：
+换机器、换 Agent、调不通时，**先读** `docs/CLI调试-AI交接手册.md`：
 里面有环境事实表、五个必踩坑（症状→判据→修法）、配置审计结论、已知未解项。
 **不要用 `cli preview` 当调试入口**，它走上传编译管线，本项目在该管线报 opaque code 10。
 
