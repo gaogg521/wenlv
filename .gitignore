@@ -29,3 +29,7 @@ KEY.txt
 # 守护进程运行日志（不入库）
 api/daemon/keepalive.log
 api/server-cli.log
+
+# 检查/走查证据截图（本地留存，不入库）
+api/test/evidence-*/
+api/automator-shots*/
