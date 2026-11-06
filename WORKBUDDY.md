@@ -1,4 +1,4 @@
-> ⚠️ **本文只适用于设计原型目录，不是运行实现的说明。** 运行实现（api / mini-a / mini-b / 后台）请读 `AI交接手册-20261102.md` 与 `README.md`。
+> ⚠️ **本文只适用于设计原型目录，不是运行实现的说明。** 运行实现（api / mini-a / mini-b / 后台）请读 `docs/AI交接手册-20261102.md` 与 `README.md`。
 
 # 「向往的自由」Web3 文旅项目
 
@@ -64,7 +64,7 @@ node tools/overflow.js
 bash C:/Users/allenzhao/Desktop/文旅项目/wanderlust/debug-cli.sh
 ```
 
-换机器、换 Agent、调不通时，**先读** `wanderlust/CLI调试-AI交接手册.md`：
+换机器、换 Agent、调不通时，**先读** `wanderlust/docs/CLI调试-AI交接手册.md`：
 里面有环境事实表、五个必踩坑（症状→判据→修法）、配置审计结论、已知未解项。
 **不要用 `cli preview` 当调试入口**，它走上传编译管线，本项目在该管线报 opaque code 10。
 
