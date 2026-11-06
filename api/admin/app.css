@@ -187,30 +187,28 @@ tbody tr:last-child td { border-bottom: none; }
 .chain-auto { font-size: 12px; color: #9db1e2; display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .chain-btn { font-size: 12px; color: #dcebff; background: rgba(80,130,255,.18); border: 1px solid rgba(110,160,255,.4); border-radius: 8px; padding: 4px 12px; }
 .chain-btn:hover { background: rgba(80,130,255,.32); }
-.chain-track { position: relative; display: flex; align-items: flex-start; min-width: max-content; padding: 14px 18px 6px; }
+.chain-track { --cy: 59px; --sink: 74px; --lmin: 210px; position: relative; display: flex; align-items: flex-start; min-width: max-content; padding: 14px 18px 6px; }
 /* S 型排布：整行铺满、奇数行反向、行尾 U 形转弯；最后一行不拉伸 */
 .chain-track.snake { display: block; min-width: 0; padding: 14px 0 6px; }
-.chain-row { position: relative; display: flex; align-items: flex-start; padding: 0 46px; --te: 59px; }
+.chain-row { position: relative; display: flex; align-items: flex-start; padding: 0 46px; --te: var(--cy); }
 .chain-row .chain-link { flex: 1 1 var(--lk, 52px); max-width: none; min-width: 32px; }
 .chain-row.last .chain-link { flex: 0 1 110px; min-width: var(--lk, 52px); }
 .chain-row.rev { flex-direction: row-reverse; }
 .chain-row.rev .chain-link { transform: scaleX(-1); }
-.chain-row.turn-branch { --te: 133px; }
-.chain-row.turn-r::after, .chain-row.turn-l::after { content: ''; position: absolute; top: 59px; width: 30px; height: calc(100% + var(--te) - 59px); border: 2px dashed var(--cl); pointer-events: none; }
+.chain-row.turn-branch { --te: calc(var(--cy) + var(--sink)); }
+.chain-row.turn-r::after, .chain-row.turn-l::after { content: ''; position: absolute; top: var(--cy); width: 30px; height: calc(100% + var(--te) - var(--cy)); border: 2px dashed var(--cl); pointer-events: none; }
 .chain-row.turn-r::after { right: 8px; border-left: none; border-radius: 0 16px 16px 0; }
 .chain-row.turn-l::after { left: 8px; border-right: none; border-radius: 16px 0 0 16px; }
 .chain-row.turn-r::before, .chain-row.turn-l::before { position: absolute; top: calc(100% + var(--te) - 11px); color: #7fb0ff; font-size: 15px; line-height: 1; pointer-events: none; z-index: 1; }
 .chain-row.turn-r::before { content: '◂'; right: 38px; }
 .chain-row.turn-l::before { content: '▸'; left: 38px; }
-.chain-track.dense .chain-node { padding: 2px 4px 6px; }
-.chain-track.dense .blk-title { font-size: 12px; }
 .chain-legend { position: relative; display: flex; align-items: center; gap: 16px; padding: 8px 18px 14px; font-size: 11.5px; color: #8ea3d4; flex-wrap: wrap; }
 .chain-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 .chain-legend .lg.dash { background: transparent; border: 1px dashed #6f86c4; }
 .chain-node { width: var(--nw, 188px); flex: none; cursor: pointer; border-radius: 10px; padding: 4px 8px 8px; transition: .15s; }
 .chain-node:hover { background: rgba(90,140,255,.08); }
 .chain-node.active { background: rgba(90,140,255,.14); outline: 1px solid rgba(127,176,255,.45); box-shadow: 0 0 18px rgba(96,165,250,.25); }
-.chain-node.branch { margin-top: 74px; }
+.chain-node.branch { margin-top: var(--sink, 74px); }
 .chain-node.ghost { cursor: not-allowed; }
 /* 可点性必须看得见：可点的给“查看…›”字样与焦点环，不可点的明说不可点 */
 .chain-node:not(.ghost):hover { background: rgba(90,140,255,.10); }
@@ -302,7 +300,7 @@ tr.ev-hit { scroll-margin-top: 120px; }
   animation: ghostPulse 2.4s ease-in-out infinite; }
 .ghost-cube b { color: #c8d7f5; }
 @keyframes ghostPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-.chain-link { flex: 0 1 110px; min-width: 52px; align-self: stretch; position: relative; min-height: 210px; }
+.chain-link { flex: 0 1 110px; min-width: 52px; align-self: stretch; position: relative; min-height: var(--lmin, 210px); }
 .chain-link i { position: absolute; left: 0; right: 26px; border-top: 2px dotted var(--cl); }
 .chain-link.elbow i { border-top: none; }
 .chain-link b { position: absolute; right: 0; width: 26px; border-top: 2px dotted var(--cl); }
@@ -567,7 +565,6 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 .chain-node .blk-mix .mx b { color: #fff; font-weight: 700; }
 .chain-node .blk-mix .mx.more { background: transparent; border-style: dashed; color: #8ea3d4; }
 .chain-node .blk-mix .mx.day { background: rgba(245,210,122,.14); border-color: rgba(245,210,122,.4); color: #f5d27a; }
-.chain-track.dense .blk-mix .mx { padding: 0 4px; font-size: 10px; }
 .chain-node { position: relative; }
 .chain-node .trace-tags { position: absolute; top: 0; right: 6px; display: flex; gap: 2px; z-index: 3; pointer-events: none; }
 .chain-node .trace-tags i { font-style: normal; font-size: 11px; line-height: 16px; min-width: 16px; text-align: center; padding: 0 3px; border-radius: 8px; background: #f5b942; color: #3a2705; font-weight: 700; box-shadow: 0 0 8px rgba(245,185,66,.6); }
@@ -641,3 +638,24 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
 /* 档案里每张角色卡下面的凭证状态 / 签发入口 */
 .vc-card-act { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .chain-more { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 2px 18px 8px; font-size: 12px; color: #9db1e2; }
+
+/* 三行十列：块多时按宽度缩成 md / sm 两档，行高也跟着降。--cy / --sink 同时驱动连线与转弯 */
+.chain-track.tier-md { --cy: 49px; --sink: 60px; --lmin: 168px; }
+.chain-track.tier-sm { --cy: 41px; --sink: 52px; --lmin: 140px; }
+.chain-track.tier-md .cube-zone { --s: 52px; height: 104px; }
+.chain-track.tier-sm .cube-zone { --s: 40px; height: 88px; }
+.chain-track.tier-md .chain-row, .chain-track.tier-sm .chain-row { padding: 0 40px; }
+.chain-track.tier-md .chain-row .chain-link, .chain-track.tier-sm .chain-row .chain-link { min-width: 10px; }
+.chain-track.tier-md .chain-node { padding: 2px 4px 6px; }
+.chain-track.tier-sm .chain-node { padding: 2px 2px 5px; }
+.chain-track.tier-md .blk-line, .chain-track.tier-sm .blk-line { font-size: 11px; line-height: 1.7; }
+.chain-track.tier-sm .blk-line { font-size: 10.5px; line-height: 1.6; }
+.chain-track.tier-md .blk-title { font-size: 12px; }
+.chain-track.tier-sm .blk-title { font-size: 11.5px; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 3px; }
+.chain-track.tier-sm .blk-mix .mx { padding: 0 3px; font-size: 10px; }
+.d-short { display: none; }
+.tier-md .d-short, .tier-sm .d-short { display: inline; }
+.tier-md .d-full, .tier-sm .d-full { display: none; }
+.tier-md .node-open, .tier-sm .node-open, .tier-sm .x, .tier-sm .blk-root { display: none; }
+.tier-sm .dpill { font-size: 10px; padding: 0 5px; }
+.chain-btn:disabled { opacity: .4; cursor: not-allowed; }
