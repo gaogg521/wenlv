@@ -238,7 +238,7 @@ window.coPayHistory = async (id) => {
       <td class="td-sub">${esc(y.operator || '')}${y.approver ? '<br>复核：' + esc(y.approver) : ''}${y.approve_note ? '<br>' + esc(y.approve_note) : ''}</td>
       <td><div class="td-actions">
         ${y.receipt_url ? `<button class="btn ghost sm" onclick="coViewReceipt(${y.id})">回单</button>` : ''}
-        ${Number(y.direction) === 1 && Number(y.status) === 1 && canPay ? `<button class="btn danger sm" onclick="coReverseModal(${id}, ${y.id}, '${esc(y.pay_ref)}', ${Number(y.amount)})">冲正</button>` : ''}
+        ${Number(y.direction) === 1 && Number(y.status) === 1 && canPay ? `<button class="btn danger sm" onclick="coReverseModal(${id}, ${y.id}, '${escJs(y.pay_ref)}', ${Number(y.amount)})">冲正</button>` : ''}
         ${Number(y.status) === 0 && isSuper ? `<button class="btn primary sm" onclick="coApprove(${id}, ${y.id}, true)">通过</button><button class="btn danger sm" onclick="coApprove(${id}, ${y.id}, false)">驳回</button>` : ''}
         ${Number(y.status) === 0 && canPay && y.operator === myOperator ? `<button class="btn ghost sm" onclick="coWithdraw(${id}, ${y.id})">撤回</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">暂无打款流水</div>')

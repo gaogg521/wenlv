@@ -19,7 +19,7 @@ async function config() {
       <td class="td-sub">${esc(r.memo || '')}</td>
       <td>${Number(r.sensitive) ? '<span class="pill warn">双人复核</span>' : '<span class="pill off">直接生效</span>'}</td>
       <td class="td-sub">${esc(String(r.updated_at).slice(5, 16))}${r.updated_by ? ' · ' + esc(r.updated_by) : ''}</td>
-      <td><button class="btn ghost sm" onclick="cfgEdit('${esc(r.k)}', '${esc(String(r.v)).replace(/'/g, '')}')">修改</button></td></tr>`).join('')}</tbody></table>` : emptyBox('该分组暂无参数')}
+      <td><button class="btn ghost sm" onclick="cfgEdit('${escJs(r.k)}', '${escJs(String(r.v))}')">修改</button></td></tr>`).join('')}</tbody></table>` : emptyBox('该分组暂无参数')}
   </div>`
 }
 function cfgEdit(k, v) {
@@ -28,9 +28,9 @@ function cfgEdit(k, v) {
     <input id="cfg_new" value="${esc(v)}" style="width:100%;margin-top:8px;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px"></div>
     <input id="cfg_reason" placeholder="修改原因（必填，将写入审计）" style="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px">
     <div id="cfg_hint" class="muted" style="margin-top:10px"></div>`,
-    `<button class="btn ghost" onclick="cfgHistory('${esc(k)}')">变更历史</button>
+    `<button class="btn ghost" onclick="cfgHistory('${escJs(k)}')">变更历史</button>
      <button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn primary" onclick="cfgPropose('${esc(k)}')">提交提案</button>`)
+     <button class="btn primary" onclick="cfgPropose('${escJs(k)}')">提交提案</button>`)
 }
 async function cfgPropose(k) {
   const reason = $('#cfg_reason').value.trim()
@@ -52,7 +52,7 @@ async function cfgHistory(k) {
       <td class="td-sub">${esc(h.proposer)} → ${esc(h.approver || '待批')}</td>
       <td>${['<span class="pill warn">待审</span>' + (ME.role !== 'ops' ? ` <button class="btn primary sm" onclick="cfgApprove(${h.id})">审批生效</button>` : ''), '<span class="pill ok">生效</span>', '<span class="pill s70">驳回</span>', '<span class="pill off">回滚</span>'][h.status]}</td></tr>`).join('')}
     </tbody></table>
-    <div class="row" style="margin-top:14px"><button class="btn ghost sm" onclick="cfgRollback('${esc(k)}')">↩ 回滚到上一版本</button></div>`
+    <div class="row" style="margin-top:14px"><button class="btn ghost sm" onclick="cfgRollback('${escJs(k)}')">↩ 回滚到上一版本</button></div>`
     : emptyBox('无变更记录'),
     `<button class="btn ghost" onclick="closeModal()">关闭</button>`)
 }
@@ -215,7 +215,7 @@ async function features() {
     <table><thead><tr><th>能力</th><th>说明</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${rows.map((f) => `<tr><td><code>${esc(f.key)}</code></td><td class="td-sub">${esc(f.memo || '')}</td>
       <td>${f.on ? '<span class="pill ok">开启</span>' : '<span class="pill off">关闭</span>'}</td>
-      <td><button class="btn ${f.on ? 'ghost' : 'primary'} sm" onclick="toggleFeature('${esc(f.key)}')">${f.on ? '关闭' : '开启'}</button></td></tr>`).join('')}
+      <td><button class="btn ${f.on ? 'ghost' : 'primary'} sm" onclick="toggleFeature('${escJs(f.key)}')">${f.on ? '关闭' : '开启'}</button></td></tr>`).join('')}
     </tbody></table>
     <p class="muted" style="margin-top:12px">扩展维度：feature.city.320508（苏州开城）· feature.promo（推广灰度）· 新主题小程序上线 = 新增 feature.channel.yoga</p>
   </div>`
@@ -260,7 +260,7 @@ async function security() {
         ${Number(a2.mfa_force) ? '<span class="pill s70">单账号强制</span>' : ''}${Number(a2.mfa_exempt) ? '<span class="pill s40">豁免</span>' : ''}</td>
       <td class="td-sub">${esc(a2.mobile || a2.email || '—')}</td>
       <td class="td-sub">${esc(String(a2.last_login_at || '').slice(5, 16))}</td>
-      <td><button class="btn ghost sm" onclick="mfaSetup(${a2.id}, '${esc(a2.username)}')">开 TOTP</button>
+      <td><button class="btn ghost sm" onclick="mfaSetup(${a2.id}, '${escJs(a2.username)}')">开 TOTP</button>
           <button class="btn ghost sm" onclick="bindContact(${a2.id}, 'sms')">绑手机</button>
           <button class="btn ghost sm" onclick="bindContact(${a2.id}, 'email')">绑邮箱</button>
           <button class="btn ghost sm" onclick="mfaFlagsHere(${a2.id}, { exempt: ${Number(a2.mfa_exempt) ? 0 : 1} })">${Number(a2.mfa_exempt) ? '取消豁免' : '设为豁免'}</button>
@@ -397,8 +397,8 @@ async function integrations() {
         <td style="width:340px">${f.label ? `<div>${esc(f.label)}</div><code class="td-sub">${esc(f.key)}</code>` : `<code>${esc(f.key)}</code>`}</td>
         <td>${f.stored ? `<span class="pill ok">${esc(f.stored)}</span>` : f.envFallback ? '<span class="pill s20">来自 .env</span>' : '<span class="pill off">未设置</span>'}</td>
         <td style="text-align:right">
-          ${ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn ghost sm" onclick="setCred('${esc(f.key)}', ${f.secret ? 'true' : 'false'})">设置</button>
-          ${f.stored ? `<button class="btn danger sm" onclick="delCred('${esc(f.key)}')">清除</button>` : ''}` : '<span class="td-sub">凭据由超级管理员维护</span>'}
+          ${ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn ghost sm" onclick="setCred('${escJs(f.key)}', ${f.secret ? 'true' : 'false'})">设置</button>
+          ${f.stored ? `<button class="btn danger sm" onclick="delCred('${escJs(f.key)}')">清除</button>` : ''}` : '<span class="td-sub">凭据由超级管理员维护</span>'}
         </td></tr>`).join('')}</table>
     </div>`).join('')}
   </div>`

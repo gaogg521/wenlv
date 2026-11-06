@@ -307,20 +307,14 @@ await t('员工邀请：老板取邀请码 → 新人加入 → 老板在店员�
   const off = await call('POST', '/m/auth/login', { code: 'mock-xend-newstaff-' + stamp, merchantId: sess.merchant_id })
   assert.ok(off.code !== 0 || !off.data.role, '停用的店员不应再拿到门店权限')
 })
-await t('实名认证：A 提交 → 后台待审（身份证脱敏）→ 驳回理由 A 可见 → 重新提交通过后 A 状态与后台画像同步', async () => {
+await t('实名认证入口已下线（A-06）：提交被明确拒绝且不落库；mine 接口仍可读存量掩码', async () => {
   const u = await login('mock-xend-kyc-' + stamp); const kt = u.token
   const idNo = '31010119900307' + String(Math.floor(Math.random() * 9000) + 1000)
-  ok(await call('POST', '/c/kyc/submit', { realName: '张三', idNo }, kt))
-  assert.equal(ok(await call('GET', '/c/kyc/mine', null, kt)).status, 0)
-  const wl = ok(await call('GET', '/admin/kyc?status=0', null, A)).find((k) => Number(k.user_id) === Number(u.user.id))
-  assert.ok(wl, '后台应看到待审实名'); assert.ok(!JSON.stringify(wl).includes(idNo), '后台列表不应出现完整身份证号'); assert.ok(/\*/.test(wl.id_no_mask))
-  ok(await call('POST', `/admin/kyc/${wl.id}/resolve`, { action: 'reject', note: '照片不清晰，请重新提交' }, A))
-  const mine = ok(await call('GET', '/c/kyc/mine', null, kt)); assert.equal(mine.status, 2); assert.match(mine.reject_note, /不清晰/)
-  ok(await call('POST', '/c/kyc/submit', { realName: '张三', idNo }, kt))
-  const again = ok(await call('GET', '/admin/kyc?status=0', null, A)).find((k) => Number(k.user_id) === Number(u.user.id))
-  ok(await call('POST', `/admin/kyc/${again.id}/resolve`, { action: 'pass' }, A))
-  assert.equal(ok(await call('GET', '/c/kyc/mine', null, kt)).status, 1)
-  assert.equal(ok(await call('GET', `/admin/users/${u.user.id}`, null, A)).kyc.status, 1, '后台用户画像里的实名状态同步')
+  const r = await call('POST', '/c/kyc/submit', { realName: '张三', idNo }, kt)
+  assert.notEqual(r.code, 0, '入口下线后提交应被拒绝')
+  assert.match(r.msg || '', /暂停|升级|下线/, '给出明确的下线提示')
+  assert.equal(ok(await call('GET', '/c/kyc/mine', null, kt)).status, -1, '未新建档案')
+  assert.ok(!(await one('SELECT id FROM kyc_application WHERE user_id = ?', [u.user.id])), '不得新建 KYC 档案')
 })
 let promoter5
 await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × 费率；A（推广员）、后台推广员列表对得上，客户清单非空', async () => {
@@ -387,16 +381,20 @@ await t('离线冲突里有凭证的（如离线时码已过期）：运营确�
   assert.ok(await one('SELECT id FROM verification_log WHERE pass_id = ? AND method = 3 AND result = 1', [z.passId]), '应有人工确认的核销记录')
   await q('DELETE FROM verify_offline_conflict WHERE id = ?', [cid])
 })
-await t('暗号核销：后台设置 → A 只看到上半句（下半句不下发）→ B 错暗号被拒、对暗号核销并拿到下半句 → A / 后台订单 40；重复暗号不能再核销', async () => {
+await t('暗号核销：后台设置 → A 只看到上半句（下半句不下发）→ B 错暗号被拒、对暗号核销并拿到下半句 → A / 后台订单 40；重复暗号返回失败且不下发对答句', async () => {
   const ph = await newPaid(C)
   const up = '跨端上句' + stamp, down = '跨端下句' + stamp
   const prev = await one('SELECT phrase_user, phrase_merchant FROM tour_product WHERE id = ?', [sess.product_id])
+  const prevDate = await one('SELECT depart_date FROM tour_session WHERE id = ?', [sess.id])
   ok(await call('POST', `/admin/phrases/${sess.product_id}`, { userPhrase: up, merchantPhrase: down }, A))
+  // A-04：暗号只匹配当日可核销团期 —— 把夹具团期拨到今天再核销，结束后还原
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [sess.id])
   try {
     assert.ok(ok(await call('GET', '/admin/phrases?pageSize=100', null, A)).rows.some((p) => Number(p.id) === sess.product_id && p.phrase_user === up))
     const a = ok(await call('GET', `/c/orders/${ph.orderNo}/phrase`, null, C))
     assert.equal(a.enabled, true); assert.equal(a.userPhrase, up); assert.ok(!JSON.stringify(a).includes(down), 'A 端不应拿到下半句')
     const bad = ok(await call('POST', '/m/verify/phrase', { phrase: '不对的暗号', orderNo: ph.orderNo }, B)); assert.equal(bad.ok, false)
+    assert.ok(!bad.counterPhrase, '错暗号不下发对答句')
     assert.equal(ok(await call('GET', '/c/orders/' + ph.orderNo, null, C)).status, 30, '错暗号不应核销')
     const good = ok(await call('POST', '/m/verify/phrase', { phrase: up, orderNo: ph.orderNo }, B))
     assert.equal(good.ok, true); assert.equal(good.counterPhrase, down); assert.ok(good.verified >= 1)
@@ -404,8 +402,13 @@ await t('暗号核销：后台设置 → A 只看到上半句（下半句不下�
     assert.equal(a2.status, 40); assert.ok(a2.passes.every((p) => p.status === 2))
     assert.equal(Number(ok(await call('GET', '/admin/orders/' + ph.orderNo, null, A)).status), 40)
     assert.ok(await one('SELECT id FROM verification_log WHERE pass_id = ? AND method = 4 AND result = 1', [ph.passId]), '应有暗号核销记录')
-    assert.equal(ok(await call('POST', '/m/verify/phrase', { phrase: up, orderNo: ph.orderNo }, B)).ok, true, '已核销订单再对暗号：不应报错')
-  } finally { await q('UPDATE tour_product SET phrase_user = ?, phrase_merchant = ? WHERE id = ?', [prev.phrase_user, prev.phrase_merchant, sess.product_id]) }
+    const again = ok(await call('POST', '/m/verify/phrase', { phrase: up, orderNo: ph.orderNo }, B))
+    assert.equal(again.ok, false, '已核销订单再对暗号：返回失败（A-04，不再「已核销 0 张」假成功）')
+    assert.ok(!again.counterPhrase, '失败时不下发对答句')
+  } finally {
+    await q('UPDATE tour_product SET phrase_user = ?, phrase_merchant = ? WHERE id = ?', [prev.phrase_user, prev.phrase_merchant, sess.product_id])
+    await q('UPDATE tour_session SET depart_date = ? WHERE id = ?', [prevDate.depart_date, sess.id])
+  }
 })
 await t('核销的城市归属：外城门店的扫码 / 离线批量核销，核销记录里的城市是门店所在城市，不是写死的青浦', async () => {
   const other = await one(`SELECT s.id sid, p.merchant_id mid, p.city_code FROM tour_session s JOIN tour_product p ON p.id = s.product_id JOIN merchant m ON m.id = p.merchant_id

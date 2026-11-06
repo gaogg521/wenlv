@@ -27,7 +27,8 @@ const ctx = {
   window: {}, localStorage: { getItem: () => '', setItem: noop }, navigator: { clipboard: { writeText: () => Promise.resolve() } },
   console, setTimeout, clearInterval, setInterval, Date, Math, JSON, Number, String, Object, Array, Promise, innerHeight: 900, innerWidth: 1400,
 }
-ctx.esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))   // 与 core.js 的 esc 同一语义（不转义单引号）
+ctx.esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))   // 与 core.js 的 esc 同一语义
+ctx.escJs = (v) => String(v ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))   // 与 core.js 的 escJs 同一语义（A-05）
 ctx.toast = (m, err) => toasts.push({ m, err: !!err })
 ctx.$ = (sel) => (sel === '#app' ? app : mkEl())
 ctx.api = (m, url) => { calls.push(url); const v = apiData[url.split('?')[0]]; return Promise.resolve(typeof v === 'function' ? v(url) : (v ?? {})) }

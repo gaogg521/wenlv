@@ -83,7 +83,12 @@ function auditDiff(before, after) {
   }).join('') + (keys.length > 6 ? `<div class="k">… 共 ${keys.length} 项</div>` : '') + '</div>'
 }
 const bizTag = (t) => `<span class="biz-tag">${BIZ_CN[t] || t}<small>${t}</small></span>`
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+// escJs：JS 字符串上下文转义，专用于事件处理器属性里的字符串参数（onclick="fn('${escJs(x)}')"）。
+// 浏览器先把属性值做 HTML 实体解码、再当 JS 编译，所以 esc() 的 &#39; 挡不住 `');…` 型逃逸（A-05 存储型 XSS）。
+// 这里把引号/反斜线/尖括号/&/换行全部转成 \xNN：HTML 层看到的是普通文本，JS 层是合法转义——
+// 参数按原文到达函数（round-trip），注入的代码不会执行。
+const escJs = (s) => String(s ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))
 const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
 

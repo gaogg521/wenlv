@@ -2,7 +2,8 @@
 <view class="card fade-up" wx:if="{{orders.length}}">
   <view class="row" bindtap="goDetail" data-no="{{item.order_no}}" wx:for="{{orders}}" wx:key="order_no">
     <view style="flex:1;min-width:0"><b>{{item.title}}</b>
-      <view class="sub">{{item.order_no}} · {{item.contact_name || '游客'}} · {{item.qty}}人</view></view>
+      <view class="sub">{{item.order_no}} · {{item.contact_name || '游客'}} · {{item.qty}}人</view>
+      <view wx:if="{{item.rebook}}" class="sub" style="color:#d97706">免费改签单 · 实收 ¥0（改签成本由本店承担）</view></view>
     <view style="text-align:right;flex-shrink:0"><view class="money">¥{{item.amount_pay / 100}}</view>
       <view class="pill p{{item.status}}" style="margin-top:8rpx">{{item.statusText}}</view></view>
   </view>

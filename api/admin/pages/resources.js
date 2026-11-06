@@ -19,7 +19,7 @@ async function scenics() {
       <td>${esc(s.coop_mode || '—')}</td><td class="td-sub">${esc(s.ticket_interface || '—')}</td>
       <td class="td-sub">${esc(s.contact_name || '—')}${s.contact_phone ? '<br>' + esc(s.contact_phone) : ''}</td>
       <td class="td-sub">${esc(s.profit_terms || '—')}</td>
-      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${esc(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
+      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${escJs(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
       <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
@@ -57,7 +57,7 @@ async function suppliers() {
       <td class="td-sub">${esc(s.contact_name || '—')}${s.contact_phone ? '<br>' + esc(s.contact_phone) : ''}</td>
       <td>${esc(SETTLE_MODE[s.settle_mode] || s.settle_mode)}</td>
       <td class="td-sub">${esc(s.note || '—')}</td>
-      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('supplier',${s.id},'${esc(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
+      <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('supplier',${s.id},'${escJs(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
       <td><button class="btn ghost sm" onclick="editSupplier(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无供应商：门票/大巴/酒店等资源方在这里入库，商品可关联')}
   </div>`

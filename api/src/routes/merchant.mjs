@@ -202,21 +202,24 @@ const m = {
 
   'GET /m/orders': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name
+    // A-01：rebook 标记 = 免费改签单（实收 ¥0，改签成本商户承担），商户端要能一眼认出
+    const rows = await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name, (o.rebook_of IS NOT NULL) AS rebook
       FROM orders o JOIN tour_product p ON p.id = o.product_id
       WHERE o.merchant_id = ? AND o.status >= 20 ORDER BY o.id DESC LIMIT 50`, [u.merchantId])
+    return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
   },
 
   'GET /m/orders/:no': async (req) => {
     const u = requireUser(req)
-    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,o.created_at,o.paid_at,p.title,s.depart_date
+    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,o.created_at,o.paid_at,o.rebook_of,p.title,s.depart_date
       FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
     if (!o) throw new BizError(2003, '本店无此订单')
     // 密文优先（V38）；历史明文在旧列，加密脚本跑完后清空
     const phone = o.contact_phone_sealed ? (openMobile(o.contact_phone_sealed) || '') : (o.contact_phone_enc ? String(o.contact_phone_enc) : '')
     const passes = await q('SELECT id,status FROM travel_pass WHERE order_id=?', [o.id])
-    const { contact_phone_enc, contact_phone_sealed, ...safe } = o
-    return { ...safe, contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
+    const { contact_phone_enc, contact_phone_sealed, rebook_of, ...safe } = o
+    return { ...safe, rebook: !!rebook_of, rebookOf: rebook_of || null,
+      contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
   },
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
@@ -236,11 +239,21 @@ const m = {
     if (action === 'price' && (!Number.isInteger(value) || value <= 0)) throw new BizError(1001, '价格必须为正整数分')
     if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid]); return { stopped: true } }
     if (action === 'adjust_quota') { await q('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid]); return { quota: value } }
-    if (action === 'price') { await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [value, req.params.sid]); return { price: value } }
+    if (action === 'price') {
+      // A-07：改现价同步校验——不得低于已设早鸟价，否则早鸟窗口内游客按更高价成交还显示"早鸟价"
+      const s = await one('SELECT early_price FROM tour_session WHERE id = ?', [req.params.sid])
+      if (s && s.early_price != null && value <= Number(s.early_price))
+        throw new BizError(1001, '现价需高于已设置的早鸟价 ' + fen2yuan(s.early_price) + ' 元（请先关闭早鸟或调低早鸟价）')
+      await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [value, req.params.sid])
+      return { price: value }
+    }
     if (action === 'early') {
       // 早鸟价（旺季武器 §9 P1）：value={price, days}；price=null 关闭
+      // A-07：早鸟价必须为正整数且严格低于现价（负数早鸟会造出负金额订单）；early_days 必须为非负整数
       const price = value && value.price != null ? Number(value.price) : null
-      const days = value && value.days != null ? Math.max(0, Number(value.days)) : 3
+      const days = value && value.days != null ? Number(value.days) : 3
+      if (price != null && (!Number.isInteger(price) || price <= 0)) throw new BizError(1001, '早鸟价必须为正整数分')
+      if (value && value.days != null && (!Number.isInteger(days) || days < 0)) throw new BizError(1001, '提前天数必须为非负整数')
       if (price != null && price >= (await one('SELECT price_adult FROM tour_session WHERE id = ?', [req.params.sid])).price_adult)
         throw new BizError(1001, '早鸟价需低于原价')
       await q('UPDATE tour_session SET early_price = ?, early_days = ? WHERE id = ?', [price, price == null ? null : days, req.params.sid])
@@ -280,10 +293,11 @@ const m = {
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
     const s = await one('SELECT * FROM settlement WHERE id = ? AND merchant_id = ?', [req.params.id, u.merchantId])
     if (!s) throw new BizError(1004, '结算单不存在')
-    // 明细：本单包含的订单（settlement_id 挂钩，对账逐单可查）
-    const items = await q(`SELECT o.order_no, o.amount_pay, o.completed_at, p.title FROM orders o
+    // 明细：本单包含的订单（settlement_id 挂钩，对账逐单可查）；免费改签单不进结算，历史单如混入也带出标记
+    const items = (await q(`SELECT o.order_no, o.amount_pay, o.completed_at, p.title, (o.rebook_of IS NOT NULL) AS rebook FROM orders o
       JOIN tour_product p ON p.id = o.product_id
-      WHERE o.settlement_id = ? AND o.merchant_id = ? ORDER BY o.id DESC`, [req.params.id, u.merchantId])
+      WHERE o.settlement_id = ? AND o.merchant_id = ? ORDER BY o.id DESC`, [req.params.id, u.merchantId]))
+      .map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
     return { ...s, items }
   },
 
@@ -340,7 +354,13 @@ const mSite = {
 
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------
 const mPhrase = {
-  // 核销员输入游客说出的暗号 → 与本店已出票订单的产品用户暗号比对；命中即核销该订单全部有效凭证
+  // 核销员输入游客说出的暗号 → 与本店已出票订单的产品用户暗号比对；命中即核销该订单全部有效凭证。
+  // A-04（全量检查 20261106）：
+  //  1) 暗号是商品级的，多张在途订单同码时不再"默认核最新一单"——返回 needConfirm + 候选订单（单号/联系人/出发日），
+  //     由店员与游客当面确认后带 orderNo 重提；确认前绝不下发商户对答句；
+  //  2) 只匹配"当日可核销团期"（出发日 ≤ 今天 ≤ 出发日 + N，与扫码日期窗同一套 pass.verifyWindowOk）；
+  //  3) 已退款/已核销/无凭证的订单一律失败，不下发对答句；
+  //  4) 流水按凭证逐条记本店 merchant_id 与暗号方式（adminConfirmPass 内实现）。
   'POST /m/verify/phrase': async (req) => {
     const u = requireUser(req)
     const { phrase, orderNo } = req.body
@@ -359,29 +379,51 @@ const mPhrase = {
       if (pf.phrase_end && today > pf.phrase_end) return '该线路暗号已于 ' + pf.phrase_end + ' 停用，请改用扫码核销'
       return null
     }
-    let o = null
     if (orderNo) {
-      o = await one(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
-        JOIN tour_product p ON p.id = o.product_id WHERE o.order_no = ? AND o.merchant_id = ?`,
-        [orderNo, u.merchantId])
-    } else {
-      const cands = await q(`SELECT o.id, o.order_no, o.city_code, p.phrase_user, p.phrase_merchant, p.profile FROM orders o
-        JOIN tour_product p ON p.id = o.product_id
-        WHERE o.merchant_id = ? AND p.phrase_user IS NOT NULL AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 200`,
-        [u.merchantId])
-      o = cands.find(accepts) || null
+      const o = await one(`SELECT o.id, o.order_no, o.status, o.city_code, o.rebook_of, s.depart_date,
+          p.phrase_user, p.phrase_merchant, p.profile
+        FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN tour_session s ON s.id = o.session_id
+        WHERE o.order_no = ? AND o.merchant_id = ?`, [orderNo, u.merchantId])
+      if (!o || !o.phrase_user) return { ok: false, reason: '未找到对应该暗号的在途订单' }
+      if (!accepts(o)) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+      const werr = windowErr(o)
+      if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
+      if (![20, 30].includes(Number(o.status)))
+        return { ok: false, reason: Number(o.status) === 40 || Number(o.status) === 50 ? '该订单已核销过（重复核销）' : '该订单已退款或已关闭，不可核销', orderNo: o.order_no }
+      const vw = await pass.verifyWindowOk(o.depart_date)
+      if (!vw.ok) return { ok: false, reason: vw.reason, orderNo: o.order_no }
+      const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
+      if (!ids.length) return { ok: false, reason: '该订单没有可核销的凭证（可能已核销或已退款）', orderNo: o.order_no }
+      for (const pid of ids) {
+        // 暗号核销不是窗口码：way=phrase 作后缀区分事件来源，流水+存证由 adminConfirmPass 在同一事务里写
+        await pass.adminConfirmPass(pid, u.uid, 'phrase')
+      }
+      return { ok: true, reason: '暗号对上了 · 已核销 ' + ids.length + ' 张凭证', orderNo: o.order_no, verified: ids.length,
+        counterPhrase: o.phrase_merchant || null }
     }
-    if (!o || !o.phrase_user) return { ok: false, reason: '未找到对应该暗号的在途订单' }
-    if (!accepts(o)) return { ok: false, reason: '暗号不对（再核对一下游客说的口令）', orderNo: o.order_no }
+    // 未带订单号：在本店"当日可核销"的已出票订单里找暗号命中者
+    const cands = (await q(`SELECT o.id, o.order_no, o.contact_name, o.qty, o.city_code, s.depart_date,
+        p.phrase_user, p.phrase_merchant, p.profile
+      FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN tour_session s ON s.id = o.session_id
+      WHERE o.merchant_id = ? AND p.phrase_user IS NOT NULL AND o.status IN (20,30) ORDER BY o.id DESC LIMIT 200`,
+      [u.merchantId])).filter((o) => accepts(o))
+    const dated = []
+    for (const o of cands) {
+      if (!(await pass.verifyWindowOk(o.depart_date)).ok) continue
+      dated.push(o)
+    }
+    if (!dated.length) return { ok: false, reason: '未找到对应该暗号的在途订单（仅限出发日至结束日内的订单；请让游客出示核销码扫码核销）' }
+    if (dated.length > 1) {
+      return { ok: false, needConfirm: true, reason: '该暗号对应多张在途订单，请与游客核对后选择',
+        candidates: dated.slice(0, 6).map((o) => ({ orderNo: o.order_no, contactName: o.contact_name || null,
+          departDate: String(o.depart_date).slice(0, 10), qty: Number(o.qty) })) }
+    }
+    const o = dated[0]
     const werr = windowErr(o)
     if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
     const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
-    for (const pid of ids) {
-      // 暗号核销不是窗口码：way=phrase 作后缀区分事件来源，存证由 adminConfirmPass 在同一事务里写
-      await pass.adminConfirmPass(pid, u.uid, 'phrase')
-    }
-    if (ids.length) await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,?,1,?)',
-      [ids[0], u.merchantId, u.uid, 4, o.city_code || '310118'])
+    if (!ids.length) return { ok: false, reason: '该订单没有可核销的凭证（可能已核销或已退款）', orderNo: o.order_no }
+    for (const pid of ids) await pass.adminConfirmPass(pid, u.uid, 'phrase')
     return { ok: true, reason: '暗号对上了 · 已核销 ' + ids.length + ' 张凭证', orderNo: o.order_no, verified: ids.length,
       counterPhrase: o.phrase_merchant || null }
   },

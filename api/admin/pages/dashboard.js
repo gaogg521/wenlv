@@ -288,7 +288,7 @@ function dxOrdersCard(recent) {
   return `<section class="dx-card"><div class="dx-hd"><h3>最新订单</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">最近 8 笔，不随统计周期变化</span>
     <span class="dx-right"><button class="btn ghost sm" onclick="go('orders')">全部订单 →</button></span></div>
     ${recent.length ? `<div class="table-wrap"><table><thead><tr><th>单号</th><th>商品</th><th>用户</th><th>金额</th><th>状态</th><th>支付时间</th></tr></thead><tbody>
-      ${recent.map((o) => `<tr style="cursor:pointer" onclick="orderDrawer('${esc(o.order_no)}')">
+      ${recent.map((o) => `<tr style="cursor:pointer" onclick="orderDrawer('${escJs(o.order_no)}')">
         <td class="num">${esc(o.order_no)}</td><td class="td-main">${esc(o.title)}</td><td>${esc(o.nickname)}</td>
         <td class="money num">${fen(o.amount_pay)}</td><td><span class="pill s${o.status}">${ST[o.status]}</span></td>
         <td class="td-sub">${esc(String(o.paid_at || o.created_at || '').slice(5, 16))}</td></tr>`).join('')}</tbody></table></div>` : emptyBox('还没有订单')}</section>`

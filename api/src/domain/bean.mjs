@@ -153,6 +153,40 @@ export async function releaseDeferredRebates(userId) {
 }
 
 /**
+ * 过期应扣量（A-02，FIFO 口径）：发放按批次（账本入账行）记账，消费从最早批次扣起；
+ * 过期 = 各过期批次（发放时间早于 NOW()-expire_months）中"尚未被消费"的剩余量之和。
+ * 关键不变式：各批次剩余量之和恒等于账户余额，因此"应扣 ≤ 余额"天然成立；
+ * 过期扣减本身也是一笔消费（biz=6），会扣掉对应批次 → 天然幂等，连跑多轮只扣一次。
+ * 批次口径：贷方（direction=1）为发放 1/2/3 与退款退回 5、存量导入 8；借方（direction=2）为 4/6/7 消费。
+ * 仅 1/2/3（营销发放）参与过期；5/8 不参与（存量导入与退款退回没有约定有效期）。
+ */
+export async function expiredDue(userId, months, connection) {
+  const run = (c) => c.q(`SELECT l.id, l.direction, l.amount, l.biz_type, (SELECT NOW() - INTERVAL ? MONTH) AS cutoff, l.created_at
+    FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+    WHERE a.user_id = ? AND a.user_id < 999999000000 ORDER BY l.id`, [months, userId])
+  const rows = connection ? await run(connection) : await q(`SELECT l.id, l.direction, l.amount, l.biz_type, (SELECT NOW() - INTERVAL ? MONTH) AS cutoff, l.created_at
+    FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+    WHERE a.user_id = ? AND a.user_id < 999999000000 ORDER BY l.id`, [months, userId])
+  const batches = []
+  for (const r of rows) {
+    const type = Number(r.biz_type), amt = Number(r.amount)
+    if (Number(r.direction) === 1) {
+      if ([1, 2, 3, 5, 8].includes(type)) batches.push({ remaining: amt, expirable: [1, 2, 3].includes(type), created: r.created_at })
+    } else if ([4, 6, 7].includes(type)) {
+      let need = amt
+      for (const b of batches) { if (need <= 0) break; const take = Math.min(b.remaining, need); b.remaining -= take; need -= take }
+    }
+  }
+  const cutoff = rows.length ? rows[0].cutoff : null
+  if (!cutoff) return 0
+  let due = 0
+  for (const b of batches) {
+    if (b.expirable && b.remaining > 0 && new Date(b.created) < new Date(cutoff)) due += b.remaining
+  }
+  return due
+}
+
+/**
  * 旅豆发放 / 净消耗（按"数量"，不是账本行数）。
  * 发放 = 用户户收到的 1/2/3 类入账；消耗 = 用户户被扣的 4/6/7 类出账 − 退款冲正退回的 5 类入账。
  * 注意不能数 direction=2 的全部行：每笔发放在预算哨兵户上还有一条借方，数进去会让"使用率"虚高、甚至超过 100%。

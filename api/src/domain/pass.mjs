@@ -3,6 +3,7 @@
 import crypto from 'node:crypto'
 import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
+import { bizDay } from '../infra/bizdate.mjs'
 import * as order from './order.mjs'
 import { attest as attestCore } from './attest.mjs'
 
@@ -41,8 +42,21 @@ export async function issueForOrder(orderNo) {
   })
 }
 
-export async function currentQr(passId) {
-  const win = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
+/** 核销日期窗（A-04/A-11，负责人 2026-11-06 决定）：出发日当天 ≤ 今日 ≤ 出发日 + N 天（多日行程覆盖，N 走参数中心）。
+ *  @param departDate 团期出发日（DATE / 'YYYY-MM-DD'）
+ *  @returns { ok, reason, departDate, endDate } */
+export async function verifyWindowOk(departDate) {
+  const today = bizDay()
+  const dep = String(departDate || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dep)) return { ok: false, reason: '团期缺少出发日，无法核销', departDate: dep || null, endDate: null }
+  const endDays = await cfgNum('pass.verify_end_days')
+  const end = bizDay(Number(endDays) || 0, new Date(dep + 'T00:00:00'))
+  if (today < dep) return { ok: false, reason: '未到出发日（' + dep + '），暂不可核销', departDate: dep, endDate: end }
+  if (today > end) return { ok: false, reason: '已超过核销有效期（' + dep + ' 出发，' + end + ' 截止）', departDate: dep, endDate: end }
+  return { ok: true, departDate: dep, endDate: end }
+}
+
+export async function currentQr(passId) {  const win = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
   await q('INSERT IGNORE INTO pass_code (pass_id, window_no, code_hash) VALUES (?,?,?)', [passId, win, sign(passId, win)])
   return { qr: qrPayload(passId, win), display: displayCode(passId, win), window: win, expiresIn: await cfgNum('pass.code_window') }
 }
@@ -151,17 +165,20 @@ export async function offlineListForStore(merchantId) {
   return { syncedAt: new Date().toISOString(), windowNo: win, passes, codes }
 }
 
-/** 人工队列确认核销：凭证置已核销 + 补流水 + 全单核销完推订单 40 */
+/** 人工队列/暗号确认核销：凭证置已核销 + 补流水 + 全单核销完推订单 40。
+ *  A-04：流水必须记订单所属门店的 merchant_id（此前写死 0，商户「今日核销」和记录少算），
+ *  方式按来源区分（admin=3 人工 / phrase=4 暗号），每张凭证一条流水。 */
 export async function adminConfirmPass(passId, adminId, way = 'admin') {
   const p = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!p) throw new Error('凭证不存在')
   if (p.status !== 1) return false
   const oc = await one('SELECT city_code, merchant_id FROM orders WHERE id = ?', [p.order_id])
+  const method = way === 'phrase' ? 4 : 3
   await tx(async (c) => {
     const n = await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ? AND status = 1', [passId])
     if (n !== 1) throw new Error('并发冲突')
-    await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,3,1,?)',
-      [passId, 0, adminId || 0, oc && oc.city_code ? oc.city_code : '310118'])
+    await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,?,1,?)',
+      [passId, (oc && Number(oc.merchant_id)) || 0, adminId || 0, method, oc && oc.city_code ? oc.city_code : '310118'])
     // 核销即存证（同事务）。扫码路径在 verifyScan 里写；这里覆盖人工确认（way=admin）与暗号核销（way=phrase），
     // 之前人工确认的核销没有存证，订单"六锚"的核销一步在链上是空的。biz_ref 带来源后缀，避免与扫码事件互相覆盖
     await attestCore('pass_verify', 'pass-' + passId + '-' + way, {

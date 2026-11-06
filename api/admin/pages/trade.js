@@ -6,12 +6,12 @@ async function orderDrawer(no) {
   const o = await api('GET', '/admin/orders/' + no)
   drawer(`订单 ${esc(o.order_no)}`, `
     <div class="order-service-actions">
-      ${adminCan('order.service') ? `<button class="btn primary sm" onclick="editOrderContact('${esc(o.order_no)}')" ${[10,20,30].includes(Number(o.status)) ? '' : 'disabled title="已核销或已终结订单保留原联系人"'}>修正联系人</button><button class="btn ghost sm" onclick="orderServiceNote('${esc(o.order_no)}')">添加客服备注</button>` : '<span class="muted">当前角色可查看订单；联系人修正与备注需运营权限</span>'}
-      ${adminCan('order.refund') && [20,30,40].includes(Number(o.status)) ? `<button class="btn danger sm" onclick="refundOrder('${esc(o.order_no)}')">处理退款</button>` : ''}
-      ${Number(o.status) === 10 && adminCan('order.service') ? `<button class="btn danger sm" onclick="cancelUnpaidOrder('${esc(o.order_no)}')">取消未支付订单</button>` : ''}
-      ${adminCan('ticket.manage') || adminCan('order.service') ? `<button class="btn ghost sm" onclick="ticketCreateModal('${esc(o.order_no)}')">发起售后</button>` : ''}
-      ${['super','ops'].includes(ME?.role) && [20,30].includes(Number(o.status)) ? `<button class="btn primary sm" onclick="rescheduleModal('${esc(o.order_no)}')">改期 / 换团</button>` : ''}
-      ${['super','ops'].includes(ME?.role) ? `<button class="btn ghost sm" onclick="rescheduleDrawer('${esc(o.order_no)}')">改期记录</button>` : ''}
+      ${adminCan('order.service') ? `<button class="btn primary sm" onclick="editOrderContact('${escJs(o.order_no)}')" ${[10,20,30].includes(Number(o.status)) ? '' : 'disabled title="已核销或已终结订单保留原联系人"'}>修正联系人</button><button class="btn ghost sm" onclick="orderServiceNote('${escJs(o.order_no)}')">添加客服备注</button>` : '<span class="muted">当前角色可查看订单；联系人修正与备注需运营权限</span>'}
+      ${adminCan('order.refund') && [20,30,40].includes(Number(o.status)) ? `<button class="btn danger sm" onclick="refundOrder('${escJs(o.order_no)}')">处理退款</button>` : ''}
+      ${Number(o.status) === 10 && adminCan('order.service') ? `<button class="btn danger sm" onclick="cancelUnpaidOrder('${escJs(o.order_no)}')">取消未支付订单</button>` : ''}
+      ${adminCan('ticket.manage') || adminCan('order.service') ? `<button class="btn ghost sm" onclick="ticketCreateModal('${escJs(o.order_no)}')">发起售后</button>` : ''}
+      ${['super','ops'].includes(ME?.role) && [20,30].includes(Number(o.status)) ? `<button class="btn primary sm" onclick="rescheduleModal('${escJs(o.order_no)}')">改期 / 换团</button>` : ''}
+      ${['super','ops'].includes(ME?.role) ? `<button class="btn ghost sm" onclick="rescheduleDrawer('${escJs(o.order_no)}')">改期记录</button>` : ''}
     </div>
     ${(o.tickets?.length) ? `<h3 style="margin:16px 0 8px">售后工单</h3><table>
       ${o.tickets.map((t) => `<tr><td class="num">${esc(t.ticket_no)}</td><td>${TICKET_CAT[t.category] || esc(t.category)}<div class="td-sub">${esc(t.assignee || '待认领')}</div></td>
@@ -46,7 +46,7 @@ window.cancelUnpaidOrder = (no) => {
     <p class="td-sub">仅待支付订单可取消；将释放占用名额、退回已抵扣旅豆并写入订单事件。若支付回调先到达，取消会失败并提示核对（不会出现已付款却无订单）。</p>
     <div class="field"><label>取消原因 *（4–200 字，进入审计与订单事件）</label><input id="cuReason" maxlength="200"></div>
     <div id="cuErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">返回</button><button class="btn danger" onclick="cancelUnpaidSubmit('${esc(no)}')">确认取消</button>`)
+    `<button class="btn ghost" onclick="closeModal()">返回</button><button class="btn danger" onclick="cancelUnpaidSubmit('${escJs(no)}')">确认取消</button>`)
 }
 window.cancelUnpaidSubmit = async (no) => {
   try {
@@ -57,7 +57,7 @@ window.cancelUnpaidSubmit = async (no) => {
 async function editOrderContact(no) {
   if (!adminCan('order.service')) return toast(adminWhy('order.service'), true)
   const o = await api('GET', '/admin/orders/' + no)
-  modal('修正订单联系人', `<p class="muted">只修正履约联系方式，不改变订单买家、出行人、价格或团期。当前号码 ${esc(o.contactPhone || '未填写')}。</p><div class="field"><label>联系人</label><input id="serviceName" maxlength="64" value="${esc(o.contact_name || '')}"></div><div class="field"><label>新手机号（不修改留空）</label><input id="servicePhone" type="tel" maxlength="11" autocomplete="off"></div><div class="field"><label>修改原因（必填）</label><textarea id="serviceReason" maxlength="300"></textarea></div>`, `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderContact('${esc(no)}')">保存修正</button>`)
+  modal('修正订单联系人', `<p class="muted">只修正履约联系方式，不改变订单买家、出行人、价格或团期。当前号码 ${esc(o.contactPhone || '未填写')}。</p><div class="field"><label>联系人</label><input id="serviceName" maxlength="64" value="${esc(o.contact_name || '')}"></div><div class="field"><label>新手机号（不修改留空）</label><input id="servicePhone" type="tel" maxlength="11" autocomplete="off"></div><div class="field"><label>修改原因（必填）</label><textarea id="serviceReason" maxlength="300"></textarea></div>`, `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderContact('${escJs(no)}')">保存修正</button>`)
 }
 async function saveOrderContact(no) {
   try {
@@ -67,7 +67,7 @@ async function saveOrderContact(no) {
 }
 function orderServiceNote(no) {
   if (!adminCan('order.service')) return toast(adminWhy('order.service'), true)
-  modal('添加客服备注', '<p class="muted">仅后台可见，保存后保留操作人和时间。请勿录入完整手机号、证件号等敏感信息。</p><textarea id="serviceNote" maxlength="500" placeholder="4–500 字，记录诉求、核实情况与处理结论"></textarea>', `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderServiceNote('${esc(no)}')">保存备注</button>`)
+  modal('添加客服备注', '<p class="muted">仅后台可见，保存后保留操作人和时间。请勿录入完整手机号、证件号等敏感信息。</p><textarea id="serviceNote" maxlength="500" placeholder="4–500 字，记录诉求、核实情况与处理结论"></textarea>', `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="saveOrderServiceNote('${escJs(no)}')">保存备注</button>`)
 }
 async function saveOrderServiceNote(no) {
   try { await api('POST', '/admin/orders/' + no + '/service-notes', { note: $('#serviceNote').value }); toast('客服备注已保存'); closeModal(); await orderDrawer(no) }
@@ -166,7 +166,7 @@ async function merchants() {
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${esc(m.name)}','${esc(m.city_code)}','${esc(m.wxpay_sub_mchid || '')}','${esc(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
 async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
@@ -245,7 +245,7 @@ window.rescheduleModal = async (orderNo) => {
     <div class="field"><label>改期原因 *（4–300 字，进入审计与时间线）</label><input id="rsReason" maxlength="300" placeholder="例如：游客临时行程变化，申请换至下周同款团期"></div>
     <p class="td-sub">流程：提交申请 → 另一位超级管理员审批 → 执行换团（执行时再校验名额与订单状态）。需补款/应退差在执行后如实登记，走财务流程，不在系统内虚构到账。</p>
     <div id="rsErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="rescheduleSubmit('${esc(orderNo)}')">提交申请</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="rescheduleSubmit('${escJs(orderNo)}')">提交申请</button>`)
   rescheduleDiff(o.product_id, o.qty)
 }
 window.rescheduleDiff = (productId) => {
@@ -279,9 +279,9 @@ window.rescheduleDrawer = async (orderNo) => {
       <td>${RS_ST_PILL[r.status] || r.status}${r.exec_note ? '<div class="td-sub">' + esc(r.exec_note) + '</div>' : ''}</td>
       <td class="td-sub">${esc(r.applicant || '')}${r.approver ? '<br>审批：' + esc(r.approver) : ''}</td>
       <td><div class="td-actions">
-        ${Number(r.status) === 0 && ME?.role === 'super' && !rescheduleIsApplicant(r) ? `<button class="btn primary sm" onclick="rescheduleVerdict(${r.id}, 1, '${esc(orderNo)}')">通过</button><button class="btn danger sm" onclick="rescheduleVerdict(${r.id}, 0, '${esc(orderNo)}')">驳回</button>` : ''}
-        ${Number(r.status) === 0 && (rescheduleIsApplicant(r) || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${esc(orderNo)}')">撤回</button>` : ''}
-        ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${esc(orderNo)}')">执行换团</button>` : ''}
+        ${Number(r.status) === 0 && ME?.role === 'super' && !rescheduleIsApplicant(r) ? `<button class="btn primary sm" onclick="rescheduleVerdict(${r.id}, 1, '${escJs(orderNo)}')">通过</button><button class="btn danger sm" onclick="rescheduleVerdict(${r.id}, 0, '${escJs(orderNo)}')">驳回</button>` : ''}
+        ${Number(r.status) === 0 && (rescheduleIsApplicant(r) || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${escJs(orderNo)}')">撤回</button>` : ''}
+        ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${escJs(orderNo)}')">执行换团</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : emptyBox('该订单暂无改期申请')}
     <p class="td-sub">执行时服务端会再次校验订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
 }
@@ -290,7 +290,7 @@ window.rescheduleVerdict = async (id, pass, orderNo) => {
     <p class="td-sub">${pass ? '通过后进入「待执行」，执行时再校验名额与订单状态；审批人不能与申请人相同。' : '驳回后申请终态；如需再改请重新发起申请。'}</p>
     <div class="field"><label>审批意见（选填，进入审计）</label><input id="rsVerdictNote" maxlength="300"></div>
     <div id="rsVerdictErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${pass ? 'primary' : 'danger'}" onclick="rescheduleVerdictSubmit(${id}, ${pass ? 1 : 0}, '${esc(orderNo)}')">确认${pass ? '通过' : '驳回'}</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${pass ? 'primary' : 'danger'}" onclick="rescheduleVerdictSubmit(${id}, ${pass ? 1 : 0}, '${escJs(orderNo)}')">确认${pass ? '通过' : '驳回'}</button>`)
 }
 window.rescheduleVerdictSubmit = async (id, pass, orderNo) => {
   try {
@@ -320,7 +320,7 @@ window.productVersions = async (pid) => {
       return `<tr><td class="num">v${v.versionNo}${snap.restoredFrom ? '<div class="td-sub">恢复自 v' + snap.restoredFrom + '</div>' : ''}</td>
       <td class="td-sub">${esc(fields || '—')}</td><td>${diff || '—'}</td>
       <td class="td-sub">${esc(v.changedBy)}<br>${esc(String(v.createdAt).slice(5, 16).replace('T', ' '))}${v.reason ? '<br>' + esc(v.reason) : ''}</td>
-      <td>${ME?.role === 'super' && restorable ? `<button class="btn ghost sm" onclick="versionRestore(${pid}, ${v.versionNo}, '${esc(String(snap.after?.price_from ?? ''))}')">恢复此版本</button>` : '<span class="td-sub">仅超管可恢复</span>'}</td></tr>`
+      <td>${ME?.role === 'super' && restorable ? `<button class="btn ghost sm" onclick="versionRestore(${pid}, ${v.versionNo}, '${escJs(String(snap.after?.price_from ?? ''))}')">恢复此版本</button>` : '<span class="td-sub">仅超管可恢复</span>'}</td></tr>`
     }).join('')}</tbody></table>` : emptyBox('暂无关键变更记录——价格/状态/归属等关键变更会自动留版本')}
     <p class="td-sub">版本簿只增不改；「恢复此版本」会写一条新版本把该版本的值带回来（金额为存储口径：分），价格变化同步上链留痕。</p>`)
 }

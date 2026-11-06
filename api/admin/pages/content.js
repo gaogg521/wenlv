@@ -298,7 +298,7 @@ async function creators() {
       <td><span class="pill ${c.creator_tag === 'star' ? 'ok' : (c.creator_tag === 'signed' ? 's40' : (c.creator_tag === 'limited' ? 's70' : 'off'))}">${CREATOR_TAG[c.creator_tag] || esc(c.creator_tag)}</span></td>
       <td class="num">${c.note_count}</td><td class="num"><b>${c.published_count}</b></td><td class="num">${c.review_count}</td>
       <td class="num">${c.task_done}</td><td class="td-sub">${c.last_published ? esc(String(c.last_published).slice(0, 10)) : '—'}</td>
-      <td><button class="btn primary sm" onclick="userProfile(${c.id})">画像</button> ${adminCan('creator.manage') ? `<button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${esc(c.creator_tag || 'none')}')">设标签</button>` : '<span class="muted">标签由运营维护</span>'}</td></tr>`).join('')}</tbody></table>`
+      <td><button class="btn primary sm" onclick="userProfile(${c.id})">画像</button> ${adminCan('creator.manage') ? `<button class="btn ghost sm" onclick="setCreatorTag(${c.id},'${escJs(c.creator_tag || 'none')}')">设标签</button>` : '<span class="muted">标签由运营维护</span>'}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(window.__kw.creators ? '没有匹配的创作者' : '池子还空：用户发布笔记或点评后自动入池')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 人 · 第 ${data.page} / ${crPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__crPage--;creators()">上一页</button> <button class="btn ghost sm" ${data.page >= crPages ? 'disabled' : ''} onclick="window.__crPage++;creators()">下一页</button></div></div>
   </div>`

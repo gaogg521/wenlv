@@ -165,22 +165,29 @@ await t('暗号：上下半句须成对、不能相同；线路名称只读不�
   assert.equal((await one('SELECT title FROM tour_product WHERE id = ?', [product.id])).title, title)
 })
 await t('暗号核销：可接受变体与标点容错生效；过停用日期拒绝', async () => {
-  const o = await one(`SELECT o.order_no, o.merchant_id FROM orders o WHERE o.product_id = ? AND o.status IN (20,30) LIMIT 1`, [product.id])
+  const o = await one(`SELECT o.order_no, o.merchant_id, o.session_id FROM orders o WHERE o.product_id = ? AND o.status IN (20,30) LIMIT 1`, [product.id])
   if (!o) { console.log('    （无在途订单，跳过核销部分）'); return }
   const code = 'phrase-staff-' + Date.now()
   await call('POST', '/m/auth/login', { code })
   const u = await one('SELECT id FROM user_account WHERE mini_b_openid LIKE ?', ['%' + code])
   await q('INSERT INTO merchant_staff (merchant_id, role, status, user_id) VALUES (?,?,1,?)', [o.merchant_id, 1, u.id])
   const mt = ok(await call('POST', '/m/auth/login', { code, merchantId: o.merchant_id })).token
-  await q(`UPDATE tour_product SET profile = JSON_SET(COALESCE(profile, '{}'), '$.phrase_end', '2000-01-01') WHERE id = ?`, [product.id])
-  const stopped = ok(await call('POST', '/m/verify/phrase', { phrase: '放生桥边等船否', orderNo: o.order_no }, mt))
-  assert.equal(stopped.ok, false); assert.match(stopped.reason, /停用/)
-  await q(`UPDATE tour_product SET profile = JSON_REMOVE(profile, '$.phrase_end') WHERE id = ?`, [product.id])
-  const wrong = ok(await call('POST', '/m/verify/phrase', { phrase: '随便说说', orderNo: o.order_no }, mt))
-  assert.equal(wrong.ok, false)
-  const alt = ok(await call('POST', '/m/verify/phrase', { phrase: '放生桥边，等船吗？', orderNo: o.order_no }, mt))
-  assert.equal(alt.ok, true, alt.reason)
-  await q('DELETE FROM merchant_staff WHERE user_id = ?', [u.id])
+  // A-04：暗号只匹配当日可核销团期 —— 夹具团期拨到今天，结束后还原
+  const prevDate = await one('SELECT depart_date FROM tour_session WHERE id = ?', [o.session_id])
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [o.session_id])
+  try {
+    await q(`UPDATE tour_product SET profile = JSON_SET(COALESCE(profile, '{}'), '$.phrase_end', '2000-01-01') WHERE id = ?`, [product.id])
+    const stopped = ok(await call('POST', '/m/verify/phrase', { phrase: '放生桥边等船否', orderNo: o.order_no }, mt))
+    assert.equal(stopped.ok, false); assert.match(stopped.reason, /停用/)
+    await q(`UPDATE tour_product SET profile = JSON_REMOVE(profile, '$.phrase_end') WHERE id = ?`, [product.id])
+    const wrong = ok(await call('POST', '/m/verify/phrase', { phrase: '随便说说', orderNo: o.order_no }, mt))
+    assert.equal(wrong.ok, false)
+    const alt = ok(await call('POST', '/m/verify/phrase', { phrase: '放生桥边，等船吗？', orderNo: o.order_no }, mt))
+    assert.equal(alt.ok, true, alt.reason)
+  } finally {
+    await q('UPDATE tour_session SET depart_date = ? WHERE id = ?', [prevDate.depart_date, o.session_id])
+    await q('DELETE FROM merchant_staff WHERE user_id = ?', [u.id])
+  }
 })
 await t('逐品佣金：费率 >12% 拒绝；必须填原因；百分比↔bp', async () => {
   assert.ok((await call('PUT', '/admin/entities/rateov/' + product.id, { values: { promo_rate_bp: 15, rate_reason: 'x' } }, A)).data.fieldErrors.promo_rate_bp)

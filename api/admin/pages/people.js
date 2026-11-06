@@ -157,7 +157,7 @@ async function userProfile(id) {
   ${(ops.notes || []).slice(0, 5).map((n) => `<div class="rv-box"><p>${esc(n.note)}</p><span class="td-sub">${esc(n.actor)} · ${esc(String(n.created_at).slice(0, 16).replace('T', ' '))}</span></div>`).join('') || '<p class="muted">暂无内部备注</p>'}
   <div class="row" style="margin:8px 0"><input id="uOpsNote" class="inp" style="flex:1" placeholder="2–500 字内部备注（勿录手机号/证件号）" maxlength="500">
     <button class="btn ghost sm" onclick="addUserOpsNote(${u.id})">追加备注</button></div>
-  <div class="row" style="margin:8px 0"><button class="btn primary sm" onclick="entitlementModal(${u.id}, '${esc(u.nickname || '')}', ${PN(u.growth_value)}, ${PN(p.beans.balance)})">发起权益调整申请</button><span class="td-sub">旅豆/成长值/徽章走申请→他人审批→账本执行，无直接改余额</span></div>` : ''
+  <div class="row" style="margin:8px 0"><button class="btn primary sm" onclick="entitlementModal(${u.id}, '${escJs(u.nickname || '')}', ${PN(u.growth_value)}, ${PN(p.beans.balance)})">发起权益调整申请</button><span class="td-sub">旅豆/成长值/徽章走申请→他人审批→账本执行，无直接改余额</span></div>` : ''
   reviewDrawer(`用户画像 · ${esc(u.nickname || 'ID ' + u.id)}`, `
   <div class="pprofile-head">
     ${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}
@@ -180,7 +180,7 @@ async function userProfile(id) {
       <div class="rv-box"><div class="rv-h">交易</div>
         ${kv('首单 / 最近', `${dt(t.first_at, 10)} / ${dt(t.last_at, 10)}`)}${kv('退款金额', fen(t.refund_amount) + (t.refund_fee ? `（扣手续费 ${fen(t.refund_fee)}）` : ''))}
         ${kv('常去城市', (p.favCities || []).map((x) => `${esc(CITY_CN[x.city_code] || x.city_code)} ${x.n}`).join(' · '))}
-        ${p.orders.length ? `<table class="ptable"><tbody>${p.orders.map((o) => `<tr><td><button class="order-link" onclick="orderDrawer('${esc(o.order_no)}')">${esc(o.order_no)}</button><div class="td-sub">${esc(o.title)} · ${o.qty} 人</div></td>
+        ${p.orders.length ? `<table class="ptable"><tbody>${p.orders.map((o) => `<tr><td><button class="order-link" onclick="orderDrawer('${escJs(o.order_no)}')">${esc(o.order_no)}</button><div class="td-sub">${esc(o.title)} · ${o.qty} 人</div></td>
           <td class="money num">${fen(o.amount_pay)}</td><td><span class="pill s${o.status}">${ST[o.status] || ''}</span></td><td class="td-sub">${dt(o.created_at, 10)}</td></tr>`).join('')}</tbody></table>` : '<div class="td-sub">暂无订单</div>'}</div>
       <div class="rv-box"><div class="rv-h">旅豆流水（最近 10 条）</div>
         ${p.beans.ledger.length ? p.beans.ledger.map((l) => `<div class="pkv"><span>${dt(l.created_at)} · ${esc(l.biz_ref || '')}</span><b style="color:${PN(l.direction) === 1 ? '#0b7a45' : '#b42318'}">${PN(l.direction) === 1 ? '+' : '−'}${PN(l.amount)}</b></div>`).join('') : '<div class="td-sub">暂无流水</div>'}</div>
