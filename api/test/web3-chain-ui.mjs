@@ -176,19 +176,20 @@ await t('上链流水线：没有批次时给出下一步动作，不是空白�
 
 console.log('== 区块上显示业务环节 / 单流程与链路视图对上号 ==')
 
-await t('区块节点直接画出批内业务环节（订单/出票/核销…），多于 3 类折成 +N', () => {
+await t('区块节点直接画出批内业务环节（订单 / 出票…），多于 2 类折成 +N', () => {
   const html = ctx.blockNodeHTML({ ...B, mix: { order: 8, pass_issue: 4, pass_verify: 3, bean_grant: 2, settlement: 1 } })
   assert.match(html, /blk-mix/)
-  for (const w of ['订单 <b>8</b>', '出票 <b>4</b>', '核销 <b>3</b>']) assert.ok(html.includes(w), '缺少环节标签：' + w)
-  assert.match(html, /\+3/, '第 4、5 类应折成 +3')
-  assert.ok(!html.includes('返豆 <b>2</b>'), '超出 3 类的不该直接画')
+  for (const w of ['订单 <b>8</b>', '出票 <b>4</b>']) assert.ok(html.includes(w), '缺少环节标签：' + w)
+  assert.match(html, /\+6/, '其余三类（3+2+1）折成 +6')
+  assert.ok(!html.includes('核销 <b>3</b>'), '超出 2 类的不该直接画（块只有 132px 宽）')
 })
 
 await t('业务主线环节排在前面：勋章数量再多也不挤掉订单/出票/核销', () => {
   const html = ctx.blockNodeHTML({ ...B, mix: { badge: 35, order: 3, pass_verify: 2, pass_issue: 2, merchant_join: 9 } })
   const i = (w) => html.indexOf(w)
-  assert.ok(i('订单 <b>3</b>') > 0 && i('订单 <b>3</b>') < i('出票 <b>2</b>') && i('出票 <b>2</b>') < i('核销 <b>2</b>'), '应按 订单→出票→核销 顺序')
-  assert.ok(!html.includes('勋章 <b>35</b>'), '旁路事件排在主线之后，超出 3 类折成 +N')
+  assert.ok(i('订单 <b>3</b>') > 0 && i('订单 <b>3</b>') < i('出票 <b>2</b>'), '应按 订单→出票 顺序')
+  assert.ok(!html.includes('勋章 <b>35</b>'), '旁路事件排在主线之后，超出 2 类折成 +N')
+  assert.match(html, /\+46/, '核销 2 + 勋章 35 + 准入 9')
 })
 
 await t('账本日终块标「旅豆账本封存」，没有构成数据的旧接口也不报错', () => {
