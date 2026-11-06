@@ -37,8 +37,8 @@ const D = (n, branchAt = []) => Array.from({ length: n }, (_, i) => ({ html: `<d
 const rowsOf = (html) => [...html.matchAll(/<div class="chain-row([^"]*)">/g)].map((m) => m[1].trim().split(/\s+/).filter(Boolean))
 
 console.log('== 链路视图 S 型折行 ==')
-await t('8 个块在 993px：每行 4 个、2 行；第 2 行反向且是最后一行；第 1 行右侧转弯', () => {
-  const html = ctx.chainTrackHTML(D(8), 993)
+await t('8 个块在 700px：每行 4 个、2 行；第 2 行反向且是最后一行；第 1 行右侧转弯', () => {
+  const html = ctx.chainTrackHTML(D(8), 700)
   assert.match(html, /data-per="4"/); const rows = rowsOf(html)
   assert.equal(rows.length, 2); assert.deepEqual(rows[0], ['turn-r']); assert.deepEqual(rows[1], ['rev', 'last'])
   for (let i = 1; i <= 8; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
@@ -51,27 +51,27 @@ await t('30 个块：每行 10 个、正好 3 行；行反向与转弯左右交�
   assert.ok(rows[0].includes('turn-branch') && rows[1].includes('turn-branch'), '下一行行首是日终块，转弯要多下沉')
   for (let i = 1; i <= 30; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
 })
-await t('排布原则：行数尽量少、每行尽量多（最多 10 块），块缩到刚好还能看清；多少块都不超过 3 行', () => {
+await t('排布原则：块宽固定、行数尽量少、每行尽量多（最多 10 块）；多少块都不超过 3 行', () => {
   const plan = (n, W) => { const p = ctx.chainPlan(n, W); return { per: p.per, nw: p.nw, tier: p.tier, rows: Math.ceil(n / p.per) } }
-  const fits = (p, W) => p.tier === 'full' ? p.nw * p.per + 32 * (p.per - 1) + 92 <= W : p.nw * p.per + 14 * (p.per - 1) + 80 <= W
-  // 不变量：常见宽度下任意数量都 ≤ 3 行、每行 ≤ 10 块、放得进面板；块缩到小号只发生在 3 行也放不下中号时
+  const fits = (p, W) => p.nw * p.per + 14 * (p.per - 1) + 80 <= W
+  // 不变量：常见宽度下任意数量都 ≤ 3 行、每行 ≤ 10 块、放得进面板；块宽封顶 132（块少也不放大）；窄到 96px 以下才加行
   for (const W of [993, 1106, 1300, 1600]) for (let n = 1; n <= 30; n++) {
     const p = plan(n, W)
     assert.ok(p.rows <= 3 && p.per <= 10, `${n} 块 / ${W}px：${JSON.stringify(p)}`)
     assert.ok(fits(p, W), `${n} 块 / ${W}px 放不进：${JSON.stringify(p)}`)
-    if (p.tier === 'sm') assert.equal(p.rows, 3, `${n} 块 / ${W}px：只有 3 行也放不下中号才缩到小号`)
+    assert.ok(p.nw <= 132, `${n} 块 / ${W}px：块宽超过上限 ${p.nw}`)
+    if (p.nw < 96) assert.equal(p.rows, 3, `${n} 块 / ${W}px：3 行也放不下 96px 才允许更窄`)
   }
-  // 演示库的 9 块（你截图里那页）：原来 3 行大块高 1082px，现在 2 行
-  assert.equal(plan(9, 1113).rows, 2); assert.equal(plan(9, 1113).tier, 'full')
-  assert.equal(plan(8, 1113).rows, 1, '块不多时一行放完'); assert.equal(plan(1, 1113).rows, 1); assert.equal(plan(5, 1113).rows, 1)
-  assert.equal(plan(12, 1113).rows, 2); assert.equal(plan(20, 1200).rows, 3); assert.equal(plan(20, 1200).per, 7)
+  // 演示库的 9 块：原来 3 行大块高 1082px，现在 1 行
+  assert.equal(plan(9, 1113).rows, 1); assert.equal(plan(8, 1113).rows, 1); assert.equal(plan(1, 1113).rows, 1); assert.equal(plan(5, 1113).nw, 132, '块少也不放大')
+  assert.equal(plan(12, 1113).rows, 2); assert.equal(plan(20, 1400).rows, 2); assert.equal(plan(20, 1400).per, 10)
   for (const W of [993, 1106, 1300, 1600]) { const p = plan(30, W); assert.equal(p.per, 10, W + 'px 也要排满 10 块'); assert.equal(p.rows, 3) }
   // 更少的行数优先：块数相同，面板更宽时行数不会更多
   for (let n = 1; n <= 30; n++) for (const [x, y] of [[993, 1300], [1300, 1600]]) assert.ok(plan(n, y).rows <= plan(n, x).rows, `${n} 块：面板变宽行数不该变多`)
   const narrow = plan(30, 700)
   assert.ok(narrow.per < 10 && narrow.rows > 3, '窄屏放不下 10 块时按宽度折行（兜底），而不是溢出')
   assert.ok(fits(narrow, 700))
-  assert.match(ctx.chainTrackHTML(D(8), 993), /tier-full/)
+  assert.match(ctx.chainTrackHTML(D(8), 700), /tier-md/)
 })
 await t('缩小后纵向尺寸跟着降：连线 / 转弯 / 分支下沉都走 CSS 变量，不写死 59 / 133', () => {
   const link = ctx.blockLinkHTML(false, true)
@@ -82,16 +82,16 @@ await t('缩小后纵向尺寸跟着降：连线 / 转弯 / 分支下沉都走 C
   const css = read('app.css')
   for (const re of [/\.chain-track\.tier-sm \{ --cy: \d+px; --sink: \d+px;/, /\.chain-track\.tier-md \{ --cy:/, /top: var\(--cy\); width: 30px; height: calc\(100% \+ var\(--te\) - var\(--cy\)\)/, /\.chain-node\.branch \{ margin-top: var\(--sink/, /--te: calc\(var\(--cy\) \+ var\(--sink\)\)/]) assert.match(css, re, String(re))
 })
-await t('档位里的节点内容：sm 只留标题 / 月日 / 事件数 / 1 个环节 / 状态；full 全有；日终块 sm 写「封存」', () => {
+await t('档位里的节点内容：md 留 2 个环节、sm 只留 1 个；都只有月日；日终块 sm 写「封存」md 写「旅豆账本封存」', () => {
   const b = { id: 5, seq: 9, biz_date: '2026-11-05', merkle_root: 'a'.repeat(64), prev_root: 'b'.repeat(64), leaf_count: 20, is_day_close: 0, status: 2, mix: { order: 11, pass_issue: 6, pass_verify: 3 } }
   const chips = (h) => (h.match(/class="mx"/g) || []).length
-  assert.equal(chips(ctx.blockNodeHTML(b, { tier: 'full' })), 3); assert.equal(chips(ctx.blockNodeHTML(b, { tier: 'md' })), 2)
+  assert.equal(chips(ctx.blockNodeHTML(b, { tier: 'md' })), 2); assert.equal(chips(ctx.blockNodeHTML(b)), 2, '默认就是 md')
   const sm = ctx.blockNodeHTML(b, { tier: 'sm' })
-  assert.equal(chips(sm), 1); assert.match(sm, /\+9/, '被收起的环节折成 +N'); assert.match(sm, /d-short">11-05</)
+  assert.equal(chips(sm), 1); assert.match(sm, /\+9/, '被收起的环节折成 +N'); assert.match(ctx.blockNodeHTML(b, { tier: 'md' }), /\+3/); assert.match(sm, /d-short">11-05</)
   assert.match(ctx.blockNodeHTML({ ...b, is_day_close: 1 }, { tier: 'sm' }), />封存</)
-  assert.match(ctx.blockNodeHTML({ ...b, is_day_close: 1 }, { tier: 'full' }), />旅豆账本封存</)
+  assert.match(ctx.blockNodeHTML({ ...b, is_day_close: 1 }, { tier: 'md' }), />旅豆账本封存</)
   const css = read('app.css')
-  assert.match(css, /\.tier-sm \.x, \.tier-sm \.blk-root/); assert.match(css, /\.d-short \{ display: none; \}/)
+  assert.match(css, /\.tier-md \.blk-root, \.tier-sm \.blk-root/); assert.match(css, /\.d-short \{ display: none; \}/)
 })
 await t('翻页切片：第一页 29 批（留 1 格给「下一区块」）、其后每页 30；不重不漏；最新页空时给空', () => {
   const asc = Array.from({ length: 120 }, (_, i) => ({ seq: i + 1 }))
