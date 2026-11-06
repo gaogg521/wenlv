@@ -34,11 +34,14 @@ export async function fire(orderNo, ev, actor, listener) {
   })
 }
 
-/** 早鸟价判定：出发前 early_days 天（含）之前报名享 early_price；未开启返回原价（总方案 §4） */
+/** 早鸟价判定：出发前 early_days 天（含）之前报名享 early_price；未开启返回原价（总方案 §4）。
+ *  取较低价兜底：历史上早鸟价可被改到高于现价（A-07），这里保证游客永远不会多付。 */
 export function priceForSession(s) {
   const days = Math.floor((new Date(s.depart_date + 'T00:00:00') - new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00')) / 86400000)
-  const early = s.early_price && s.early_days != null && days >= Number(s.early_days) ? Number(s.early_price) : Number(s.price_adult)
-  return { price: early, isEarly: early !== Number(s.price_adult), daysToDepart: days }
+  const adult = Number(s.price_adult)
+  const earlyEligible = s.early_price != null && s.early_days != null && days >= Number(s.early_days)
+  const early = earlyEligible ? Math.min(Number(s.early_price), adult) : adult
+  return { price: early, isEarly: early !== adult, daysToDepart: days }
 }
 
 /** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
@@ -47,6 +50,7 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
   const goods = priceForSession(s).price * qty
+  if (!(goods > 0)) throw new BizError(1001, '商品价格异常，暂不可下单') // A-07 兜底：负价/零价团期落库后不得出负金额订单
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
   const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
   if (!prod || prod.status !== 1 || prod.merchant_status !== 1) throw new BizError(2001, '商品或商户已暂停营业')
@@ -55,6 +59,7 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const beans = Math.max(0, Math.min(Math.floor(Number(wantedBeans) || 0), clampCap))
   const dedFen = beans * 10
   const pay = goods - dedFen + insFee
+  if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
   // 单号 = WL + 日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
   const suffix = String(Date.now() % 100000000).padStart(8, '0') + String(Math.floor(Math.random() * 90) + 10)
   const orderNo = 'WL' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + suffix
@@ -76,6 +81,20 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
 
 export async function byNo(orderNo) { return await one('SELECT * FROM orders WHERE order_no = ?', [orderNo]) }
 
+/** 事务内出票（acceptPayment 与免费改签共用）：凭证数校验 → 逐张建凭证 + 签发存证，全部在同一事务 */
+export async function issuePassesInTx(c, o, orderNo) {
+  const issued = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_id=?', [o.id])
+  if (Number(issued.c) > Number(o.qty)) throw new BizError(2002, '订单凭证数量异常')
+  for (let i = Number(issued.c); i < Number(o.qty); i++) {
+    const passId = await c.ins('INSERT INTO travel_pass(user_id,order_id,kind,name,product_id,status) VALUES(?,?,1,?,?,1)', [o.user_id, o.id, '主题游通行凭证·' + orderNo, o.product_id])
+    // 凭证签发即锚定（与出票同事务）：这是主出票路径，pass.issueForOrder 只在拼团重开单时使用
+    await attest('pass_issue', 'pass-' + passId, {
+      passId: Number(passId), orderNo, kind: 1, qty: Number(o.qty),
+      productId: Number(o.product_id), merchantId: Number(o.merchant_id), cityCode: o.city_code,
+    }, c, 1)
+  }
+}
+
 /** 支付入账、状态事件与出票在同一事务中提交；微信重试不会留下“有支付记录但无票”的半状态。 */
 export async function acceptPayment(orderNo, transNo, mock = false) {
   if (!transNo) throw new BizError(1001, '缺少支付交易号')
@@ -93,16 +112,7 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
       await c.upd('UPDATE orders SET status=20,version=version+1,paid_at=NOW(3),refund_deadline=NOW(3)+INTERVAL ? DAY WHERE id=?', [days,o.id])
       await c.q('INSERT INTO order_event(order_id,from_st,to_st,actor,detail) VALUES(?,10,20,?,?)', [o.id,'system',JSON.stringify('支付回调 '+transNo)])
     }
-    const issued = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_id=?', [o.id])
-    if (Number(issued.c) > Number(o.qty)) throw new BizError(2002, '订单凭证数量异常')
-    for (let i=Number(issued.c);i<Number(o.qty);i++) {
-      const passId = await c.ins('INSERT INTO travel_pass(user_id,order_id,kind,name,product_id,status) VALUES(?,?,1,?,?,1)', [o.user_id,o.id,'主题游通行凭证·'+orderNo,o.product_id])
-      // 凭证签发即锚定（与出票同事务）：这是主出票路径，pass.issueForOrder 只在拼团重开单时使用
-      await attest('pass_issue', 'pass-' + passId, {
-        passId: Number(passId), orderNo, kind: 1, qty: Number(o.qty),
-        productId: Number(o.product_id), merchantId: Number(o.merchant_id), cityCode: o.city_code,
-      }, c, 1)
-    }
+    await issuePassesInTx(c, o, orderNo)
     await c.upd('UPDATE orders SET status=30,version=version+1 WHERE id=?', [o.id])
     await c.q('INSERT INTO order_event(order_id,from_st,to_st,actor,detail) VALUES(?,20,30,?,?)', [o.id,'system',JSON.stringify('确认出票·'+o.qty+'张凭证')])
     // 支付成功即订单存证（同事务，version=30）。此前订单事件只在"完成"时才有（version=50），后台"一单六锚"的"支付成功"一步
@@ -115,19 +125,49 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
   })
 }
 
+/** 事务内关闭未支付单（A-03）：退抵扣旅豆 + 释放名额 + 事件审计。由 closeUnpaid / closeTimeout / 拼团取消共用。 */
+export async function closeUnpaidInTx(c, o, closeReason, eventDetail, actor) {
+  const n = await c.upd('UPDATE orders SET status = 90, close_reason = ?, version = version + 1 WHERE id = ? AND status = 10', [closeReason, o.id])
+  if (n !== 1) return false // 并发下别人已关，幂等返回
+  if (Number(o.bean_deducted) > 0) await bean.reverse(o.user_id, Number(o.bean_deducted), o.order_no, c)
+  await c.upd('UPDATE tour_session SET booked = GREATEST(booked - ?, 0) WHERE id = ?', [o.qty, o.session_id])
+  await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,10,90,?,?)', [o.id, actor, JSON.stringify(eventDetail)])
+  return true
+}
+
+/** 关闭单笔未支付订单（A-03）：返回 { closed } 或 { already: true }（幂等，重复调用不重复退豆） */
+export async function closeUnpaid(orderNo, closeReason, actor = 'system', eventDetail = '关单·名额释放') {
+  return await tx(async (c) => {
+    const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+    if (!o) throw new BizError(2003, '订单不存在')
+    if (Number(o.status) !== ST.WAIT_PAY) return { order: o, already: true }
+    const closed = await closeUnpaidInTx(c, o, closeReason, eventDetail, actor)
+    return { order: { ...o, status: 90 }, closed, already: !closed }
+  })
+}
+
 /** 超时关单（分钟级定时任务） */
 export async function closeTimeout() {
   const mins = await cfgNum('order.pay_timeout')
-  const stale = await q('SELECT id, order_no, session_id, qty, user_id, bean_deducted FROM orders WHERE status = 10 AND created_at < NOW() - INTERVAL ? MINUTE', [mins])
+  const stale = await q('SELECT id, order_no FROM orders WHERE status = 10 AND created_at < NOW() - INTERVAL ? MINUTE', [mins])
   for (const o of stale) {
-    await tx(async (c) => {
-      const n = await c.upd('UPDATE orders SET status = 90, version = version + 1 WHERE id = ? AND status = 10', [o.id])
-      if (n === 1) {
-        if (Number(o.bean_deducted) > 0) await bean.reverse(o.user_id, Number(o.bean_deducted), o.order_no, c)
-        await c.upd('UPDATE tour_session SET booked = booked - ? WHERE id = ?', [o.qty, o.session_id])
-        await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,10,90,?,?)', [o.id, 'system', JSON.stringify('超时关单·名额释放')])
-      }
-    })
+    await closeUnpaid(o.order_no, 'pay_timeout', 'system', '超时关单·名额释放')
   }
   return stale.length
+}
+
+/** 取消免费改签单（A-01）：释放名额、订单关闭，不退款不退豆（改签单本就没收钱没抵豆） */
+export async function cancelRebook(orderNo, actor = 'user') {
+  return await tx(async (c) => {
+    const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+    if (!o) throw new BizError(2003, '订单不存在')
+    if (!o.rebook_of) throw new BizError(2002, '仅免费改签订单可走此取消')
+    if (![ST.PAID, ST.CONFIRMED].includes(Number(o.status))) throw new BizError(2002, '当前状态不可取消')
+    const n = await c.upd('UPDATE orders SET status = 90, close_reason = ?, version = version + 1 WHERE id = ? AND status IN (20, 30)', ['rebook_cancel', o.id])
+    if (n !== 1) throw new BizError(2002, '并发冲突')
+    await c.upd('UPDATE tour_session SET booked = GREATEST(booked - ?, 0) WHERE id = ?', [o.qty, o.session_id])
+    await c.upd('UPDATE travel_pass SET status = 4 WHERE order_id = ? AND status = 1', [o.id])
+    await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,90,?,?)', [o.id, o.status, actor, JSON.stringify('取消免费改签单·释放名额（不退款）')])
+    return { ...o, status: 90 }
+  })
 }

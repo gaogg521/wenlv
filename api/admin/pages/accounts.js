@@ -40,7 +40,7 @@ window.roleModuleToggle = (cb) => {
     <p>${on ? '该角色所有账号将<b>新增</b>此模块的默认可见/可办。' : '该角色所有账号将<b>失去</b>此模块（未单独授予者）；已有旧会话立即失效。'}</p>
     <div class="field"><label>变更原因 *（4–200 字，进入审计）</label><input id="rmReason" maxlength="200"></div>
     <div id="rmErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="roleModuleSubmit('${role}','${esc(modkey)}',${on ? 1 : 0})">确认${on ? '授予' : '收回'}</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="roleModuleSubmit('${role}','${escJs(modkey)}',${on ? 1 : 0})">确认${on ? '授予' : '收回'}</button>`)
 }
 window.roleModuleSubmit = async (role, moduleKey, on) => {
   const reason = ($('#rmReason').value || '').trim()
@@ -77,18 +77,18 @@ async function accountsList() {
       const self = Number(u.id) === Number(ME?.uid)
       const lastSuper = u.role === 'super' && rows.filter((r) => r.role === 'super' && Number(r.status) === 1).length <= 1
       const ops = []
-      ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${esc(u.username)}')">验证方式</button>`)
-      if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountPermModal(${u.id}, '${esc(u.username)}')">权限</button>`)
-      ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${esc(u.display_name)}', '${esc(u.note || '')}')">资料</button>`)
+      ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${escJs(u.username)}')">验证方式</button>`)
+      if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountPermModal(${u.id}, '${escJs(u.username)}')">权限</button>`)
+      ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${escJs(u.display_name)}', '${escJs(u.note || '')}')">资料</button>`)
       if (!self) {
-        ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${esc(u.username)}', '${u.role}', '${esc(u.scope_city || '')}')">角色/城市</button>`)
-        ops.push(`<button class="btn ghost sm" onclick="accountResetPwd(${u.id}, '${esc(u.username)}')">重置密码</button>`)
-        if (Number(u.mfa_enabled) === 1) ops.push(`<button class="btn ghost sm" onclick="accountMfaReset(${u.id}, '${esc(u.username)}')">重置MFA</button>`)
+        ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${escJs(u.username)}', '${u.role}', '${escJs(u.scope_city || '')}')">角色/城市</button>`)
+        ops.push(`<button class="btn ghost sm" onclick="accountResetPwd(${u.id}, '${escJs(u.username)}')">重置密码</button>`)
+        if (Number(u.mfa_enabled) === 1) ops.push(`<button class="btn ghost sm" onclick="accountMfaReset(${u.id}, '${escJs(u.username)}')">重置MFA</button>`)
         // 内置 admin 或最后一个有效超管：停用入口置灰并给原因，不是「看着能点实际不能点」
         if (u.username === 'admin' || lastSuper) ops.push('<span class="td-sub" title="内置管理员或最后一个有效超管，不能停用">停用🔒</span>')
         else ops.push(Number(u.status) === 1
-          ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${esc(u.username)}')">停用</button>`
-          : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${esc(u.username)}')">恢复</button>`)
+          ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${escJs(u.username)}')">停用</button>`
+          : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${escJs(u.username)}')">恢复</button>`)
       } else ops.push('<span class="td-sub">本人</span>')
       const mfaCell = Number(u.mfa_enabled) === 1
         ? '<span class="pill ok">已绑定</span><div class="td-sub">' + (MFA_CH_CN[u.mfa_channel] || esc(u.mfa_channel || '')) + '</div>'
@@ -118,10 +118,10 @@ window.accountMfaDialog = async (id, username) => {
     <p>当前状态：<b>${Number(u.mfa_enabled) === 1 ? '已绑定 · ' + (chCn[u.mfa_channel] || esc(u.mfa_channel)) : '未绑定'}</b>
       ${Number(u.mfa_force) === 1 ? ' <span class="pill s70">单账号强制</span>' : ''}${Number(u.mfa_exempt) === 1 ? ' <span class="pill s40">豁免</span>' : ''}</p>
     <div class="row" style="margin:10px 0">
-      <button class="btn primary sm" onclick="mfaSetup(${id}, '${esc(username)}')">绑定验证器 App（推荐）</button>
+      <button class="btn primary sm" onclick="mfaSetup(${id}, '${escJs(username)}')">绑定验证器 App（推荐）</button>
       <button class="btn ghost sm" onclick="bindContact(${id}, 'sms')">绑定手机</button>
       <button class="btn ghost sm" onclick="bindContact(${id}, 'email')">绑定邮箱</button>
-      ${Number(u.mfa_enabled) === 1 ? `<button class="btn danger sm" onclick="accountMfaReset(${id}, '${esc(username)}')">重置 MFA</button>` : ''}
+      ${Number(u.mfa_enabled) === 1 ? `<button class="btn danger sm" onclick="accountMfaReset(${id}, '${escJs(username)}')">重置 MFA</button>` : ''}
     </div>
     ${mfaChannelPanel(chn)}
     <div class="rv-box" style="margin-top:12px"><div class="rv-h">策略调整（单账号）</div>
@@ -180,7 +180,7 @@ window.accountPermModal = async (id, username) => {
     })()}
     <div class="field" style="margin-top:10px"><label>授权/收回原因 *（4–200 字，进入审计）</label><input id="apReason" maxlength="200" placeholder="例如：临时协助风控核查"></div>
     <div id="apErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountPermSubmit(${id}, '${esc(username)}')">保存权限</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountPermSubmit(${id}, '${escJs(username)}')">保存权限</button>`)
 }
 window.accountPermSubmit = async (id, username) => {
   const reason = ($('#apReason').value || '').trim()
@@ -271,7 +271,7 @@ window.accountResetPwd = (id, username) => {
   modal('重置密码 · ' + username, `
     <p class="td-sub">重置后生成一次性临时密码（仅显示一次），该账号全部会话立即失效，本人下次登录必须改密。审计不记录密码。</p>
     <div id="acRsErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountResetPwdSubmit(${id}, '${esc(username)}')">确认重置</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountResetPwdSubmit(${id}, '${escJs(username)}')">确认重置</button>`)
 }
 window.accountResetPwdSubmit = async (id, username) => {
   try {

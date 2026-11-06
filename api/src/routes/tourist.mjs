@@ -289,7 +289,7 @@ const c = {
     const mo = await one(`SELECT COALESCE(SUM(CASE WHEN l.direction = 1 AND l.biz_type IN (1,2,3,5) THEN l.amount END), 0) inc,
       COALESCE(SUM(CASE WHEN l.direction = 2 AND l.biz_type IN (4,6,7) THEN l.amount END), 0) outc
       FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ? AND l.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')`, [uid])
-    // 30 天内将到期：入账满 (有效期 - 1) 个月的发放量，上限为当前余额（与过期任务同口径的估算）
+    // 30 天内将到期：入账满 (有效期 - 1) 个月的发放量，上限为当前余额（展示估算：按发放批次面额，未逐批扣减 FIFO 消费；过期实扣以过期任务为准）
     const ex = await one(`SELECT COALESCE(SUM(l.amount), 0) s FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
       WHERE a.user_id = ? AND l.direction = 1 AND l.biz_type IN (1,2,3) AND l.created_at < NOW() - INTERVAL ? MONTH + INTERVAL 30 DAY`, [uid, months])
     return { balance: bal, orderRatePct: rate, deductMaxPct: cap, expireMonths: months,
@@ -391,6 +391,8 @@ const c = {
     const u = requireUser(req)
     const o = await order.byNo(req.params.no)
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    // A-01：免费改签单实收 ¥0（成本商户承担），不能走原路退款；取消订单释放名额即可
+    if (o.rebook_of) return { allowed: false, reason: '免费改签订单不退款；取消订单将释放名额（不产生退款）', rebook: true }
     const qt = await refund.quoteFor(o)
     return { ...qt, feeLabel: qt.feeFen != null ? fen2yuan(qt.feeFen) : null, refundLabel: qt.refundFen != null ? fen2yuan(qt.refundFen) : null,
       amountPayLabel: fen2yuan(o.amount_pay), rules: refundPolicy.describe(await cfg('order.refund_policy')) }
@@ -400,7 +402,16 @@ const c = {
     const o = await order.byNo(req.params.no)
     if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
     const { reason } = req.body
-    if (o.status === 10) { await order.fire(o.order_no, 'CLOSE_TIMEOUT', 'user'); return { closed: true } }
+    if (o.status === 10) {
+      // A-03：取消未支付单必须退回抵扣旅豆并释放名额（此前只关单，豆和名额都没还）
+      await order.closeUnpaid(o.order_no, 'user_cancel', 'user:' + u.uid, '用户取消未支付单·名额释放')
+      return { closed: true }
+    }
+    // A-01：免费改签单取消 = 释放名额关闭订单，不退款（实收 ¥0，无款可退）
+    if (o.rebook_of) {
+      await order.cancelRebook(o.order_no, 'user:' + u.uid)
+      return { closed: true, rebook: true, msg: '免费改签订单已取消，名额已释放（免费改签订单不产生退款）' }
+    }
     // 自助退款只覆盖"已支付、未核销"：核销即服务已发生，全额自助退款会让用户玩完再全退。
     // 已核销订单的售后由客服在后台处理（后台退款接口不受此限制，并留审计）
     if (![20, 30].includes(Number(o.status))) throw new BizError(2002, Number(o.status) === 40 ? '凭证已核销，如需售后请联系客服' : '当前状态不可退款')
@@ -683,24 +694,15 @@ const cPhraseKyc = {
       role: pf.phrase_role || null, location: pf.phrase_location || null }
   },
 
-  // KYC 实名提交（一户一档：重复提交=更新待审资料）
+  // KYC 实名（A-06 定稿：实名结果目前没有任何业务使用 → 入口下线，存量数据已加密保留）。
+  // 负责人明确业务用途恢复时：走 infra/idcard.mjs（AES-256-GCM + 18 位校验码校验）重新开入口。
   'POST /c/kyc/submit': async (req) => {
-    const u = requireUser(req)
-    const { realName, idNo } = req.body
-    const name = String(realName || '').trim()
-    const id = String(idNo || '').trim().toUpperCase()
-    if (!/^[\u4e00-\u9fa5]{2,20}$/.test(name)) throw new BizError(1001, '请输入真实中文姓名')
-    if (!/^[0-9X]{17}[0-9X]$|^[0-9X]{15}$/.test(id)) throw new BizError(1001, '身份证号格式不正确')
-    const mask = id.length === 18 ? id.slice(0, 3) + '***********' + id.slice(-4) : id.slice(0, 3) + '******' + id.slice(-4)
-    const enc = Buffer.from(id + '|' + name, 'utf8') // 与 contact_phone_enc 同口径（生产换 KMS 信封）
-    await q(`INSERT INTO kyc_application (user_id, real_name, id_no_enc, id_no_mask, status)
-      VALUES (?,?,?,?,0) ON DUPLICATE KEY UPDATE real_name = VALUES(real_name),
-      id_no_enc = VALUES(id_no_enc), id_no_mask = VALUES(id_no_mask), status = 0, reject_note = NULL, reviewed_at = NULL`,
-      [u.uid, name, enc, mask])
-    return { submitted: true, masked: mask }
+    requireUser(req)
+    throw new BizError(1001, '实名认证功能升级中，已暂停提交；如有出行保险需求请联系客服')
   },
   'GET /c/kyc/mine': async (req) => {
     const u = requireUser(req)
+    // 只下发掩码与状态，不下发密文列（完整号码任何接口都不出现）
     const r = await one('SELECT real_name, id_no_mask, status, reject_note FROM kyc_application WHERE user_id = ?', [u.uid])
     return r || { status: -1 }
   },

@@ -19,10 +19,10 @@ export async function completeOrder(orderNo) {
     await c.upd('UPDATE orders SET completed_at = NOW(3) WHERE order_no = ?', [orderNo])
     return '观察期结束·返豆+计佣'
   })
-  // 返豆：账号冻结时不发，记为待补发，解冻后补发
+  // 返豆：账号冻结时不发，记为待补发，解冻后补发（实收 0 的免费改签单天然不返）
   await bean.rebateOrder({ ...o, order_no: orderNo })
   const amt = Number(o.amount_pay)
-  await member.addGrowth(o.user_id, amt, orderNo)
+  if (amt > 0) await member.addGrowth(o.user_id, amt, orderNo) // A-01：实收 ¥0 的免费改签单不加成长值
   await promo.createCommission(orderNo)
   // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
   await pass.attest('order', orderNo, {
@@ -71,18 +71,32 @@ async function tickSettlement() {
   console.log('[job:settlement]', merchants.length, 'merchants', period)
 }
 
-/** 豆过期（滚动 12 个月 FIFO）：回收超期豆（负向分录 biz=6） */
+/** 豆过期（滚动 expire_months 个月 FIFO）：回收超期豆（负向分录 biz=6）。
+ *  A-02 修复：旧实现用原发放分录的 tx_no 比对过期分录（tx_no 永远不同 → 每分钟重复扣），
+ *  也没有按 FIFO 扣除已消费部分（已花掉的旧豆会被再扣一次）。
+ *  新实现：按账户算"过期批次剩余量"（bean.expiredDue），扣一次后该批次剩余归零 → 幂等；
+ *  与账户行同事务加锁，避免与消费/发放并发时算错。 */
 export async function tickExpire() {
   const months = await cfgNum('bean.expire_months') // 有效期走参数中心（此前写死 12）
-  const rows = await q(`SELECT l.account_id, a.user_id, SUM(l.amount) amt FROM bean_ledger l
+  const rows = await q(`SELECT DISTINCT l.account_id, a.user_id FROM bean_ledger l
     JOIN bean_account a ON a.id = l.account_id
     WHERE l.direction = 1 AND l.biz_type IN (1,2,3) AND l.created_at < NOW() - INTERVAL ? MONTH
-      AND NOT EXISTS (SELECT 1 FROM bean_ledger x WHERE x.tx_no = l.tx_no AND x.biz_type = 6)
-    GROUP BY l.account_id, a.user_id HAVING amt > 0`, [months])
-  const { deduct, BIZ } = await import('./domain/bean.mjs')
+      AND a.user_id < 999999000000`, [months])
+  const { deduct, expiredDue, BIZ } = await import('./domain/bean.mjs')
+  const { tx } = await import('./db.mjs')
   for (const r of rows) {
-    try { await deduct(Number(r.user_id), Number(r.amt), BIZ.EXPIRE, 'EXPIRE-' + r.account_id); console.log('[job:expire]', r.user_id, r.amt) }
-    catch (e) { console.error('[job:expire:err]', e.message) }
+    try {
+      const userId = Number(r.user_id)
+      // 锁账户行再算应扣量：过期/消费/发放并发时口径一致（deduct 内部同样先锁账户行）
+      const due = await tx(async (c) => {
+        await c.one('SELECT id FROM bean_account WHERE user_id = ? FOR UPDATE', [userId])
+        return expiredDue(userId, months, c)
+      })
+      if (due > 0) {
+        await deduct(userId, due, BIZ.EXPIRE, 'EXPIRE-' + r.account_id)
+        console.log('[job:expire]', userId, due)
+      }
+    } catch (e) { console.error('[job:expire:err]', r.user_id, e.message) }
   }
 }
 

@@ -44,22 +44,36 @@ Page({
   },
 
   // ── 对暗号核销（剧本游）：输入游客说出的暗号 → 命中即整单核销 ──
+  // A-04：暗号是商品级的，多张在途订单同码时服务端不下发对答句、要求二次确认；
+  // 这里弹出候选订单（联系人 · 出发日 · 单号），店员与游客当面核对后选择再核销
   phraseInput() {
     wx.showModal({ title: '对暗号', editable: true, placeholderText: '输入游客说出的暗号', success: async (r) => {
       if (!r.confirm || !r.content) return
-      try {
-        const res = await api.request('/m/verify/phrase', 'POST', { phrase: r.content.trim() })
-        wx.vibrateShort({ type: res.ok ? 'heavy' : 'light' })
-        if (res.ok) {
-          this.setData({ streak: this.data.streak + 1, result: { ok: true, payload: '暗号·' + res.orderNo, reason: res.reason + (res.counterPhrase ? ' · 对答：' + res.counterPhrase : '') } })
-          // 对答句在结果卡常驻展示，这里只轻提示，避免双弹窗打断连续核销
-          wx.showToast({ title: res.counterPhrase ? '对答：' + res.counterPhrase : '已整单核销', icon: 'none', duration: 2500 })
-          this.syncList()
-        } else {
-          this.setData({ result: { ok: false, payload: '暗号', reason: res.reason } })
-        }
-      } catch (e) { wx.showToast({ title: e.msg || '核销失败', icon: 'none' }) }
+      await this.phraseVerify({ phrase: r.content.trim() })
     }})
+  },
+  async phraseVerify(body) {
+    try {
+      const res = await api.request('/m/verify/phrase', 'POST', body)
+      wx.vibrateShort({ type: res.ok ? 'heavy' : 'light' })
+      if (res.ok) {
+        this.setData({ streak: this.data.streak + 1, result: { ok: true, payload: '暗号·' + res.orderNo, reason: res.reason + (res.counterPhrase ? ' · 对答：' + res.counterPhrase : '') } })
+        // 对答句在结果卡常驻展示，这里只轻提示，避免双弹窗打断连续核销
+        wx.showToast({ title: res.counterPhrase ? '对答：' + res.counterPhrase : '已整单核销', icon: 'none', duration: 2500 })
+        this.syncList()
+        return
+      }
+      if (res.needConfirm && Array.isArray(res.candidates) && res.candidates.length) {
+        this.setData({ result: { ok: false, payload: '暗号', reason: res.reason } })
+        return wx.showActionSheet({
+          alertText: res.reason,
+          itemList: res.candidates.map((c) => (c.contactName || '未留姓名') + ' · ' + c.departDate + ' · ' + c.orderNo),
+          success: (tap) => this.phraseVerify({ phrase: body.phrase, orderNo: res.candidates[tap.tapIndex].orderNo }),
+          fail: () => {},
+        })
+      }
+      this.setData({ result: { ok: false, payload: '暗号', reason: res.reason } })
+    } catch (e) { wx.showToast({ title: e.msg || '核销失败', icon: 'none' }) }
   },
 
   // ── 在线核销（连续模式：成功后 800ms 自动重开相机，§10 verify 规格）──

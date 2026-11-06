@@ -39,7 +39,8 @@
   <view wx:if="{{detail[s.id]}}" class="fade-up" style="margin-top:10rpx">
     <view class="row" wx:for="{{detail[s.id]}}" wx:for-item="it" wx:key="order_no">
       <view style="flex:1;min-width:0"><b style="font-size:24rpx">{{it.title}}</b>
-        <view class="sub">{{it.order_no}} · {{it.completed_at}}</view></view>
+        <view class="sub">{{it.order_no}} · {{it.completed_at}}</view>
+        <view wx:if="{{it.rebook}}" class="sub" style="color:var(--warn, #d97706)">免费改签单 · 实收 ¥0（不计入结算）</view></view>
       <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
     </view>
   </view>

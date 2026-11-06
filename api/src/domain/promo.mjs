@@ -50,8 +50,9 @@ export async function hit(scene, userId) {
 
 /** 订单 50 后计佣（幂等） */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee, paid_at FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee, paid_at, rebook_of FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
+  if (o.rebook_of) return false // A-01：免费改签单实收 ¥0（成本商户承担），不计佣
   const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
   if (!a) return false
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
@@ -128,12 +129,13 @@ export async function feeShareBp(c, merchantId) {
 
 // ===== 结算（五口径：履约58% / 服务12% / 权益5% / 推广=实际佣金 / 留存=差额兜底）=====
 export async function generateSettlement(merchantId, period) {
-  // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账
+  // 只取从未结算过的订单（settlement_id IS NULL）——同一订单绝不重复进账。
+  // A-01：免费改签单（rebook_of 非空）实收 ¥0、改签成本由商户承担，不进结算金额与共创分润基数
   return await tx(async (c) => {
   await c.one('SELECT id FROM merchant WHERE id = ? FOR UPDATE', [merchantId])
   const orders = await c.q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
-    WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL GROUP BY o.id`, [merchantId])
+    WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL AND o.rebook_of IS NULL GROUP BY o.id`, [merchantId])
   // 退改手续费：该商户名下已退款成功、扣了手续费、尚未计入任何结算单的退款（每笔只计一次）
   const fees = await c.q(`SELECT r.id, r.fee_amount FROM refunds r JOIN orders o ON o.id = r.order_id
     WHERE o.merchant_id = ? AND r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL FOR UPDATE`, [merchantId])

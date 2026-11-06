@@ -19,11 +19,12 @@ const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', n
 const noop = () => {}
 const mkEl = () => ({ innerHTML: '', hidden: false, dataset: {}, style: {}, classList: { add: noop, remove: noop, contains: () => false }, scrollIntoView: noop, appendChild: noop, setAttribute: noop })
 const toasts = [], apiCalls = [], drawers = []
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const escJs = (v) => String(v ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))   // 与 core.js 的 escJs 同一语义（A-05）
 const ctx = {
   document: { querySelector: () => mkEl(), getElementById: () => null, createElement: mkEl, querySelectorAll: () => [] },
   window: {}, localStorage: { getItem: () => '', setItem: noop }, navigator: {}, console, setTimeout, clearInterval, setInterval, Date, Math, JSON, Number, String, Object, Array, Promise,
-  innerHeight: 900, innerWidth: 1400, esc,
+  innerHeight: 900, innerWidth: 1400, esc, escJs,
   toast: (m, err) => toasts.push({ m, err: !!err }), $: () => mkEl(), go: noop, bizTag: (x) => String(x || ''), BIZ_CN: {}, skel: () => '', emptyBox: (m) => `<div class="empty">${m}</div>`,
   runJob: noop, dxKey: '', CITY_CN: { 310118: '上海·青浦' }, closeModal: noop, copyText: noop,
   drawer: (title, html) => drawers.push({ title, html }),
@@ -160,7 +161,7 @@ await t('同一行放 DID 与旅豆账户；没开户的明确写「未开户」
 })
 
 console.log('== 侧栏合并 ==')
-const ops = vm.createContext({ document: { getElementById: () => mkEl(), querySelectorAll: () => [] }, esc })
+const ops = vm.createContext({ document: { getElementById: () => mkEl(), querySelectorAll: () => [] }, esc, escJs })
 vm.runInContext(read('operations.js'), ops, { filename: 'admin/operations.js' })
 const keys = new Set(MODULE_GROUPS.flatMap(([, items]) => items.map(([k]) => k)))
 const get = (n) => vm.runInContext(n, ops)

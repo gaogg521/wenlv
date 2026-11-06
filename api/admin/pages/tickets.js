@@ -64,7 +64,7 @@ window.ticketCreateModal = (orderNo) => {
     <div class="field"><label>诉求说明 *（4–500 字，进入工单时间线）</label><textarea id="tkNote" rows="3" maxlength="500"></textarea></div>
     <div class="field"><label>承诺办结时限（可选）</label><input id="tkPromised" type="datetime-local"></div>
     <div id="tkErr" class="td-sub" style="color:var(--red)"></div>`,
-    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="ticketCreateSubmit('${esc(orderNo)}')">创建工单</button>`)
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="ticketCreateSubmit('${escJs(orderNo)}')">创建工单</button>`)
 }
 window.ticketCreateSubmit = async (orderNo) => {
   try {

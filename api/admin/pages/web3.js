@@ -1043,9 +1043,9 @@ async function openBlock(id, opt = {}) {
     <div class="card-head"><h3>区块 #${b.seq} · 批内事件（${Number(b.leaf_count)}${demo ? '，演示取前 10' : ''}）</h3>
       <span class="muted">${Number(b.is_day_close) ? '旅豆账本日终封存批 · ' : ''}打包于 ${esc(String(b.biz_date).slice(0, 10))}${demo ? ' · 演示数据' : ''}<button class="btn ghost sm" style="margin-left:8px" onclick="closeBlock()">收起</button></span></div>
     <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
-      <span>Merkle 根 <code>${esc(b.merkle_root)}</code><button class="copy-chip" title="复制完整根" onclick="copyText('${esc(b.merkle_root)}')">复制</button></span>
-      <span>前根 ${b.prev_root ? `<code>${esc(b.prev_root)}</code><button class="copy-chip" title="复制前根" onclick="copyText('${esc(b.prev_root)}')">复制</button>` : '<code>—（链起点）</code>'}</span>
-      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code><button class="copy-chip" title="复制交易哈希" onclick="copyText('${esc(b.chain_tx_ref)}')">复制</button></span>` : ''}
+      <span>Merkle 根 <code>${esc(b.merkle_root)}</code><button class="copy-chip" title="复制完整根" onclick="copyText('${escJs(b.merkle_root)}')">复制</button></span>
+      <span>前根 ${b.prev_root ? `<code>${esc(b.prev_root)}</code><button class="copy-chip" title="复制前根" onclick="copyText('${escJs(b.prev_root)}')">复制</button>` : '<code>—（链起点）</code>'}</span>
+      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code><button class="copy-chip" title="复制交易哈希" onclick="copyText('${escJs(b.chain_tx_ref)}')">复制</button></span>` : ''}
       ${b.chain_block ? `<span>链上块高 <code>${esc(b.chain_block)}</code></span>` : ''}
       ${b.anchored_at ? `<span>锚定时间 ${esc(String(b.anchored_at).slice(0, 19))}</span>` : ''}
       <span>尝试 ${Number(b.attempt) || 0} 次</span>
@@ -1205,7 +1205,7 @@ function attestResultHtml(r) {
     const u = r.user
     obj.push(`<span class="pill s20">用户</span> <b>#${u.id} ${esc(u.nickname || '')}</b>
       <span class="muted">等级 L${Number(u.memberLevel)}</span>
-      ${u.did ? `<span class="muted">DID <code>${esc(u.did)}</code><button class="copy-chip" onclick="copyText('${esc(u.did)}')">复制</button></span>` : '<span class="muted">未签发 DID</span>'}`)
+      ${u.did ? `<span class="muted">DID <code>${esc(u.did)}</code><button class="copy-chip" onclick="copyText('${escJs(u.did)}')">复制</button></span>` : '<span class="muted">未签发 DID</span>'}`)
   }
   if (r.pass) {
     obj.push(`<span class="pill s20">权益凭证</span> <b>pass-${Number(r.pass.id)}</b>
@@ -1216,7 +1216,7 @@ function attestResultHtml(r) {
       <span>${Number(b.is_day_close) ? '账本日终' : '业务批次'} · 业务日 ${esc(String(b.biz_date || '').slice(0, 10))} · ${Number(b.leaf_count || 0)} 条</span>
       ${stPill(b.status)}
       <code class="sr-root">根 ${esc(String(b.merkle_root || '').slice(0, 12))}…</code>
-      ${b.chain_tx_ref ? `<code class="sr-tx">链上 ${esc(String(b.chain_tx_ref).slice(0, 16))}…</code><button class="copy-chip" onclick="copyText('${esc(b.chain_tx_ref)}')">复制哈希</button>` : '<span class="muted">未上链</span>'}
+      ${b.chain_tx_ref ? `<code class="sr-tx">链上 ${esc(String(b.chain_tx_ref).slice(0, 16))}…</code><button class="copy-chip" onclick="copyText('${escJs(b.chain_tx_ref)}')">复制哈希</button>` : '<span class="muted">未上链</span>'}
       ${b.chain_block ? `<span class="muted">块高 ${esc(b.chain_block)}</span>` : ''}
       <button class="btn ghost sm" onclick="openBlock(${Number(b.id)})">打开批内事件 ›</button>
     </div>`).join('')
@@ -1335,7 +1335,7 @@ function openFlowStep(i, opt = {}) {
       <span>版本 v${Number(e.version_no ?? 1)}</span>
       <span>${BST[Number(e.status)] || ''}</span>
       <span>所在批次 ${e.seq != null ? '#' + e.seq : '待打包'}</span>
-      <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code>${e.merkle_root ? `<button class="copy-chip" title="复制完整根" onclick="copyText('${esc(e.merkle_root)}')">复制</button>` : ''}</span>
+      <span>Merkle 根 <code>${e.merkle_root ? esc(String(e.merkle_root).slice(0, 24)) + '…' : '—'}</code>${e.merkle_root ? `<button class="copy-chip" title="复制完整根" onclick="copyText('${escJs(e.merkle_root)}')">复制</button>` : ''}</span>
       <span>payload 指纹 <code>${esc(String(e.payload_hash).slice(0, 16))}…</code></span>
       <span>时间 ${esc(String(e.created_at).slice(0, 19))}</span>
     </div>
