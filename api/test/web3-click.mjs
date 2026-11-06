@@ -117,12 +117,22 @@ await t('检索只有一个入口；单流程的说明只出现一次（原来�
   assert.match(h, /id="flowSec" class="flow-sec" hidden/, '没追踪订单时单流程区不占位')
 })
 
-await t('链路视图只画了一部分时给出「再看更早」，并按累加的数量取数', async () => {
-  const keep = apiData['/admin/web3/overview']
+await t('链路视图一页最多 30 块：有更早的批次时给出翻页，翻页按页取数；最新页没有「更新」', async () => {
+  const keep = apiData['/admin/web3/overview'], keepC = apiData['/admin/attest/center']
   apiData['/admin/web3/overview'] = { ...keep, batches: 99 }
+  // 接口按 batchLimit 回最新 N 批（降序）；这里造 99 批
+  apiData['/admin/attest/center'] = (url) => { const n = Number((url.match(/batchLimit=(\d+)/) || [])[1] || 20); return { ...keepC, batches: Array.from({ length: Math.min(n, 99) }, (_, i) => B({ id: 1000 + 99 - i, seq: 99 - i })) } }
+  run('window.__chainPage = 0'); calls = []
   await run('web3dash()')
-  assert.match(app.innerHTML, /共 99 批/); assert.match(app.innerHTML, /onclick="chainMore\(\)"/)
-  apiData['/admin/web3/overview'] = keep
+  assert.ok(calls.some((u) => u.includes('/admin/attest/center?batchLimit=29')), '最新一页取 29 批（留 1 格给「下一区块」）：' + calls)
+  assert.match(app.innerHTML, /共 99 批/); assert.match(app.innerHTML, /onclick="chainPage\(1\)">← 更早 30 批/)
+  assert.match(app.innerHTML, /<button class="chain-btn" type="button" disabled onclick="chainPage\(-1\)">/, '最新页「更新」应禁用')
+  calls = []; await run('chainPage(1)'); await new Promise((r) => setTimeout(r, 30))
+  assert.ok(calls.some((u) => u.includes('batchLimit=59')), '第二页要把前两页都取回：' + calls)
+  assert.ok(/<button class="chain-btn" type="button"\s+onclick="chainPage\(-1\)">/.test(app.innerHTML), '第二页可以回到更新')
+  assert.match(app.innerHTML, /本页 #41–#70/, "第二页应是 #41–#70（第一页 #71–#99 共 29 批）：" + (app.innerHTML.match(/本页[^<]*/) || [])[0])
+  run('window.__chainPage = 0')
+  apiData['/admin/web3/overview'] = keep; apiData['/admin/attest/center'] = keepC
 })
 
 console.log('== 验证结果：三态，不再把“待打包”说成“验证通过” ==')

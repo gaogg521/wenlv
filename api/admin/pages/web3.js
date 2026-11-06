@@ -666,15 +666,16 @@ function blockMixSorted(b) {
   const rank = (k) => { const i = FLOW_ORDER.indexOf(k); return i < 0 ? 99 : i }
   return Object.entries(b.mix || {}).sort((a, c) => rank(a[0]) - rank(c[0]) || c[1] - a[1])
 }
-function blockMixHTML(b, max = 3) {
-  if (Number(b.is_day_close) === 1) return '<div class="blk-mix"><span class="mx day">旅豆账本封存</span></div>'
+function blockMixHTML(b, max = 3, tier = 'full') {
+  if (Number(b.is_day_close) === 1) return `<div class="blk-mix"><span class="mx day">${tier === 'sm' ? '封存' : '旅豆账本封存'}</span></div>`
   const ents = blockMixSorted(b)
   if (!ents.length) return '<div class="blk-mix"></div>'
   const shown = ents.slice(0, max)
   const rest = ents.slice(max).reduce((s, [, n]) => s + n, 0)
   return `<div class="blk-mix">${shown.map(([k, n]) => `<span class="mx" style="--c:${bizColor(k)}" title="${esc(BIZ_CN[k] || k)}">${esc(BLK_SHORT[k] || BIZ_CN[k] || k)} <b>${Number(n)}</b></span>`).join('')}${rest ? `<span class="mx more" title="其他业务类型 ${rest} 条">+${rest}</span>` : ''}</div>`
 }
-function blockNodeHTML(b) {
+function blockNodeHTML(b, opt = {}) {
+  const tier = opt.tier || 'full'
   const dayClose = Number(b.is_day_close) === 1
   const st = Number(b.status)
   const root8 = String(b.merkle_root).slice(0, 8)
@@ -691,10 +692,10 @@ function blockNodeHTML(b) {
     onmouseenter="chainTip(event, 'b', ${b.id})" onmousemove="chainTipMove(event)" onmouseleave="chainTipHide()" onfocus="chainTip(event, 'b', ${b.id})" onblur="chainTipHide()">
     ${cube3d(tone, { pulse: st === 5, ...paint })}
     <div class="blk-title">${dayClose ? '账本日终' : '区块'} #${b.seq}${b.prev_root ? '' : ' <span class="dpill genesis">创世</span>'}</div>
-    <div class="blk-line">业务日 ${esc(String(b.biz_date).slice(0, 10))}</div>
-    <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条 · ${dayClose ? '账本封存' : '业务存证'}</div>
-    ${blockMixHTML(b, window.__chainDense ? 2 : 3)}
-    <div class="blk-line">根 <code class="dk">${root8}…</code></div>
+    <div class="blk-line"><span class="d-full">业务日 ${esc(String(b.biz_date).slice(0, 10))}</span><span class="d-short">${esc(String(b.biz_date).slice(5, 10))}</span></div>
+    <div class="blk-line">事件 <b>${Number(b.leaf_count)}</b> 条<span class="x"> · ${dayClose ? '账本封存' : '业务存证'}</span></div>
+    ${blockMixHTML(b, tier === 'sm' ? 1 : tier === 'md' ? 2 : 3, tier)}
+    <div class="blk-line blk-root">根 <code class="dk">${root8}…</code></div>
     <div class="blk-line">${BLOCK_ST[st] || ''} <span class="node-open">查看批内事件 ›</span></div>
   </div>`
 }
@@ -770,15 +771,15 @@ function chainTipMove(ev) {
 }
 function chainTipHide() { const el = document.getElementById('chainTip'); if (el) { el.hidden = true; el.dataset.key = '' } }
 function blockLinkHTML(prevBranch, curBranch) {
-  const y = (p) => p ? 133 : 59
-  const y1 = y(prevBranch), y2 = y(curBranch)
+  // 纵向位置用 CSS 变量：--cy = 立方体中心线，--sink = 日终分支块下沉量；块缩小时两者一起变小
+  const y = (p) => (p ? 'calc(var(--cy) + var(--sink))' : 'var(--cy)')
+  const at = (p, d) => `calc(${y(p)} - ${d}px)`
   // <s> 是沿连线流动的数据包，表示"前一块的根被写进后一块的 prev_root"
-  if (y1 === y2) return `<div class="chain-link"><i style="top:${y1 - 1}px"></i><s style="top:${y1 - 2}px"></s><s class="p2" style="top:${y1 - 2}px"></s><u style="top:${y1 - 11}px">»</u></div>`
-  const down = y1 < y2
-  const top = Math.min(y1, y2) - 1
+  if (!!prevBranch === !!curBranch) return `<div class="chain-link"><i style="top:${at(curBranch, 1)}"></i><s style="top:${at(curBranch, 2)}"></s><s class="p2" style="top:${at(curBranch, 2)}"></s><u style="top:${at(curBranch, 11)}">»</u></div>`
+  const down = !prevBranch && !!curBranch
   const edge = down ? 'border-top:2px dashed var(--cl);border-top-right-radius:12px' : 'border-bottom:2px dashed var(--cl);border-bottom-right-radius:12px'
-  return `<div class="chain-link elbow"><i style="top:${top}px;height:${Math.abs(y2 - y1)}px;${edge};border-right:2px dashed var(--cl)"></i>
-    <b style="top:${y2 - 1}px"></b><s class="tail" style="top:${y2 - 2}px"></s><u style="top:${y2 - 11}px">▸</u></div>`
+  return `<div class="chain-link elbow"><i style="top:calc(var(--cy) - 1px);height:var(--sink);${edge};border-right:2px dashed var(--cl)"></i>
+    <b style="top:${at(curBranch, 1)}"></b><s class="tail" style="top:${at(curBranch, 2)}"></s><u style="top:${at(curBranch, 11)}">▸</u></div>`
 }
 /**
  * 上链流水线：把"一个批次"从业务事件到链上确认的 5 段真实路径铺开。
@@ -819,37 +820,63 @@ function pipelineHtml(batches, queue, demo) {
 }
 
 /**
- * 链路视图的 S 型（蛇形）排布：一行放不下就折行，奇数行从右往左，行尾用 U 形虚线转弯接到下一行行首，
- * 所以不管多少个区块都能一眼看全（不再靠横向滚动）。区块很多（>18）自动进入紧凑模式（节点变窄）。
- * 行容量按面板宽度算：容量 n 满足 n*节点宽 + (n-1)*最小连线宽 ≤ 可用宽度（两侧各留 46px 给转弯）。
+ * 链路视图的 S 型（蛇形）排布：一行放不下就折行，奇数行从右往左，行尾用 U 形虚线转弯接到下一行行首。
+ * 页面高度有上限：**最多 3 行、每行最多 10 块**。块少时用大块（188px）；放不下 3 行就按宽度把块缩小
+ * （md / sm 两档，行高也跟着降），每行最多到 10 块。一页最多 30 块，更早的翻页看（见 chainPageSlice）。
+ * 窗口窄到 10 块放不下时，每行块数按宽度来，行数才会超过 3（手机宽度的兜底，不是常态）。
  */
+const CHAIN_MAX_ROWS = 3, CHAIN_MAX_PER = 10, CHAIN_PAGE = 30
 function chainTrackWidth() {
   const app = document.getElementById('app')
   return Math.max(560, ((app && app.clientWidth) || 1200) - 36)
 }
+function chainPlan(n, W) {
+  const perFull = Math.max(2, Math.min(CHAIN_MAX_PER, Math.floor((W - 92 + 52) / (188 + 52))))
+  if (n <= CHAIN_MAX_ROWS * perFull) return { per: perFull, nw: 188, lk: 52, tier: 'full' }
+  const lk = 14   // 缩小档的连线很短：只表示「前一块的根接到后一块」，不需要长
+  const per = Math.max(2, Math.min(CHAIN_MAX_PER, Math.ceil(n / CHAIN_MAX_ROWS), Math.floor((W - 80 + lk) / (70 + lk))))
+  const nw = Math.max(70, Math.min(188, Math.floor((W - 80 - (per - 1) * lk) / per)))
+  return { per, nw, lk, tier: nw >= 160 ? 'full' : nw >= 108 ? 'md' : 'sm' }
+}
 function chainTrackHTML(descs, W) {
   if (!descs.length) return '<div class="chain-track"><div class="blk-line" style="padding:30px">尚无区块：到「存证中心」点「① 打包」即可出根</div></div>'
-  const dense = descs.length > 18
-  const nw = dense ? 140 : 188, minLink = dense ? 40 : 52
-  const per = Math.max(2, Math.floor((W - 92 + minLink) / (nw + minLink)))
+  const plan = chainPlan(descs.length, W)
   const rows = []
-  for (let i = 0; i < descs.length; i += per) rows.push(descs.slice(i, i + per))
+  for (let i = 0; i < descs.length; i += plan.per) rows.push(descs.slice(i, i + plan.per))
   const html = rows.map((row, r) => {
     const inner = []
-    row.forEach((d, i) => { if (i) inner.push(blockLinkHTML(row[i - 1].branch, d.branch)); inner.push(d.html) })
+    row.forEach((d, i) => { if (i) inner.push(blockLinkHTML(row[i - 1].branch, d.branch)); inner.push(d.html || blockNodeHTML(d.b, { tier: plan.tier })) })
     const rev = r % 2 === 1, last = r === rows.length - 1
     const turn = last ? '' : (rev ? ' turn-l' : ' turn-r') + (rows[r + 1][0].branch ? ' turn-branch' : '')
     return `<div class="chain-row${rev ? ' rev' : ''}${last ? ' last' : ''}${turn}">${inner.join('')}</div>`
   }).join('')
-  return `<div class="chain-track snake${dense ? ' dense' : ''}" style="--nw:${nw}px;--lk:${minLink}px" data-rows="${rows.length}" data-per="${per}">${html}</div>`
+  return `<div class="chain-track snake tier-${plan.tier}" style="--nw:${plan.nw}px;--lk:${plan.lk}px" data-rows="${rows.length}" data-per="${plan.per}" data-nw="${plan.nw}" data-tier="${plan.tier}">${html}</div>`
 }
+/**
+ * 翻页：一页 30 块（第一页给「下一区块」占位留 1 格，所以是 29 批）。asc = 按 seq 升序、已含最新批的列表；
+ * page 0 = 最新一页，page 1 = 再往前 30 批……接口一次最多回 200 批，所以最多翻到这里。
+ */
+function chainSeen(page) { return page <= 0 ? CHAIN_PAGE - 1 : CHAIN_PAGE - 1 + CHAIN_PAGE * page }
+function chainFetchLimit(page) { return Math.min(200, chainSeen(page)) }
+function chainPageSlice(asc, page) {
+  const end = Math.max(0, asc.length - (page <= 0 ? 0 : chainSeen(page - 1)))
+  return asc.slice(Math.max(0, end - (page <= 0 ? CHAIN_PAGE - 1 : CHAIN_PAGE)), end)
+}
+function chainPagerHtml(page, batches, total) {
+  const seen = chainSeen(page), hasOlder = seen < total && seen < 200, hasNewer = page > 0
+  return `<div class="chain-more">本页 #${Number(batches[0].seq)}–#${Number(batches[batches.length - 1].seq)} · 共 ${total} 批
+    <button class="chain-btn" type="button" ${hasOlder ? '' : 'disabled'} onclick="chainPage(1)">← 更早 ${CHAIN_PAGE} 批</button>
+    <button class="chain-btn" type="button" ${hasNewer ? '' : 'disabled'} onclick="chainPage(-1)">更新 ${CHAIN_PAGE} 批 →</button>
+    ${seen >= 200 && seen < total ? '<span>（一次最多翻 200 批，更早的请用检索）</span>' : ''}</div>`
+}
+function chainPage(delta) { window.__chainPage = Math.max(0, (window.__chainPage || 0) + delta); web3dash({ silent: true }) }
 /** 窗口尺寸变了：只重排链路（不重新请求接口） */
 function chainRelayout() {
   const el = document.querySelector('#chainViz .chain-track'); if (!el || !window.__chainDescs) return
   const next = chainTrackHTML(window.__chainDescs, chainTrackWidth())
   const tmp = document.createElement('div'); tmp.innerHTML = next
   const n = tmp.firstElementChild
-  if (n && n.dataset.per !== el.dataset.per) { el.replaceWith(n); flowMarkChain() }   // 重排后重新标出"本单经过的区块"
+  if (n && (n.dataset.per !== el.dataset.per || n.dataset.nw !== el.dataset.nw)) { el.replaceWith(n); flowMarkChain() }   // 重排后重新标出"本单经过的区块"
 }
 if (typeof window.addEventListener === 'function' && !window.__chainResizeBound) {
   window.__chainResizeBound = true
@@ -860,19 +887,20 @@ if (typeof window.addEventListener === 'function' && !window.__chainResizeBound)
 async function web3dash(opt = {}) {
   if (!opt.silent) $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
-  const lim = window.__chainLimit || 20
-  const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center' + (lim > 20 ? '?batchLimit=' + lim : ''))])
   const demo = !!window.__demoChain
-  const batches = demo ? mockChain() : (c.batches || []).slice().sort((a, b) => a.seq - b.seq)
+  const page = demo ? 0 : Math.max(0, Number(window.__chainPage) || 0)
+  const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center?batchLimit=' + chainFetchLimit(page))])
+  const fetched = demo ? mockChain() : (c.batches || []).slice().sort((a, b) => a.seq - b.seq)
+  const batches = demo ? fetched : chainPageSlice(fetched, page)
+  if (!demo && page > 0 && !batches.length) { window.__chainPage = 0; return web3dash(opt) }   // 翻到的那页已经没有批次（数据变少了）：回到最新一页
   const pendingN = demo ? batches.filter((b) => Number(b.status) === 0).reduce((s, b) => s + Number(b.leaf_count), 0) : Number(d.pendingEvents)
   const anchorN = demo ? batches.filter((b) => Number(b.status) === 2).reduce((s, b) => s + Number(b.leaf_count), 0) : d.anchoredEvents
   const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
-  const lastSeq = batches.length ? batches[batches.length - 1].seq : 0
+  const lastSeq = fetched.length ? fetched[fetched.length - 1].seq : 0   // 区块高度永远取最新批，不随翻页变
   window.__chainMap = Object.fromEntries(batches.map((b) => [b.id, b]))
-  window.__chainDense = batches.length > 18
   const descs = []   // 链路节点描述：branch=账本日终（下沉一档的分支块），连线与换行由 chainTrackHTML 统一生成
-  batches.forEach((b) => descs.push({ html: blockNodeHTML(b), branch: Number(b.is_day_close) === 1 }))
-  if (Number(pendingN) > 0) {
+  batches.forEach((b) => descs.push({ b, branch: Number(b.is_day_close) === 1 }))   // 节点按档位在 chainTrackHTML 里渲染
+  if (Number(pendingN) > 0 && page === 0) {   // 「下一区块」只在最新一页出现
     descs.push({ branch: false, html: `<div class="chain-node ghost" role="presentation" aria-disabled="true"
       title="待打包队列：还没出根，所以点不开。到「存证中心」点「① 打包」出根后，这里才会变成可点的区块">${cube3d('gray', { ghost: true, label: '待打包<br><b>' + pendingN + '</b> 条' })}
       <div class="blk-title" style="opacity:.75">下一区块</div>
@@ -931,7 +959,7 @@ async function web3dash(opt = {}) {
       <div class="chain-divider"></div>
     </div>
     ${chainTrackHTML(descs, chainTrackWidth())}
-    ${!demo && Number(d.batches) > batches.length ? `<div class="chain-more">显示最近 ${batches.length} 批，共 ${Number(d.batches)} 批 ${batches.length < 200 ? '<button class="chain-btn" onclick="chainMore()">再看更早 20 批</button>' : '<span>（一次最多看 200 批，更早的请用检索）</span>'}</div>` : ''}
+    ${!demo && Number(d.batches) > batches.length && batches.length ? chainPagerHtml(page, batches, Number(d.batches)) : ''}
     <div class="chain-legend">
       ${CHAIN_LEGEND.map(([k, n]) => `<span><i class="lg" style="background:${bizColor(k)}66;border:1px solid ${bizColor(k)}"></i>${n}</span>`).join('')}
       <span><i class="lg" style="background:${DAY_CLOSE_COLOR}66;border:1px solid ${DAY_CLOSE_COLOR}"></i>账本日终（分支）</span>
@@ -961,7 +989,6 @@ async function web3dash(opt = {}) {
   else if (window.__openFlowStep != null) openFlowStep(window.__openFlowStep, { silent: true })
   chainTimerSetup()
 }
-function chainMore() { window.__chainLimit = Math.min((window.__chainLimit || 20) + 20, 200); web3dash({ silent: true }) }
 function chainTimerSetup() {
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
   if (!window.__chainAuto) return

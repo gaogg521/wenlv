@@ -43,14 +43,64 @@ await t('8 个块在 1200px：每行 4 个、2 行；第 2 行反向且是最后
   assert.equal(rows.length, 2); assert.deepEqual(rows[0], ['turn-r']); assert.deepEqual(rows[1], ['rev', 'last'])
   for (let i = 1; i <= 8; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
 })
-await t('30 个块：进入紧凑模式；行反向与转弯左右交替；下一行行首是日终块时转弯多下沉一档', () => {
-  const html = ctx.chainTrackHTML(D(30, [7, 13]), 1200)
-  assert.match(html, /class="chain-track snake dense"/); const rows = rowsOf(html)
-  assert.ok(rows.length >= 3)
+await t('30 个块：每行 10 个、正好 3 行；行反向与转弯左右交替；下一行行首是日终块时转弯多下沉一档', () => {
+  const html = ctx.chainTrackHTML(D(30, [11, 21]), 1200)
+  assert.match(html, /class="chain-track snake tier-sm"/); const rows = rowsOf(html)
+  assert.equal(rows.length, 3); assert.match(html, /data-per="10"/)
   rows.forEach((r, i) => { assert.equal(r.includes('rev'), i % 2 === 1, `第 ${i + 1} 行方向`); if (i < rows.length - 1) assert.ok(r.includes(i % 2 ? 'turn-l' : 'turn-r'), `第 ${i + 1} 行转弯侧`); else assert.ok(r.includes('last')) })
-  const per = Number(html.match(/data-per="(\d+)"/)[1])   // 第 7 块是第 2 行行首（per=6）→ 第 1 行应 turn-branch
-  assert.equal(per, 6); assert.ok(rows[0].includes('turn-branch'), '下一行行首是日终块，转弯要多下沉')
-  assert.ok(!rows[1].includes('turn-branch') || rows[2], '')
+  assert.ok(rows[0].includes('turn-branch') && rows[1].includes('turn-branch'), '下一行行首是日终块，转弯要多下沉')
+  for (let i = 1; i <= 30; i++) assert.equal((html.match(new RegExp(`id="n${i}"`, 'g')) || []).length, 1, `块 ${i} 应恰好出现一次`)
+})
+await t('高度上限：不同数量 / 宽度下的行数与档位（块少用大块，放不下 3 行才缩小；缩小后每行最多 10 块）', () => {
+  const plan = (n, W) => { const p = ctx.chainPlan(n, W); return { per: p.per, nw: p.nw, tier: p.tier, rows: Math.ceil(n / p.per) } }
+  const sample = [[12, 1200], [13, 1200], [20, 1200], [29, 1050], [30, 1050], [30, 1400], [30, 2400], [8, 1200], [1, 1200]]
+  for (const [n, W] of sample) assert.ok(plan(n, W).rows <= 3, `${n} 块 / ${W}px 超过了 3 行：${JSON.stringify(plan(n, W))}`)
+  for (const [n, W] of sample) assert.ok(plan(n, W).per <= 10, '每行不超过 10')
+  assert.equal(plan(12, 1200).tier, 'full'); assert.equal(plan(12, 1200).nw, 188, '12 块还放得下大块，不缩')
+  assert.equal(plan(20, 1200).per, 7); assert.equal(plan(20, 1200).tier, 'md')
+  assert.equal(plan(30, 1050).per, 10); assert.equal(plan(30, 1050).tier, 'sm'); assert.ok(plan(30, 1050).nw >= 70)
+  assert.ok(plan(30, 1050).nw * 10 + 14 * 9 + 80 <= 1050, '10 块必须真的放得进 1050px')
+  for (const W of [993, 1106, 1300, 1600]) { const p = plan(30, W); assert.equal(p.per, 10, W + 'px 也要排满 10 块'); assert.equal(p.rows, 3); assert.ok(p.nw * 10 + 14 * 9 + 80 <= W, W + 'px 放得进') }
+  const narrow = plan(30, 700)
+  assert.ok(narrow.per < 10 && narrow.rows > 3, '窄屏放不下 10 块时按宽度折行（兜底），而不是溢出')
+  assert.ok(narrow.nw * narrow.per + 14 * (narrow.per - 1) + 80 <= 700)
+  assert.match(ctx.chainTrackHTML(D(8), 1200), /tier-full/)
+})
+await t('缩小后纵向尺寸跟着降：连线 / 转弯 / 分支下沉都走 CSS 变量，不写死 59 / 133', () => {
+  const link = ctx.blockLinkHTML(false, true)
+  assert.match(link, /height:var\(--sink\)/); assert.match(link, /top:calc\(var\(--cy\) - 1px\)/)
+  assert.match(ctx.blockLinkHTML(false, false), /top:calc\(var\(--cy\) - 1px\)/)
+  assert.match(ctx.blockLinkHTML(true, true), /var\(--cy\) \+ var\(--sink\)/)
+  assert.ok(!/\b(59|133)px/.test(link + ctx.blockLinkHTML(true, false)), '不该再写死像素位置')
+  const css = read('app.css')
+  for (const re of [/\.chain-track\.tier-sm \{ --cy: \d+px; --sink: \d+px;/, /\.chain-track\.tier-md \{ --cy:/, /top: var\(--cy\); width: 30px; height: calc\(100% \+ var\(--te\) - var\(--cy\)\)/, /\.chain-node\.branch \{ margin-top: var\(--sink/, /--te: calc\(var\(--cy\) \+ var\(--sink\)\)/]) assert.match(css, re, String(re))
+})
+await t('档位里的节点内容：sm 只留标题 / 月日 / 事件数 / 1 个环节 / 状态；full 全有；日终块 sm 写「封存」', () => {
+  const b = { id: 5, seq: 9, biz_date: '2026-11-05', merkle_root: 'a'.repeat(64), prev_root: 'b'.repeat(64), leaf_count: 20, is_day_close: 0, status: 2, mix: { order: 11, pass_issue: 6, pass_verify: 3 } }
+  const chips = (h) => (h.match(/class="mx"/g) || []).length
+  assert.equal(chips(ctx.blockNodeHTML(b, { tier: 'full' })), 3); assert.equal(chips(ctx.blockNodeHTML(b, { tier: 'md' })), 2)
+  const sm = ctx.blockNodeHTML(b, { tier: 'sm' })
+  assert.equal(chips(sm), 1); assert.match(sm, /\+9/, '被收起的环节折成 +N'); assert.match(sm, /d-short">11-05</)
+  assert.match(ctx.blockNodeHTML({ ...b, is_day_close: 1 }, { tier: 'sm' }), />封存</)
+  assert.match(ctx.blockNodeHTML({ ...b, is_day_close: 1 }, { tier: 'full' }), />旅豆账本封存</)
+  const css = read('app.css')
+  assert.match(css, /\.tier-sm \.x, \.tier-sm \.blk-root/); assert.match(css, /\.d-short \{ display: none; \}/)
+})
+await t('翻页切片：第一页 29 批（留 1 格给「下一区块」）、其后每页 30；不重不漏；最新页空时给空', () => {
+  const asc = Array.from({ length: 120 }, (_, i) => ({ seq: i + 1 }))
+  const seqs = (p) => ctx.chainPageSlice(asc, p).map((x) => x.seq)
+  const p0 = seqs(0), p1 = seqs(1), p2 = seqs(2)
+  assert.equal(p0.length, 29); assert.equal(p0[28], 120); assert.equal(p0[0], 92)
+  assert.equal(p1.length, 30); assert.equal(p1[29], 91); assert.equal(p1[0], 62)
+  assert.equal(p2[29], 61)
+  assert.equal(new Set([...p0, ...p1, ...p2]).size, 89, '三页之间不重复')
+  assert.equal(ctx.chainPageSlice([], 0).length, 0)
+  assert.equal(ctx.chainFetchLimit(0), 29); assert.equal(ctx.chainFetchLimit(1), 59); assert.equal(ctx.chainFetchLimit(9), 200, '接口一次最多 200 批')
+  const html = ctx.chainPagerHtml(1, [{ seq: 62 }, { seq: 91 }], 120)
+  assert.match(html, /本页 #62–#91 · 共 120 批/); assert.ok(!/disabled onclick="chainPage\(1\)"/.test(html)); assert.ok(!/disabled onclick="chainPage\(-1\)"/.test(html))
+  assert.match(ctx.chainPagerHtml(0, [{ seq: 92 }, { seq: 120 }], 120), /disabled onclick="chainPage\(-1\)"/)
+  assert.match(ctx.chainPagerHtml(0, [{ seq: 1 }, { seq: 29 }], 29), /disabled onclick="chainPage\(1\)"/, '没有更早的了')
+  assert.match(ctx.chainPagerHtml(6, [{ seq: 1 }, { seq: 2 }], 500), /最多翻 200 批/)
 })
 await t('空链给出提示；极窄也至少一行 2 个（不会退化成每行 1 个而无法折返）', () => {
   assert.match(ctx.chainTrackHTML([], 1200), /尚无区块/)
