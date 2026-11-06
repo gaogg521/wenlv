@@ -48,11 +48,15 @@ for (const d of ['mini-a', 'mini-b']) walkRef(path.join(root, d))
 // ---------- 2) 运行时 ----------
 const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 let runtime = 'skipped'
+let db = null
 try {
+  // 没明确指定 PORT 就不跑接口扫描：默认端口 8080 是演示服务，测试不该去碰（登录会写库）
+  if (!process.env.PORT) throw new Error('没设 PORT，只做静态扫描')
   const call = async (p, t) => (await fetch(BASE + p, { headers: t ? { authorization: 'Bearer ' + t } : {} })).json()
   const login = async (p, b) => (await (await fetch(BASE + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).json()).data
   const cT = (await login('/c/auth/login', { code: 'mock-wording-guard' })).token
-  const { one, q } = await import('../src/db.mjs')
+  db = await import('../src/db.mjs')
+  const { one, q } = db
   const any = await one('SELECT o.order_no, o.user_id, o.product_id FROM orders o WHERE o.status IN (20,30,40,50,70) ORDER BY o.id DESC LIMIT 1')
   const buyer = any ? await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [any.user_id]) : null
   const bT = buyer ? (await login('/c/auth/login', { code: String(buyer.mini_a_openid).replace(/^mock-openid-/, '') })).token : cT
@@ -74,8 +78,10 @@ try {
     for (const w of BANNED) if (w === 'Token' ? /\bToken\b/.test(body) : body.includes(w)) hits.push(`GET ${r} 返回 → 「${w}」`)
   }
   runtime = `${n} 个接口（商户端${mT ? '已' : '未'}登录）`
-  await (await import('../src/db.mjs')).pool?.end?.()
-} catch (e) { runtime = '未运行（' + e.message + '）' }
+} catch (e) { runtime = '未运行（' + e.message + '）' } finally {
+  // 异常路径也要关连接池：连接池开着时 process.exit 在 Windows 上会崩（exit 127），后面的测试就被跳过了
+  await db?.closeDb().catch(() => {})
+}
 
 console.log(`小程序用语检查：静态扫描 mini-a/mini-b；运行时 ${runtime}`)
 if (hits.length) { console.log('✗ 发现 ' + hits.length + ' 处敏感用语：\n  ' + [...new Set(hits)].join('\n  ')); process.exit(1) }
