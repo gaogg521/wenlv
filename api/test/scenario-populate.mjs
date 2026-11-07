@@ -183,7 +183,7 @@ async function main() {
   // 第二单：陈姐自己报瑜伽团（不抵豆），随后申请退款
   step('游客-陈姐', '自己也下单瑜伽团（¥688，不抵豆）→ 支付')
   const chenT = promoLogin.token
-  const order2 = await api('POST', '/c/orders', { sessionId: (await api('GET', '/c/tours/' + p2.id, null, chenT)).sessions[0].id, qty: 1 }, chenT)
+  const order2 = await api('POST', '/c/orders', { sessionId: (await api('GET', '/c/tours/' + p2.id, null, chenT)).sessions[0].id, qty: 1, contactName: '陈导', contactPhone: '13800002222' }, chenT)
   await api('POST', '/admin/dev/mock-pay', { orderNo: order2.orderNo }, admin)
   step('游客-陈姐', '行程有变 → 申请退款（全量冲正）')
   const rf = await api('POST', '/c/orders/' + order2.orderNo + '/refund', { reason: '行程变更' }, chenT)

@@ -29,7 +29,7 @@ Page({
   fillMe(m) {
     const lv = (m && m.level) || {}
     const hint = lv.next ? '再积累 ' + Number(lv.next.gapPoints).toLocaleString() + ' 成长值升级「' + lv.next.name + '」' : '已是最高等级'
-    this.setData({ avatarUrl: (m && m.avatarUrl) || '', initial: String((m && m.nickname) || '旅').trim().slice(0, 1) || '旅', user: { nickname: (m && m.nickname) || '旅友', levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
+    this.setData({ avatarUrl: (m && m.avatarUrl) ? api.img(m.avatarUrl) : '', initial: String((m && m.nickname) || '旅').trim().slice(0, 1) || '旅', user: { nickname: (m && m.nickname) || '旅友', levelName: lv.name || '探索者', levelArt: lv.art || '', levelPct: lv.pct || 0, levelHint: hint } })
   },
   async login() {
     try {

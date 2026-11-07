@@ -1,6 +1,7 @@
 // 订单域（与 Java 版同一守卫表）：状态机 + 下单 + 支付编排
 import { q, one, tx, count, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
+import { bizDay } from '../infra/bizdate.mjs'
 import * as bean from './bean.mjs'
 import { attest } from './attest.mjs'
 
@@ -35,9 +36,10 @@ export async function fire(orderNo, ev, actor, listener) {
 }
 
 /** 早鸟价判定：出发前 early_days 天（含）之前报名享 early_price；未开启返回原价（总方案 §4）。
- *  取较低价兜底：历史上早鸟价可被改到高于现价（A-07），这里保证游客永远不会多付。 */
+ *  取较低价兜底：历史上早鸟价可被改到高于现价（A-07），这里保证游客永远不会多付。
+ *  A-34：天数按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 少算一天。 */
 export function priceForSession(s) {
-  const days = Math.floor((new Date(s.depart_date + 'T00:00:00') - new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00')) / 86400000)
+  const days = Math.floor((new Date(String(s.depart_date).slice(0, 10) + 'T00:00:00') - new Date(bizDay() + 'T00:00:00')) / 86400000)
   const adult = Number(s.price_adult)
   const earlyEligible = s.early_price != null && s.early_days != null && days >= Number(s.early_days)
   const early = earlyEligible ? Math.min(Number(s.early_price), adult) : adult
@@ -60,9 +62,10 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const dedFen = beans * 10
   const pay = goods - dedFen + insFee
   if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
-  // 单号 = WL + 日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
+  // 单号 = WL + 业务日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
+  // A-34：日期段用业务时区（此前 toISOString 取 UTC 日期，凌晨下单的订单号日期错一天）
   const suffix = String(Date.now() % 100000000).padStart(8, '0') + String(Math.floor(Math.random() * 90) + 10)
-  const orderNo = 'WL' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + suffix
+  const orderNo = 'WL' + bizDay().replaceAll('-', '') + suffix
 
   await tx(async (c) => {
     const n = await c.upd('UPDATE tour_session SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota', [qty, sessionId, qty])

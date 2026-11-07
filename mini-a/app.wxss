@@ -371,3 +371,16 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .hero.tier-black .hi { color: #f6e7bb; }
 .hero.tier-black .sub2 { color: #dcb862; }
 .hero.tier-black .tier-name { color: #dcb862; }
+
+/* == 大气主题磁贴（视觉升级：分色渐变 + 大字白字 + 角标水印）== */
+.theme-grid { display: flex; gap: 16rpx; padding: 28rpx 32rpx 8rpx; }
+.theme-tile { position: relative; flex: 1; min-width: 0; min-height: 168rpx; border-radius: 28rpx; overflow: hidden;
+  padding: 26rpx 20rpx 22rpx 26rpx; box-shadow: 0 10rpx 26rpx rgba(38,28,18,.16); display: flex; flex-direction: column; justify-content: flex-end; }
+.tg0 { background: linear-gradient(150deg, #ff7a45 0%, #d94a1e 62%, #a83a18 100%); }
+.tg1 { background: linear-gradient(150deg, #3fa57c 0%, #1f7a58 62%, #145741 100%); }
+.tg2 { background: linear-gradient(150deg, #d9a13c 0%, #b47620 62%, #8a5a14 100%); }
+.tg3 { background: linear-gradient(150deg, #6f86e8 0%, #4a5ec4 62%, #33439a 100%); }
+.theme-mark { position: absolute; right: -8rpx; top: -18rpx; font-size: 120rpx; line-height: 1; color: rgba(255,255,255,.22); font-weight: 800; pointer-events: none; }
+.theme-body { position: relative; }
+.theme-name { font-size: 30rpx; font-weight: 800; color: #fff; letter-spacing: 2rpx; text-shadow: 0 2rpx 6rpx rgba(0,0,0,.18); }
+.theme-sub { font-size: 20rpx; color: rgba(255,255,255,.88); margin-top: 8rpx; letter-spacing: 1rpx; }

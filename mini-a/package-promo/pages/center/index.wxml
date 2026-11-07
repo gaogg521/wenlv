@@ -12,7 +12,7 @@
 <block wx:if="{{seg === 'earn'}}">
   <view class="card" wx:if="{{ov && ov.promoter}}">
     <view class="kv"><text>当前档位</text><text class="v">{{nameMap[ov.tier]}}</text></view>
-    <view class="kv"><text>累计有效成交（90天）</text><text class="v">滚动升级</text></view>
+    <view class="kv"><text>累计有效成交（90天）</text><text class="v">{{overview.validGmvLabel || "以审核通过订单计"}}</text></view>
     <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
   </view>
   <view class="btn" wx:if="{{ov && ov.withdrawable >= 10000}}" bindtap="withdraw">申请提现</view>
@@ -31,7 +31,7 @@
 <block wx:if="{{seg === 'cust'}}">
   <view class="card" wx:if="{{customers.length}}">
     <view class="kv" wx:for="{{customers}}" wx:key="index">
-      <text>{{item.when}} · {{item.orderNo ? '已成交' : '仅到访'}}</text>
+      <text>{{item.when}} · {{item.orderNo ? (item.statusText || '已下单') : '仅到访'}}</text>
       <text class="v">{{item.amount ? '¥' + (item.amount / 100) : '—'}}</text>
     </view>
   </view>

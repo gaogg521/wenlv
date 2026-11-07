@@ -91,9 +91,9 @@ async function main() {
   const o1 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 200, promoScene: sceneCode, contactName: '王小满', contactPhone: '13800001111' }, buyerT)
   ok(o1.amountPay === 27800 && o1.beanDeducted === 200, '下单：200 豆抵 20 元 · 实付 ¥278')
   ok(o1.payParams && (o1.payParams.mock || o1.payParams.paySign), '支付参数返回（' + (o1.payParams.mock ? 'MOCK' : 'V3') + '）')
-  const o2 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, buyerT)
+  const o2 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, buyerT)
   let overbooked = false
-  try { await api('POST', '/c/orders', { sessionId: sess.id, qty: 1 }, buyerT) } catch (e) { overbooked = e.message.includes('名额') }
+  try { await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, contactName: '回归测试', contactPhone: '13800009999' }, buyerT) } catch (e) { overbooked = e.message.includes('名额') }
   ok(overbooked, 'quota=2 卖满后第三单被拒（防超卖）')
   // o2 不支付 → 超时关单测试（直接调域函数模拟 15 分钟）
   const { closeTimeout } = await import('../src/domain/order.mjs')
@@ -150,7 +150,7 @@ async function main() {
   ok(Number(s0.amt_promoter) === Math.floor((27800 - 2000) * 500 / 10000), '推广口径=实际佣金 5%（基数 25800=实付-豆抵扣 → 1290 分）')
 
   console.log('== 9. 退款链（全量冲正）==')
-  const o3 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, buyerT)
+  const o3 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, buyerT)
   await api('POST', '/admin/dev/mock-pay', { orderNo: o3.orderNo }, adminT)
   const r3 = await api('POST', '/c/orders/' + o3.orderNo + '/refund', { reason: '行程变更' }, buyerT)
   ok(r3.refunded === true, '用户自助退款成功')

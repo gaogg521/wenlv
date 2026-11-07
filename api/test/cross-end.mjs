@@ -158,7 +158,7 @@ await t('退款：A 试算 = 后台试算；A 退款后三端状态 70、凭证�
   const v0b = await views()
   // 退改梯度只对未出发订单生效（出发当天不允许自助退）——把团期拨到 +10 天，测完拨回当天供后续核销用例
   await q('UPDATE tour_session SET depart_date = DATE_ADD(CURDATE(), INTERVAL 10 DAY) WHERE id = ?', [sess.id])
-  o2 = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, C)); created.orders.push(o2.orderNo)
+  o2 = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, C)); created.orders.push(o2.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: o2.orderNo }, A))
   const aq = ok(await call('GET', `/c/orders/${o2.orderNo}/refund-quote`, null, C))
   const wq = ok(await call('GET', '/admin/orders/' + o2.orderNo, null, A)).refundQuote
@@ -326,7 +326,7 @@ await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × �
   const { createScene } = await import('../src/domain/promo.mjs')
   const scene = await createScene(pu.user.id, 'poster')
   const buyer2 = await login('mock-xend-promo-buyer-' + stamp)
-  const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, promoScene: scene }, buyer2.token)); created.orders.push(od.orderNo)
+  const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, promoScene: scene , contactName: '回归测试', contactPhone: '13800009999' }, buyer2.token)); created.orders.push(od.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const pid2 = ok(await call('GET', '/c/orders/' + od.orderNo, null, buyer2.token)).passes[0].id
   assert.equal(ok(await call('POST', '/m/verify/scan', { payload: ok(await call('GET', `/c/pass/${pid2}/code`, null, buyer2.token)).qr }, B)).ok, true)
@@ -342,7 +342,7 @@ await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × �
 
 console.log('\n== 六、核销的各条路径：离线批量 / 冲突处理 / 暗号 / 城市归属 ==')
 const newPaid = async (tok, sessionId = sess.id) => {
-  const od = ok(await call('POST', '/c/orders', { sessionId, qty: 1, beanDeduct: 0 }, tok)); created.orders.push(od.orderNo)
+  const od = ok(await call('POST', '/c/orders', { sessionId, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, tok)); created.orders.push(od.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const passId = ok(await call('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
   return { orderNo: od.orderNo, passId, amountPay: Number(od.amountPay) }
@@ -509,7 +509,7 @@ await t('推广员的钱：后台合伙人画像、对账页、A 推广中心、
   const ovTxt = JSON.stringify(after.ov); assert.ok(ovTxt.includes(String(after.tr.earned)) || ovTxt.includes((after.tr.earned / 100).toFixed(2)), 'A 推广中心应显示放行后的金额 ' + after.tr.earned + '：' + ovTxt.slice(0, 300))
 })
 const finishOrder = async (tok, promoScene) => {
-  const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, ...(promoScene ? { promoScene } : {}) }, tok)); created.orders.push(od.orderNo)
+  const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, ...(promoScene ? { promoScene } : {}) , contactName: '回归测试', contactPhone: '13800009999' }, tok)); created.orders.push(od.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const pid = ok(await call('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
   assert.equal(ok(await call('POST', '/m/verify/scan', { payload: ok(await call('GET', `/c/pass/${pid}/code`, null, tok)).qr }, B)).ok, true)

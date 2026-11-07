@@ -28,6 +28,7 @@ Page({
       if (this.data.tries < 6) this.timer = setTimeout(() => this.poll(), 2000)
     })
   },
+  goPay() { wx.redirectTo({ url: '/package-order/pages/order-detail/index?no=' + this.data.orderNo }) }, // A-37：待支付结果页可继续支付
   goOrders() { wx.redirectTo({ url: '/package-order/pages/orders/index' }) },
   goHome() { wx.switchTab({ url: '/pages/home/index' }) },
 })

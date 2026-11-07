@@ -8,6 +8,7 @@
     🎫 入园凭证已签发 · 出行当日出示动态核销码</view>
   <view wx:if="{{mock}}" class="note">本地测试支付 · 未产生真实扣款</view>
 </view>
+<view class="btn" bindtap="goPay" wx:if="{{status === 10}}">继续支付</view>
 <view class="btn" bindtap="goOrders" wx:if="{{hasPass}}">查看我的核销码</view>
 <view class="btn ghost" bindtap="goHome">回首页继续逛</view>
-<view class="note">返豆/佣金在核销完成后入账 · 退款按平台梯度执行</view>
+<view class="note">返豆与佣金按订单实付在行程完成后入账 · 退款按平台梯度执行</view>

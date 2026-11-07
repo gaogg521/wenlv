@@ -1,0 +1,5 @@
+
+/* A-45：标签不换行（此前"手机号"被右侧按钮挤成竖排） */
+.kv text:first-child { white-space: nowrap; flex-shrink: 0; }
+/* A-45：为底部固定栏留出高度，避免盖住表单 */
+page { padding-bottom: 160rpx; }

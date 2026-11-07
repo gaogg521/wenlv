@@ -982,6 +982,21 @@ const admin = {
     return { id, merchantNo: mno }
   },
 
+  // A-36：商户入驻驳回（此前只有 approve，申请永远卡在"平台审核中"且挡住重新申请）
+  'POST /admin/merchants/:id/reject': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const reason = String(req.body.reason || '').trim()
+    if (reason.length < 2 || reason.length > 200) throw new BizError(1001, '请填写 2–200 字驳回原因')
+    const n = await tx(async (c) => {
+      const cnt = await c.upd('UPDATE merchant SET status = 2, apply_reject_note = ? WHERE id = ? AND status = 0', [reason, req.params.id])
+      if (Number(cnt) !== 1) throw new BizError(1004, '申请不存在或已处理（仅进件中可驳回）')
+      await audit(c, 'admin:' + a.name, 'merchant', 'reject', 'merchant-' + req.params.id, { status: 0 }, { status: 2, reason })
+      return cnt
+    })
+    void n
+    return { status: 2 }
+  },
+
   // ===== 参数中心（§4.2：分组/双人复核/影响预览/版本回滚）=====
   'GET /admin/config': async (req) => {
     await requireAdmin(req)

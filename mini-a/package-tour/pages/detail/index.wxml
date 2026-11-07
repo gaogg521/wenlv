@@ -26,7 +26,7 @@
     </view>
     <view class="dt-price-row">
       <view><text class="tour-price" style="font-size:44rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text><text class="muted2"> 起/人</text></view>
-      <text class="muted2" wx:if="{{p.beanGift}}">完成后得 {{p.beanGift}} 旅豆</text>
+      <text class="muted2" wx:if="{{p.beanGift}}">完成后约得 {{p.beanGift}} 旅豆（按实付计算，旅豆抵扣部分不计）</text>
     </view>
   </view>
 

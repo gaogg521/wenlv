@@ -185,7 +185,11 @@ export async function offlineListForStore(merchantId) {
       if (!(c in codes)) codes[c] = p.pass_id
     }
   }
-  return { syncedAt: new Date().toISOString(), windowNo: win, passes, codes }
+  // A-46：syncedAt 下发本地时间串（此前 toISOString 是 UTC，商户端直接截取显示成"15:36"，实际已 23:37）
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const syncedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  return { syncedAt, windowNo: win, passes, codes }
 }
 
 /** 人工队列/暗号确认核销：凭证置已核销 + 补流水 + 全单核销完推订单 40。
