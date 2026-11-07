@@ -20,8 +20,15 @@ const session = detail.sessions.find(x => Number(x.left_seats) > 0)
 const order = await call('/c/orders', { sessionId: session.id, qty: 1, contactName: '模拟器验收', contactPhone: '13800001234', insurance: true }, token)
 const admin = await call('/admin/login', { username: 'admin', password: 'admin123' })
 await call('/admin/dev/mock-pay', { orderNo: order.orderNo }, admin.token)
+const note = await call('/c/notes', { title: '模拟器验收 · 江南的一天', body: '慢慢走过水乡，记录旅途里的好风景。', relatedProductId: product.id }, token)
 await closeDb()
 const mini = await automator.connect({ wsEndpoint: 'ws://127.0.0.1:9421' })
+let ready = false
+for (let i = 0; i < 60 && !ready; i++) {
+  try { ready = !!(await mini.currentPage()) && await mini.evaluate(() => typeof getApp === 'function' && !!getApp()) } catch {}
+  if (!ready) await new Promise(r => setTimeout(r, 1000))
+}
+assert.ok(ready, '等待模拟器首屏与 App 就绪超时')
 const errors = []
 mini.on('console', m => { if(m.type === 'error') errors.push(m.args) })
 mini.on('exception', e => errors.push(e))
@@ -33,6 +40,7 @@ const pages = [
   ['booking', '/package-tour/pages/booking/index?id=' + product.id],
   ['create', '/package-content/pages/create/index'],
   ['square', '/package-content/pages/square/index'],
+  ['note', '/package-content/pages/note/index?id=' + note.id],
   ['pay-result', '/package-tour/pages/pay-result/index?orderNo=' + order.orderNo + '&mock=1'],
 ]
 for (const [name, url] of pages) {
@@ -46,6 +54,12 @@ for (const [name, url] of pages) {
     assert.equal((await p.data()).priceSummary.insurance, '5.00')
   }
   if (name === 'home') assert.ok(!data.demo, 'home must load real isolated service')
+  if (name === 'square') assert.ok(data.items.some(x => Number(x.id) === Number(note.id)), '已发布笔记必须出现在广场')
+  if (name === 'note') {
+    await (await p.$('.report-toggle')).tap()
+    await new Promise(r => setTimeout(r, 300))
+    assert.equal((await p.data()).liked, true, '详情点赞必须成功')
+  }
   await mini.screenshot({ path: out + '/' + name + '.png' })
   if (name === 'booking') {
     await mini.evaluate(() => wx.pageScrollTo({ scrollTop: 10000, duration: 0 }))
