@@ -160,7 +160,7 @@ function productImages(product) {
   return Array.isArray(images) ? images.filter(u => !isIllustration(u)) : []
 }
 function isIllustration(url) { return /\.svg(?:[?#]|$)|\/assets\/scenes\//i.test(String(url || '')) }
-function isReferencePhoto(url) { return /\/assets\/photos\/|\/uploads\/reference-[a-z-]+-20261107\.jpg(?:[?#]|$)/.test(String(url || '')) }
+function isReferencePhoto(url) { return /\/assets\/photos\/|\/uploads\/reference-[a-z-]+-\d{8}\.jpg(?:[?#]|$)/.test(String(url || '')) }
 function photoFor(subject = {}) {
   const name = String(subject.title || subject.name || subject.cityName || '')
   let photo = 'water-town'

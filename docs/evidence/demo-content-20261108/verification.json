@@ -1,0 +1,132 @@
+{
+  "operation": "read-only-api-verification",
+  "results": [
+    {
+      "id": 29,
+      "title": "朱家角寻灯记 · 水巷沉浸探案",
+      "cat": "script",
+      "merchantId": 1,
+      "sessions": 3,
+      "cover": "/uploads/reference-zjj-canal-20261108.jpg"
+    },
+    {
+      "id": 30,
+      "title": "课植园来信 · 古镇建筑解谜",
+      "cat": "script",
+      "merchantId": 1,
+      "sessions": 3,
+      "cover": "/uploads/reference-kezhi-20261108.jpg"
+    },
+    {
+      "id": 31,
+      "title": "安吉竹海 · 森林呼吸与轻瑜伽",
+      "cat": "yoga",
+      "merchantId": 2,
+      "sessions": 3,
+      "cover": "/uploads/reference-bamboo-path-20261108.jpg"
+    },
+    {
+      "id": 32,
+      "title": "余村慢生活 · 山野茶修周末",
+      "cat": "yoga",
+      "merchantId": 2,
+      "sessions": 3,
+      "cover": "/uploads/reference-tea-manor-20261108.jpg"
+    },
+    {
+      "id": 33,
+      "title": "青西自然课 · 亲子湿地观察",
+      "cat": "family",
+      "merchantId": 1,
+      "sessions": 3,
+      "cover": "/uploads/reference-wetland-egret-20261108.jpg"
+    },
+    {
+      "id": 34,
+      "title": "安吉竹林小队 · 亲子自然探索",
+      "cat": "family",
+      "merchantId": 2,
+      "sessions": 3,
+      "cover": "/uploads/reference-bamboo-explore-20261108.jpg"
+    },
+    {
+      "id": 35,
+      "title": "耦园拾光 · 好友园林摄影散步",
+      "cat": "sister",
+      "merchantId": 3,
+      "sessions": 3,
+      "cover": "/uploads/reference-couple-garden-20261108.jpg"
+    },
+    {
+      "id": 36,
+      "title": "平江路慢游 · 蓝印手作与茶会",
+      "cat": "sister",
+      "merchantId": 3,
+      "sessions": 3,
+      "cover": "/uploads/reference-pingjiang-20261108.jpg"
+    },
+    {
+      "id": 37,
+      "title": "江南蓝印 · 手作体验预约",
+      "cat": "shop",
+      "merchantId": 3,
+      "sessions": 3,
+      "cover": "/uploads/reference-indigo-20261108.jpg"
+    },
+    {
+      "id": 38,
+      "title": "安吉白茶 · 山间品茗双人席",
+      "cat": "shop",
+      "merchantId": 2,
+      "sessions": 3,
+      "cover": "/uploads/reference-tea-cups-20261108.jpg"
+    },
+    {
+      "id": 39,
+      "title": "水乡家味 · 手包粽子体验",
+      "cat": "shop",
+      "merchantId": 1,
+      "sessions": 3,
+      "cover": "/uploads/reference-zongzi-pair-20261108.jpg"
+    },
+    {
+      "id": 40,
+      "title": "竹林野餐 · 双人装备预约包",
+      "cat": "shop",
+      "merchantId": 2,
+      "sessions": 3,
+      "cover": "/uploads/reference-camp-20261107.jpg"
+    }
+  ],
+  "categoryCounts": {
+    "script": 3,
+    "yoga": 3,
+    "family": 2,
+    "sister": 3,
+    "shop": 7
+  },
+  "allActiveProducts": 18,
+  "uniqueCoverUrls": 18,
+  "uniquePhotoBytes": 18,
+  "merchantScopeIsolation": true,
+  "paymentsOrMessagesSent": false,
+  "freshDatabase": "wanderlust_qa_demo1108",
+  "testExitCodes": {
+    "scenario": 0,
+    "test": 0,
+    "test:db": 0,
+    "test:chain": 0
+  },
+  "uiEntryTest": false,
+  "miniSimulatorPages": [
+    "tour-list/script",
+    "tour-list/yoga",
+    "tour-list/family",
+    "tour-list/sister",
+    "shop",
+    "detail",
+    "merchant/workbench",
+    "merchant/supply",
+    "merchant/orders"
+  ]
+}

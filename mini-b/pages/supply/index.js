@@ -24,7 +24,7 @@ Page({
   // 改价（店长/老板权限；单位分，界面提示元）
   changePrice(e) {
     const id = e.currentTarget.dataset.id
-    const cur = (Number(e.currentTarget.dataset.price) / 100).toFixed(0)
+    const cur = (Number(e.currentTarget.dataset.price) / 100).toFixed(2)
     wx.showModal({ title: '修改团期价格', editable: true, placeholderText: '当前 ¥' + cur + '，输入新价格（元）', success: (r) => {
       if (!r.confirm || !r.content) return
       const yuan = Number(r.content)
