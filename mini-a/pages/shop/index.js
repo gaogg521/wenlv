@@ -4,15 +4,20 @@ Page({
   data: { site: siteData.DEFAULT, items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
   retry() { this.onLoad() },
   onReady() { siteData.get().then((site) => this.setData({ site })) },
+  onShow() { if (this.data.error) this.retry() }, // A-18：失败后回到本页自动重试
   onLoad() {
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
       this.setData({ items: (items || []).map(t => ({ ...t, price: t.price || t.price_from, cover: api.coverFor(t) })), fromApi: true, loading: false })
     }).catch(e => {
-      // 演示兜底：内置演示商品
-      const items = api.FALLBACK.shop.map(t => ({ ...t, cover: api.coverFor(t) }))
-      this.setData({ items, fromApi: false, loading: false, fallback: true })
-      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
+      if (api.demoAllowed()) {
+        const items = api.FALLBACK.shop.map(t => ({ ...t, cover: api.coverFor(t), bean: '可用旅豆抵 10%' }))
+        this.setData({ items, fromApi: false, loading: false, fallback: true, demo: true, error: '' })
+        wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      } else {
+        this.setData({ items: [], fromApi: false, loading: false, demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+      }
     })
   },
   buy(e) {

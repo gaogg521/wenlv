@@ -132,7 +132,52 @@ export async function closeUnpaidInTx(c, o, closeReason, eventDetail, actor) {
   if (Number(o.bean_deducted) > 0) await bean.reverse(o.user_id, Number(o.bean_deducted), o.order_no, c)
   await c.upd('UPDATE tour_session SET booked = GREATEST(booked - ?, 0) WHERE id = ?', [o.qty, o.session_id])
   await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,10,90,?,?)', [o.id, actor, JSON.stringify(eventDetail)])
+  // A-13：关单即关掉微信预支付单（防"关单后还能付"）。真实通道才调；失败只留日志，不阻断关单（微信侧过期时间兜底）
+  if (Number(o.amount_pay) > 0) {
+    const wxpay = await import('./wxpay.mjs')
+    if (wxpay.isLive()) wxpay.closeOrder(o.order_no).catch((e) => console.error('[order:closeWx]', o.order_no, e.message))
+  }
   return true
+}
+
+/** A-13 迟到支付：订单关闭后才到账的支付——入账留痕 + 风险事件 + 自动全额原路退回。
+ *  此前回调直接抛"请人工核对支付"并 400：微信持续重试、钱收了没人知道。现在回调拿到成功响应。
+ *  真实通道退款失败时 refunds 停在 0、有风险事件，由人工处理（不走 complete()，订单已是终态 90）。 */
+export async function handleLatePayment(orderNo, transNo, mock = false) {
+  const wxpay = await import('./wxpay.mjs')
+  return await tx(async (c) => {
+    const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+    if (!o) throw new BizError(2003, '订单不存在')
+    const dup = await c.one('SELECT id FROM payment WHERE wx_trans_no = ?', [transNo])
+    if (dup) return { code: 0, duplicated: true }
+    await c.q('INSERT INTO payment(order_id,wx_trans_no,amount,status,callback_at,raw_notify) VALUES(?,?,?,1,NOW(3),?)',
+      [o.id, transNo, o.amount_pay, JSON.stringify({ late: true, orderNo, transNo })])
+    await c.q(`INSERT INTO risk_event (kind, severity, detail) VALUES ('late_payment', 2, ?)`,
+      [JSON.stringify(`迟到支付：订单 ${orderNo} 已关闭（status=${o.status}）后收到支付，交易号 ${transNo}，金额 ${o.amount_pay} 分，处理：自动全额原路退回`)])
+    await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,?,?,?)',
+      [o.id, o.status, o.status, 'system', JSON.stringify('迟到支付·自动全额原路退回 ' + transNo)])
+    const refundNo = 'RF' + Date.now()
+    await c.q('INSERT INTO refunds (order_id, refund_no, amount, fee_amount, reason, status, operator) VALUES (?,?,?,?,?,0,?)',
+      [o.id, refundNo, o.amount_pay, 0, '迟到支付·自动原路退回', 'system'])
+    if (mock || !wxpay.isLive()) {
+      await c.q('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
+      await c.q('UPDATE payment SET status = 4 WHERE order_id = ? AND wx_trans_no = ?', [o.id, transNo])
+      return { code: 0, late: true, refundNo, refunded: true }
+    }
+    // 真实通道：先落 0，事务外调微信，成功回写 2；失败留在 0 由人工处理（有风险事件）
+    const wxr = await wxpay.refund({ orderNo, refundNo, amountFen: Number(o.amount_pay), totalFen: Number(o.amount_pay), reason: '迟到支付·自动退回' }).catch((e) => {
+      console.error('[order:lateRefund]', orderNo, e.message)
+      return { status: 'ERROR' }
+    })
+    if (wxr.status === 'SUCCESS') {
+      await c.q('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
+      await c.q('UPDATE payment SET status = 4 WHERE order_id = ? AND wx_trans_no = ?', [o.id, transNo])
+      return { code: 0, late: true, refundNo, refunded: true }
+    }
+    await c.q(`INSERT INTO risk_event (kind, severity, detail) VALUES ('refund_failed', 2, ?)`,
+      [JSON.stringify(`迟到支付自动退款失败：订单 ${orderNo}，退款单 ${refundNo}，微信状态 ${wxr.status}，需人工处理`)])
+    return { code: 0, late: true, refundNo, refunded: false, wxRefund: wxr.status }
+  })
 }
 
 /** 关闭单笔未支付订单（A-03）：返回 { closed } 或 { already: true }（幂等，重复调用不重复退豆） */

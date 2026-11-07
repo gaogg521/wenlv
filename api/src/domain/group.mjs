@@ -30,7 +30,8 @@ export async function cancelDueSessions() {
     const paid = await q("SELECT order_no FROM orders WHERE session_id = ? AND status IN (20,30)", [s.id])
     for (const o of paid) {
       try {
-        await refund.fullRefund({ orderNo: o.order_no, reason: '未成团自动取消·全额退款', operator: 'system' })
+        // A-14：closeReason 随退款单走——异步退款完成时也能写上 group_cancel，改签资格不再丢
+        await refund.fullRefund({ orderNo: o.order_no, reason: '未成团自动取消·全额退款', operator: 'system', closeReason: 'group_cancel' })
         await q("UPDATE orders SET close_reason = 'group_cancel' WHERE order_no = ? AND status = 70", [o.order_no])
         await notifyUser(o.order_no, s.title)
         done.push(o.order_no)

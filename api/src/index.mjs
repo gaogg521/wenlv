@@ -59,6 +59,7 @@ function json(res, code, data, status = 200) {
 }
 
 const server = http.createServer(async (req, res) => {
+  req.ip = String((req.headers['x-forwarded-for'] || '').split(',')[0] || '').trim() || (req.socket && req.socket.remoteAddress) || ''
   const url = new URL(req.url, 'http://localhost')
   const pathname = decodeURIComponent(url.pathname)
 
@@ -157,6 +158,9 @@ const server = http.createServer(async (req, res) => {
 })
 
 bootstrap().then(async () => {
+  // A-22 生产密钥护栏：NODE_ENV=production 下密钥缺失/公开默认值 → 拒绝启动（在监听端口之前）
+  const { assertProductionSecrets } = await import('./infra/boot-guard.mjs')
+  assertProductionSecrets(process.env)
   // 服务监听所有网卡（listen 未绑定具体地址）；启动日志列出真实局域网地址，避免只印 127.0.0.1 造成"定死本机"的误解
   server.listen(PORT, async () => {
     const os = await import('node:os')

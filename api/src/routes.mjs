@@ -27,13 +27,15 @@ for (const [key, handler] of Object.entries(routes)) {
     return handler(req, res)
   }
 }
-// 游客账号被后台冻结后立即失效：每个 /c 请求复核账号状态（已登录的会话也会被拒）
+// 游客账号被后台冻结后立即失效：每个 /c 请求复核账号状态（已登录的会话也会被拒）。
+// A-17：同时拒绝跨端令牌——/c/* 只接受 end==='c' 的 JWT（商户/后台/mfa challenge 令牌一律 1003）
 for (const [key, handler] of Object.entries(routes)) {
   if (!key.split(' ')[1]?.startsWith('/c/') || key === 'POST /c/auth/login') continue
   routes[key] = async (req, res) => {
     let u = null
     try { u = requireUser(req) } catch { /* 未登录的由原 handler 自行处理 */ }
-    if (u && u.end === 'c') {
+    if (u) {
+      if (u.end !== 'c') throw new BizError(1003, '请使用游客账号访问')
       const r = await one('SELECT status FROM user_account WHERE id = ?', [u.uid])
       if (r && Number(r.status) === 0) throw new BizError(1003, '账号已被停用，请联系客服')
     }
@@ -41,12 +43,15 @@ for (const [key, handler] of Object.entries(routes)) {
   }
 }
 // 商户权限在每次请求重新校验，停用员工及变更角色立即生效，禁止跨端 JWT 复用。
+// A-17：复核账号本体状态——账号被冻结后，商户令牌也立即失效（此前只查 staff/merchant）
 for (const [key, handler] of Object.entries(routes)) {
   if (!key.split(' ')[1]?.startsWith('/m/') || key === 'POST /m/auth/login') continue
   // 注意：必须把 res 透传给原 handler —— 否则 /m/ 下的 PDF/文件类响应拿不到 res（曾踩坑：500 writeHead）
   routes[key] = async (req, res) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
+    const ua = await one('SELECT status FROM user_account WHERE id = ?', [u.uid])
+    if (!ua || Number(ua.status) === 0) throw new BizError(1003, '账号已被停用，请联系平台')
     if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'].includes(key)) {
       const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
         WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])

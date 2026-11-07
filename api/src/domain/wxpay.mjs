@@ -65,9 +65,13 @@ async function authHeader(method, urlPath, body = '') {
 async function httpJson(method, urlPath, bodyObj) {
   const body = bodyObj ? JSON.stringify(bodyObj) : ''
   const auth = await authHeader(method, urlPath, body)
+  // WXPAY_API_HOST/WXPAY_API_HTTP：测试注入假微信服务用（A-14），生产不设置
+  const host = process.env.WXPAY_API_HOST || 'api.mch.weixin.qq.com'
+  const [hostname, port] = host.split(':')
+  const lib = process.env.WXPAY_API_HTTP === '1' ? await import('node:http') : https
   return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.mch.weixin.qq.com', path: urlPath, method,
+    const req = lib.request({
+      hostname, port: port || undefined, path: urlPath, method,
       headers: {
         'Content-Type': 'application/json', Accept: 'application/json',
         Authorization: auth,
@@ -89,6 +93,7 @@ async function httpJson(method, urlPath, bodyObj) {
 /**
  * JSAPI 下单 → 返回小程序 wx.requestPayment 所需 paySign 参数。
  * MOCK 模式返回 mock 参数（前端直接进入待支付态，由测试/后台触发回调）。
+ * A-13：带 time_expire（=支付超时分钟数），预支付单到期自动失效，关单后不能再付。
  */
 export async function jsapiOrder({ orderNo, amountFen, openid, description }) {
   const C = await CFG()._promise
@@ -106,9 +111,14 @@ export async function jsapiOrder({ orderNo, amountFen, openid, description }) {
     return { mock: true, timeStamp: String(Math.floor(Date.now() / 1000)), nonceStr: 'mock' + orderNo,
       package: 'prepay_id=mock_' + orderNo, signType: 'RSA', paySign: 'MOCKSIGN' + orderNo }
   }
+  const { cfgNum } = await import('../config.mjs')
+  const mins = await cfgNum('order.pay_timeout').catch(() => 15)
+  const expire = new Date(Date.now() + Number(mins || 15) * 60000)
+  const pad = (n) => String(n).padStart(2, '0')
+  const timeExpire = `${expire.getFullYear()}-${pad(expire.getMonth() + 1)}-${pad(expire.getDate())}T${pad(expire.getHours())}:${pad(expire.getMinutes())}:${pad(expire.getSeconds())}+08:00`
   const r = await httpJson('POST', '/v3/pay/transactions/jsapi', {
     appid: C.appid, mchid: C.mchid, description, out_trade_no: orderNo,
-    notify_url: C.notifyUrl,
+    notify_url: C.notifyUrl, time_expire: timeExpire,
     amount: { total: amountFen, currency: 'CNY' },
     payer: { openid },
   })
@@ -118,6 +128,15 @@ export async function jsapiOrder({ orderNo, amountFen, openid, description }) {
   const pkg = 'prepay_id=' + r.data.prepay_id
   const paySign = await rsaSign(`${C.appid}\n${ts}\n${nonce}\n${pkg}\n`)
   return { mock: false, timeStamp: ts, nonceStr: nonce, package: pkg, signType: 'RSA', paySign }
+}
+
+/** A-13 关单：订单关闭时同步关掉微信预支付单，防止"关单后预支付单还能付"。MOCK 无单可关。 */
+export async function closeOrder(orderNo) {
+  const C = await CFG()._promise
+  if (!(C.appid && C.mchid && C.serial && C.privateKey)) return { mock: true }
+  const r = await httpJson('POST', `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`, { mchid: C.mchid })
+  if (r.status !== 204 && r.status !== 200) throw new Error('微信关单失败：' + (r.data.message || r.status))
+  return { mock: false }
 }
 
 /** V3 退款（真实模式）；MOCK 直接成功 */

@@ -718,22 +718,35 @@ const adminFin = {
   'POST /admin/withdrawals/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
     const { pass: passed, payRef } = req.body
-    const w = await one('SELECT * FROM promoter_withdraw WHERE id = ? AND status = 0', [req.params.id])
-    if (!w) throw new BizError(1004, '申请不存在或已处理')
-    // 账号冻结期间暂停打款：可以驳回，不能通过；解冻后再审批
-    if (passed && await promo.isUserFrozen(w.promoter_id)) throw new BizError(6001, '该推广员账号已冻结，暂停打款。请先解冻，或驳回本次申请')
     const st = passed ? 1 : 2
     const finalRef = passed ? String(payRef || '').trim() : null
     if (passed && (!finalRef || finalRef.length < 6 || finalRef.length > 64)) throw new BizError(1001, '请先完成实际支付，再填写真实打款流水号')
-    await q('UPDATE promoter_withdraw SET status = ?, reviewed_by = ?, reviewed_at = NOW(3), pay_ref = ? WHERE id = ?',
-      [st, 'admin:' + a.name, finalRef, w.id])
-    await tx(async (c) => audit(c, 'admin:' + a.name, 'withdraw', passed ? 'pay' : 'reject', 'wd-' + w.id, { status: 0 }, { status: st, amount: w.amount }))
+    // A-12：并发保护——行锁 + 条件更新（此前 SELECT 无锁、UPDATE 不带 status=0，双人/双击会双双成功、pay_ref 互相覆盖）
+    const w = await tx(async (c) => {
+      const row = await c.one('SELECT * FROM promoter_withdraw WHERE id = ? FOR UPDATE', [req.params.id])
+      if (!row) throw new BizError(1004, '申请不存在或已处理')
+      if (Number(row.status) !== 0) throw new BizError(1004, '申请不存在或已处理')
+      // 账号冻结期间暂停打款：可以驳回，不能通过；解冻后再审批
+      if (passed && await promo.isUserFrozen(row.promoter_id)) throw new BizError(6001, '该推广员账号已冻结，暂停打款。请先解冻，或驳回本次申请')
+      const n = await c.upd('UPDATE promoter_withdraw SET status = ?, reviewed_by = ?, reviewed_at = NOW(3), pay_ref = ? WHERE id = ? AND status = 0',
+        [st, 'admin:' + a.name, finalRef, row.id])
+      if (n !== 1) throw new BizError(2002, '并发冲突，请刷新后重试')
+      await audit(c, 'admin:' + a.name, 'withdraw', passed ? 'pay' : 'reject', 'wd-' + row.id, { status: 0 }, { status: st, amount: row.amount })
+      return row
+    })
     // 资金出账入存证：金额进 canonical（只在库里），链上只有哈希；外部流水号只放哈希，不落明文
     await attestDomain.attest('withdraw', 'wd-' + w.id, {
       promoterUserId: Number(w.promoter_id), amountFen: Number(w.amount), result: passed ? 'paid' : 'rejected',
       payRefHash: finalRef ? crypto.createHash('sha256').update(finalRef).digest('hex') : null,
     })
     return { status: st }
+  },
+
+  // A-11：过期未核销订单的后台手动入口（定时任务每分钟自动跑；这里供运营/超管手动触发与核查）
+  'POST /admin/orders/expire-vouchers': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const jobs = await import('../jobs.mjs')
+    return { processed: await jobs.tickExpireVouchers() }
   },
 }
 

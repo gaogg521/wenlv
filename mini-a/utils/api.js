@@ -1,5 +1,14 @@
-// API 客户端：token 管理 / wx.login 登录 / 交易链路接口 / 后端不可达时的演示兜底
+// API 客户端：token 管理 / wx.login 登录 / 交易链路接口 / 演示兜底（仅开发环境）
 const g = () => getApp().globalData
+
+// A-18：假业务数据（FALLBACK）只允许在开发者工具/开发版出现（envVersion==='develop'）。
+// 体验版/正式版请求失败一律走错误态 + 重试，绝不展示假线路/假余额/假订单。
+function demoAllowed() {
+  try {
+    const env = wx.getAccountInfoSync().miniProgram.envVersion
+    return env === 'develop'
+  } catch (e) { return false }
+}
 
 function request(path, method = 'GET', data = {}, retried = false) {
   return new Promise((resolve, reject) => {
@@ -14,6 +23,7 @@ function request(path, method = 'GET', data = {}, retried = false) {
           g().token = ''; wx.removeStorageSync('token')
           return login().then(() => request(path, method, data, true)).then(resolve, reject)
         }
+        // A-18：冻结（1003）等业务错误原样上抛，页面显示明确提示，不落假数据
         reject(res.data || { msg: '网络错误' })
       },
       fail: (e) => reject({ msg: '服务不可达', detail: e }),
@@ -110,9 +120,9 @@ async function getBean() {
   return request('/c/bean/account')
 }
 
-/** 下单 → 支付参数（真实 V3 或 MOCK） */
-async function createOrder({ sessionId, qty, beanDeduct, promoScene, contactName, contactPhone }) {
-  return await request('/c/orders', 'POST', { sessionId, qty, beanDeduct, promoScene, contactName, contactPhone })
+/** 下单 → 支付参数（真实 V3 或 MOCK）；phoneTicket = 一键获取手机号的短期凭证（A-08） */
+async function createOrder({ sessionId, qty, beanDeduct, promoScene, contactName, contactPhone, phoneTicket }) {
+  return await request('/c/orders', 'POST', { sessionId, qty, beanDeduct, promoScene, contactName, contactPhone, phoneTicket })
 }
 
 /** 唤起支付：真实通道走 wx.requestPayment；MOCK 直接轮询订单状态 */
@@ -155,5 +165,5 @@ function coverFor(product) {
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
-  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, FALLBACK,
+  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, FALLBACK, demoAllowed,
 }

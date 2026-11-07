@@ -28,7 +28,7 @@ export async function quoteFor(o) {
  * @param applyPolicy true=游客自助（按梯度扣手续费，不满足档位直接拒绝）；
  *                    false=全额（未成团等平台原因、客服后台处理，均留审计）
  */
-export async function refundOrder({ orderNo, reason, operator = 'user', applyPolicy = false }) {
+export async function refundOrder({ orderNo, reason, operator = 'user', applyPolicy = false, closeReason = null }) {
   const o = await order.byNo(orderNo)
   if (!o) throw new BizError(2003, '订单不存在')
   if (![20, 30, 40].includes(Number(o.status))) throw new BizError(2002, '当前状态不可退款')
@@ -40,8 +40,10 @@ export async function refundOrder({ orderNo, reason, operator = 'user', applyPol
     refundFen = q.refundFen; feeFen = q.feeFen; feeRate = q.rate; days = q.daysToDepart
   }
   const refundNo = 'RF' + Date.now()
-  await q(`INSERT INTO refunds (order_id, refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator) VALUES (?,?,?,?,?,?,?,0,?)`,
-    [o.id, refundNo, refundFen, feeFen, feeRate, days, reason, operator])
+  // A-14：close_reason 随退款单落库——异步退款（PROCESSING→补偿任务完成）也能把 close_reason 写进订单，
+  // 未成团单不再因为"同步路径才写 close_reason"而永久失去改签资格
+  await q(`INSERT INTO refunds (order_id, refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, close_reason) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [o.id, refundNo, refundFen, feeFen, feeRate, days, reason, 0, operator, closeReason])
   // 退款申请即锚定（version 0）；后续成功(2)/拒绝(3)各锚一次，形成状态演进链
   await attest('refund', refundNo, {
     refundNo, orderNo, amount: refundFen, feeAmount: feeFen, feeRate, daysToDepart: days, status: 0, operator,
@@ -60,7 +62,7 @@ export const fullRefund = (args) => refundOrder({ ...args, applyPolicy: false })
 
 async function complete(o, refundNo, reason, status) {
   const orderNo = o.order_no
-  const rf = await one('SELECT amount, fee_amount, fee_rate FROM refunds WHERE refund_no = ?', [refundNo])
+  const rf = await one('SELECT amount, fee_amount, fee_rate, close_reason FROM refunds WHERE refund_no = ?', [refundNo])
   const previous = Number(o.status) === 60 ? await one('SELECT from_st FROM order_event WHERE order_id=? AND to_st=60 ORDER BY id DESC LIMIT 1',[o.id]) : {from_st:o.status}
   await order.fire(orderNo, 'REFUND_SUCCESS', 'system', async (cc) => {
     if (Number(o.bean_deducted) > 0) await bean.reverse(Number(o.user_id), Number(o.bean_deducted), orderNo, cc)
@@ -75,14 +77,48 @@ async function complete(o, refundNo, reason, status) {
     }, cc, 2)
     return reason + (rf && Number(rf.fee_amount) > 0 ? '·扣手续费 ' + (Number(rf.fee_amount) / 100).toFixed(2) + ' 元' : '·全额') + '·冲正'
   })
+  // A-14：close_reason 在 fire 之外补写（fire 的监听器里状态还没变 70，条件更新会落空）
+  if (rf && rf.close_reason) {
+    await q("UPDATE orders SET close_reason = ? WHERE order_no = ? AND status = 70 AND (close_reason IS NULL OR close_reason = '')", [rf.close_reason, orderNo])
+  }
   return { refunded: true, wxRefund: status }
 }
 
+/** 退款结果刷新（游客打开详情时 + 定时补偿任务 A-14 共用）：
+ *  SUCCESS → 完成退款；PROCESSING → 保持 60；CLOSED → 退款单置 3（人工队列）+ 风险事件；
+ *  ABNORMAL → 保持 0 可重试 + 风险事件；查询异常 → 只留日志，下一轮重试。 */
 export async function refresh(orderNo) {
   const o = await order.byNo(orderNo)
   if (!o || Number(o.status) !== 60) return
   const rf = await one('SELECT * FROM refunds WHERE order_id = ? AND status = 0 ORDER BY id DESC LIMIT 1', [o.id])
   if (!rf) return
-  const result = await wxpay.queryRefund(rf.refund_no)
-  if (result.status === 'SUCCESS' && result.out_trade_no === orderNo && Number(result.amount?.refund) === Number(rf.amount)) await complete(o, rf.refund_no, rf.reason || '退款确认', result.status)
+  let result
+  try {
+    result = await wxpay.queryRefund(rf.refund_no)
+  } catch (e) {
+    console.error('[refund:query]', orderNo, rf.refund_no, e.message)
+    return
+  }
+  if (result.status === 'SUCCESS') {
+    if (result.out_trade_no === orderNo && Number(result.amount?.refund) === Number(rf.amount)) {
+      await complete(o, rf.refund_no, rf.reason || '退款确认', result.status)
+    } else {
+      console.error('[refund:mismatch]', orderNo, rf.refund_no, JSON.stringify(result).slice(0, 200))
+    }
+    return
+  }
+  if (result.status === 'CLOSED') {
+    await q('UPDATE refunds SET status = 3 WHERE refund_no = ?', [rf.refund_no])
+    await q(`INSERT INTO risk_event (kind, severity, detail) VALUES ('refund_failed', 2, ?)`,
+      [JSON.stringify(`退款被微信关闭（CLOSED）：订单 ${orderNo}，退款单 ${rf.refund_no}，需人工处理（重试或线下退款后登记）`)])
+    await q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,?,?,?)',
+      [o.id, o.status, o.status, 'system', JSON.stringify('退款失败（微信 CLOSED）·转人工，退款单 ' + rf.refund_no)])
+    return
+  }
+  if (result.status === 'ABNORMAL') {
+    await q(`INSERT INTO risk_event (kind, severity, detail) VALUES ('refund_failed', 2, ?)`,
+      [JSON.stringify(`退款异常（ABNORMAL）：订单 ${orderNo}，退款单 ${rf.refund_no}，持续重试查询，超 24h 未恢复需人工介入`)])
+    return
+  }
+  // PROCESSING / 其他：保持 60，等待下一轮
 }

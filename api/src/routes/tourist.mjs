@@ -1,6 +1,6 @@
 import { q, one, count, tx, BizError } from '../db.mjs'
 import { cfg, cfgAll, cfgNum, cfgArr, loadConfig } from '../config.mjs'
-import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from '../auth.mjs'
+import { requireUser, jwtSign, jwtVerify, code2Session, hashPassword, verifyPassword } from '../auth.mjs'
 import * as order from '../domain/order.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
@@ -53,6 +53,16 @@ const c = {
       })
       u = await one('SELECT * FROM user_account WHERE id = ?', [uid])
     }
+    // A-20：同一 unionid 先用了商户端（B）再进游客端（A）时，这里补写 mini_a_openid 和旅豆账户。
+    // 此前只按 unionid 归账号、openid 留 NULL —— 真实支付拿不到 openid 会直接失败，订阅消息也发不出。
+    if (!u.mini_a_openid || u.mini_a_openid !== ses.openid) {
+      const holder = await one('SELECT id FROM user_account WHERE mini_a_openid = ? AND id <> ?', [ses.openid, u.id])
+      if (holder) throw new BizError(1003, '该微信已绑定其他账号，请联系客服处理')
+      await tx(async (cc) => {
+        await cc.upd('UPDATE user_account SET mini_a_openid = ? WHERE id = ?', [ses.openid, u.id])
+        await cc.q('INSERT IGNORE INTO bean_account (user_id) VALUES (?)', [u.id])
+      })
+    }
     if (Number(u.status) === 0) throw new BizError(1003, '账号已被停用，请联系客服')
     return { token: jwtSign({ uid: u.id, end: 'c' }, 7 * 24 * 3600), user: { id: u.id, nickname: u.nickname, memberLevel: u.member_level, growth: u.growth_value } }
   },
@@ -62,7 +72,11 @@ const c = {
     // 微信官方「手机号快速验证组件」：前端 button open-type=getPhoneNumber → code → 服务端换号
     const { phoneNumber, mock } = await wxapi.getPhoneNumber(req.body.code || '')
     await tx(async (cc) => bindMobile(cc, u.uid, phoneNumber, BizError))
-    return { phone: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), mock }
+    // A-08：不下发明文号码，也不再把打码值给前端填表单（打码值过不了 11 位校验、必下单失败）。
+    // 下发短期凭证（10 分钟，JWT 签名 + AES 密文封装）：下单时随单提交，服务端解封直接写订单联系电话
+    const { sealMobile } = await import('../infra/mobile.mjs')
+    const ticket = jwtSign({ uid: u.uid, ph: sealMobile(phoneNumber).enc.toString('base64'), tk: 'phone' }, 600)
+    return { ticket, mock, phoneMasked: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') }
   },
 
   'GET /c/notify/templates': async (req) => {
@@ -190,7 +204,19 @@ const c = {
 
   'POST /c/orders': async (req) => {
     const u = requireUser(req)
-    const { sessionId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone } = req.body
+    const { sessionId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone, phoneTicket } = req.body
+    // A-08：一键获取的手机号以短期凭证随单提交，服务端解封后加密落库（明文不过接口、打码值不再进表单）
+    let sealedPhone = null
+    if (phoneTicket) {
+      const p = jwtVerify(String(phoneTicket))
+      if (!p || p.tk !== 'phone' || Number(p.uid) !== Number(u.uid)) throw new BizError(1001, '手机号凭证无效或已过期，请重新获取')
+      const { openMobile } = await import('../infra/mobile.mjs')
+      const plain = openMobile(Buffer.from(String(p.ph), 'base64'))
+      if (!plain || !/^1[3-9]\d{9}$/.test(plain)) throw new BizError(1001, '手机号凭证无效，请重新获取')
+      sealedPhone = sealMobile(plain).enc
+    } else if (contactPhone && /^1[3-9]\d{9}$/.test(String(contactPhone))) {
+      sealedPhone = sealMobile(String(contactPhone)).enc
+    }
     const r = await order.place({
       userId: u.uid, sessionId, qty, wantedBeans: beanDeduct, promoScene, withInsurance: !!req.body.insurance,
       beanHook: { deduct: (uid, beans, orderNo) => bean.deduct(uid, beans, bean.BIZ.DEDUCT, orderNo) },
@@ -198,7 +224,7 @@ const c = {
     await tx(async (cc) => {
       // 联系电话加密落库（V38）；旧列 contact_phone_enc 只留历史明文，新单不再写
       await cc.upd('UPDATE orders SET contact_name = ?, contact_phone_sealed = ?, contact_phone_enc = NULL WHERE order_no = ?',
-        [contactName || null, contactPhone ? sealMobile(String(contactPhone)).enc : null, r.orderNo])
+        [contactName || null, sealedPhone, r.orderNo])
     })
     // 归因命中（首触）
     if (promoScene) await promo.hit(promoScene, u.uid)
@@ -465,6 +491,14 @@ const cWithdraw = {
       await c.one('SELECT user_id FROM promoter WHERE user_id = ? FOR UPDATE', [u.uid])
       const pend = await c.one('SELECT COUNT(*) n FROM promoter_withdraw WHERE promoter_id = ? AND status = 0', [u.uid])
       if (Number(pend.n) > 0) throw new BizError(6001, '已有待处理的提现申请，请等待审核')
+      // A-12：单日限额（promoter.withdraw_daily_max，方案要求 ≤¥5000/日）——当日待审+已打款合计不得超限
+      const dailyMax = await cfgNum('promoter.withdraw_daily_max')
+      if (dailyMax > 0) {
+        const todaySum = await c.one(`SELECT COALESCE(SUM(amount),0) s FROM promoter_withdraw
+          WHERE promoter_id = ? AND status IN (0,1) AND created_at >= CURDATE()`, [u.uid])
+        if (Number(todaySum.s) + Number(ov.withdrawable) > Number(dailyMax))
+          throw new BizError(6001, `超出单日提现限额 ¥${dailyMax / 100}（今日已申请/已打款 ¥${todaySum.s / 100}）`)
+      }
       return c.ins('INSERT INTO promoter_withdraw (promoter_id, amount, proposer_note) VALUES (?,?,?)',
         [u.uid, ov.withdrawable, req.body.note || ''])
     })
@@ -632,9 +666,24 @@ const cNotes = {
   'POST /c/tasks/:id/submit': async (req) => {
     const u = requireUser(req)
     const { noteId } = req.body
-    const note = await one('SELECT id, user_id, status FROM content_note WHERE id = ?', [noteId])
+    const note = await one('SELECT id, user_id, status, body FROM content_note WHERE id = ?', [noteId])
     if (!note || Number(note.user_id) !== Number(u.uid)) throw new BizError(1004, '笔记不存在')
     if (Number(note.status) !== 2) throw new BizError(1001, '仅已发布的笔记可提交审核')
+    // A-16：任务状态与截止时间在提交时复检（此前只在领取时校验，截止后仍能提交）
+    const task = await one('SELECT id, status, deadline, min_words, min_images FROM content_task WHERE id = ?', [req.params.id])
+    if (!task || Number(task.status) !== 0) throw new BizError(2002, '任务已下线')
+    if (task.deadline && new Date(task.deadline) < new Date()) throw new BizError(2002, '任务已截止')
+    // A-16：作品要求在提交侧拦截（字数/图片按笔记正文实算；图片兼容 images 数组与富文本 <img> 两种形态）
+    let body = note.body
+    try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = {} }
+    const textHtml = String((body && body.text) || '')
+    const textLen = textHtml.replace(/\s/g, '').length
+    const imgCount = Math.max(Array.isArray(body && body.images) ? body.images.length : 0, (textHtml.match(/<img\b/gi) || []).length)
+    if (Number(task.min_words) > 0 && textLen < Number(task.min_words)) throw new BizError(1001, `笔记正文至少 ${task.min_words} 字（当前 ${textLen} 字）`)
+    if (Number(task.min_images) > 0 && imgCount < Number(task.min_images)) throw new BizError(1001, `笔记需配至少 ${task.min_images} 张图片（当前 ${imgCount} 张）`)
+    // A-16：一篇笔记只能用于一个任务（其他进行中/审核中/已通过的条目占用了同一篇即拒绝）
+    const used = await one('SELECT e.id, t.title FROM content_task_entry e JOIN content_task t ON t.id = e.task_id WHERE e.note_id = ? AND e.task_id <> ? AND e.status > 0 LIMIT 1', [noteId, req.params.id])
+    if (used) throw new BizError(1001, '这篇笔记已用于任务「' + used.title + '」，一篇笔记只能参与一个约稿')
     const n = await tx(async (c) => c.upd('UPDATE content_task_entry SET status = 2, note_id = ?, submitted_at = NOW(3) WHERE task_id = ? AND user_id = ? AND status = 1',
       [noteId, req.params.id, u.uid]))
     if (n !== 1) throw new BizError(2002, '仅创作中的任务可提交')

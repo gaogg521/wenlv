@@ -48,13 +48,17 @@ export async function hit(scene, userId) {
   catch { return false }
 }
 
-/** 订单 50 后计佣（幂等） */
+/** 订单 50 后计佣（幂等）。
+ *  A-15（负责人决策）：① 按首触归因——佣金归该用户第一条归因命中的推广员（界面承诺"首触唯一"）；
+ *  ② 推广员本人下单不计佣；③ 基数 = 实付 − 保费，旅豆只减一次（amount_pay 已是抵扣后的实付，此前又减一次豆）。 */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, product_id, promo_scene, amount_pay, bean_deducted, insurance_fee, paid_at, rebook_of FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, user_id, product_id, promo_scene, amount_pay, insurance_fee, paid_at, rebook_of FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   if (o.rebook_of) return false // A-01：免费改签单实收 ¥0（成本商户承担），不计佣
-  const a = await one('SELECT promoter_id FROM attribution WHERE scene = ?', [o.promo_scene])
+  const a = await one(`SELECT a.promoter_id FROM attribution_hit h JOIN attribution a ON a.scene = h.scene
+    WHERE h.user_id = ? ORDER BY h.id ASC LIMIT 1`, [o.user_id]) // 首触唯一
   if (!a) return false
+  if (Number(a.promoter_id) === Number(o.user_id)) return false // 自买不计佣
   const p = await one('SELECT rate_bp, status FROM promoter WHERE user_id = ? AND status = 1', [a.promoter_id])
   if (!p) return false
   // 逐品佣金覆盖（D2 扩展）：单品费率优先于推广商档位，仍受 12% 封顶
@@ -64,7 +68,7 @@ export async function createCommission(orderNo) {
   const payDay = o.paid_at ? String(o.paid_at).slice(0, 10) : bizDay()
   const inWindow = (!pf.rate_start || payDay >= pf.rate_start) && (!pf.rate_end || payDay <= pf.rate_end)
   const rateBp = Math.min(prod && prod.promo_rate_bp != null && inWindow ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
-  const base = Number(o.amount_pay) - Number(o.bean_deducted) * 10 - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣
+  const base = Number(o.amount_pay) - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣；旅豆已在实付中扣除，只减一次
   const amount = Math.floor(base * rateBp / 10000)
   try {
     await q(`INSERT INTO commission (order_id, promoter_id, base_amount, rate_bp, amount, status, payable_at)

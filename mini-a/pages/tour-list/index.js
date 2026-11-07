@@ -20,12 +20,16 @@ Page({
       const tours = (list || []).map(t => ({ ...t, cover: api.coverFor(t) }))
       this.setData({ tours, loading: false })
     }).catch(e => {
-      // 演示兜底：按当前分类过滤内置演示线路
-      const cat = this.data.active
-      const src = (cat && cat !== 'all') ? api.FALLBACK.tours.filter(t => t.cat === cat) : api.FALLBACK.tours
-      const tours = src.map(t => ({ ...t, cover: api.coverFor(t) }))
-      this.setData({ tours, loading: false, fallback: true })
-      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
+      if (api.demoAllowed()) {
+        const cat = this.data.active
+        const src = (cat && cat !== 'all') ? api.FALLBACK.tours.filter(t => t.cat === cat) : api.FALLBACK.tours
+        const tours = src.map(t => ({ ...t, cover: api.coverFor(t) }))
+        this.setData({ tours, loading: false, fallback: true, demo: true, error: '' })
+        wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      } else {
+        this.setData({ tours: [], loading: false, demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+      }
     })
   }
 })

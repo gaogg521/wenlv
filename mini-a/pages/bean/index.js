@@ -6,12 +6,21 @@ Page({
   onShow() {
     this.setData({ error: '' })
     siteData.get().then((s) => this.setData({ beanIntro: s.bean_intro || '' }))
-    api.getBean().then(bean => this.setData({ bean }))
-      .catch(() => { this.setData({ bean: api.FALLBACK.bean }); wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' }) })
-    // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）；后端不可达时用演示会员
-    api.getMe().then((m) => this.fillMember(m)).catch(() => this.fillMember(api.FALLBACK.member))
+    // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试；冻结（1003）原样提示
+    api.getBean().then(bean => this.setData({ bean })).catch((e) => {
+      if (api.demoAllowed()) { this.setData({ bean: api.FALLBACK.bean, demo: true, error: '' }); wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' }) }
+      else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+    })
+    // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）
+    api.getMe().then((m) => this.fillMember(m)).catch((e) => {
+      if (api.demoAllowed()) { this.fillMember(api.FALLBACK.member); this.setData({ demo: true }) }
+      else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+    })
     api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: (ledger || []).slice(0, 20) }))
-      .catch(() => this.setData({ ledger: api.FALLBACK.ledger }))
+      .catch((e) => {
+        if (api.demoAllowed()) this.setData({ ledger: api.FALLBACK.ledger, demo: true })
+        else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+      })
   },
   fillMember(m) {
     const lv = (m && m.level) || {}

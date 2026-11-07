@@ -20,7 +20,11 @@ Page({
   },
   // 等级名与升级进度来自服务端（参数中心「会员等级体系」），页面里不写死
   loadMe() {
-    return api.getMe().then((m) => this.fillMe(m)).catch(() => this.fillMe(api.FALLBACK.member))
+    return api.getMe().then((m) => this.fillMe(m)).catch((e) => {
+      // A-18：假会员信息仅限开发环境且常驻标识；正式版错误态（冻结 1003 的提示也在这里露出）
+      if (api.demoAllowed()) { this.fillMe(api.FALLBACK.member); this.setData({ demo: true }) }
+      else this.setData({ user: null, demo: false, meError: e.msg || '加载失败，请重新进入' })
+    })
   },
   fillMe(m) {
     const lv = (m && m.level) || {}

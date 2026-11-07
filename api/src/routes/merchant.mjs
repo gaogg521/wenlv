@@ -167,21 +167,25 @@ const m = {
     return { linked: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
       bound: !!staff, merchantId: staff ? Number(staff.merchant_id) : null, role: staff ? Number(staff.role) : null }
   },
-  // 离线名单（§10）：断网前同步本店有效凭证 + 展示码映射
+  // 离线名单（§10）：断网前同步本店有效凭证 + 展示码映射；每次下发记录签发时间（A-10 防伪造 offlineAt）
   'GET /m/verify/offline-list': async (req) => {
     const u = requireUser(req)
-    return await pass.offlineListForStore(u.merchantId)
+    const list = await pass.offlineListForStore(u.merchantId)
+    await q(`INSERT INTO verify_offline_sync (merchant_id, issued_at) VALUES (?, NOW(3))
+      ON DUPLICATE KEY UPDATE issued_at = NOW(3)`, [u.merchantId])
+    return list
   },
 
-  // 恢复上传（二次校验）：逐条重走 verifyScan；失败条目进人工队列
+  // 恢复上传（二次校验）：逐条重走 verifyScan（带 offlineAt，按扫码时刻的窗口校验）；失败条目进人工队列
   'POST /m/verify/offline-batch': async (req) => {
     const u = requireUser(req)
     const { items = [] } = req.body
+    const sync = await one('SELECT issued_at FROM verify_offline_sync WHERE merchant_id = ?', [u.merchantId])
     const results = []
     for (const it of items.slice(0, 200)) {
       const payload = String(it.payload || '').trim()
       if (!payload) continue
-      const r = await pass.verifyScan({ merchantId: u.merchantId, staffId: u.uid, payload, cityCode: '310118' })
+      const r = await pass.verifyScan({ merchantId: u.merchantId, staffId: u.uid, payload, cityCode: '310118', offlineAt: it.offlineAt, issuedAt: sync && sync.issued_at })
       if (!r.ok) {
         await q(`INSERT INTO verify_offline_conflict (merchant_id, pass_id, payload, offline_at, reason)
           VALUES (?,?,?,?,?)`, [u.merchantId, r.passId || null, payload.slice(0, 120), it.offlineAt ? new Date(it.offlineAt) : new Date(), r.reason])

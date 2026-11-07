@@ -37,10 +37,15 @@ Page({
         .map(t => ({ ...t, cover: api.coverFor(t) }))
       this.setData({ tours, loading: false }, done)
     }).catch(e => {
-      // 后端不可达（真机演示常见）：回退内置演示线路，页面照常可用
-      const tours = api.FALLBACK.tours.map(t => ({ ...t, cover: api.coverFor(t) }))
-      this.setData({ tours, loading: false, fallback: true }, done)
-      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      // A-18：假数据仅限开发环境（envVersion=develop），且页面常驻"演示模式"标识；
+      // 体验版/正式版一律错误态 + 重试，绝不把假线路当真数据展示
+      if (api.demoAllowed()) {
+        const tours = api.FALLBACK.tours.map(t => ({ ...t, cover: api.coverFor(t) }))
+        this.setData({ tours, loading: false, fallback: true, demo: true, error: '' }, done)
+        wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      } else {
+        this.setData({ tours: [], loading: false, demo: false, error: e.msg || '加载失败，请检查网络后重试' }, done)
+      }
     })
   },
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },

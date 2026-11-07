@@ -156,6 +156,8 @@ async function main() {
   const merch = (await api('POST', '/m/auth/login', { code: 'mock-chenjie', merchantId: mZJQ.id })).token
   const wb = await api('GET', '/m/workbench', null, merch)
   ok(wb.pendingVerify === 1, '工作台待核销=1')
+  // A-11 核销日期窗（出发日当天起到结束日）：演示剧本按"出游当天到店核销"处理，把团期拨到今天
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [detail.sessions[0].id])
   step('游客-小满', '出游当天打开 60 秒动态核销码')
   const code = await api('GET', '/c/pass/' + paid.passes[0].id + '/code', null, buyer)
   step('商户-店员', '扫码核销 → 成功')

@@ -164,6 +164,8 @@ console.log('\n== 四、持续运行：锚定之后再走一整笔新订单 ==')
 let newOrder
 await t('新订单走完全程（下单→支付→核销→完成→返豆）：新事件先是待处理，打包锚定后全部上链，且不重复', async () => {
   const sess = await one(`SELECT s.id, p.merchant_id FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 2 ORDER BY s.id LIMIT 1`)
+  // A-11 核销日期窗：核销发生在"出发日当天到结束日"，把夹具团期拨到当天再扫码
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [sess.id])
   const login = async (c) => ok(await call('POST', '/c/auth/login', { code: c }))
   const buyer = await login('mock-chain-buyer-' + stamp), st = await login('mock-chain-staff-' + stamp)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [sess.merchant_id, st.user.id])
