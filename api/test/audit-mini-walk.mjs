@@ -60,4 +60,14 @@ for (const [name, url] of pages) {
 }
 fs.writeFileSync(out + '/console.json', JSON.stringify(errors, null, 2))
 assert.equal(errors.length, 0, JSON.stringify(errors))
+if (process.env.ALL_PAGES === '1') {
+  const config = JSON.parse(fs.readFileSync(new URL('../../mini-a/app.json', import.meta.url)))
+  const paths = [...config.pages, ...config.subPackages.flatMap(s => s.pages.map(p => s.root + '/' + p))]
+  for (const path of paths) {
+    const page = await mini.reLaunch('/' + path)
+    assert.equal(page.path, path)
+    await new Promise(r => setTimeout(r, 400))
+    console.log('REGISTERED', path)
+  }
+}
 await mini.disconnect()
