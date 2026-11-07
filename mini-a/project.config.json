@@ -29,7 +29,7 @@
   "condition": {},
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [{ "type": "file", "value": "assets/logo-lockup.png" }],
     "include": []
   },
   "editorSetting": {}

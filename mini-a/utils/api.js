@@ -154,10 +154,16 @@ function img(url) {
   return /^https?:\/\//.test(url) ? url : g().apiBase + url
 }
 
-function coverFor(product) {
+function productImages(product) {
   let images = product.images || []
   if (typeof images === 'string') { try { images = JSON.parse(images) } catch { images = [] } }
+  // 仅替换已确认的旧演示SVG占位图，正常上传的商品图片继续优先展示。
+  return Array.isArray(images) ? images.filter(u => !/^\/uploads\/demo-prod-\d+-\d+\.svg$/.test(u)) : []
+}
+function coverFor(product) {
+  const images = productImages(product)
   if (images.length) return img(images[0])
+  if (['script', 'yoga', 'family', 'sister'].includes(product.cat)) return '/assets/themes/' + product.cat + '-v2.jpg'
   const scene = { script:'watertown', yoga:'bamboo', sister:'garden', single:'camp', sport:'lake', family:'mountain', red:'jinggang', shop:'tea' }[product.cat] || 'watertown'
   return '/assets/scenes/' + scene + '.png'
 }
@@ -165,5 +171,5 @@ function coverFor(product) {
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
-  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, FALLBACK, demoAllowed,
+  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, FALLBACK, demoAllowed,
 }

@@ -5,7 +5,7 @@ Page({
   data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
   onLoad(q) {
     const h = new Date().getHours()
-    this.setData({ greet: h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好' })
+    this.setData({ greet: h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好', themeEntries: siteData.DEFAULT.themes.map(t => ({ ...t, cover: api.coverFor(t) })) })
     if (q && q.scene) {
       const scene = decodeURIComponent(q.scene)
       if (/^[pm][0-9a-z-]+$/i.test(scene)) {
@@ -14,7 +14,7 @@ Page({
       }
     }
     this.fetchBanners()
-    siteData.get().then((site) => this.setData({ site }))
+    siteData.get().then((site) => this.setData({ site, themeEntries: site.themes.map(t => ({ ...t, cover: api.coverFor(t) })) }))
   },
   onShow() {
     this.checkConsent() // A-44：首次使用同意流程
@@ -59,7 +59,7 @@ Page({
     api.getTours('all').then(list => {
       // 首页「即将成团」只展示主题游线路；有实拍图用真图，无图回退渐变封面
       const tours = (list || []).filter(t => (t.cat || '') !== 'shop')
-        .map(t => ({ ...t, cover: api.coverFor(t) }))
+        .map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: cover.startsWith('/assets/') } })
       this.setData({ tours, loading: false }, done)
     }).catch(e => {
       // A-18：假数据仅限开发环境（envVersion=develop），且页面常驻"演示模式"标识；
