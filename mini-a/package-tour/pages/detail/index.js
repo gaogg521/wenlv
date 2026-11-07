@@ -22,7 +22,7 @@ Page({
       const sessions = d.sessions || []
       let rich = {}
       try { rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {}) } catch (e) { rich = {} }
-      const images = (d.images || []).map(api.img)
+      const images = api.productImages(d).map(api.img)
       const sessPreview = sessions.slice(0, 3).map((s) => {
         const left = Number(s.left_seats)
         const g = s.groupProgress || {}

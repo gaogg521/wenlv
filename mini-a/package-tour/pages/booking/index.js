@@ -10,8 +10,9 @@ Page({
     api.getTourDetail(q.id).then((d) => {
       const withFallbackSessions = d.sessions || []
       const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
-      const gallery = (d.images || []).length ? (d.images || []).map(api.img) : [api.coverFor(d)]
-      this.setData({ illustrated: !(d.images || []).length })
+      const images = api.productImages(d)
+      const gallery = images.length ? images.map(api.img) : [api.coverFor(d)]
+      this.setData({ illustrated: !images.length })
       const sv = this.sessView(withFallbackSessions[0])
       // 默认选中第一个还有名额的团期
       const firstOpen = Math.max(0, withFallbackSessions.findIndex((x) => Number(x.left_seats) > 0))

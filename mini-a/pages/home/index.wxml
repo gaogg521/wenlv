@@ -7,10 +7,12 @@
   <view class="home-destination" bindtap="goDestinations">{{homeCity && homeCity.name ? '当前城市：' + homeCity.name : site.destination_line}}<text>{{homeCity && homeCity.name ? '切换 ↗' : '发现目的地 ↗'}}</text></view>
 </view>
 <view class="theme-grid">
-<view wx:for="{{site.themes}}" wx:key="cat" class="theme-tile tg{{index}}" data-cat="{{item.cat}}" bindtap="goTours">
-<view class="theme-top"><text class="theme-mark">{{item.icon}}</text><text class="theme-arrow">↗</text></view>
+<view wx:for="{{themeEntries}}" wx:key="cat" class="theme-tile tg{{index}}" data-cat="{{item.cat}}" bindtap="goTours">
+<image class="theme-scene" src="{{item.cover}}" mode="aspectFill" />
+<view class="theme-shade"></view>
+<view class="theme-top"><text class="theme-index">0{{index + 1}}</text><view class="theme-hairline"></view></view>
 <view class="theme-body"><view class="theme-name">{{item.name}}</view><view class="theme-sub">{{item.sub}}</view></view>
-<view class="theme-landscape"></view>
+<view class="theme-arrow">↗</view>
 </view>
 </view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">
@@ -29,7 +31,7 @@
 <view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
 <view wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
-    <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+    <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>
     <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
     <view style="flex:1;min-width:0">
       <view class="tour-title">{{item.title}}</view>

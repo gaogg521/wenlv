@@ -13,7 +13,7 @@
 <view wx:if="{{loading}}"><view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view></view>
 <block wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
-    <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+    <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>
     <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
     <view style="flex:1;min-width:0">
       <view class="tour-title">{{item.title}}<text class="mh-tag" wx:if="{{item.merchantTag}}">{{item.merchantTag.name}}</text></view>
