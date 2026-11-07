@@ -170,7 +170,7 @@ await t('新订单走完全程（下单→支付→核销→完成→返豆）�
   const buyer = await login('mock-chain-buyer-' + stamp), st = await login('mock-chain-staff-' + stamp)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [sess.merchant_id, st.user.id])
   const B = ok(await call('POST', '/m/auth/login', { code: 'mock-chain-staff-' + stamp, merchantId: sess.merchant_id })).token
-  const o = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, buyer.token)); newOrder = o.orderNo
+  const o = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, buyer.token)); newOrder = o.orderNo
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: o.orderNo }, A))
   const pid = ok(await call('GET', '/c/orders/' + o.orderNo, null, buyer.token)).passes[0].id
   assert.equal(ok(await call('POST', '/m/verify/scan', { payload: ok(await call('GET', `/c/pass/${pid}/code`, null, buyer.token)).qr }, B)).ok, true)

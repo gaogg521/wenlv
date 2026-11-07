@@ -10,7 +10,7 @@
   <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill"/><view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
   <view style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0">
     <view class="tour-title">{{item.title}}</view>
-    <view class="tour-desc">{{item.bean}}</view>
+    <view class="tour-desc">{{item.subtitle || item.days_desc || ""}}</view>
     <view style="display:flex;align-items:center;gap:16rpx">
       <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.price / 100}}</view>
       <view class="btn sm" bindtap="buy" data-id="{{item.id}}">预约领取</view>

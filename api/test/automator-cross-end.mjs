@@ -118,7 +118,7 @@ const until = async (mini, pred, ms = 8000) => { const t0 = Date.now(); for (;;)
 const callPage = (mini, method, data, ...args) => mini.evaluate((m, d, a) => { const p = getCurrentPages().slice(-1)[0]; if (d) p.setData(d); return p[m] ? (p[m](...a), 'called') : 'no method ' + m }, method, data || null, args)
 const asBuyer = async (tok) => { await ma.callWxMethod('setStorageSync', 'token', tok); await ma.evaluate((x) => { getApp().globalData.token = x }, tok) }
 const paid = async (tok) => {
-  const od = ok(await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, tok))
+  const od = ok(await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, tok))
   ok(await api('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const passId = ok(await api('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
   return { orderNo: od.orderNo, passId }

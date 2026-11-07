@@ -35,7 +35,12 @@ export const apiImg = (u, req) => (u && /^https?:/.test(u)) ? u : (u ? publicBas
 // CSV 序列化：RFC4180 转义 + UTF-8 BOM（Excel 直开不乱码）
 export function toCsv(rows) {
   if (!rows.length) return '\uFEFF(空)\n'
-  const esc = (v) => { const str = v == null ? '' : String(v); return /[",\n]/.test(str) ? '"' + str.replaceAll('"', '""') + '"' : str }
+  // A-40：防公式注入——=、+、-、@ 开头的单元格前置单引号，避免 Excel 打开时被执行
+  const esc = (v) => {
+    let str = v == null ? '' : String(v)
+    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str
+    return /[",\n]/.test(str) ? '"' + str.replaceAll('"', '""') + '"' : str
+  }
   const head = Object.keys(rows[0]).join(',')
   const body = rows.map((r) => Object.values(r).map(esc).join(',')).join('\n')
   return '\uFEFF' + head + '\n' + body + '\n'

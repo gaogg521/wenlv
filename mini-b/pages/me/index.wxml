@@ -18,7 +18,11 @@
   <input value="{{applyMobile}}" bindinput="onApplyMobile" type="number" placeholder="联系电话"
     style="border:1rpx solid var(--line);border-radius:16rpx;padding:20rpx 24rpx;margin-bottom:16rpx" />
   <view class="btn ghost" bindtap="applyMerchant">提交入驻申请</view>
-  <view class="note">{{joinTip || '可在本页查看审核进度；审核通过后重新登录即可进入门店。'}}</view>
+  <view wx:if="{{applications.length}}" style="margin:16rpx 0">
+    <view wx:for="{{applications}}" wx:key="id" class="note" style="{{item.rejected ? 'color:var(--red)' : ''}}">「{{item.name}}」{{item.statusText}}</view>
+    <view wx:if="{{applications[0].rejected}}" class="note">驳回后可修改资料重新提交</view>
+  </view>
+  <view class="note">{{joinTip || '提交后可在此查看审核进度。'}}</view>
 </view>
 <block wx:else>
   <view class="card">

@@ -12,7 +12,7 @@ Page({
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {
-        const items = api.FALLBACK.shop.map(t => ({ ...t, cover: api.coverFor(t), bean: '可用旅豆抵 10%' }))
+        const items = api.FALLBACK.shop.map(t => ({ ...t, cover: api.coverFor(t) }))
         this.setData({ items, fromApi: false, loading: false, fallback: true, demo: true, error: '' })
         wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
       } else {

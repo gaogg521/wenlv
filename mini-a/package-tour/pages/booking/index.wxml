@@ -27,7 +27,7 @@
         <text class="qty-btn {{qty <= 1 ? 'off' : ''}}" bindtap="subQty">－</text><text class="v" style="min-width:48rpx;text-align:center">{{qty}}</text><text class="qty-btn" bindtap="addQty">＋</text>
       </view></view>
     <view class="kv"><text>联系人</text>
-      <input class="v input-r" placeholder="出行联系人姓名" value="{{contactName}}" bindinput="onName" /></view>
+      <input class="v input-r" placeholder="出行联系人姓名" value="{{contactName}}" bindinput="onName"  maxlength="20"></view>
     <view class="kv"><text>手机号</text>
       <view style="display:flex;align-items:center;gap:16rpx">
         <input class="v input-r" type="number" maxlength="11" placeholder="用于接收出行通知"

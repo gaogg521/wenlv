@@ -45,7 +45,7 @@ Page({
     } catch (e) { wx.showToast({ title: e.msg || '生成失败', icon: 'none' }) }
   },
   async withdraw() {
-    const ok = await new Promise((r) => wx.showModal({ title: '申请提现', content: '可提现金额将全数申请，¥100 起，T+1 到账', success: r }))
+    const ok = await new Promise((r) => wx.showModal({ title: '申请提现', content: '可提现金额将全数申请，最低提现额与到账时效以下单页提示为准', success: r }))
     if (!ok.confirm) return
     try { await api.request('/c/promote/withdraw', 'POST', { note: '小程序申请' }); wx.showToast({ title: '已提交，等待财务审批' }); this.fetch() }
     catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }

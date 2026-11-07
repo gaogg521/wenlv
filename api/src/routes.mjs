@@ -43,16 +43,19 @@ for (const [key, handler] of Object.entries(routes)) {
   }
 }
 // 商户权限在每次请求重新校验，停用员工及变更角色立即生效，禁止跨端 JWT 复用。
-// A-17：复核账号本体状态——账号被冻结后，商户令牌也立即失效（此前只查 staff/merchant）
+// A-17：复核账号本体状态——账号被冻结后，商户令牌也立即失效（此前只查 staff/merchant）。
+// 注意：/m/apply、/m/applications、/m/auth/phone-login 是游客端（c 令牌）可用的入驻流程，
+// 端校验只对门店业务路由生效——此前 c 令牌调 /m/apply 一律被"请使用商户账号登录"挡死，入驻自助化名存实亡。
+const M_C_END_ROUTES = new Set(['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'])
 for (const [key, handler] of Object.entries(routes)) {
   if (!key.split(' ')[1]?.startsWith('/m/') || key === 'POST /m/auth/login') continue
   // 注意：必须把 res 透传给原 handler —— 否则 /m/ 下的 PDF/文件类响应拿不到 res（曾踩坑：500 writeHead）
   routes[key] = async (req, res) => {
     const u = requireUser(req)
-    if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
     const ua = await one('SELECT status FROM user_account WHERE id = ?', [u.uid])
     if (!ua || Number(ua.status) === 0) throw new BizError(1003, '账号已被停用，请联系平台')
-    if (!['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'].includes(key)) {
+    if (!M_C_END_ROUTES.has(key)) {
+      if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
       const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
         WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])
       if (!staff) throw new BizError(1003, '尚未加入门店或账号已停用')

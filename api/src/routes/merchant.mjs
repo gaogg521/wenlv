@@ -199,7 +199,8 @@ const m = {
 
   'GET /m/verify/records': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT v.id, v.pass_id, v.result, v.created_at, o.order_no, p.name pass_name
+    // A-46：核销流水时间去毫秒
+    return await q(`SELECT v.id, v.pass_id, v.result, DATE_FORMAT(v.created_at, '%Y-%m-%d %H:%i') created_at, o.order_no, p.name pass_name
       FROM verification_log v JOIN travel_pass p ON p.id = v.pass_id LEFT JOIN orders o ON o.id = p.order_id
       WHERE v.merchant_id = ? AND (? >= 2 OR v.staff_id = ?) ORDER BY v.id DESC LIMIT 50`, [u.merchantId, u.role, u.uid])
   },
@@ -215,7 +216,10 @@ const m = {
 
   'GET /m/orders/:no': async (req) => {
     const u = requireUser(req)
-    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,o.created_at,o.paid_at,o.rebook_of,p.title,s.depart_date
+    // A-46：时间列 DATE_FORMAT 去毫秒（此前 datetime(3) 直出 '2026-11-06 23:37:56.497'）
+    const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,
+      DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') created_at, DATE_FORMAT(o.paid_at, '%Y-%m-%d %H:%i') paid_at,o.rebook_of,p.title,
+      DATE_FORMAT(s.depart_date, '%Y-%m-%d') depart_date
       FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
     if (!o) throw new BizError(2003, '本店无此订单')
     // 密文优先（V38）；历史明文在旧列，加密脚本跑完后清空
@@ -241,8 +245,28 @@ const m = {
     if (!owned) throw new BizError(1004, '团期不存在或不属于本店')
     if (action === 'adjust_quota' && (!Number.isInteger(value) || value < owned.booked)) throw new BizError(1001, '名额必须为整数且不少于已报名人数')
     if (action === 'price' && (!Number.isInteger(value) || value <= 0)) throw new BizError(1001, '价格必须为正整数分')
-    if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid]); return { stopped: true } }
-    if (action === 'adjust_quota') { await q('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid]); return { quota: value } }
+    if (action === 'stop_sell') {
+      await tx(async (c) => {
+        await c.upd('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid])
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'stop_sell', 'session-' + req.params.sid, { status: 1 }, { status: 3 })
+      })
+      return { stopped: true }
+    }
+    // A-35：停售可恢复（此前没有恢复通道，停售后永远不可卖）
+    if (action === 'resume_sell') {
+      await tx(async (c) => {
+        await c.upd('UPDATE tour_session SET status = 1 WHERE id = ? AND status = 3', [req.params.sid])
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'resume_sell', 'session-' + req.params.sid, { status: 3 }, { status: 1 })
+      })
+      return { resumed: true }
+    }
+    if (action === 'adjust_quota') {
+      await tx(async (c) => {
+        await c.upd('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid])
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + req.params.sid, null, { quota: value })
+      })
+      return { quota: value }
+    }
     if (action === 'price') {
       // A-07：改现价同步校验——不得低于已设早鸟价，否则早鸟窗口内游客按更高价成交还显示"早鸟价"
       const s = await one('SELECT early_price FROM tour_session WHERE id = ?', [req.params.sid])
@@ -261,29 +285,34 @@ const m = {
       if (price != null && price >= (await one('SELECT price_adult FROM tour_session WHERE id = ?', [req.params.sid])).price_adult)
         throw new BizError(1001, '早鸟价需低于原价')
       await q('UPDATE tour_session SET early_price = ?, early_days = ? WHERE id = ?', [price, price == null ? null : days, req.params.sid])
+      await tx(async (c) => audit(c, 'merchant:' + u.merchantId, 'supply', 'set_early', 'session-' + req.params.sid, null, { earlyPrice: price, earlyDays: price == null ? null : days }))
       return { earlyPrice: price, earlyDays: price == null ? null : days }
     }
     throw new BizError(1001, '未知操作')
   },
 
   // 商户经营数据（7 日订单/核销趋势 + 本店评分 + 最新评价）
+  // A-34：全部按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 丢当天；
+  //       核销数按"核销日"（verification_log.created_at）统计，此前错按支付日
   'GET /m/stats': async (req) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
-    const weekRaw = await q(`SELECT DATE(o.paid_at) d, COUNT(*) orders, COALESCE(SUM(CASE WHEN EXISTS (
-      SELECT 1 FROM verification_log v JOIN travel_pass tp2 ON tp2.id = v.pass_id WHERE tp2.order_id = o.id AND v.result = 1) THEN 1 ELSE 0 END), 0) verifies
-      FROM orders o WHERE o.merchant_id = ? AND o.paid_at >= NOW() - INTERVAL 7 DAY
-      AND o.status IN (20,30,40,50) GROUP BY DATE(o.paid_at) ORDER BY d`, [u.merchantId])
+    const weekRaw = await q(`SELECT o2.d, COUNT(*) orders, COALESCE(SUM(v.n), 0) verifies FROM (
+      SELECT DISTINCT DATE(paid_at) d, id FROM orders WHERE merchant_id = ? AND paid_at >= NOW() - INTERVAL 7 DAY AND status IN (20,30,40,50)
+    ) o2 LEFT JOIN (
+      SELECT tp.order_id, 1 n FROM verification_log v2 JOIN travel_pass tp ON tp.id = v2.pass_id
+      WHERE v2.result = 1 AND v2.merchant_id = ? AND DATE(v2.created_at) >= CURDATE() - INTERVAL 6 DAY GROUP BY tp.order_id, DATE(v2.created_at)
+    ) v ON v.order_id = o2.id GROUP BY o2.d ORDER BY o2.d`, [u.merchantId, u.merchantId])
     const byDay = Object.fromEntries(weekRaw.map((w) => [String(w.d), w]))
     const week = []
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
+      const d = bizDay(-i)
       const hit = byDay[d]
       week.push({ d, orders: hit ? Number(hit.orders) : 0, verifies: hit ? Number(hit.verifies) : 0 })
     }
     const agg = await one(`SELECT COALESCE(AVG(r.rating),0) avg, COUNT(*) count FROM review r
       JOIN orders o ON o.id = r.order_id WHERE o.merchant_id = ? AND r.status = 1`, [u.merchantId])
-    const latest = await one(`SELECT r.rating, r.content, r.created_at, u.nickname, p.title FROM review r
+    const latest = await one(`SELECT r.rating, r.content, DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i') created_at, u.nickname, p.title FROM review r
       JOIN orders o ON o.id = r.order_id JOIN user_account u ON u.id = r.user_id JOIN tour_product p ON p.id = r.product_id
       WHERE o.merchant_id = ? AND r.status = 1 ORDER BY r.id DESC LIMIT 1`, [u.merchantId])
     return { week, rating: { avg: Math.round(Number(agg.avg) * 10) / 10, count: Number(agg.count) }, latestReview: latest || null }
@@ -436,7 +465,8 @@ const mPhrase = {
 const mApply = {
   'GET /m/applications': async req => {
     const u = requireUser(req)
-    return q('SELECT id,name,status,merchant_no,created_at,approved_at FROM merchant WHERE applicant_user_id = ? ORDER BY id DESC', [u.uid])
+    // A-36：带出驳回原因，小程序端"我的申请"展示驳回态
+    return q('SELECT id,name,status,merchant_no,created_at,approved_at,apply_reject_note reject_note FROM merchant WHERE applicant_user_id = ? ORDER BY id DESC', [u.uid])
   },
   'GET /m/staff': async req => {
     const u = requireUser(req)
@@ -456,6 +486,10 @@ const mApply = {
     const u = requireUser(req)
     const { name, cityCode = '310118', contact, mobile, note } = req.body
     if (!name || !contact || !/^1[3-9]\d{9}$/.test(mobile || '')) throw new BizError(1001, '请填写门店名、联系人和有效手机号')
+    // A-24：字段长度统一拦截（此前超长直接触发数据库报"系统错误"）
+    if (String(name).trim().length > 30) throw new BizError(1001, '门店名称最多 30 字')
+    if (String(contact).trim().length > 20) throw new BizError(1001, '联系人最多 20 字')
+    if (note && String(note).length > 200) throw new BizError(1001, '备注最多 200 字')
     const pending = await one('SELECT id FROM merchant WHERE applicant_user_id = ? AND status = 0', [u.uid])
     if (pending) throw new BizError(2002, '已有待审核申请，请勿重复提交')
     const mno = 'MAPPLY' + String(Date.now()).slice(-10)

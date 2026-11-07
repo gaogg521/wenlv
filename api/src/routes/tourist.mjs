@@ -89,9 +89,10 @@ const c = {
   'GET /c/home': async () => ({
     banners: [{ title: '朱家角剧本游 · 江南谜案', tag: '实景搜证·多结局' }],
     cats: (await cfgAll())['channel.initial'],
+    // A-39：groups 过滤下架商品（此前只过滤团期，下架商品仍在列）
     groups: await q(`SELECT s.id session_id, p.id product_id, p.title, p.days_desc, s.depart_date, s.quota - s.booked AS left_seats
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE s.status = 1 AND s.depart_date >= CURDATE() ORDER BY s.depart_date LIMIT 6`),
+      WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() ORDER BY s.depart_date LIMIT 6`),
     hot: await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc
       FROM tour_product p WHERE p.status = 1 ORDER BY p.id LIMIT 10`),
   }),
@@ -99,16 +100,17 @@ const c = {
   'GET /c/tours': async (req) => {
     const { cat = 'all', kw = '', city = '' } = req.query
     // 搜索同时命中标题、副标题，以及后台维护的「搜索关键词」「标签」
+    // A-30：主题游"全部"不再混入商城商品（此前 6 条里 3 条是 shop SKU）
     const like = '%' + kw + '%'
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
         JSON_EXTRACT(p.profile, '$.tags') tags_json, m.level merchant_lv
-      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : ''}
+      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
       ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
       ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
       [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
     const tagCache = {}
     for (const r of rows) if (!(r.merchant_lv in tagCache)) tagCache[r.merchant_lv] = await merchantLevel.listTagFor(r.merchant_lv)
-    return rows.map(({ tags_json, merchant_lv, ...r }) => ({ ...r, merchantTag: tagCache[merchant_lv] || null, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    return rows.map(({ tags_json, merchant_lv, ...r }) => ({ ...r, merchantTag: tagCache[merchant_lv] || null, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: (Object.fromEntries(entities.DICT.city))[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
   },
 
   'GET /c/tours/:id': async (req) => {
@@ -205,6 +207,10 @@ const c = {
   'POST /c/orders': async (req) => {
     const u = requireUser(req)
     const { sessionId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone, phoneTicket } = req.body
+    // A-23：联系信息在建单前拦截——此前校验缺失，姓名过长时报"系统错误"但订单已建、旅豆已扣、名额已占
+    const name = String(contactName || '').trim()
+    if (name.length < 2 || name.length > 20) throw new BizError(1001, '请填写联系人姓名（2–20 字）')
+    if (!phoneTicket && !/^1[3-9]\d{9}$/.test(String(contactPhone || ''))) throw new BizError(1001, '请填写 11 位有效手机号，或使用一键获取')
     // A-08：一键获取的手机号以短期凭证随单提交，服务端解封后加密落库（明文不过接口、打码值不再进表单）
     let sealedPhone = null
     if (phoneTicket) {
@@ -265,7 +271,10 @@ const c = {
       o = { ...o, ...(await order.byNo(o.order_no)) }
     }
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
-    const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
+    // A-27：时间线下发面向用户的文案——内部事件键（REFUND_APPLY）、actor（user:57）、交易号、内部备注不下发
+    const ST_TEXT = { 0: '下单', 10: '待支付', 20: '已支付', 30: '待出行', 40: '已核销', 50: '已完成', 60: '退款处理中', 70: '已退款', 90: '已关闭' }
+    const events = (await q('SELECT from_st, to_st, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id]))
+      .map((e) => ({ text: `${ST_TEXT[Number(e.from_st)] || '订单'} → ${ST_TEXT[Number(e.to_st)] || '处理中'}`, at: String(e.created_at).slice(0, 19) }))
     const reviewed = !!(await one('SELECT id FROM review WHERE order_id = ?', [o.id]))
     const canRebook = Number(o.status) === 70 && o.close_reason === 'group_cancel' &&
       !(await one('SELECT id FROM orders WHERE rebook_of = ?', [o.order_no]))
@@ -302,8 +311,14 @@ const c = {
   },
   'GET /c/pass/:id/code': async (req) => {
     const u = requireUser(req)
-    const p = await one('SELECT * FROM travel_pass WHERE id = ? AND user_id = ? AND status = 1', [req.params.id, u.uid])
+    const p = await one('SELECT * FROM travel_pass WHERE id = ? AND user_id = ?', [req.params.id, u.uid])
     if (!p) throw new BizError(4001, '凭证不存在')
+    // A-28：已核销的凭证不再报"凭证加载失败"——返回已核销态与时间，核销码页据此展示
+    if (Number(p.status) === 2) {
+      const v = await one('SELECT created_at FROM verification_log WHERE pass_id = ? AND result = 1 ORDER BY id DESC LIMIT 1', [p.id])
+      return { verified: true, verifiedAt: v ? String(v.created_at).slice(0, 19) : null }
+    }
+    if (Number(p.status) !== 1) throw new BizError(4001, Number(p.status) === 4 ? '凭证已作废（订单已退款或已取消）' : '凭证状态异常')
     return await pass.currentQr(Number(req.params.id))
   },
 
@@ -390,14 +405,14 @@ const c = {
       await tx(async (cc) => cc.upd('UPDATE user_account SET nickname = ? WHERE id = ?', [String(nickname).slice(0, 24), u.uid]))
     }
     if (avatarUrl !== undefined) {
-      if (!/^\/uploads\/avatar_[0-9]+\.(png|jpg|jpeg|webp)$/.test(String(avatarUrl))) throw new BizError(1001, '头像地址非法')
+      if (!/^\/uploads\/avatar_[0-9]+_[0-9]+\.(png|jpg|jpeg|webp)$/.test(String(avatarUrl))) throw new BizError(1001, '头像地址非法')
       await tx(async (cc) => cc.upd('UPDATE user_account SET avatar_url = ? WHERE id = ?', [avatarUrl, u.uid]))
     }
     const acc = await one('SELECT nickname, avatar_url FROM user_account WHERE id = ?', [u.uid])
     return { nickname: acc.nickname, avatarUrl: acc.avatar_url, secMock: sec ? sec.mock : null }
   },
 
-  // 头像上传（base64 JSON：规避零框架 multipart；2MB 上限 + 白名单扩展名）
+  // 头像上传（base64 JSON：规避零框架 multipart；2MB 上限 + 白名单扩展名 + 文件头校验）
   'POST /c/upload/avatar': async (req) => {
     const u = requireUser(req)
     const { data, ext = 'png' } = req.body || {}
@@ -405,9 +420,14 @@ const c = {
     if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) throw new BizError(1001, '仅支持 png/jpg/webp')
     const buf = Buffer.from(String(data), 'base64')
     if (buf.length === 0 || buf.length > 2 * 1024 * 1024) throw new BizError(1001, '文件大小需在 2MB 内')
+    // A-29：校验文件头（magic bytes）——此前任何内容改名 png 都能上传
+    const magics = { png: [[0x89, 0x50, 0x4e, 0x47]], jpg: [[0xff, 0xd8, 0xff]], jpeg: [[0xff, 0xd8, 0xff]], webp: [[0x52, 0x49, 0x46, 0x46]] }
+    const okMagic = (magics[ext] || []).some((sig) => sig.every((byte, i) => buf[i] === byte))
+    if (!okMagic) throw new BizError(1001, '文件内容与格式不符，请重新选择图片')
     const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'uploads')
     fs.mkdirSync(dir, { recursive: true })
-    const name = 'avatar_' + u.uid + '.' + (ext === 'jpeg' ? 'jpg' : ext)
+    // A-29：文件名带版本时间戳——此前固定 avatar_<uid>.x，微信端缓存一天，换头像不更新
+    const name = `avatar_${u.uid}_${Date.now()}.` + (ext === 'jpeg' ? 'jpg' : ext)
     fs.writeFileSync(path.join(dir, name), buf)
     return { url: '/uploads/' + name }
   },
@@ -579,6 +599,8 @@ const cNotes = {
     const u = requireUser(req)
     const { title, body, images, relatedProductId } = req.body
     if (!body) throw new BizError(1001, '内容不能为空')
+    // A-24：标题长度在建库前拦截（此前 70 字标题直接触发数据库报"系统错误"）
+    if (title != null && String(title).trim().length > 30) throw new BizError(1001, '标题最多 30 字，请精简后发布')
     const { msgSecCheck } = await import('../infra/wxsec.mjs')
     const sec = await msgSecCheck((title || '') + ' ' + body, 'mock-openid-' + u.uid)
     // 图片机审（P2 启用 mediaCheckAsync）：MOCK 通道直通；真实通道为异步回执，先挂机审中

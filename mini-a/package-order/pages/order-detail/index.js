@@ -1,7 +1,7 @@
 const api = require('../../../utils/api')
 const place = require('../../../utils/place')
 Page({
-  data: { o: null, passes: [], stName: { 10: '待支付', 20: '已支付', 30: '待出行·待核销', 40: '已核销', 50: '已完成', 70: '已退款', 90: '已关闭' },
+  data: { o: null, passes: [], stName: { 10: '待支付', 20: '已支付', 30: '待出行·待核销', 40: '已核销', 50: '已完成', 60: '退款处理中', 70: '已退款', 90: '已关闭' },
     passSt: { 1: '有效 · 待核销', 2: '已核销', 3: '已撤销', 4: '已冲正' },
     rating: 5, rvText: '', reviewDone: false },
   onLoad(q) { this.no = q.no; this.fetch() },

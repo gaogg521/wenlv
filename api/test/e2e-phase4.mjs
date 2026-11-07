@@ -41,10 +41,10 @@ async function main() {
   ok(sA.isEarly === true && sA.priceNow === 23800, '远期团期展示早鸟价 ¥238（原 ¥298）')
   ok(sB.isEarly === false && sB.priceNow === 29800, '近端团期早鸟窗已过，恢复原价 ¥298')
   ok(sA.groupProgress && sA.groupProgress.minGo === 2, '成团进度字段下发（min_go=' + sA.groupProgress.minGo + '）')
-  const o1 = await api('POST', '/c/orders', { sessionId: sidA, qty: 1 }, u.token)
+  const o1 = await api('POST', '/c/orders', { sessionId: sidA, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   ok(o1.amountPay === 23800, '早鸟窗内下单按早鸟价结算（实付 ' + o1.amountPay + ' 分）')
   const u2 = await api('POST', '/c/auth/login', { code: 'phase4-tourist-2' })
-  const o2 = await api('POST', '/c/orders', { sessionId: sidB, qty: 1 }, u2.token)
+  const o2 = await api('POST', '/c/orders', { sessionId: sidB, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u2.token)
   ok(o2.amountPay === 29800, '窗外下单按原价结算（实付 ' + o2.amountPay + ' 分）')
   for (const no of [o1.orderNo, o2.orderNo]) {
     for (let i = 0; i < 20; i++) {
@@ -71,7 +71,7 @@ async function main() {
   ok(sup2.early_price === null, '早鸟价可关闭（置 NULL）')
 
   console.log('== C. 未成团自动取消（§4：48h 内 booked < min_go → 取消+全额退款）==')
-  const o3 = await api('POST', '/c/orders', { sessionId: sidC, qty: 1 }, u.token)
+  const o3 = await api('POST', '/c/orders', { sessionId: sidC, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   let st = null
   // 等条件不等时间：MOCK 支付回调落库（铁律 20）
   for (let i = 0; i < 20; i++) {
@@ -89,7 +89,7 @@ async function main() {
   ok(st.passes.every((p) => p.status === 4), '凭证已作废（防核销死票）')
   const sessC = await one('SELECT status FROM tour_session WHERE id = ?', [sidC])
   ok(Number(sessC.status) === 5, '团期置为 5 已取消')
-  const bookAgain = await api('POST', '/c/orders', { sessionId: sidC, qty: 1 }, u2.token, true)
+  const bookAgain = await api('POST', '/c/orders', { sessionId: sidC, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u2.token, true)
   ok(bookAgain.code === 2001, '已取消团期不可再报名')
 
   console.log('== D. 免费改签（§4：同频道同价团期，免支付出票）==')
@@ -111,7 +111,7 @@ async function main() {
   // 两张凭证的新订单（qty=2）
   const sidF = (await dbx.q('INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, status) VALUES (?,?,?,?,?,1)',
     [pid, day(7), 20, 2, 29800])).insertId
-  const o4 = await api('POST', '/c/orders', { sessionId: sidF, qty: 2 }, u.token)
+  const o4 = await api('POST', '/c/orders', { sessionId: sidF, qty: 2 , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   let paid4 = null
   for (let i = 0; i < 20; i++) {
     paid4 = await api('GET', '/c/orders/' + o4.orderNo, null, u.token)

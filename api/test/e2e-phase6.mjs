@@ -35,7 +35,7 @@ async function main() {
   await api('POST', '/admin/phrases/' + pid, { userPhrase: phU, merchantPhrase: phM }, admin)
   const plist = await api('GET', '/admin/phrases', null, admin)
   ok(plist.some((x) => x.id === pid && x.phrase_user === phU), '后台配置产品暗号对')
-  const o1 = await api('POST', '/c/orders', { sessionId: sid, qty: 1 }, u.token)
+  const o1 = await api('POST', '/c/orders', { sessionId: sid, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   let paid1 = null
   for (let i = 0; i < 20; i++) {
     paid1 = await api('GET', '/c/orders/' + o1.orderNo, null, u.token)
@@ -68,7 +68,7 @@ async function main() {
   const promoUser = await api('POST', '/c/auth/login', { code: 'phase6-promoter' })
   await api('POST', '/admin/promoters/register', { userId: promoUser.user.id, tier: 1 }, admin) // 档位 5%
   const scene = await api('GET', '/c/promote/scene', null, promoUser.token)
-  const o2 = await api('POST', '/c/orders', { sessionId: sid, qty: 1, promoScene: scene.scene }, u.token)
+  const o2 = await api('POST', '/c/orders', { sessionId: sid, qty: 1, promoScene: scene.scene , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   for (let i = 0; i < 20; i++) {
     const st = await api('GET', '/c/orders/' + o2.orderNo, null, u.token)
     if (st.status >= 20) break

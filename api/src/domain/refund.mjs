@@ -29,31 +29,41 @@ export async function quoteFor(o) {
  *                    false=全额（未成团等平台原因、客服后台处理，均留审计）
  */
 export async function refundOrder({ orderNo, reason, operator = 'user', applyPolicy = false, closeReason = null }) {
-  const o = await order.byNo(orderNo)
-  if (!o) throw new BizError(2003, '订单不存在')
-  if (![20, 30, 40].includes(Number(o.status))) throw new BizError(2002, '当前状态不可退款')
-  const total = Number(o.amount_pay)
-  let refundFen = total, feeFen = 0, feeRate = null, days = null
-  if (applyPolicy) {
-    const q = await quoteFor(o)
-    policy.assertAllowed(q)
-    refundFen = q.refundFen; feeFen = q.feeFen; feeRate = q.rate; days = q.daysToDepart
-  }
-  const refundNo = 'RF' + Date.now()
-  // A-14：close_reason 随退款单落库——异步退款（PROCESSING→补偿任务完成）也能把 close_reason 写进订单，
-  // 未成团单不再因为"同步路径才写 close_reason"而永久失去改签资格
-  await q(`INSERT INTO refunds (order_id, refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, close_reason) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [o.id, refundNo, refundFen, feeFen, feeRate, days, reason, 0, operator, closeReason])
-  // 退款申请即锚定（version 0）；后续成功(2)/拒绝(3)各锚一次，形成状态演进链
-  await attest('refund', refundNo, {
-    refundNo, orderNo, amount: refundFen, feeAmount: feeFen, feeRate, daysToDepart: days, status: 0, operator,
-  }, null, 0)
-  await order.fire(orderNo, 'REFUND_APPLY', operator)
+  const total0 = await order.byNo(orderNo)
+  if (!total0) throw new BizError(2003, '订单不存在')
+  if (![20, 30, 40].includes(Number(total0.status))) throw new BizError(2002, '当前状态不可退款')
+  // A-25：先锁订单行再建退款单——连点/并发此前会建出多张退款单（一张成功、其余 status=0 孤儿 + 孤儿存证）
+  const { refundNo, refundFen, feeFen, feeRate, days } = await tx(async (c) => {
+    const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+    if (![20, 30, 40].includes(Number(o.status))) throw new BizError(2002, '当前状态不可退款')
+    const dup = await c.one('SELECT refund_no FROM refunds WHERE order_id = ? AND status IN (0, 2) LIMIT 1', [o.id])
+    if (dup) throw new BizError(2002, '退款已在处理中（' + dup.refund_no + '），请勿重复提交')
+    const total = Number(o.amount_pay)
+    let refundFen = total, feeFen = 0, feeRate = null, days = null
+    if (applyPolicy) {
+      const q = await quoteFor(o)
+      policy.assertAllowed(q)
+      refundFen = q.refundFen; feeFen = q.feeFen; feeRate = q.rate; days = q.daysToDepart
+    }
+    const refundNo = 'RF' + Date.now()
+    // A-14：close_reason 随退款单落库——异步退款（PROCESSING→补偿任务完成）也能把 close_reason 写进订单，
+    // 未成团单不再因为"同步路径才写 close_reason"而永久失去改签资格
+    await c.q(`INSERT INTO refunds (order_id, refund_no, amount, fee_amount, fee_rate, days_to_depart, reason, status, operator, close_reason) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [o.id, refundNo, refundFen, feeFen, feeRate, days, reason, 0, operator, closeReason])
+    await attest('refund', refundNo, {
+      refundNo, orderNo, amount: refundFen, feeAmount: feeFen, feeRate, daysToDepart: days, status: 0, operator,
+    }, c, 0)
+    await c.upd('UPDATE orders SET status = 60, version = version + 1 WHERE id = ? AND version = ?', [o.id, o.version])
+    await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,?,?,?)',
+      [o.id, o.status, 60, operator, JSON.stringify('退款申请·' + (reason || '') + '（' + refundNo + '）')])
+    return { refundNo, refundFen, feeFen, feeRate, days }
+  })
   // 手续费 100% 的档位在试算阶段已拒绝；实付为 0（全旅豆抵扣）时无需调微信
   const wxr = refundFen > 0
-    ? await wxpay.refund({ orderNo, refundNo, amountFen: refundFen, totalFen: total, reason })
+    ? await wxpay.refund({ orderNo, refundNo, amountFen: refundFen, totalFen: Number(total0.amount_pay), reason })
     : { status: 'SUCCESS' }
   if (wxr.status !== 'SUCCESS') return { refunded: false, processing: true, wxRefund: wxr.status, refundNo, refundFen, feeFen }
+  const o = await order.byNo(orderNo)
   return { ...(await complete(o, refundNo, reason, wxr.status)), refundNo, refundFen, feeFen, feeRate }
 }
 

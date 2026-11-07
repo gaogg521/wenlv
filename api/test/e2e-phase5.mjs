@@ -87,12 +87,12 @@ async function main() {
     VALUES ('main','310118','trend','P2保险测试·黄山两日','phase5',29900,1,1,'含 30 万保额户外意外险', 1500)`)).insertId
   const sid = (await q(`INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, status) VALUES (?,?,?,?,?,1)`,
     [pid, new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), 20, 2, 29900])).insertId
-  const o1 = await api('POST', '/c/orders', { sessionId: sid, qty: 2, insurance: true }, u.token)
+  const o1 = await api('POST', '/c/orders', { sessionId: sid, qty: 2, insurance: true , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   ok(o1.amountPay === 29900 * 2 + 1500 * 2, '下单含保费（2×299 + 2×15 = ' + o1.amountPay / 100 + ' 元）')
   ok(o1.insuranceFee === 3000 && /意外险/.test(o1.insuranceNote), '保费与保险说明回传')
   const orow = await one('SELECT amount_goods, insurance_fee, amount_pay FROM orders WHERE order_no = ?', [o1.orderNo])
   ok(Number(orow.insurance_fee) === 3000 && Number(orow.amount_pay) === Number(orow.amount_goods) + 3000, '订单行保费字段落库且并入实付')
-  const o2 = await api('POST', '/c/orders', { sessionId: sid, qty: 1 }, u.token)
+  const o2 = await api('POST', '/c/orders', { sessionId: sid, qty: 1 , contactName: '回归测试', contactPhone: '13800009999' }, u.token)
   ok(o2.amountPay === 29900 && o2.insuranceFee === 0, '不勾选保险 → 纯票价')
   await q("UPDATE orders SET status = 90 WHERE order_no IN (?, ?) AND status = 10", [o1.orderNo, o2.orderNo])
 

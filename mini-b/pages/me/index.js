@@ -10,7 +10,7 @@ Page({
     if (this.data.merchant && this.data.role >= 3) this.fetchStaff()
   },
   async fetchApplications() {
-    try { const applications = await api.request('/m/applications'); this.setData({ applications: applications.map(a => ({ ...a, statusText: a.status === 1 ? '审核通过 · 请重新登录进入门店' : '平台审核中' })) }) } catch (e) {}
+    try { const applications = await api.request('/m/applications'); this.setData({ applications: applications.map(a => ({ ...a, statusText: Number(a.status) === 1 ? '审核通过 · 请重新登录进入门店' : Number(a.status) === 2 ? '已驳回' + (a.reject_note ? '：' + a.reject_note : '') : '平台审核中', rejected: Number(a.status) === 2 })) }) } catch (e) {}
   },
   async fetchStaff() {
     try { const staff = await api.request('/m/staff'); this.setData({ staff: staff.map(s => ({ ...s, roleText: ['','核销员','店长','老板'][s.role] })) }) } catch (e) { wx.showToast({ title: e.msg || '员工加载失败', icon: 'none' }) }

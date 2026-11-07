@@ -37,7 +37,7 @@ const cases = [
   ['我的订单', '/package-order/pages/orders/index', (d) => (d.orders || []).length > 0 && !d.error
     && d.orders.every((o) => o.order_no && o.title && Number(o.amount_pay) === o.amount_pay && o.amount_pay > 0 && o.statusText && o.created_at && o.days_desc)],
   ['数字身份', '/package-content/pages/identity/index', (d) => !!d.d && !!d.d.profile && !String(d.loadTxt || '').match(/不可达|失败/)],
-  ['创作中心（错误态可重试）', '/package-content/pages/create/index', (d) => !!String(d.loadError || '').match(/失败|重试/)],
+  ['创作中心（错误态可重试）', '/package-content/pages/create/index', (d) => !!String(d.loadError || '').match(/失败|重试|不可达/)],
   ['推广中心', '/package-promo/pages/center/index', (d) => !String(d.loadTxt || '').match(/不可达|失败/)],
   ['目的地', '/pages/destination/index', (d) => !d.error],
   ['FAQ', '/pages/faq/index', (d) => !d.error],

@@ -46,7 +46,8 @@
         "iconPath": "assets/tab/me.png",
         "selectedIconPath": "assets/tab/me-on.png"
       }
-    ]
+    ],
+    "custom": true
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
