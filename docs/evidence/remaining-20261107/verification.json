@@ -1,0 +1,60 @@
+{
+  "sourceCommit": "f3d3f10",
+  "deployedMain": "7517ed8",
+  "pr": "https://github.com/gaogg521/wenlv/pull/136",
+  "freshDatabase": "wanderlust_qa_remaining1107r",
+  "suiteExitCodes": {
+    "seed:scenario": 0,
+    "test": 0,
+    "test:db": 0,
+    "test:chain": 0
+  },
+  "simulator": {
+    "themes": [
+      "script",
+      "yoga",
+      "family",
+      "sister"
+    ],
+    "a41to44": [
+      "home",
+      "booking",
+      "create",
+      "square",
+      "note",
+      "pay-result"
+    ],
+    "photos": [
+      "shop",
+      "destination",
+      "scenic",
+      "merchant",
+      "detail",
+      "credits"
+    ],
+    "exceptions": []
+  },
+  "wxmlAllCompiled": true,
+  "preservation": {
+    "orders": 1482,
+    "users": 43,
+    "oldSecretsUnchanged": 19,
+    "oldAdminPasswordHashesUnchanged": 5,
+    "addedTemplateSecrets": 2,
+    "kycRows": 0
+  },
+  "mediaRollout": {
+    "product": 6,
+    "scenic": 10,
+    "merchant": 5,
+    "banner": 12,
+    "failures": 0,
+    "remainingLegacyPlans": 0
+  },
+  "realBusinessAccepted": false,
+  "smsProviderError": "FailedOperation.NotEnterpriseCertification",
+  "wechatTemplateFieldsMatch": true,
+  "demoStartup": "existing scheduled task WanderlustAPI-KeepAlive, original .env",
+  "externalMessagesSent": 0,
+  "contractsDeployed": 0
+}
