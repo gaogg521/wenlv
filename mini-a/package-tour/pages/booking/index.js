@@ -15,6 +15,9 @@ Page({
       const sv = this.sessView(withFallbackSessions[0])
       // 默认选中第一个还有名额的团期
       const firstOpen = Math.max(0, withFallbackSessions.findIndex((x) => Number(x.left_seats) > 0))
+      // A-42：分包 wxml 只做取值——保险相关在 JS 预计算（复杂表达式会静默炸分包编译）
+      d.hasInsurance = Number(d.insurance_fee) > 0
+      d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
       this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv }, () => this.updatePrice())
@@ -44,8 +47,10 @@ Page({
     const goods = Number(s.priceNow || s.price_adult) * this.data.qty
     const beans = this.data.useBean ? Math.min(Number(this.data.beanBal) || 0, this.beanCap(goods)) : 0
     const unit = Number(s.priceNow || s.price_adult)
+    const ins = this.data.buyInsurance ? Math.max(0, Number(this.data.p.insurance_fee) || 0) * this.data.qty : 0
     this.setData({ priceSummary: { unit: (unit / 100).toFixed(2), goods: (goods / 100).toFixed(2), capYuan: (this.beanCap(goods) / 10).toFixed(2),
-      deduct: (beans / 10).toFixed(2), pay: ((goods - beans * 10) / 100).toFixed(2) } })
+      insurance: (ins / 100).toFixed(2), showInsRow: ins > 0,
+      deduct: (beans / 10).toFixed(2), pay: ((goods - beans * 10 + ins) / 100).toFixed(2) } })
   },
   /** 抵扣上限（豆）：与服务端 order.mjs 同一公式 floor(金额分 × 上限比例 ÷ 10)，比例取参数中心实时值 */
   beanCap(goodsFen) {
@@ -78,6 +83,9 @@ Page({
     this.setData({ qty: this.data.qty - 1 }, () => this.updatePrice())
   },
   toggleBean(e) { this.setData({ useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
+  toggleInsurance(e) { this.setData({ buyInsurance: !!e.detail.value }, () => this.updatePrice()) },
+  toggleAgree(e) { this.setData({ agree: e.detail.value.includes('agree') }) },
+  goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + (e.currentTarget.dataset.type === 'terms' ? 'agreement' : 'privacy') }) },
   onName(e) { this.setData({ contactName: e.detail.value }) },
   // 微信官方手机号快速验证组件回调：code 交服务端换号。
   // A-08：服务端不下发明文也不下发打码值（打码值过不了 11 位校验，一键获取后必下单失败），
@@ -98,6 +106,7 @@ Page({
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.submitting) return
+    if (!this.data.agree) return wx.showToast({ title: '请先阅读并同意服务条款与隐私政策', icon: 'none' })
     if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
     if (!String(this.data.contactName || '').trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
     // A-08：一键获取（有 phoneTicket）或手输 11 位手机号，二者其一即可下单
@@ -105,10 +114,13 @@ Page({
     this.setData({ submitting: true })
     try {
       await api.ensureLogin()
+      await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true })
+      await api.request('/c/consent', 'POST', { scene: 'terms', granted: true })
       const beanBal = this.data.beanBal || 0
       const unit = s.priceNow || s.price_adult
       const want = this.data.useBean ? Math.min(beanBal, this.beanCap(unit * this.data.qty)) : 0
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
+        insurance: this.data.buyInsurance,
         promoScene: wx.getStorageSync('promoScene') || undefined,
         contactName: this.data.contactName,
         phoneTicket: this.data.phoneTicket || undefined,
@@ -119,7 +131,6 @@ Page({
         const ids = [t.groupCancel, t.payOk].filter(Boolean)
         if (ids.length) wx.requestSubscribeMessage({ tmplIds: ids, fail: () => {} })
       } catch (e) { /* 订阅是增强能力 */ }
-      try { await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: this.data.consentVersion || undefined }) } catch (e) {}
       try { await api.pay(r.payParams) } catch (err) { wx.showToast({ title: '支付未完成，可在订单中继续支付', icon: 'none' }) }
       wx.redirectTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + r.orderNo + '&mock=' + (r.payParams.mock ? 1 : 0) })
     } catch (e) {

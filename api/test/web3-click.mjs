@@ -235,3 +235,5 @@ await t('所有放进 onclick 的业务值都经 w3Arg 转义：单号里带引�
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
+// web3dash 的自动刷新属于浏览器生命周期，测试结束时释放，避免 npm test 挂住。
+if (ctx.window.__chainTimer) clearInterval(ctx.window.__chainTimer)

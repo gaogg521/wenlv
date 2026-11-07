@@ -139,6 +139,9 @@ await t('A43-4 点赞：一用户一赞、可取消、计数准确', async () =>
   const feed = ok(await call('GET', '/c/notes/feed?page=1&pageSize=20', null, u.token))
   const row = feed.items.find((x) => Number(x.id) === Number(pub.id))
   assert.equal(row.liked, true, 'feed 应带 liked 标记')
+  const detail = ok(await call('GET', `/c/notes/${pub.id}`, null, u.token))
+  assert.equal(detail.liked, true, '详情点赞态不能依赖广场前 50 条')
+  assert.equal(detail.likeCount, 1)
 })
 
 await t('A43-5 创作页有图片选择与关联线路；广场页已登记 MINI_MAP', async () => {

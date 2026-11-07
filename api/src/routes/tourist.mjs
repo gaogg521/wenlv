@@ -695,7 +695,7 @@ const cNotes = {
   },
   // 笔记详情独立页（P2）：仅已发布可见
   'GET /c/notes/:id': async (req) => {
-    requireUser(req)
+    const user = requireUser(req)
     const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.published_at, c.related_product_id,
       u.nickname author, p.title product_title
       FROM content_note c JOIN user_account u ON u.id = c.user_id
@@ -704,7 +704,8 @@ const cNotes = {
     if (!n) throw new BizError(1004, '笔记不存在或未发布')
     let body = n.body
     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
-    return { ...n, body, text: (body && body.text) || '', images: (body && body.images) || [] }
+    const liked = await one('SELECT note_id FROM content_note_likes WHERE note_id = ? AND user_id = ?', [n.id, user.uid])
+    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [] }
   },
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {
