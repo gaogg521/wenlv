@@ -157,19 +157,29 @@ function img(url) {
 function productImages(product) {
   let images = product.images || []
   if (typeof images === 'string') { try { images = JSON.parse(images) } catch { images = [] } }
-  // 仅替换已确认的旧演示SVG占位图，正常上传的商品图片继续优先展示。
-  return Array.isArray(images) ? images.filter(u => !/^\/uploads\/demo-prod-\d+-\d+\.svg$/.test(u)) : []
+  return Array.isArray(images) ? images.filter(u => !isIllustration(u)) : []
 }
+function isIllustration(url) { return /\.svg(?:[?#]|$)|\/assets\/scenes\//i.test(String(url || '')) }
+function isReferencePhoto(url) { return /\/assets\/photos\/|\/uploads\/reference-[a-z-]+-20261107\.jpg(?:[?#]|$)/.test(String(url || '')) }
+function photoFor(subject = {}) {
+  const name = String(subject.title || subject.name || subject.cityName || '')
+  let photo = 'water-town'
+  if (subject.cat === 'family' || subject.cat === 'single') photo = 'camp'
+  if (subject.cat === 'yoga' || /安吉|竹/.test(name)) photo = 'bamboo'
+  if (subject.cat === 'sister' || /苏州|园林|茶会/.test(name)) photo = 'garden'
+  if (/方巾|扎染|蓝染|花布/.test(name)) photo = 'cloth'
+  else if (/粽/.test(name)) photo = 'zongzi'
+  else if (subject.cat === 'shop' || /白茶|茶叶/.test(name)) photo = 'tea'
+  return '/assets/photos/' + photo + '.jpg'
+}
+function businessImage(url, subject) { return !url || isIllustration(url) ? photoFor(subject) : String(url).startsWith('/assets/') ? url : img(url) }
 function coverFor(product) {
   const images = productImages(product)
-  if (images.length) return img(images[0])
-  if (['script', 'yoga', 'family', 'sister'].includes(product.cat)) return '/assets/themes/' + product.cat + '-v2.jpg'
-  const scene = { script:'watertown', yoga:'bamboo', sister:'garden', single:'camp', sport:'lake', family:'mountain', red:'jinggang', shop:'tea' }[product.cat] || 'watertown'
-  return '/assets/scenes/' + scene + '.png'
+  return images.length ? businessImage(images[0], product) : photoFor(product)
 }
 
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
-  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, FALLBACK, demoAllowed,
+  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, businessImage, photoFor, isIllustration, isReferencePhoto, FALLBACK, demoAllowed,
 }

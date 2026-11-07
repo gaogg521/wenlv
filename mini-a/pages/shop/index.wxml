@@ -7,7 +7,7 @@
 </view>
 <view style="height:12rpx"></view>
 <view class="tour-item fade-up" wx:for="{{items}}" wx:key="id">
-  <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill"/><view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
+  <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill"/><text wx:if="{{item.sampleCover}}" class="tour-sample">商品参考图</text></view><view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
   <view style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0">
     <view class="tour-title">{{item.title}}</view>
     <view class="tour-desc">{{item.subtitle || item.days_desc || ""}}</view>

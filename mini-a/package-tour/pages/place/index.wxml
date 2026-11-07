@@ -4,6 +4,7 @@
   <swiper wx:if="{{d.gallery.length}}" class="gallery" indicator-dots="{{d.gallery.length > 1}}" circular bindchange="onSwiper">
     <swiper-item wx:for="{{d.gallery}}" wx:key="index"><image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" bindtap="preview" data-i="{{index}}" /></swiper-item>
   </swiper>
+  <view wx:if="{{d.samplePhoto}}" class="note">场景参考图，实际设施与服务以商户资料为准</view>
   <view class="book-bar dt-head">
     <view class="pl-top">
       <image wx:if="{{d.kind === 'merchant' && d.logo}}" class="pl-logo" src="{{d.logo}}" mode="aspectFill" />

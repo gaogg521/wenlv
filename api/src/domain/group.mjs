@@ -51,7 +51,7 @@ async function notifyUser(orderNo, productTitle) {
     const tpl = await getSecret('WX_TMPL_GROUP_CANCEL')
     await wxapi.sendSubscribeMessage(u && u.mini_a_openid, tpl, {
       thing1: { value: String(productTitle).slice(0, 20) },
-      thing2: { value: '未达成团人数已自动取消，款项原路退回' },
+      thing4: { value: '未达成团人数已取消，退款进度见订单' },
     }, 'package-order/pages/orders/index')
   } catch (e) { console.error('[group:notify]', orderNo, e.message) }
 }

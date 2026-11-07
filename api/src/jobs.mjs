@@ -99,11 +99,11 @@ export async function tickExpireVouchers() {
         const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])
         const p = await one('SELECT title FROM tour_product WHERE id = ?', [o.product_id])
         const { getSecret } = await import('./infra/secrets.mjs')
-        const tpl = await getSecret('WX_TMPL_GROUP_CANCEL')
+        const tpl = await getSecret('WX_TMPL_VOUCHER_EXPIRE')
         const wxapi = await import('./domain/wxapi.mjs')
         await wxapi.sendSubscribeMessage(u && u.mini_a_openid, tpl, {
           thing1: { value: String(p && p.title || '您的行程').slice(0, 20) },
-          thing2: { value: '凭证已过核销有效期，款项原路退回' },
+          thing4: { value: '核销有效期已过，退款进度见订单' },
         }, 'package-order/pages/orders/index')
       } catch (e) { console.error('[job:expire-voucher:notify]', r.order_no, e.message) }
       done.push(r.order_no)

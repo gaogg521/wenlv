@@ -33,6 +33,7 @@ import { SMS_KEYS, SMTP_KEYS } from '../infra/mfa.mjs'
 // ---------- 集成中心（第三方凭据后台化：.env 仅自举）----------
 // 字段中文名：页面上先看中文，环境变量名退到小字
 const FIELD_CN = {
+  WX_TMPL_GROUP_CANCEL: '未成团取消通知模板', WX_TMPL_VOUCHER_EXPIRE: '凭证到期通知模板（可选）', WX_CALLBACK_TOKEN: '微信消息回调 Token', WX_CALLBACK_AES_KEY: '微信消息加解密 EncodingAESKey',
   WX_APPID: '小程序 AppID', WX_SECRET: '小程序 AppSecret', WX_B_APPID: '商户端 AppID', WX_B_SECRET: '商户端 AppSecret',
   SMS_TENCENT_SECRET_ID: 'SecretId（云 API 访问密钥 ID）', SMS_TENCENT_SECRET_KEY: 'SecretKey（云 API 访问密钥）', SMS_TENCENT_SDKAPPID: '短信应用 SdkAppId',
   SMS_TENCENT_SIGN: '短信签名内容（如：向往的自由）', SMS_TENCENT_TEMPLATE_ID: '验证码模板 ID',
@@ -145,17 +146,18 @@ const integrations = {
     const { listSecretMeta } = await import('../infra/secrets.mjs')
     const { getSecrets } = await import('../infra/secrets.mjs')
     const stored = Object.fromEntries((await listSecretMeta()).map((r2) => [r2.k, r2.hint]))
-    const s = await getSecrets(['WX_APPID', 'WX_SECRET', 'WX_B_APPID', 'WX_B_SECRET', 'WX_API_V3_KEY', 'WX_PLATFORM_PUBLIC_KEY', 'WX_PLATFORM_SERIAL', 'WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL', 'WX_TMPL_PAY_OK',
+    const s = await getSecrets(['WX_APPID', 'WX_SECRET', 'WX_B_APPID', 'WX_B_SECRET', 'WX_API_V3_KEY', 'WX_PLATFORM_PUBLIC_KEY', 'WX_PLATFORM_SERIAL', 'WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL', 'WX_TMPL_PAY_OK', 'WX_TMPL_GROUP_CANCEL', 'WX_CALLBACK_TOKEN', 'WX_CALLBACK_AES_KEY',
       ...SMS_KEYS, ...SMTP_KEYS])
     const ch = (keys, name, desc) => ({ name, desc, ready: keys.every((k) => !!(s[k] || process.env[k])),
-      fields: keys.map((k) => ({ key: k, label: FIELD_CN[k] || '', secret: /SECRET|PASS|KEY/.test(k), envFallback: !!process.env[k], stored: stored[k] || null })) })
+      fields: keys.map((k) => ({ key: k, label: FIELD_CN[k] || '', secret: /SECRET|PASS|KEY|TOKEN/.test(k), envFallback: !!process.env[k], stored: stored[k] || null })) })
     return {
       envNote: '.env 只保留自举：DB 连接、JWT_SECRET、ADMIN_INIT_PASSWORD；其余凭据在本页保存（AES-256-GCM 加密落库）',
       channels: [
         ch(['WX_APPID', 'WX_SECRET'], '微信小程序登录', 'code2Session（未配置=mock openid 联调）'),
         ch(['WX_B_APPID', 'WX_B_SECRET'], '商户小程序登录', '商户端独立 AppID 与 Secret'),
         ch(['WX_API_V3_KEY', 'WX_PLATFORM_PUBLIC_KEY', 'WX_PLATFORM_SERIAL'], '微信支付回调校验', 'APIv3 密钥、微信支付公钥与公钥 ID/证书序列号'),
-        ch(['WX_TMPL_PAY_OK'], '订阅消息模板', '支付成功通知模板 ID（公众平台→订阅消息→我的模板）'),
+        ch(['WX_TMPL_PAY_OK', 'WX_TMPL_GROUP_CANCEL'], '订阅消息模板', '出票与未成团取消两类模板；配置不代表已获得用户授权或实际送达'),
+        ch(['WX_CALLBACK_TOKEN', 'WX_CALLBACK_AES_KEY'], '微信图片审核回执', '公网HTTPS /callback/wechat；微信消息推送选择安全模式；配置不代表已收过真实回执'),
         ch(['WX_MCHID', 'WX_SERIAL', 'WX_PRIVATE_KEY', 'WX_NOTIFY_URL'], '微信支付 V3', '未配置=MOCK 通道（不真实收款）'),
         { ...ch(SMS_KEYS, '短信验证码（腾讯云短信）', '后台登录两步验证、通知短信。腾讯云控制台 → 短信 → 应用管理 / 签名管理 / 正文模板管理 获取以下 5 项'), kind: 'sms' },
         { ...ch(SMTP_KEYS, '邮箱验证码（SMTP）', '后台登录两步验证、通知邮件。填写邮件服务商（企业邮箱 / 腾讯企业邮 / 阿里企业邮等）提供的 SMTP 信息'), kind: 'email' },

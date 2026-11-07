@@ -35,6 +35,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
+import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 // ---------- /c 游客端 ----------
@@ -136,6 +137,7 @@ const c = {
     const pub = Object.fromEntries(PUB_COLS.map((k) => [k, p[k]]))
     pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
     return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
+      insuranceAvailable: process.env.NODE_ENV !== 'production', insuranceMode: process.env.NODE_ENV === 'production' ? 'unavailable' : 'demo',
       merchantCard: entities.publicProfile('merchant', merchantRow, img),
       merchantHonor: await honorOf(p.merchant_id, req),
       scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
@@ -210,6 +212,7 @@ const c = {
 
   'POST /c/orders': async (req) => {
     const u = requireUser(req)
+    await requireProductionLegal(u.uid)
     // A-44：隐私授权兜底——未同意（或已撤回）隐私政策不得下单（小程序端下单页有勾选，这里是服务端强校验）
     const consent = await one("SELECT granted FROM user_privacy_consent WHERE user_id = ? AND scene = 'privacy'", [u.uid])
     if (!consent || Number(consent.granted) !== 1) throw new BizError(1001, '请先阅读并同意《隐私政策》后再下单')
@@ -355,12 +358,12 @@ const c = {
   // 隐私授权（逐项可撤回）：签署即入存证 —— 这是"用户知不知道规则"唯一拿得出手的证据
   'GET /c/consent': async (req) => {
     const u = requireUser(req)
-    const rows = await q('SELECT scene, granted, granted_at, revoked_at FROM user_privacy_consent WHERE user_id = ?', [u.uid])
+    const rows = await q('SELECT scene, granted, granted_at, revoked_at, version FROM user_privacy_consent WHERE user_id = ?', [u.uid])
     // cfg() 对未注册的键会抛错（配置中心要求显式声明），这里用兜底读取，避免因为"没配版本号"整个接口 500
     const cfgOr = async (k, d) => { try { return (await cfg(k)) || d } catch { return d } }
     return {
-      versions: { terms: await cfgOr('legal.terms_version', '2026.11'), privacy: await cfgOr('legal.privacy_version', '2026.11') },
-      items: rows.map((r) => ({ scene: r.scene, granted: Number(r.granted) === 1, grantedAt: r.granted_at, revokedAt: r.revoked_at })),
+      versions: await legalVersions(), documentsReady: await legalDocuments(),
+      items: rows.map((r) => ({ scene: r.scene, granted: Number(r.granted) === 1, version: r.version, grantedAt: r.granted_at, revokedAt: r.revoked_at })),
     }
   },
   'POST /c/consent': async (req) => {
@@ -372,16 +375,23 @@ const c = {
     if (!ALLOWED.includes(scene)) throw new BizError(1001, '未知的授权项：' + scene + '（可用：' + ALLOWED.join('/') + '）')
     const cfgOr = async (k, d) => { try { return (await cfg(k)) || d } catch { return d } }
     const version = String(req.body.version || await cfgOr('legal.' + scene + '_version', await cfgOr('legal.privacy_version', '2026.11')))
-    await q(`INSERT INTO user_privacy_consent (user_id, scene, granted, granted_at, revoked_at)
-      VALUES (?,?,?,NOW(3),NULL)
+    if (version.length > 64) throw new BizError(1001, '协议版本格式不正确')
+    if (granted && ['terms', 'privacy'].includes(scene) && process.env.NODE_ENV === 'production') {
+      if (!(await legalDocuments())[scene]) throw new BizError(1001, '协议正文尚未发布，暂不可确认同意')
+      if (req.body.version !== (await legalVersions())[scene]) throw new BizError(1001, '协议已更新，请重新打开并阅读')
+    }
+    await tx(async c => {
+      await c.q(`INSERT INTO user_privacy_consent (user_id, scene, granted, granted_at, revoked_at, version)
+      VALUES (?,?,?,IF(?=1,NOW(3),NULL),IF(?=0,NOW(3),NULL),?)
       ON DUPLICATE KEY UPDATE granted = VALUES(granted),
         granted_at = IF(VALUES(granted) = 1, NOW(3), granted_at),
-        revoked_at = IF(VALUES(granted) = 0, NOW(3), NULL)`, [u.uid, scene, granted ? 1 : 0])
+        version = VALUES(version), revoked_at = IF(VALUES(granted) = 0, NOW(3), NULL)`, [u.uid, scene, granted ? 1 : 0, granted ? 1 : 0, granted ? 1 : 0, version])
     // 版本进 biz_ref：换一版规则重签就是一片新叶子，不会把旧同意覆盖掉
     // version_no 区分"同意(1)/撤回(2)"：同一版本的同意与撤回各留一片叶子，撤回不会被幂等键吞掉
-    await attestDomain.attest('consent', `consent-${u.uid}-${scene}-${version}`, {
-      userId: Number(u.uid), scene, granted, version,
-    }, null, granted ? 1 : 2)
+      const ref = `consent-${u.uid}-${scene}-${version}`
+      const latest = await c.one("SELECT MAX(version_no) n FROM attest_event WHERE biz_type='consent' AND biz_ref=?", [ref])
+      await attestDomain.attest('consent', ref, { userId: Number(u.uid), scene, granted, version }, c, Number(latest.n || 0) + 1)
+    })
     return { scene, granted, version }
   },
 
@@ -677,19 +687,23 @@ const cNotes = {
     // A-24：标题长度在建库前拦截（此前 70 字标题直接触发数据库报"系统错误"）
     if (title != null && String(title).trim().length > 30) throw new BizError(1001, '标题最多 30 字，请精简后发布')
     const { msgSecCheck } = await import('../infra/wxsec.mjs')
-    const sec = await msgSecCheck((title || '') + ' ' + body, 'mock-openid-' + u.uid)
+    const account = await one('SELECT mini_a_openid FROM user_account WHERE id=?', [u.uid])
+    const sec = await msgSecCheck((title || '') + ' ' + body, account?.mini_a_openid)
     // 图片机审（P2 启用 mediaCheckAsync）：MOCK 通道直通；真实通道为异步回执，先挂机审中
     const imgUrls = Array.isArray(images) ? images.slice(0, 9) : []
     const imgSec = []
     let status = sec.pass ? 2 : 1
     for (const url of imgUrls) {
-      const r = await wxapi.mediaCheckAsync(String(url).slice(0, 500), 'mock-openid-' + u.uid)
+      const r = await wxapi.mediaCheckAsync(apiImg(String(url).slice(0, 500), req), account?.mini_a_openid)
       imgSec.push({ url: String(url).slice(0, 500), traceId: r.traceId, mock: r.mock })
-      if (!r.mock) status = 0 // 真实异步机审 → 机审中，等回执
+      if (!r.mock && sec.pass) status = 0 // 真实异步机审 → 全图回执通过后才能发布
     }
-    const id = await tx(async (c) => c.ins(
-      'INSERT INTO content_note (user_id, title, body, status, sec_check_id, related_product_id,published_at) VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))',
-      [u.uid, title || null, JSON.stringify({ text: sanitizeRich(String(body)), images: imgUrls, imgSec }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null,status]))
+    const id = await tx(async c => {
+      const id = await c.ins('INSERT INTO content_note (user_id, title, body, status, sec_check_id, related_product_id,published_at) VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))',
+        [u.uid, title || null, JSON.stringify({ text: sanitizeRich(String(body)), images: imgUrls, imgSec, textCheck: { pass: sec.pass, mock: sec.mock } }), status, sec.mock ? 'mock' : 'wx-sec', relatedProductId || null, status])
+      for (const check of imgSec.filter(x => !x.mock)) await c.ins('INSERT INTO content_media_check (trace_id,note_id) VALUES (?,?)', [check.traceId, id])
+      return id
+    })
     return { id, status, secMock: sec.mock, imgChecked: imgSec.length,
       msg: status === 2 ? '已发布' : status === 0 ? '图片机审中' : '进入人工审核' }
   },

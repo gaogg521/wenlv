@@ -39,7 +39,7 @@
     { end: '游客端', path: 'package-content/pages/square/index', name: '旅行笔记广场', items: [['公开笔记流（已发布笔记、作者、点赞、关联线路）', [['内容审核', 'content'], ['创作者池', 'creators']]], ['点赞与举报入口', [['举报与申诉', 'contentcases']]]] },
     { end: '游客端', path: 'package-content/pages/note/index', name: '笔记详情', items: [['笔记内容与状态', [['内容审核', 'content'], ['创作者池', 'creators']]], ['读者举报入口及处理', [['举报与申诉', 'contentcases']]]] },
     { end: '游客端', path: 'package-content/pages/identity/index', name: '我的身份', items: [['勋章墙（勋章图、稀有度、规则、有效期）', [['勋章发行', 'badges']]], ['权益凭证与可信记录', [['存证中心', 'attest'], ['权益账户', 'wallets']]]] },
-    { end: '游客端', path: 'package-content/pages/doc/index', name: '协议与说明', items: [['用户协议、隐私政策、关于我们', [['小程序装修 · 客服与协议', 'site']]]] },
+    { end: '游客端', path: 'package-content/pages/doc/index', name: '协议与说明', items: [['用户协议、隐私政策、关于我们；图片来源与许可可从关于页查看', [['小程序装修 · 客服与协议', 'site']]]] },
     { end: '游客端', path: 'package-promo/pages/center/index', name: '推广中心', items: [['资格、档位与费率', [['推广服务商', 'promoters'], ['逐品佣金', 'rateov']]], ['提现', [['提现审批', 'withdrawals']]], ['规则说明', [['小程序装修 · 旅豆与推广', 'site']]]] },
     { end: '游客端', path: 'pages/faq/index', name: '常见问题', items: [['问题、富文本答案、分类、热门、同义问法', [['常见问题', 'faqs']]]] },
     { end: '游客端', path: 'pages/me/index', name: '我的', items: [['客服电话与服务时间、协议入口、品牌标语', [['小程序装修 · 客服与协议', 'site']]], ['实名认证审核', [['实名认证', 'kyc']]]] },

@@ -1,4 +1,13 @@
 <view class="card doc-card">
-  <rich-text wx:if="{{html}}" class="rich-p" nodes="{{html}}"></rich-text>
-  <view wx:else class="empty">{{title}}内容整理中</view>
+  <block wx:if="{{credits}}">
+    <view class="note">参考图片为真实摄影作品，不代表当前商品的实物或当前服务现场。供应商提供实拍后优先展示实拍。</view>
+    <view wx:for="{{credits}}" wx:key="name" style="padding:24rpx 0;border-bottom:1rpx solid #eee;word-break:break-all">
+      <view>{{item.title}}</view><view>作者：{{item.author}}</view><view>许可：{{item.license}}</view>
+      <text selectable style="display:block;font-size:22rpx">{{item.source}}</text>
+      <text selectable style="display:block;font-size:22rpx">{{item.licenseUrl}}</text>
+      <view class="note">{{item.changes}}</view>
+    </view>
+  </block>
+  <block wx:else><rich-text wx:if="{{html}}" class="rich-p" nodes="{{html}}"></rich-text><view wx:else class="empty">{{title}}内容整理中</view></block>
+  <view wx:if="{{showCredits}}" class="btn ghost" bindtap="goCredits">图片来源与许可</view>
 </view>

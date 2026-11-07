@@ -41,7 +41,8 @@
     <view class="kv">
       <view style="flex:1;min-width:0">
         <view><text style="font-weight:700">出行意外险</text><text class="muted2"> ¥{{p.insuranceFeeYuan}}/人</text></view>
-        <view class="muted2" style="font-size:22rpx;margin-top:6rpx">{{p.insurance_note || '为全体出行人投保旅行意外险，费用随订单支付'}}</view>
+        <view class="muted2" style="font-size:22rpx;margin-top:6rpx">{{p.insurance_note || '保险费用联调展示，未开通真实承保服务'}}</view>
+        <view class="muted2" wx:if="{{p.insuranceMode === 'demo'}}">联调演示 · 支付不代表真实投保</view>
       </view>
       <switch checked="{{buyInsurance}}" bindchange="toggleInsurance" color="#e87722" style="transform:scale(.8)" />
     </view>

@@ -51,7 +51,7 @@ Page({
           itinerary: (pf.itinerary || []).map((n) => ({ ...n, image: n.image ? api.img(n.image) : '' })),
           notice: pf.notice || '', meetingGeo: pf.meeting_geo || '', shareTitle: pf.share_title || '', shareImage: pf.share_image ? api.img(pf.share_image) : '',
         },
-        gallery: images.length ? images : [api.coverFor(d)], illustrated: !images.length, gIdx: 0,
+        gallery: images.length ? images : [api.coverFor(d)], illustrated: !images.length || images.every(api.isReferencePhoto), gIdx: 0,
         rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [], excludes: rich.excludes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv,
       })
