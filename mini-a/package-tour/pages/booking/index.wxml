@@ -27,13 +27,24 @@
         <text class="qty-btn {{qty <= 1 ? 'off' : ''}}" bindtap="subQty">－</text><text class="v" style="min-width:48rpx;text-align:center">{{qty}}</text><text class="qty-btn" bindtap="addQty">＋</text>
       </view></view>
     <view class="kv"><text>联系人</text>
-      <input class="v input-r" placeholder="出行联系人姓名" value="{{contactName}}" bindinput="onName"  maxlength="20"></view>
+      <input class="v input-r" placeholder="出行联系人姓名" value="{{contactName}}" bindinput="onName" maxlength="20" /></view>
     <view class="kv"><text>手机号</text>
       <view style="display:flex;align-items:center;gap:16rpx">
         <input class="v input-r" type="number" maxlength="11" placeholder="用于接收出行通知"
           value="{{contactPhone}}" bindinput="onPhoneInput" style="flex:1;min-width:0" />
         <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onPhone">一键获取</button>
       </view></view>
+  </view>
+
+  <view class="sec-title" wx:if="{{p.hasInsurance}}">出行保障</view>
+  <view class="card" wx:if="{{p.hasInsurance}}">
+    <view class="kv">
+      <view style="flex:1;min-width:0">
+        <view><text style="font-weight:700">出行意外险</text><text class="muted2"> ¥{{p.insuranceFeeYuan}}/人</text></view>
+        <view class="muted2" style="font-size:22rpx;margin-top:6rpx">{{p.insurance_note || '为全体出行人投保旅行意外险，费用随订单支付'}}</view>
+      </view>
+      <switch checked="{{buyInsurance}}" bindchange="toggleInsurance" color="#e87722" style="transform:scale(.8)" />
+    </view>
   </view>
 
   <view class="sec-title">3 · 费用确认</view>
@@ -43,12 +54,21 @@
     <view class="kv"><text>旅豆抵扣 <text class="muted2">（余额 {{beanBal}}，最多抵 {{priceSummary.capYuan}} 元）</text></text>
       <switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
     <view class="kv" wx:if="{{useBean && priceSummary.deduct !== '0.00'}}"><text>抵扣金额</text><text style="color:var(--green)">−¥{{priceSummary.deduct}}</text></view>
+    <view class="kv" wx:if="{{priceSummary.showInsRow}}"><text>出行意外险</text><text>¥{{priceSummary.insurance}}</text></view>
   </view>
   <view class="card" wx:if="{{p.bookingRules && p.bookingRules.refundRules.length}}">
     <view class="fee-h">退改规则</view>
     <view class="hl-item" wx:for="{{p.bookingRules.refundRules}}" wx:key="*this"><text class="hl-dot">·</text>{{item}}</view>
   </view>
   <view class="note">退款按上述规则从实付金额中扣除手续费，抵扣的旅豆全额返还。最终金额以提交时的实时价格为准。</view>
+  <view class="agree-row" style="display:flex;align-items:flex-start;gap:12rpx;padding:20rpx 32rpx">
+    <checkbox-group bindchange="toggleAgree" style="transform:scale(.75);transform-origin:left center">
+      <checkbox value="agree" checked="{{agree}}" style="transform:scale(.9)" />
+    </checkbox-group>
+    <view style="font-size:22rpx;color:var(--sub,#8a919c);line-height:1.6">已阅读并同意
+      <text style="color:var(--brand,#e87722)" data-type="terms" bindtap="goDoc">《服务条款》</text>与
+      <text style="color:var(--brand,#e87722)" data-type="privacy" bindtap="goDoc">《隐私政策》</text>，同意将出行信息用于订单与保险投保。</view>
+  </view>
   <view style="height:150rpx"></view>
 
   <view class="dt-bottom">

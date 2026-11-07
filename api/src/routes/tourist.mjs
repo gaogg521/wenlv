@@ -81,9 +81,13 @@ const c = {
 
   'GET /c/notify/templates': async (req) => {
     requireUser(req)
+    // A-41：补出「未成团取消通知」模板——此前从未请求过订阅授权，取消了也发不出
     const { getSecrets } = await import('../infra/secrets.mjs')
-    const s = await getSecrets(['WX_TMPL_PAY_OK'])
-    return { payOk: s.WX_TMPL_PAY_OK || process.env.WX_TMPL_PAY_OK || null }
+    const s = await getSecrets(['WX_TMPL_PAY_OK', 'WX_TMPL_GROUP_CANCEL'])
+    return {
+      payOk: s.WX_TMPL_PAY_OK || process.env.WX_TMPL_PAY_OK || null,
+      groupCancel: s.WX_TMPL_GROUP_CANCEL || process.env.WX_TMPL_GROUP_CANCEL || null,
+    }
   },
 
   'GET /c/home': async () => ({
@@ -206,6 +210,9 @@ const c = {
 
   'POST /c/orders': async (req) => {
     const u = requireUser(req)
+    // A-44：隐私授权兜底——未同意（或已撤回）隐私政策不得下单（小程序端下单页有勾选，这里是服务端强校验）
+    const consent = await one("SELECT granted FROM user_privacy_consent WHERE user_id = ? AND scene = 'privacy'", [u.uid])
+    if (!consent || Number(consent.granted) !== 1) throw new BizError(1001, '请先阅读并同意《隐私政策》后再下单')
     const { sessionId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone, phoneTicket } = req.body
     // A-23：联系信息在建单前拦截——此前校验缺失，姓名过长时报"系统错误"但订单已建、旅豆已扣、名额已占
     const name = String(contactName || '').trim()
@@ -410,6 +417,74 @@ const c = {
     }
     const acc = await one('SELECT nickname, avatar_url FROM user_account WHERE id = ?', [u.uid])
     return { nickname: acc.nickname, avatarUrl: acc.avatar_url, secMock: sec ? sec.mock : null }
+  },
+
+  // 笔记配图上传（A-43）：同头像通道口径（base64 + 文件头校验 + 版本文件名），2MB 内
+  'POST /c/upload/note-image': async (req) => {
+    const u = requireUser(req)
+    const { data, ext = 'jpg' } = req.body || {}
+    if (!data) throw new BizError(1001, '缺少文件内容')
+    if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) throw new BizError(1001, '仅支持 png/jpg/webp')
+    const buf = Buffer.from(String(data), 'base64')
+    if (buf.length === 0 || buf.length > 2 * 1024 * 1024) throw new BizError(1001, '图片大小需在 2MB 内')
+    const magics = { png: [[0x89, 0x50, 0x4e, 0x47]], jpg: [[0xff, 0xd8, 0xff]], jpeg: [[0xff, 0xd8, 0xff]], webp: [[0x52, 0x49, 0x46, 0x46]] }
+    const okMagic = (magics[ext] || []).some((sig) => sig.every((byte, i) => buf[i] === byte))
+    if (!okMagic) throw new BizError(1001, '文件内容与格式不符，请重新选择图片')
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'uploads')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = `note_${u.uid}_${Date.now()}.` + (ext === 'jpeg' ? 'jpg' : ext)
+    fs.writeFileSync(path.join(dir, name), buf)
+    return { url: '/uploads/' + name }
+  },
+
+  // 旅行笔记广场（A-43）：仅已发布（status=2）笔记，分页，带封面/作者/点赞/关联线路
+  'GET /c/notes/feed': async (req) => {
+    requireUser(req)
+    const u = requireUser(req)
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const rows = await q(`SELECT n.id, n.title, n.like_count, n.published_at, u.nickname author, p.title product_title,
+        JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.images[0]')) cover
+      FROM content_note n JOIN user_account u ON u.id = n.user_id
+      LEFT JOIN tour_product p ON p.id = n.related_product_id
+      WHERE n.status = 2 ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize])
+    const liked = rows.length ? await q(`SELECT note_id FROM content_note_likes WHERE user_id = ? AND note_id IN (${rows.map(() => '?').join(',')})`, [u.uid, ...rows.map((r) => r.id)]) : []
+    const likedSet = new Set(liked.map((x) => Number(x.note_id)))
+    return {
+      page, pageSize,
+      items: rows.map((r) => ({
+        ...r, cover: r.cover ? apiImg(r.cover, req) : null,
+        liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count),
+        productTitle: r.product_title || null,
+        when: String(r.published_at || '').slice(0, 10),
+      })),
+    }
+  },
+
+  // 点赞（A-43）：一用户一笔记一赞，重复点赞给业务错误；取消可重赞
+  'POST /c/notes/:id/like': async (req) => {
+    const u = requireUser(req)
+    const n = await one('SELECT id, status FROM content_note WHERE id = ?', [req.params.id])
+    if (!n || Number(n.status) !== 2) throw new BizError(1004, '笔记不存在或未发布')
+    try {
+      await tx(async (c) => {
+        await c.ins('INSERT INTO content_note_likes (note_id, user_id) VALUES (?,?)', [n.id, u.uid])
+        await c.upd('UPDATE content_note SET like_count = like_count + 1 WHERE id = ?', [n.id])
+      })
+    } catch (e) {
+      if (e && e.code === 'ER_DUP_ENTRY') throw new BizError(1001, '已经赞过这篇笔记了')
+      throw e
+    }
+    return { liked: true, likeCount: Number((await one('SELECT like_count FROM content_note WHERE id = ?', [n.id])).like_count) }
+  },
+  'DELETE /c/notes/:id/like': async (req) => {
+    const u = requireUser(req)
+    const n = await tx(async (c) => {
+      const gone = await c.q('DELETE FROM content_note_likes WHERE note_id = ? AND user_id = ?', [req.params.id, u.uid])
+      if (gone.affectedRows > 0) await c.upd('UPDATE content_note SET like_count = GREATEST(like_count - 1, 0) WHERE id = ?', [req.params.id])
+      return gone.affectedRows
+    })
+    return { liked: false, likeCount: Number((await one('SELECT like_count FROM content_note WHERE id = ?', [req.params.id])).like_count), removed: n > 0 }
   },
 
   // 头像上传（base64 JSON：规避零框架 multipart；2MB 上限 + 白名单扩展名 + 文件头校验）
@@ -620,7 +695,7 @@ const cNotes = {
   },
   // 笔记详情独立页（P2）：仅已发布可见
   'GET /c/notes/:id': async (req) => {
-    requireUser(req)
+    const user = requireUser(req)
     const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.published_at, c.related_product_id,
       u.nickname author, p.title product_title
       FROM content_note c JOIN user_account u ON u.id = c.user_id
@@ -629,7 +704,8 @@ const cNotes = {
     if (!n) throw new BizError(1004, '笔记不存在或未发布')
     let body = n.body
     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
-    return { ...n, body, text: (body && body.text) || '', images: (body && body.images) || [] }
+    const liked = await one('SELECT note_id FROM content_note_likes WHERE note_id = ? AND user_id = ?', [n.id, user.uid])
+    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [] }
   },
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {

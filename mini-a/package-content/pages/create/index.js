@@ -4,7 +4,7 @@ const api = require('../../../utils/api')
 Page({
   data: {
     notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
-    title: '', bodyHtml: '', bodyText: '',
+    title: '', bodyHtml: '', bodyText: '', images: [], relatedProductId: null, relatedName: '',
     pubMsg: '', showPreview: false, formats: {},
   },
   async onShow() { await this.fetch(); this.fetchTasks() },
@@ -83,13 +83,38 @@ Page({
     try {
       await api.ensureLogin()
       // 存 HTML 原文；列表展示用纯文本
-      const r = await api.request('/c/notes', 'POST', { title: this.data.title, body: this.data.bodyHtml })
-      this.setData({ title: '', bodyHtml: '', bodyText: '', pubMsg: r.msg + (r.secMock ? '（联调机审直通）' : '') })
+      if (this.data.uploading) return wx.showToast({ title: '图片上传中', icon: 'none' })
+      const r = await api.request('/c/notes', 'POST', { title: this.data.title, body: this.data.bodyHtml, images: this.data.images, relatedProductId: this.data.relatedProductId || undefined })
+      this.setData({ title: '', bodyHtml: '', bodyText: '', images: [], relatedProductId: null, relatedName: '', pubMsg: r.msg + (r.secMock ? '（联调机审直通）' : '') })
       if (this.editor) this.editor.clear()
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '发布失败', icon: 'none' }) }
   },
 
+  // A-43：配图上传（chooseMedia → /c/upload/note-image → 版本文件名 URL）
+  pickImage() {
+    wx.chooseMedia({ count: 9 - this.data.images.length, mediaType: ['image'], sizeType: ['compressed'],
+      success: async (r) => {
+        this.setData({ uploading: true })
+        try {
+          for (const f of r.tempFiles) {
+            const b64 = wx.getFileSystemManager().readFileSync(f.tempFilePath, 'base64')
+            const ext = (f.tempFilePath.split('.').pop() || 'jpg').toLowerCase() === 'png' ? 'png' : 'jpg'
+            const up = await api.request('/c/upload/note-image', 'POST', { data: b64, ext })
+            this.setData({ images: this.data.images.concat(up.url) })
+          }
+        } catch (e) { wx.showToast({ title: e.msg || '图片上传失败', icon: 'none' }) }
+        finally { this.setData({ uploading: false }) }
+      } })
+  },
+  removeImage(e) { const i = Number(e.currentTarget.dataset.i); this.setData({ images: this.data.images.filter((x, k) => k !== i) }) },
+  pickProduct() {
+    api.getTours('all').then((list) => {
+      wx.showActionSheet({ alertText: '关联到哪条线路？', itemList: list.slice(0, 6).map((x) => x.title),
+        success: (tap) => { const p = list[tap.tapIndex]; this.setData({ relatedProductId: p.id, relatedName: p.title }) }, fail: () => {} })
+    }).catch(() => wx.showToast({ title: '线路加载失败', icon: 'none' }))
+  },
+  goSquare() { wx.navigateTo({ url: '/package-content/pages/square/index' }) },
   onShareAppMessage() {
     return { title: '向往的自由 · 旅行笔记', path: '/pages/home/index' }
   },

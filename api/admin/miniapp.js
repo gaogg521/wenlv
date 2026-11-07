@@ -36,6 +36,7 @@
       ['返豆比例、抵扣上限、有效期', [['参数中心 · 旅豆', 'config']]], ['旅豆说明', [['小程序装修 · 旅豆与推广', 'site']]], ['旅豆账本', [['积分发行台账', 'pointassets']]]] },
     { end: '游客端', path: 'package-content/pages/create/index', name: '创作中心', items: [['约稿任务卡片', [['约稿任务', 'tasks']]], ['笔记审核', [['内容审核', 'content']]], ['下架原因、作者申诉与我的举报反馈', [['举报与申诉', 'contentcases']]], ['未通过原因（笔记 / 约稿投稿）', [['内容审核 → 审核', 'content'], ['约稿任务 → 审核投稿', 'tasks']]]] },
     { end: '游客端', path: 'package-content/pages/task/index', name: '约稿任务详情', items: [['任务说明、必须提及/禁止出现、参考范例、审核标准、奖励', [['约稿任务', 'tasks']]], ['上次投稿未通过的原因', [['约稿任务 → 审核投稿', 'tasks']]]] },
+    { end: '游客端', path: 'package-content/pages/square/index', name: '旅行笔记广场', items: [['公开笔记流（已发布笔记、作者、点赞、关联线路）', [['内容审核', 'content'], ['创作者池', 'creators']]], ['点赞与举报入口', [['举报与申诉', 'contentcases']]]] },
     { end: '游客端', path: 'package-content/pages/note/index', name: '笔记详情', items: [['笔记内容与状态', [['内容审核', 'content'], ['创作者池', 'creators']]], ['读者举报入口及处理', [['举报与申诉', 'contentcases']]]] },
     { end: '游客端', path: 'package-content/pages/identity/index', name: '我的身份', items: [['勋章墙（勋章图、稀有度、规则、有效期）', [['勋章发行', 'badges']]], ['权益凭证与可信记录', [['存证中心', 'attest'], ['权益账户', 'wallets']]]] },
     { end: '游客端', path: 'package-content/pages/doc/index', name: '协议与说明', items: [['用户协议、隐私政策、关于我们', [['小程序装修 · 客服与协议', 'site']]]] },

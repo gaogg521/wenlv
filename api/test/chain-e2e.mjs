@@ -168,6 +168,7 @@ await t('新订单走完全程（下单→支付→核销→完成→返豆）�
   await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [sess.id])
   const login = async (c) => ok(await call('POST', '/c/auth/login', { code: c }))
   const buyer = await login('mock-chain-buyer-' + stamp), st = await login('mock-chain-staff-' + stamp)
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, buyer.token) // A-44
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [sess.merchant_id, st.user.id])
   const B = ok(await call('POST', '/m/auth/login', { code: 'mock-chain-staff-' + stamp, merchantId: sess.merchant_id })).token
   const o = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, buyer.token)); newOrder = o.orderNo

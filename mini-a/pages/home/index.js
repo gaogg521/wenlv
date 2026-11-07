@@ -17,6 +17,7 @@ Page({
     siteData.get().then((site) => this.setData({ site }))
   },
   onShow() {
+    this.checkConsent() // A-44：首次使用同意流程
     // 首次进入 onLoad→onShow 只请求一次；从其他页返回时，超过 60 秒才刷新，避免来回切 tab 反复请求
     if (!this.lastFetch || Date.now() - this.lastFetch > 60000) this.fetch()
     // 从目的地页选了新城市回来：按新城市刷新轮播
@@ -27,6 +28,30 @@ Page({
   },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
   goTours(e) { wx.setStorageSync('tourFilter', { cat: e.currentTarget.dataset.cat || 'all', city: '' }); wx.switchTab({ url: '/pages/tour-list/index' }) },
+  checkConsent() {
+    // A-44：首次使用同意流程——未授权隐私政策时弹窗（同意/拒绝），拒绝不阻断浏览但下单会被服务端拦
+    api.request('/c/consent').then((d) => {
+      this._privacyV = (d.versions && d.versions.privacy) || 'v1'
+      const privacy = (d.items || []).find((x) => x.scene === 'privacy')
+      if (privacy && privacy.granted) return
+      if (wx.getStorageSync('consentDeclined') === this._privacyV) return
+      wx.showModal({
+        title: '隐私政策与服务条款',
+        content: '使用本小程序需同意《用户服务条款》与《隐私政策》。我们仅收集订单与出行必需的信息。',
+        confirmText: '同意并继续',
+        cancelText: '不同意',
+        success: (r) => {
+          if (r.confirm) {
+            api.request('/c/consent', 'POST', { scene: 'privacy', granted: true }).catch(() => {})
+            api.request('/c/consent', 'POST', { scene: 'terms', granted: true }).catch(() => {})
+          } else {
+            wx.setStorageSync('consentDeclined', this._privacyV || 'v1')
+            wx.showToast({ title: '未同意隐私政策，下单等功能将受限', icon: 'none', duration: 3000 })
+          }
+        },
+      })
+    }).catch(() => {})
+  },
   fetch(done) {
     if (typeof done !== 'function') done = undefined
     this.lastFetch = Date.now()

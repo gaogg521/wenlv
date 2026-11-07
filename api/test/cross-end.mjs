@@ -28,12 +28,17 @@ const sess = await one(`SELECT s.id, s.product_id, s.price_adult, p.merchant_id,
   WHERE p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 5 AND s.price_adult > 0 ORDER BY s.id LIMIT 1`)
 assert.ok(sess, '隔离库需先 seed:scenario，库里应有可买团期')
 await q('UPDATE tour_session SET quota = GREATEST(quota, booked + 30) WHERE id = ?', [sess.id]) // 本测试会连续下很多单：给足余量，重复运行也不会因名额不足误报
-const login = async (code) => ok(await call('POST', '/c/auth/login', { code }))
+const login = async (code) => {
+  const r = ok(await call('POST', '/c/auth/login', { code }))
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, r.token).catch(() => {}) // A-44：登录即授权（真实流程由下单页勾选触发）
+  return r
+}
 const buyer = await login('mock-xend-buyer-' + stamp)
 const staffUser = await login('mock-xend-staff-' + stamp)
 await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [sess.merchant_id, staffUser.user.id])
 const B = ok(await call('POST', '/m/auth/login', { code: 'mock-xend-staff-' + stamp, merchantId: sess.merchant_id })).token
 const C = buyer.token
+await call('POST', '/c/consent', { scene: 'privacy', granted: true }, C) // A-44
 const PHONE = '139' + String(Math.floor(Math.random() * 1e8)).padStart(8, '0')
 const created = { orders: [], banners: [], faqs: [], badges: [], notes: [] }
 
@@ -229,7 +234,9 @@ console.log('\n== 三、存证三端：后台 / 对外验证 / 游客侧同源�
     // 看字段名与数值，不看提示语文字（提示语本身会写"不含个人信息与金额"）
     const keys = []; const walk = (v) => { if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { keys.push(k); walk(x) } }
     walk(pub); assert.ok(!keys.some((k) => /amount|mobile|phone|price|nickname|user/i.test(k)), '对外流程不应有金额 / 电话 / 用户类字段：' + keys.join(','))
-    assert.ok(!/(?<!\d)1[3-9]\d{9}(?!\d)/.test(JSON.stringify(pub)), '对外流程不应含手机号')
+    // 手机号断言排除 64 位十六进制哈希（payload_hash 是随机 hex，可能偶然出现形似手机号的数字串，本身不含个人信息）
+    const pubStr = JSON.stringify(pub).replace(/[da-f]{64}/gi, '')
+    assert.ok(!/(?<!d)1[3-9]d{9}(?!d)/.test(pubStr), '对外流程不应含手机号')
   })
   await t('打包：对外验证、后台、数据库的批次根一致；默克尔证明可复算；打包本身不会把批次标成已锚定', async () => {
     // 注意：这里不切换链、不锚定。已锚定批次有触发器保护、无法回退，会让 web3-integrity 的"NOOP 下已锚定批次必须为 0"在下一遍失败；
@@ -326,6 +333,7 @@ await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × �
   const { createScene } = await import('../src/domain/promo.mjs')
   const scene = await createScene(pu.user.id, 'poster')
   const buyer2 = await login('mock-xend-promo-buyer-' + stamp)
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, buyer2.token) // A-44
   const od = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, promoScene: scene , contactName: '回归测试', contactPhone: '13800009999' }, buyer2.token)); created.orders.push(od.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const pid2 = ok(await call('GET', '/c/orders/' + od.orderNo, null, buyer2.token)).passes[0].id
@@ -341,7 +349,9 @@ await t('推广分佣：推广员带来的订单完成后，佣金 = 基数 × �
 })
 
 console.log('\n== 六、核销的各条路径：离线批量 / 冲突处理 / 暗号 / 城市归属 ==')
+const grantConsent = async (tok) => { try { await call('POST', '/c/consent', { scene: 'privacy', granted: true }, tok) } catch (e) {} }
 const newPaid = async (tok, sessionId = sess.id) => {
+  await grantConsent(tok) // A-44
   const od = ok(await call('POST', '/c/orders', { sessionId, qty: 1, beanDeduct: 0 , contactName: '回归测试', contactPhone: '13800009999' }, tok)); created.orders.push(od.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: od.orderNo }, A))
   const passId = ok(await call('GET', '/c/orders/' + od.orderNo, null, tok)).passes[0].id
@@ -417,6 +427,8 @@ await t('核销的城市归属：外城门店的扫码 / 离线批量核销，�
   const other = await one(`SELECT s.id sid, p.merchant_id mid, p.city_code FROM tour_session s JOIN tour_product p ON p.id = s.product_id JOIN merchant m ON m.id = p.merchant_id
     WHERE p.city_code <> ? AND m.city_code = p.city_code AND p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 3 ORDER BY s.id LIMIT 1`, [sess.city_code])
   assert.ok(other, '隔离库需有外城商品（seed:scenario 会建）')
+  const opid = Number((await one('SELECT product_id FROM tour_session WHERE id = ?', [other.sid])).product_id)
+  await q('UPDATE tour_session SET depart_date = DATE_ADD(CURDATE(), INTERVAL 30 DAY) WHERE product_id = ? AND id <> ? AND depart_date = CURDATE()', [opid, other.sid])
   await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [other.sid]) // A-11：核销日期窗要求当日出发起可核销
   const st2 = await login('mock-xend-staff2-' + stamp)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [other.mid, st2.user.id])
@@ -521,7 +533,9 @@ await t('提现闭环：A 申请 → 后台待办 +1 且金额同额；重复申
   const pu = await login('mock-xend-wd-' + stamp); const uid = pu.user.id
   ok(await call('POST', '/admin/promoters/register', { userId: uid, tier: 1 }, A))
   const { createScene } = await import('../src/domain/promo.mjs')
-  const od = await finishOrder((await login('mock-xend-wd-buyer-' + stamp)).token, await createScene(uid, 'poster'))
+  const wdBuyerTok = (await login('mock-xend-wd-buyer-' + stamp)).token
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, wdBuyerTok) // A-44
+  const od = await finishOrder(wdBuyerTok, await createScene(uid, 'poster'))
   assert.ok(od.orderNo)
   // 先按真实佣金把这笔订单结掉，再放大佣金：否则放大的佣金会被计进之后的结算单，把留存压成负数
   ok(await call('POST', '/admin/settlements/generate', { period: isoWeek(new Date()) }, A))
@@ -566,7 +580,9 @@ const coIds = []
 await t('共创分润：后台出结算单 → 分润 = 留存 × 产品占比 × 分润比例；台账 / 对账页 / 画像 / 排行同额；发放后同步', async () => {
   const co = ok(await call('POST', '/admin/co-creators', { productId: sess.product_id, name: '跨端共创' + stamp, mobile: PHONE, role: 1, investAmount: 1000000, sharePct: 5000 }, A))
   coIds.push(co.id)
-  await finishOrder((await login('mock-xend-co-buyer-' + stamp)).token)
+  const coBuyerTok = (await login('mock-xend-co-buyer-' + stamp)).token
+  await grantConsent(coBuyerTok) // A-44
+  await finishOrder(coBuyerTok)
   const gen = ok(await call('POST', '/admin/settlements/generate', { period: isoWeek(new Date()) }, A)); assert.ok((gen.settlementIds || []).length, '应生成结算单')
   const cps = await q('SELECT cp.id, cp.settlement_id, cp.base_amount, cp.amount, cp.status FROM co_profit cp WHERE cp.co_creator_id = ?', [co.id])
   assert.ok(cps.length >= 1, '结算后应生成分润记录')

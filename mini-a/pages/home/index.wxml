@@ -8,8 +8,9 @@
 </view>
 <view class="theme-grid">
 <view wx:for="{{site.themes}}" wx:key="cat" class="theme-tile tg{{index}}" data-cat="{{item.cat}}" bindtap="goTours">
-<text class="theme-mark">{{item.icon}}</text>
+<view class="theme-top"><text class="theme-mark">{{item.icon}}</text><text class="theme-arrow">↗</text></view>
 <view class="theme-body"><view class="theme-name">{{item.name}}</view><view class="theme-sub">{{item.sub}}</view></view>
+<view class="theme-landscape"></view>
 </view>
 </view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">

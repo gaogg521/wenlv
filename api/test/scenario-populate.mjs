@@ -118,6 +118,7 @@ async function main() {
   // ===== 第二幕：推广员开通与分享 =====
   step('游客-小满', '微信登录（小程序 wx.login）')
   const buyer = (await api('POST', '/c/auth/login', { code: 'mock-xiaoman' })).token
+  await api('POST', '/c/consent', { scene: 'privacy', granted: true }, buyer) // A-44：下单前隐私授权
   step('游客-陈姐', '微信登录（导游，想做推广）')
   const promoLogin = (await api('POST', '/c/auth/login', { code: 'mock-chenjie' }))
   step('运营-赵敏', '推广服务商 → 给陈姐开通（基础档 5%）')
@@ -183,6 +184,7 @@ async function main() {
   // 第二单：陈姐自己报瑜伽团（不抵豆），随后申请退款
   step('游客-陈姐', '自己也下单瑜伽团（¥688，不抵豆）→ 支付')
   const chenT = promoLogin.token
+  await api('POST', '/c/consent', { scene: 'privacy', granted: true }, chenT) // A-44
   const order2 = await api('POST', '/c/orders', { sessionId: (await api('GET', '/c/tours/' + p2.id, null, chenT)).sessions[0].id, qty: 1, contactName: '陈导', contactPhone: '13800002222' }, chenT)
   await api('POST', '/admin/dev/mock-pay', { orderNo: order2.orderNo }, admin)
   step('游客-陈姐', '行程有变 → 申请退款（全量冲正）')

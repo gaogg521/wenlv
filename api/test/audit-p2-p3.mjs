@@ -22,6 +22,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8')
 const cLogin = async (tag) => {
   const code = 'mock-audp23-' + tag + '-' + stamp
   const r = ok(await call('POST', '/c/auth/login', { code }))
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, r.token) // A-44
   created.users.push(Number(r.user.id))
   return { token: r.token, id: Number(r.user.id), code }
 }

@@ -8,8 +8,14 @@ Page({
     try {
       await api.ensureLogin()
       const n = await api.request('/c/notes/' + this.id)
-      this.setData({ n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
+      this.setData({ liked: n.liked, likeCount: n.likeCount, n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
     } catch (e) { this.setData({ n: null, loadTxt: '内容暂未加载（演示模式）' }) }
+  },
+  async toggleLike() {
+    try {
+      const r = await api.request('/c/notes/' + this.id + '/like', this.data.liked ? 'DELETE' : 'POST')
+      this.setData({ liked: r.liked, likeCount: r.likeCount })
+    } catch (e) { wx.showToast({ title: e.msg || '操作失败', icon: 'none' }) }
   },
   toggleReport() { this.setData({reporting:!this.data.reporting,reportMsg:''}) },
   onReportReason(e) { this.setData({reportReason:e.detail.value}) },

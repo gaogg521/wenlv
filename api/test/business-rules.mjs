@@ -18,6 +18,7 @@ assert.ok(sess, '需要可预订团期（先跑 seed:scenario）')
 // 造一笔"已完成"订单（直接置 50，聚焦规则本身）
 async function completedOrder(code) {
   const tok = ok(await call('POST', '/c/auth/login', { code })).token
+  ok(await call('POST', '/c/consent', { scene: 'privacy', granted: true }, tok)) // A-44
   const o = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, contactName: '规则测试', contactPhone: '13800006666' }, tok))
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: o.orderNo }, A))
   await q('UPDATE orders SET status = 50, completed_at = NOW(3) WHERE order_no = ?', [o.orderNo])
