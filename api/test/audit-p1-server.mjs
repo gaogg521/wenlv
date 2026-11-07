@@ -64,6 +64,7 @@ await t('A08-1 /c/auth/phone 下发短期凭证（不回传明文号码）；下
   assert.ok(r.data.ticket, '应下发短期凭证')
   assert.ok(!/\d{11}/.test(JSON.stringify(r.data)), '响应不得包含完整 11 位号码: ' + JSON.stringify(r.data))
   const sid = await mkSession({ days: 50, price: 10000, productId: 1 })
+  await call('POST', '/c/consent', { scene: 'privacy', granted: true }, u.token) // A-44
   const placed = ok(await call('POST', '/c/orders', { sessionId: sid, qty: 1, beanDeduct: 0, contactName: '凭证测试', phoneTicket: r.data.ticket }, u.token))
   created.orders.push(placed.orderNo)
   const o = await one('SELECT contact_phone_sealed, contact_name FROM orders WHERE order_no = ?', [placed.orderNo])

@@ -1,7 +1,7 @@
 const api = require('../../../utils/api')
 Page({
   data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,
-    contactName: '', contactPhone: '', phoneTicket: '', gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
+    contactName: '', contactPhone: '', phoneTicket: '', agree: false, buyInsurance: false, gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
     if (q.scene && /^[pm][0-9a-z-]+$/i.test(decodeURIComponent(q.scene))) {
@@ -113,6 +113,13 @@ Page({
         contactName: this.data.contactName,
         phoneTicket: this.data.phoneTicket || undefined,
         contactPhone: this.data.phoneTicket ? undefined : this.data.contactPhone })
+      // A-41/A-44：下单成功（tap 回调内）请求出行通知订阅 + 落隐私授权记录
+      try {
+        const t = await api.getNotifyTemplates()
+        const ids = [t.groupCancel, t.payOk].filter(Boolean)
+        if (ids.length) wx.requestSubscribeMessage({ tmplIds: ids, fail: () => {} })
+      } catch (e) { /* 订阅是增强能力 */ }
+      try { await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: this.data.consentVersion || undefined }) } catch (e) {}
       try { await api.pay(r.payParams) } catch (err) { wx.showToast({ title: '支付未完成，可在订单中继续支付', icon: 'none' }) }
       wx.redirectTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + r.orderNo + '&mock=' + (r.payParams.mock ? 1 : 0) })
     } catch (e) {

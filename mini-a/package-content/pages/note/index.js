@@ -9,7 +9,21 @@ Page({
       await api.ensureLogin()
       const n = await api.request('/c/notes/' + this.id)
       this.setData({ n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
+      this.loadLike()
     } catch (e) { this.setData({ n: null, loadTxt: '内容暂未加载（演示模式）' }) }
+  },
+  async loadLike() {
+    try {
+      const d = await api.request('/c/notes/feed?page=1&pageSize=50')
+      const row = (d.items || []).find((x) => Number(x.id) === Number(this.data.id))
+      if (row) this.setData({ liked: row.liked, likeCount: row.likeCount })
+    } catch (e) { /* 点赞态是增强能力 */ }
+  },
+  async toggleLike() {
+    try {
+      const r = await api.request('/c/notes/' + this.data.id + '/like', this.data.liked ? 'DELETE' : 'POST')
+      this.setData({ liked: r.liked, likeCount: r.likeCount })
+    } catch (e) { wx.showToast({ title: e.msg || '操作失败', icon: 'none' }) }
   },
   toggleReport() { this.setData({reporting:!this.data.reporting,reportMsg:''}) },
   onReportReason(e) { this.setData({reportReason:e.detail.value}) },

@@ -6,6 +6,7 @@
   <view class="card">
     <rich-text nodes="{{n.html}}" style="font-size:28rpx;line-height:1.8;color:#16232e"></rich-text>
     <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
+    <button class="report-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
     <button class="report-toggle" bindtap="toggleReport">举报此笔记</button>
     <view wx:if="{{reporting}}">
       <textarea class="report-reason" value="{{reportReason}}" bindinput="onReportReason" maxlength="300" placeholder="请描述违规内容或事实依据（4—300 字）"></textarea>

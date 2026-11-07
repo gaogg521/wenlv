@@ -88,6 +88,7 @@ async function main() {
   await grant(buyer.user.id, 200, BIZ.TASK, 'TASK-E2E', budget.id)
 
   console.log('== 4. 下单（豆抵扣 + 防超卖 + 支付参数）==')
+  await api('POST', '/c/consent', { scene: 'privacy', granted: true }, buyerT) // A-44
   const o1 = await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 200, promoScene: sceneCode, contactName: '王小满', contactPhone: '13800001111' }, buyerT)
   ok(o1.amountPay === 27800 && o1.beanDeducted === 200, '下单：200 豆抵 20 元 · 实付 ¥278')
   ok(o1.payParams && (o1.payParams.mock || o1.payParams.paySign), '支付参数返回（' + (o1.payParams.mock ? 'MOCK' : 'V3') + '）')

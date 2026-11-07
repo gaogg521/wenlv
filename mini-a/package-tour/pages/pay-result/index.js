@@ -4,14 +4,18 @@ Page({
   onLoad(q) {
     this.setData({ orderNo: q.orderNo, mock: q.mock === '1' })
     this.poll()
-    this.askSubscribe()
   },
   // 官方订阅消息：出票后可收到「支付成功/出票通知」；未配置模板则跳过
   async askSubscribe() {
+    // A-41：出票通知 + 未成团取消通知一起请求（用户点击按钮后调起）
     try {
       const t = await api.getNotifyTemplates()
-      if (!t.payOk) return
-      wx.requestSubscribeMessage({ tmplIds: [t.payOk], fail: () => {} })
+      const ids = [t.payOk, t.groupCancel].filter(Boolean)
+      if (!ids.length) return wx.showToast({ title: '通知模板未配置', icon: 'none' })
+      wx.requestSubscribeMessage({ tmplIds: ids, complete: (r) => {
+        const ok = ids.some((id) => r[id] === 'accept')
+        wx.showToast({ title: ok ? '已订阅出行通知' : '未订阅', icon: ok ? 'success' : 'none' })
+      } })
     } catch (e) { /* 静默：订阅是增强能力 */ }
   },
   onUnload() { clearTimeout(this.timer) },

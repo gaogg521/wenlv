@@ -22,6 +22,7 @@ assert.ok(sess, '需要至少一个可预订团期（先跑 seed:scenario）')
 const origDepart = String(sess.depart_date).slice(0, 10)
 const shift = (days) => q('UPDATE tour_session SET depart_date = ? WHERE id = ?', [bizDay(days), sess.id])
 async function paidOrder() {
+  await api('POST', '/c/consent', { scene: 'privacy', granted: true }, buyerT) // A-44
   const o = (await api('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0, contactName: '梯度测试', contactPhone: '13800002222' }, buyerT)).data
   await api('POST', '/admin/dev/mock-pay', { orderNo: o.orderNo }, adminT)
   return o.orderNo

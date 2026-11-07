@@ -24,7 +24,18 @@
   </view>
   <rich-text wx:if="{{showPreview && bodyHtml}}" nodes="{{bodyHtml}}" style="margin-top:12rpx;padding:16rpx;background:#fafbfc;border-radius:12rpx;font-size:28rpx;line-height:1.7"></rich-text>
 
+  <view style="margin:16rpx 0">
+    <view class="sub2" style="margin-bottom:12rpx">配图（最多 9 张，任务配图用）</view>
+    <view style="display:flex;flex-wrap:wrap;gap:12rpx">
+      <image wx:for="{{images}}" wx:key="*this" src="{{item}}" mode="aspectFill" style="width:140rpx;height:140rpx;border-radius:12rpx" data-i="{{index}}" bindtap="removeImage" />
+      <view wx:if="{{images.length < 9}}" bindtap="pickImage" style="width:140rpx;height:140rpx;border-radius:12rpx;border:2rpx dashed var(--line,#ddd);display:flex;align-items:center;justify-content:center;font-size:48rpx;color:#bbb">＋</view>
+    </view>
+  </view>
+  <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0" bindtap="pickProduct">
+    <text>关联线路</text><text class="v">{{relatedName || '选填，内容看板按线路归集'}} ›</text>
+  </view>
   <view class="btn" bindtap="publish" style="margin-top:16rpx">发布</view>
+  <view class="btn ghost" bindtap="goSquare" style="margin-top:12rpx">🏮 旅行笔记广场 · 看看大家去了哪</view>
   <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
 </view>
 
