@@ -89,7 +89,8 @@ await t('A01-1 改签单实收为 0、有凭证、无支付记录、refund_deadl
   const passes = await q('SELECT id, status FROM travel_pass WHERE order_id = ?', [nw.id])
   assert.equal(passes.length, Number(nw.qty), '改签单凭证已出（同事务，不留半成品）')
   assert.ok(passes.every((p) => Number(p.status) === 1), '凭证可用')
-  // 扫码可核销（走完 出票→核销→完成 的第一段）
+  // 扫码可核销（走完 出票→核销→完成 的第一段）；A-11 日期窗要求出发日当天起可核销，把目标团期拨到今天
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [target])
   const qr = ok(await call('GET', `/c/pass/${passes[0].id}/code`, null, u.token))
   const staff = await cLogin('a01staff')
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES ((SELECT merchant_id FROM tour_product WHERE id = (SELECT product_id FROM orders WHERE order_no = ?)), ?, 3)', [rb.orderNo, staff.id])
@@ -165,7 +166,8 @@ await t('A01-5 改签单完成不产生佣金/返豆/成长值；结算单不含
   const nw = await order.byNo(rb.orderNo)
   const growthBefore = Number((await one('SELECT growth_value FROM user_account WHERE id = ?', [u.id])).growth_value)
   const balBefore = await bean.balance(u.id)
-  // 先扫码核销（走完 出票→核销→完成 的中间段），再把观察期拨到过去并完成
+  // 先扫码核销（走完 出票→核销→完成 的中间段），再把观察期拨到过去并完成；核销按 A-11 需当日出发
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [target])
   const passes0 = await q('SELECT id FROM travel_pass WHERE order_id = ?', [nw.id])
   const qr = ok(await call('GET', `/c/pass/${passes0[0].id}/code`, null, u.token))
   const staff5 = await cLogin('a01estaff')

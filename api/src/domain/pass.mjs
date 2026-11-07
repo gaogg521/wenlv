@@ -58,19 +58,36 @@ export async function verifyWindowOk(departDate) {
 
 export async function currentQr(passId) {  const win = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
   await q('INSERT IGNORE INTO pass_code (pass_id, window_no, code_hash) VALUES (?,?,?)', [passId, win, sign(passId, win)])
-  return { qr: qrPayload(passId, win), display: displayCode(passId, win), window: win, expiresIn: await cfgNum('pass.code_window') }
+  const p = await one('SELECT o.order_no FROM travel_pass tp JOIN orders o ON o.id = tp.order_id WHERE tp.id = ?', [passId])
+  // A-09：带出订单号——pass-code 页 loadPhrase 需要 orderNo 才能取入戏暗号（此前只传 id，暗号永远加载不到）
+  return { qr: qrPayload(passId, win), display: displayCode(passId, win), window: win, expiresIn: await cfgNum('pass.code_window'), orderNo: p ? p.order_no : null }
 }
 
-/** 商户扫码/输码核销：窗口±1 → 签名 → 唯一约束消费 → 全单核销完推订单 40 */
-export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
+/** 商户扫码/输码核销：窗口±1 → 签名 → 唯一约束消费 → 全单核销完推订单 40。
+ *  A-10：离线恢复上传时传 offlineAt（扫到的时刻）——按该时刻所在窗口校验，而不是上传时刻；
+ *        offlineAt 必须落在 [名单签发时间, 当前时间] 内（防客户端伪造），由调用方传 issuedAt 校验。
+ *  A-11：核销日期窗（出发日 ≤ 今天 ≤ 出发日 + N），提前/过期一律拒绝。 */
+export async function verifyScan({ merchantId, staffId, payload, cityCode, offlineAt, issuedAt }) {
   // 核销记录与存证里的城市取门店自己的城市。调用方过去把 '310118' 写死传进来，非青浦门店的核销会被记到青浦；传入值只作兜底
   const store = await one('SELECT city_code FROM merchant WHERE id = ?', [merchantId])
   cityCode = (store && store.city_code) || cityCode
+  const winSec = await cfgNum('pass.code_window')
+  // A-10：校验基准时刻 = 离线扫码时刻（在线核销=当前时刻）
+  let baseMs = Date.now()
+  if (offlineAt != null && offlineAt !== '') {
+    const t = new Date(offlineAt).getTime()
+    if (!Number.isFinite(t)) return { ok: false, reason: '无效码（offlineAt）', needManual: true }
+    const issued = issuedAt ? new Date(issuedAt).getTime() : null
+    if (issued && t < issued - 60_000) return { ok: false, reason: '无效码（扫码时间早于名单同步）', needManual: true }
+    if (t > Date.now() + 60_000) return { ok: false, reason: '无效码（扫码时间在未来）', needManual: true }
+    if (issued && t - issued > 32 * winSec * 1000) return { ok: false, reason: '无效码（离线名单已过期）', needManual: true }
+    baseMs = t
+  }
   const raw = String(payload || '').trim()
   let passId = null, hit = -1
   if (/^\d{6}$/.test(raw)) {
-    // 手动输码兜底：6 位展示码 → 在有效凭证 × 当前窗口±1 内匹配 HMAC 展示码
-    const win = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
+    // 手动输码兜底：6 位展示码 → 在有效凭证 × 基准窗口±1 内匹配 HMAC 展示码
+    const win = windowOf(Math.floor(baseMs / 1000), winSec)
     const actives = await q(`SELECT tp.id FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
       WHERE tp.status = 1 AND o.merchant_id = ? AND o.status = 30`, [merchantId])
     outer: for (const p of actives) {
@@ -84,21 +101,27 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode }) {
     if (parts.length !== 6 || parts[0] !== 'wl:' || parts[2] !== 'v')
       return { ok: false, reason: '无效码（格式）' }
     passId = Number(parts[3])
-    const now = windowOf(Math.floor(Date.now() / 1000), await cfgNum('pass.code_window'))
+    const base = windowOf(Math.floor(baseMs / 1000), winSec)
     const given = Number(parts[4])
-    hit = Number.isInteger(given) && Math.abs(now - given) <= 1 && sign(passId, given) === parts[5] ? given : -1
+    hit = Number.isInteger(given) && Math.abs(base - given) <= 1 && sign(passId, given) === parts[5] ? given : -1
     if (hit < 0) return { ok: false, reason: '无效码（签名/窗口）', passId }
   }
 
   const pass = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!pass) return { ok: false, reason: '凭证不存在', passId }
-  const owner = await one('SELECT merchant_id, status FROM orders WHERE id = ?', [pass.order_id])
+  const owner = await one('SELECT merchant_id, status, session_id FROM orders WHERE id = ?', [pass.order_id])
   if (!owner || Number(owner.merchant_id) !== Number(merchantId)) return { ok: false, reason: '非本店凭证', passId }
   if (Number(owner.status) !== 30 && pass.status === 1) return { ok: false, reason: '订单当前不可核销', passId }
   if (pass.status !== 1) {
     await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,2,?)',
       [passId, merchantId, staffId, cityCode])
     return { ok: false, reason: pass.status === 2 ? '已核销（重复）' : '凭证状态异常', passId }
+  }
+  // A-11：核销日期窗（出发日当天到结束日）——此前完全不校验，出发前 60 天和过期 20 天都能核销
+  if (owner.session_id) {
+    const s = await one('SELECT depart_date FROM tour_session WHERE id = ?', [owner.session_id])
+    const vw = await verifyWindowOk(s && s.depart_date)
+    if (!vw.ok) return { ok: false, reason: vw.reason, passId }
   }
 
   const consumed = await tx(async (c) => {

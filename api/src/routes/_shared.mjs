@@ -146,7 +146,17 @@ export async function notifyMerchantStaff(merchantId, orderNo) {
 }
 
 export async function handlePayNotify(orderNo, transNo, mock = false) {
-  const o = await order.acceptPayment(orderNo, transNo, mock)
+  let o
+  try {
+    o = await order.acceptPayment(orderNo, transNo, mock)
+  } catch (e) {
+    // A-13：订单关闭后才到账的支付（微信预支付单未关/未过期）——留痕 + 自动原路退回，回调返回成功让微信停试
+    if (/已关闭或不在可支付状态/.test(String(e.message))) {
+      console.warn('[pay:late]', orderNo, transNo)
+      return await order.handleLatePayment(orderNo, transNo, mock)
+    }
+    throw e
+  }
   if (o.duplicated) return { code: 0, duplicated: true }
   {
     // 商户端订阅消息（P2）：新订单通知门店（WX_TMPL_NEW_ORDER 未配置则 skipped，不阻断）

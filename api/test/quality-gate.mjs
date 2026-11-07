@@ -24,17 +24,20 @@ log('已连接')
 await mini.evaluate(function () { getApp().globalData.apiBase = 'http://127.0.0.1:9' })
 log('已切换到"后端不可达"模式（apiBase=http://127.0.0.1:9）')
 
+// A-18 口径（后端不可达场景）：使用 FALLBACK 的页面必须 demo===true（常驻"演示模式"标识，
+// 假数据不得与真实数据无法区分）；错误态页面必须可重试（loadError 有值）。
+// develop 环境允许演示兜底；本门禁在开发者工具里跑（envVersion=develop）。
 const cases = [
-  ['首页', '/pages/home/index', (d) => d.tours && d.tours.length > 0 && !d.error],
-  ['主题游', '/pages/tour-list/index', (d) => d.tours && d.tours.length > 0 && !d.error],
-  ['商城', '/pages/shop/index', (d) => d.items && d.items.length > 0 && !d.error],
-  ['旅豆', '/pages/bean/index', (d) => !!d.bean && (d.ledger || []).length > 0 && !d.error
+  ['首页（演示标识）', '/pages/home/index', (d) => d.tours && d.tours.length > 0 && d.demo === true && !d.error],
+  ['主题游（演示标识）', '/pages/tour-list/index', (d) => d.tours && d.tours.length > 0 && d.demo === true && !d.error],
+  ['商城（演示标识）', '/pages/shop/index', (d) => d.items && d.items.length > 0 && d.demo === true && !d.error],
+  ['旅豆（演示标识）', '/pages/bean/index', (d) => !!d.bean && (d.ledger || []).length > 0 && d.demo === true && !d.error
     && d.ledger.every((x) => x.tx_no && (x.direction === 0 || x.direction === 1) && x.biz_type && Number(x.amount) === x.amount && x.created_at)],
-  ['我的', '/pages/me/index', (d) => !!d.user && !!d.user.nickname],
+  ['我的（演示标识）', '/pages/me/index', (d) => !!d.user && !!d.user.nickname && d.demo === true],
   ['我的订单', '/package-order/pages/orders/index', (d) => (d.orders || []).length > 0 && !d.error
     && d.orders.every((o) => o.order_no && o.title && Number(o.amount_pay) === o.amount_pay && o.amount_pay > 0 && o.statusText && o.created_at && o.days_desc)],
   ['数字身份', '/package-content/pages/identity/index', (d) => !!d.d && !!d.d.profile && !String(d.loadTxt || '').match(/不可达|失败/)],
-  ['创作中心', '/package-content/pages/create/index', (d) => !String(d.loadError || '').match(/不可达|失败/)],
+  ['创作中心（错误态可重试）', '/package-content/pages/create/index', (d) => !!String(d.loadError || '').match(/失败|重试/)],
   ['推广中心', '/package-promo/pages/center/index', (d) => !String(d.loadTxt || '').match(/不可达|失败/)],
   ['目的地', '/pages/destination/index', (d) => !d.error],
   ['FAQ', '/pages/faq/index', (d) => !d.error],

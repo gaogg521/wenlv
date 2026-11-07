@@ -156,12 +156,15 @@ await t('结算：后台出单 → B 看到同一张单，金额逐字段一致�
 let o2
 await t('退款：A 试算 = 后台试算；A 退款后三端状态 70、凭证冲正、商户 GMV 回落、旅豆按规则退回', async () => {
   const v0b = await views()
+  // 退改梯度只对未出发订单生效（出发当天不允许自助退）——把团期拨到 +10 天，测完拨回当天供后续核销用例
+  await q('UPDATE tour_session SET depart_date = DATE_ADD(CURDATE(), INTERVAL 10 DAY) WHERE id = ?', [sess.id])
   o2 = ok(await call('POST', '/c/orders', { sessionId: sess.id, qty: 1, beanDeduct: 0 }, C)); created.orders.push(o2.orderNo)
   ok(await call('POST', '/admin/dev/mock-pay', { orderNo: o2.orderNo }, A))
   const aq = ok(await call('GET', `/c/orders/${o2.orderNo}/refund-quote`, null, C))
   const wq = ok(await call('GET', '/admin/orders/' + o2.orderNo, null, A)).refundQuote
   assert.equal(Number(aq.refundFen ?? aq.refund), Number(wq.refundFen), 'A 与后台的退款试算应一致')
   ok(await call('POST', `/c/orders/${o2.orderNo}/refund`, { reason: '跨端回归' }, C))
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [sess.id])
   const a = ok(await call('GET', '/c/orders/' + o2.orderNo, null, C)); const w = ok(await call('GET', '/admin/orders/' + o2.orderNo, null, A))
   assert.deepEqual([a.status, Number(w.status)], [70, 70]); assert.ok(a.passes.every((p) => p.status === 4))
   assert.equal(w.refunds.length, 1)
@@ -414,6 +417,7 @@ await t('核销的城市归属：外城门店的扫码 / 离线批量核销，�
   const other = await one(`SELECT s.id sid, p.merchant_id mid, p.city_code FROM tour_session s JOIN tour_product p ON p.id = s.product_id JOIN merchant m ON m.id = p.merchant_id
     WHERE p.city_code <> ? AND m.city_code = p.city_code AND p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 3 ORDER BY s.id LIMIT 1`, [sess.city_code])
   assert.ok(other, '隔离库需有外城商品（seed:scenario 会建）')
+  await q('UPDATE tour_session SET depart_date = CURDATE() WHERE id = ?', [other.sid]) // A-11：核销日期窗要求当日出发起可核销
   const st2 = await login('mock-xend-staff2-' + stamp)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES (?,?,3)', [other.mid, st2.user.id])
   const B2 = ok(await call('POST', '/m/auth/login', { code: 'mock-xend-staff2-' + stamp, merchantId: other.mid })).token

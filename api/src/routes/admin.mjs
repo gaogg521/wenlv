@@ -195,8 +195,20 @@ const admin = {
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
+    // A-21 防爆破：按账号与 IP 双维度计数，10 次失败锁 15 分钟；锁定提示不暴露账号是否存在；
+    // 成功登录清零；超管可 POST /admin/login/unlock 主动解锁。不影响后续 MFA 流程（锁定只在取密码之后、MFA 之前）。
+    const guard = await import('../infra/login-guard.mjs')
+    const keys = guard.loginGuardKeys(username, req.ip)
+    for (const k of keys) {
+      const { locked, retryAfterSec } = guard.isLocked(k)
+      if (locked) throw new BizError(1002, `尝试过于频繁，请 ${Math.ceil(retryAfterSec / 60)} 分钟后再试`)
+    }
     const u = await one('SELECT * FROM admin_user WHERE username = ? AND status = 1', [username || ''])
-    if (!u || !verifyPassword(password || '', u.password_hash)) throw new BizError(1002, '账号或密码错误')
+    if (!u || !verifyPassword(password || '', u.password_hash)) {
+      for (const k of keys) guard.recordFailure(k)
+      throw new BizError(1002, '账号或密码错误')
+    }
+    guard.clearFailures(keys[0]); guard.clearFailures(keys[1])
     // 生产环境不接受代码里写死的默认口令：运行 node scripts/admin-reset-password.mjs <账号> 换一个随机临时密码
     if (isForbiddenPassword(password)) throw new BizError(1003, '默认密码不能在生产环境登录，请联系管理员重置密码')
     // MFA（C-02/C-03）：单账号强制 > 单账号豁免 > 全局策略（admin.mfa.mode: off/optional/required）。
@@ -217,6 +229,16 @@ const admin = {
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
     return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
       user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
+  },
+
+  // A-21：超管解锁被防爆破锁定的账号
+  'POST /admin/login/unlock': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const { username } = req.body
+    const guard = await import('../infra/login-guard.mjs')
+    guard.unlock('admin-login:user:' + String(username || '').toLowerCase())
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'security', 'login-unlock', 'admin-user:' + username, null, { note: 'A21 防爆破解锁' }))
+    return { unlocked: true, username }
   },
 
   // C-03：强制绑定引导——在「登录受限态」（challenge，非通行令牌）下生成 TOTP 密钥；验证通过前拿不到后台会话

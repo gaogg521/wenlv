@@ -47,14 +47,20 @@ try {
   })
 
   console.log('== 约稿投稿审核 ==')
-  const bad = await submitAs(C, BODY_SHORT)
+  // A-16：作品要求（字数/图片）在提交侧拦截——不达标的笔记提交即拒，审核端不再产生"必不合格"的投稿
+  await t('不满足字数/图片要求：提交即被拒（A-16）', async () => {
+    const n = ok(await call('POST', '/c/notes', { title: '水乡一日' + stamp, body: BODY_SHORT }, C)); created.notes.push(n.id)
+    const r = await call('POST', `/c/tasks/${task.id}/submit`, { noteId: n.id }, C)
+    assert.equal(r.code, 1001); assert.match(r.msg, /字|图片/)
+  })
+  const good = await submitAs(C, BODY_OK)
   const e1 = (await entryOf(C)).entry_id
   await t('审核材料包含投稿全文、图片数、字数，并按要求逐项自动核对', async () => {
     const p = ok(await call('GET', `/admin/task-entries/${e1}/review`, null, A))
-    assert.equal(p.submission.id, bad); assert.match(p.submission.text, /只写了一句话/)
+    assert.equal(p.submission.id, good); assert.match(p.submission.text, /放生桥/)
     const by = Object.fromEntries(p.checks.map((c) => [c.key, c.ok]))
-    assert.equal(by.words, false); assert.equal(by.images, false)
-    assert.equal(by['must:放生桥'], false); assert.equal(by['ban:剧透结局'], false); assert.equal(by.published, true)
+    assert.equal(by.words, true); assert.equal(by.images, true)
+    assert.equal(by['must:放生桥'], true); assert.equal(by['ban:剧透结局'], true); assert.equal(by.published, true)
     assert.deepEqual(p.requirements.review_rules, ['原创', '图片清晰'])
   })
   await t('驳回必须写原因；原因不能含小程序禁用词', async () => {
@@ -64,18 +70,18 @@ try {
     assert.equal(r.code, 1001); assert.match(r.msg, /不能出现/)
   })
   await t('驳回后退回创作中，作者在小程序看到原因，审核记录保留原投稿', async () => {
-    ok(await call('POST', `/admin/task-entries/${e1}/verdict`, { pass: false, reason: '字数和图片不够，并且剧透了结局，请修改后重新提交' }, A))
+    ok(await call('POST', `/admin/task-entries/${e1}/verdict`, { pass: false, reason: '题材不符，请修改后重新提交' }, A))
     const row = await one('SELECT status, note_id FROM content_task_entry WHERE id = ?', [e1])
     assert.equal(Number(row.status), 1); assert.equal(row.note_id, null)
-    assert.match((await entryOf(C)).rejectReason, /字数和图片不够/)
-    assert.match(ok(await call('GET', `/c/tasks/${task.id}`, null, C)).rejectReason, /剧透/)
+    assert.match((await entryOf(C)).rejectReason, /题材不符/)
+    assert.match(ok(await call('GET', `/c/tasks/${task.id}`, null, C)).rejectReason, /题材不符/)
     const h = await one('SELECT note_id, verdict, reviewer FROM content_task_review WHERE entry_id = ? ORDER BY id DESC LIMIT 1', [e1])
-    assert.equal(Number(h.note_id), bad); assert.equal(Number(h.verdict), 0); assert.match(h.reviewer, /^admin:/)
+    assert.equal(Number(h.note_id), good); assert.equal(Number(h.verdict), 0); assert.match(h.reviewer, /^admin:/)
   })
-  const good = await submitAs(C, BODY_OK)
   await t('重新投稿：自动核对全部通过；正文已清洗（脚本与事件属性被去掉）', async () => {
+    const good2 = await submitAs(C, BODY_OK)
     const p = ok(await call('GET', `/admin/task-entries/${e1}/review`, null, A))
-    assert.equal(p.submission.id, good)
+    assert.equal(p.submission.id, good2)
     assert.ok(p.checks.every((c) => c.ok), JSON.stringify(p.checks.filter((c) => !c.ok)))
     assert.equal(p.submission.imageCount, 3)
     assert.ok(!/<script|onerror/i.test(p.submission.html))

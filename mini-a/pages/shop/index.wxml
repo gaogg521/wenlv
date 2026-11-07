@@ -1,3 +1,4 @@
+<view wx:if="{{demo}}" style="background:#fff7e6;color:#b45309;padding:14rpx 24rpx;font-size:24rpx;border-radius:0 0 16rpx 16rpx">演示模式（后端未连接）· 以下为演示数据，非真实内容</view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="hero">
   <view class="hi">{{site.shop_title}}</view>

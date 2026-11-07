@@ -25,6 +25,8 @@ Page({
     try {
       const code = await api.getPassCode(this.data.id)
       this.setData({ code, ...this.qrCells(code.qr), fail: false, total: code.expiresIn || 60, left: code.expiresIn || 60 })
+      // A-09：接口现在带 orderNo——首次拿到 code 后补一次暗号加载（onLoad 时 orderNo 还没就绪）
+      if (!this.data.phrase && code.orderNo) this.loadPhrase()
       this.startTick()
     } catch (e) {
       this.setData({ fail: true })

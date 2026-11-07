@@ -1,7 +1,7 @@
 const api = require('../../../utils/api')
 Page({
   data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,
-    contactName: '', contactPhone: '', gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
+    contactName: '', contactPhone: '', phoneTicket: '', gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
     if (q.scene && /^[pm][0-9a-z-]+$/i.test(decodeURIComponent(q.scene))) {
@@ -79,26 +79,29 @@ Page({
   },
   toggleBean(e) { this.setData({ useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
   onName(e) { this.setData({ contactName: e.detail.value }) },
-  // 微信官方手机号快速验证组件回调：code 交服务端换号
+  // 微信官方手机号快速验证组件回调：code 交服务端换号。
+  // A-08：服务端不下发明文也不下发打码值（打码值过不了 11 位校验，一键获取后必下单失败），
+  // 改为下发短期凭证 phoneTicket——提交订单时随单带上，服务端解封后加密落库
   async onPhone(e) {
     if (!e.detail || !e.detail.code) return
     try {
       const r = await api.getPhoneNumber(e.detail.code)
-      this.setData({ contactPhone: r.phone })
+      this.setData({ phoneTicket: r.ticket || '', contactPhone: r.phoneMasked || '' })
       wx.showToast({ title: '手机号已验证', icon: 'success' })
     } catch (err) { wx.showToast({ title: err.msg || '验证失败', icon: 'none' }) }
   },
-  // 手动输入兜底：微信快速验证组件之外的常规途径（11 位格式校验）
+  // 手动输入兜底：微信快速验证组件之外的常规途径（11 位格式校验）；手动输入清掉凭证
   onPhoneInput(e) {
     const v = String(e.detail.value || '').replace(/[^0-9]/g, '').slice(0, 11)
-    this.setData({ contactPhone: v })
+    this.setData({ contactPhone: v, phoneTicket: '' })
   },
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.submitting) return
     if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
     if (!String(this.data.contactName || '').trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
-    if (!/^1[3-9]\d{9}$/.test(this.data.contactPhone || '')) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
+    // A-08：一键获取（有 phoneTicket）或手输 11 位手机号，二者其一即可下单
+    if (!this.data.phoneTicket && !/^1[3-9]\d{9}$/.test(this.data.contactPhone || '')) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
     this.setData({ submitting: true })
     try {
       await api.ensureLogin()
@@ -107,7 +110,9 @@ Page({
       const want = this.data.useBean ? Math.min(beanBal, this.beanCap(unit * this.data.qty)) : 0
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
         promoScene: wx.getStorageSync('promoScene') || undefined,
-        contactName: this.data.contactName, contactPhone: this.data.contactPhone })
+        contactName: this.data.contactName,
+        phoneTicket: this.data.phoneTicket || undefined,
+        contactPhone: this.data.phoneTicket ? undefined : this.data.contactPhone })
       try { await api.pay(r.payParams) } catch (err) { wx.showToast({ title: '支付未完成，可在订单中继续支付', icon: 'none' }) }
       wx.redirectTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + r.orderNo + '&mock=' + (r.payParams.mock ? 1 : 0) })
     } catch (e) {

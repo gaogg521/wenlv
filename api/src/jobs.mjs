@@ -71,6 +71,48 @@ async function tickSettlement() {
   console.log('[job:settlement]', merchants.length, 'merchants', period)
 }
 
+/** A-14 退款补偿：状态 60 的订单逐单调 refund.refresh（PROCESSING 等待 / SUCCESS 完成 / CLOSED 转人工）。分钟级。 */
+export async function tickRefundRefresh() {
+  const rows = await q(`SELECT o.order_no FROM orders o JOIN refunds r ON r.order_id = o.id
+    WHERE o.status = 60 AND r.status = 0 GROUP BY o.order_no ORDER BY o.id LIMIT 50`)
+  const { refresh } = await import('./domain/refund.mjs')
+  for (const r of rows) {
+    try { await refresh(r.order_no) } catch (e) { console.error('[job:refund]', r.order_no, e.message) }
+  }
+  return rows.length
+}
+
+/** A-11 过期未核销：核销窗口（出发日 + pass.verify_end_days 天）已过仍未核销的订单 → 全额退款 + 凭证作废 + 通知游客。
+ *  此前这类单永久停在 30：游客不能自助退（退改梯度不含已出发）、商户结算不了、提前核销还能进观察期。 */
+export async function tickExpireVouchers() {
+  const endDays = await cfgNum('pass.verify_end_days')
+  const rows = await q(`SELECT o.order_no FROM orders o JOIN tour_session s ON s.id = o.session_id
+    WHERE o.status = 30 AND s.depart_date < DATE_SUB(CURDATE(), INTERVAL ? DAY) LIMIT 50`, [endDays])
+  const { fullRefund } = await import('./domain/refund.mjs')
+  const done = []
+  for (const r of rows) {
+    try {
+      await fullRefund({ orderNo: r.order_no, reason: '核销有效期已过·自动退款', operator: 'system', closeReason: 'verify_expired' })
+      // 通知游客（模板未配置静默）
+      try {
+        const o = await order.byNo(r.order_no)
+        const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])
+        const p = await one('SELECT title FROM tour_product WHERE id = ?', [o.product_id])
+        const { getSecret } = await import('./infra/secrets.mjs')
+        const tpl = await getSecret('WX_TMPL_GROUP_CANCEL')
+        const wxapi = await import('./domain/wxapi.mjs')
+        await wxapi.sendSubscribeMessage(u && u.mini_a_openid, tpl, {
+          thing1: { value: String(p && p.title || '您的行程').slice(0, 20) },
+          thing2: { value: '凭证已过核销有效期，款项原路退回' },
+        }, 'package-order/pages/orders/index')
+      } catch (e) { console.error('[job:expire-voucher:notify]', r.order_no, e.message) }
+      done.push(r.order_no)
+    } catch (e) { console.error('[job:expire-voucher]', r.order_no, e.message) }
+  }
+  if (done.length) console.log('[job:expire-voucher]', done.join(','))
+  return done.length
+}
+
 /** 豆过期（滚动 expire_months 个月 FIFO）：回收超期豆（负向分录 biz=6）。
  *  A-02 修复：旧实现用原发放分录的 tx_no 比对过期分录（tx_no 永远不同 → 每分钟重复扣），
  *  也没有按 FIFO 扣除已消费部分（已花掉的旧豆会被再扣一次）。
@@ -171,6 +213,8 @@ async function main() {
       await tickComplete()
       await tickGroupCancel()
       await tickExpire()
+      await tickRefundRefresh()
+      await tickExpireVouchers()
       await tickAttest()
       await tickRiskNotify()
       // 心跳：运维控制台据此判断任务进程存活
