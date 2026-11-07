@@ -121,7 +121,7 @@ page {
 .avatar-img { width: 96rpx; height: 96rpx; border-radius: 50%; display: block; }
 .avatar-empty { background: linear-gradient(135deg, var(--brand), #f5a623); }
 .nick-input { font-size: 34rpx; font-weight: 700; min-width: 200rpx; }
-.contact-btn { width: 100%; background: transparent; text-align: left; font-weight: inherit; line-height: inherit; padding: 20rpx 0; margin: 0; border-radius: 0; display: flex; justify-content: space-between; border-bottom: 1rpx solid var(--line); font-size: 26rpx; }
+.contact-btn { width: 100%; background: transparent; text-align: left; font-weight: inherit; line-height: inherit; padding: 22rpx 0; margin: 0; border-radius: 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1rpx solid var(--line); font-size: 26rpx; min-height: 0; }
 .contact-btn::after { border: none; }
 
 /* ---- 详情页：图集/内容/评价 ---- */
