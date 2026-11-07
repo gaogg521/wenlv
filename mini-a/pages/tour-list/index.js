@@ -17,7 +17,7 @@ Page({
   fetch() {
     this.setData({ loading: true, error: '' })
     api.request('/c/tours?cat=' + this.data.active + '&kw=' + encodeURIComponent(this.data.kw || '') + (this.city ? '&city=' + this.city : '')).then(list => {
-      const tours = (list || []).map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: cover.startsWith('/assets/') } })
+      const tours = (list || []).map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: api.isReferencePhoto(cover) } })
       this.setData({ tours, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试

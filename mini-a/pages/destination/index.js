@@ -8,7 +8,7 @@ Page({
   async fetch() {
     try {
       const list = await api.request('/c/destinations')
-      this.setData({ list, loading: false })
+      this.setData({ list: list.map(d => ({ ...d, cover: api.businessImage(d.cover, { name: d.cityName }), samplePhoto: !d.cover || api.isIllustration(d.cover) || api.isReferencePhoto(d.cover) })), loading: false })
     } catch (e) { this.setData({ loading: false }) }
   },
   goList(e) {

@@ -1,5 +1,6 @@
 const api = require('../../utils/api')
 const siteData = require('../../utils/site')
+const TAB_PAGES = ['home', 'tour-list', 'shop', 'bean', 'me'].map(p => '/pages/' + p + '/index')
 
 Page({
   data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
@@ -33,7 +34,7 @@ Page({
     api.request('/c/consent').then((d) => {
       this._privacyV = (d.versions && d.versions.privacy) || 'v1'
       const privacy = (d.items || []).find((x) => x.scene === 'privacy')
-      if (privacy && privacy.granted) return
+      if (privacy && privacy.granted && privacy.version === this._privacyV) return
       if (wx.getStorageSync('consentDeclined') === this._privacyV) return
       wx.showModal({
         title: '隐私政策与服务条款',
@@ -42,8 +43,8 @@ Page({
         cancelText: '不同意',
         success: (r) => {
           if (r.confirm) {
-            api.request('/c/consent', 'POST', { scene: 'privacy', granted: true }).catch(() => {})
-            api.request('/c/consent', 'POST', { scene: 'terms', granted: true }).catch(() => {})
+            api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: d.versions.privacy }).catch(() => {})
+            api.request('/c/consent', 'POST', { scene: 'terms', granted: true, version: d.versions.terms }).catch(() => {})
           } else {
             wx.setStorageSync('consentDeclined', this._privacyV || 'v1')
             wx.showToast({ title: '未同意隐私政策，下单等功能将受限', icon: 'none', duration: 3000 })
@@ -59,7 +60,7 @@ Page({
     api.getTours('all').then(list => {
       // 首页「即将成团」只展示主题游线路；有实拍图用真图，无图回退渐变封面
       const tours = (list || []).filter(t => (t.cat || '') !== 'shop')
-        .map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: cover.startsWith('/assets/') } })
+        .map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: api.isReferencePhoto(cover) } })
       this.setData({ tours, loading: false }, done)
     }).catch(e => {
       // A-18：假数据仅限开发环境（envVersion=develop），且页面常驻"演示模式"标识；
@@ -82,13 +83,17 @@ Page({
       this.bannerCity = hc ? hc.code : ''
       this.setData({ homeCity: hc })
       const bs = await api.request('/c/banners' + (hc && hc.code ? '?city=' + hc.code : ''))
-      this.setData({ banners: bs.map(b => ({ ...b, image: api.img(b.image) })), curBanner: 0 })
+      this.setData({ banners: bs.map(b => ({ ...b, image: api.businessImage(b.image, b), samplePhoto: !b.image || api.isIllustration(b.image) || api.isReferencePhoto(b.image) })), curBanner: 0 })
     } catch (e) {} // 无轮播静默
   },
   onBannerChange(e) { this.setData({ curBanner: e.detail.current }) },
   tapBanner(e) {
     const b = this.data.banners[e.currentTarget.dataset.i]
-    if (b && b.link) wx.navigateTo({ url: b.link, fail: () => wx.showToast({ title: '该入口已下线', icon: 'none' }) })
+    if (b && b.link) {
+      const target = b.link.split('?')[0]
+      if (TAB_PAGES.includes(target)) wx.switchTab({ url: target })
+      else wx.navigateTo({ url: b.link, fail: () => wx.showToast({ title: '该入口已下线', icon: 'none' }) })
+    }
   },
   onShareAppMessage() {
     const s = this.data.site || {}

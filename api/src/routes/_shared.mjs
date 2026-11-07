@@ -170,7 +170,7 @@ export async function handlePayNotify(orderNo, transNo, mock = false) {
     wxapi.sendSubscribeMessage(
       (await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])).mini_a_openid,
       (await (async () => { const { getSecrets } = await import('../infra/secrets.mjs'); return (await getSecrets(['WX_TMPL_PAY_OK'])).WX_TMPL_PAY_OK })()) || '',
-      { thing1: { value: '出票成功' }, character_string2: { value: orderNo } },
+      { character_string1: { value: orderNo }, thing2: { value: String((await one('SELECT title FROM tour_product WHERE id=?', [o.product_id]))?.title || '出行订单').slice(0, 20) } },
       'package-order/pages/orders/index',
     ).catch((e) => console.error('[notify] payOk send failed:', e.message))
   }

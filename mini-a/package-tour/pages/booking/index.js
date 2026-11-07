@@ -4,6 +4,7 @@ Page({
     contactName: '', contactPhone: '', phoneTicket: '', agree: false, buyInsurance: false, gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
+    api.request('/c/consent').then(d => this.setData({ legalVersions: d.versions })).catch(() => {})
     if (q.scene && /^[pm][0-9a-z-]+$/i.test(decodeURIComponent(q.scene))) {
       wx.setStorageSync('promoScene', decodeURIComponent(q.scene))
     }
@@ -17,7 +18,7 @@ Page({
       // 默认选中第一个还有名额的团期
       const firstOpen = Math.max(0, withFallbackSessions.findIndex((x) => Number(x.left_seats) > 0))
       // A-42：分包 wxml 只做取值——保险相关在 JS 预计算（复杂表达式会静默炸分包编译）
-      d.hasInsurance = Number(d.insurance_fee) > 0
+      d.hasInsurance = Number(d.insurance_fee) > 0 && d.insuranceAvailable !== false
       d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
       this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
@@ -115,8 +116,8 @@ Page({
     this.setData({ submitting: true })
     try {
       await api.ensureLogin()
-      await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true })
-      await api.request('/c/consent', 'POST', { scene: 'terms', granted: true })
+      await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: this.data.legalVersions?.privacy })
+      await api.request('/c/consent', 'POST', { scene: 'terms', granted: true, version: this.data.legalVersions?.terms })
       const beanBal = this.data.beanBal || 0
       const unit = s.priceNow || s.price_adult
       const want = this.data.useBean ? Math.min(beanBal, this.beanCap(unit * this.data.qty)) : 0
@@ -126,12 +127,7 @@ Page({
         contactName: this.data.contactName,
         phoneTicket: this.data.phoneTicket || undefined,
         contactPhone: this.data.phoneTicket ? undefined : this.data.contactPhone })
-      // A-41/A-44：下单成功（tap 回调内）请求出行通知订阅 + 落隐私授权记录
-      try {
-        const t = await api.getNotifyTemplates()
-        const ids = [t.groupCancel, t.payOk].filter(Boolean)
-        if (ids.length) wx.requestSubscribeMessage({ tmplIds: ids, fail: () => {} })
-      } catch (e) { /* 订阅是增强能力 */ }
+      // 订阅在支付结果页由独立按钮同步触发，避免异步下单丢失用户手势。
       try { await api.pay(r.payParams) } catch (err) { wx.showToast({ title: '支付未完成，可在订单中继续支付', icon: 'none' }) }
       wx.redirectTo({ url: '/package-tour/pages/pay-result/index?orderNo=' + r.orderNo + '&mock=' + (r.payParams.mock ? 1 : 0) })
     } catch (e) {

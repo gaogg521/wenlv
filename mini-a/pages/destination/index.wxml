@@ -4,6 +4,7 @@
 </view>
 <view class="card dest-card" wx:for="{{list}}" wx:key="city_code" bindtap="goList" data-city="{{item.city_code}}">
   <image wx:if="{{item.cover}}" class="dest-cover" src="{{item.cover}}" mode="aspectFill" />
+  <view wx:if="{{item.samplePhoto}}" class="muted2">场景参考图</view>
   <view class="row">
     <view style="flex:1">
       <b>{{item.cityName}}</b>

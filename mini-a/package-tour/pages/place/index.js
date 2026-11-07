@@ -7,11 +7,11 @@ Page({
   load() {
     this.setData({ error: '' })
     api.request(`/c/places/${this.kind}/${this.id}`).then((d) => {
-      const gallery = (this.kind === 'merchant' ? d.storefront : d.gallery) || []
+      const gallery = ((this.kind === 'merchant' ? d.storefront : d.gallery) || []).filter(u => !api.isIllustration(u))
       const cover = this.kind === 'merchant' ? d.logo : d.cover
       wx.setNavigationBarTitle({ title: d.short_name || d.name || (this.kind === 'scenic' ? '景区' : '商户') })
       this.setData({ d: {
-        ...d, kind: this.kind, gallery: gallery.length ? gallery : (cover ? [cover] : []),
+        ...d, kind: this.kind, gallery: gallery.length ? gallery : [api.businessImage(cover, d)], samplePhoto: gallery.length ? gallery.every(api.isReferencePhoto) : !cover || api.isIllustration(cover) || api.isReferencePhoto(cover),
         facilityText: (d.facilities || []).map((f) => place.FACILITY[f]).filter(Boolean),
         aliasText: (d.alias || []).join(' / '),
         tours: (d.tours || []).map((t) => ({ ...t, cover: api.coverFor(t) })),

@@ -8,7 +8,7 @@ Page({
   onLoad() {
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
-      this.setData({ items: (items || []).map(t => ({ ...t, price: t.price || t.price_from, cover: api.coverFor(t) })), fromApi: true, loading: false })
+      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); return { ...t, price: t.price || t.price_from, cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {

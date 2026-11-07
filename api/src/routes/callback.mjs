@@ -26,9 +26,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
+import { decodeWxCallback } from '../infra/wx-callback.mjs'
+import { applyMediaReview } from '../domain/media-review.mjs'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 const callback = {
+  'GET /callback/wechat': async (req, res) => wechatCallback(req, res),
+  'POST /callback/wechat': async (req, res) => wechatCallback(req, res),
   // 异步链的上链结果回调：对方确认出块后推送 { txRef, root, block }，验签通过并与待确认批次匹配才置为已锚定
   // 支持：gateway（按网关签名规则验签）、chaingen（HMAC-SHA256：METHOD\nPATH\nts\nbody）
   'POST /callback/chain/:provider': async (req) => {
@@ -66,3 +70,17 @@ const callback = {
 }
 
 export { callback }
+
+async function wechatCallback(req, res) {
+  try {
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const s = await getSecrets(['WX_CALLBACK_TOKEN', 'WX_CALLBACK_AES_KEY', 'WX_APPID'])
+    const decoded = decodeWxCallback({ query: req.query, rawBody: req.rawBody, token: s.WX_CALLBACK_TOKEN, aesKey: s.WX_CALLBACK_AES_KEY, appid: s.WX_APPID })
+    if (!decoded.echo) await applyMediaReview(decoded.message)
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end(decoded.echo || 'success')
+  } catch (e) {
+    res.writeHead(e.statusCode === 403 ? 403 : 503, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end('fail')
+  }
+}

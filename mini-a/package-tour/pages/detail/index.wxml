@@ -7,7 +7,7 @@
       <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
     </swiper-item>
   </swiper>
-  <view class="g-count">{{illustrated ? '主题示意图' : gIdx + 1 + '/' + gallery.length}}</view>
+  <view class="g-count">{{illustrated ? '场景参考图' : gIdx + 1 + '/' + gallery.length}}</view>
 
   <!-- 标题区：先回答"这是什么、多久、在哪、多少钱" -->
   <view class="book-bar dt-head">

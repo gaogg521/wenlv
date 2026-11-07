@@ -157,10 +157,12 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-bootstrap().then(async () => {
-  // A-22 生产密钥护栏：NODE_ENV=production 下密钥缺失/公开默认值 → 拒绝启动（在监听端口之前）
+try {
   const { assertProductionSecrets } = await import('./infra/boot-guard.mjs')
   assertProductionSecrets(process.env)
+} catch (e) { console.error('[boot failed]', e.message); process.exit(1) }
+
+bootstrap().then(async () => {
   // 服务监听所有网卡（listen 未绑定具体地址）；启动日志列出真实局域网地址，避免只印 127.0.0.1 造成"定死本机"的误解
   server.listen(PORT, async () => {
     const os = await import('node:os')

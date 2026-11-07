@@ -48,6 +48,7 @@ export function priceForSession(s) {
 
 /** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
 export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, beanHook }) {
+  if (withInsurance && process.env.NODE_ENV === 'production') throw new BizError(1001, '保险承保服务尚未接通，暂不可购买保险')
   if (!Number.isInteger(qty) || qty < 1 || qty > 9) throw new BizError(1001, '出行人数应为 1–9 人')
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
