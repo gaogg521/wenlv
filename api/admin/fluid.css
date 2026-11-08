@@ -1,0 +1,21 @@
+/* 分辨率自适应层：必须最后加载，只覆盖尺寸 / 边距 / 收列点，不动配色。
+   原则：
+   1. 侧栏宽度、内容区边距随视口平滑变化，不再「断点一到就跳一档」；
+   2. 内容区上限放宽到 2200px，2K/4K 屏不再只剩 1600px 窄条加两边空白；
+   3. KPI 等多列栅格的收列点，按「内容区实际能放下几列」来定，而不是按整屏宽度。 */
+
+@media (min-width: 761px) {
+  .side { width: clamp(208px, 14vw, 272px); }
+  .content { padding-left: clamp(16px, 1.8vw, 40px); padding-right: clamp(16px, 1.8vw, 40px); }
+}
+.content { max-width: min(2200px, 100%); }
+
+/* 经营概览：6 张 KPI 卡每张不低于约 150px 才并成一行，否则 3×2；
+   实时指标条 5+1+2 列至少要 1480px 才放得下，更窄时沿用 dashboard.css 的 4 列写法 */
+@media (min-width: 1240px) {
+  .dx .dx-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (min-width: 1480px) {
+  .dx-live-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) 1px repeat(2, minmax(0, 1.1fr)); }
+  .dx-sep { display: block; }
+}
