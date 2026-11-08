@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { parseLevels, levelFor, DEFAULT_LEVELS } from '../src/domain/member.mjs'
-import { renderBadgeSvg, renderBeanSvg, serveBadgeArt, CATEGORIES, CATEGORY_ORDER, RARITIES, ICON_KEYS } from '../src/domain/badge-art.mjs'
+import { renderBadgeSvg, renderBeanSvg, serveBadgeArt, artOptions, CATEGORIES, CATEGORY_ORDER, RARITIES, ICON_KEYS } from '../src/domain/badge-art.mjs'
 import { DEFAULTS } from '../src/config.mjs'
 import * as ml from '../src/domain/merchant-level.mjs'
 import { findBanned } from '../src/domain/wording.mjs'
@@ -113,7 +113,7 @@ t('商户等级配置错误被拒：数量 / 编号 / 评分无评价数 / 门�
     [mk(1, { minOrders: 0, minReviews: 0, minRating: 0, maxRefundPct: 100 }), '没有区分度'], [mk(1, { perks: ['链上权益'] }), '禁用词'], [mk(0, { minOrders: 5 }), 'Lv1 不设门槛'], [mk(1, { minRating: 51 }), '评分门槛'], [mk(1, { maxRefundPct: 120 }), '退款率']]
   for (const [cfg, key] of bad) assert.throws(() => ml.parseLevels(cfg), (e) => e.message.includes(key), '应拒绝：' + key)
 })
-t('商户徽章图：门楼招牌随等级换材质、经营荣誉随稀有度换色、未获得灰阶；与游客徽章造型不同', () => {
+t('商户徽章图：圆拱认证牌随等级换材质、经营荣誉随稀有度换色、未获得灰阶；与游客徽章造型不同', () => {
   const lv = [1, 2, 3, 4].map((n) => renderBadgeSvg({ category: 'mlevel', tier: n })); assert.equal(new Set(lv).size, 4)
   const h = ['common', 'rare', 'epic', 'legend'].map((r) => renderBadgeSvg({ category: 'mhonor', icon_key: 'trend', rarity: r })); assert.equal(new Set(h).size, 4)
   assert.notEqual(renderBadgeSvg({ category: 'mlevel', tier: 2 }), renderBadgeSvg({ category: 'mlevel', tier: 2 }, false))
@@ -123,6 +123,15 @@ t('商户徽章图：门楼招牌随等级换材质、经营荣誉随稀有度�
 })
 
 console.log('\n== 分种类设计 ==')
+t('商户可信图按规则受众选择；游客可信图保留原形象；灰阶不带自定义主题色', () => {
+  const merchant=artOptions({id:80,icon_key:'seal',rule_type:'m_sealed',profile:{category:'trusted',tier:1}})
+  const tourist=artOptions({id:46,icon_key:'seal',rule_type:'sealed_count',profile:{category:'trusted',tier:1}})
+  assert.equal(merchant.audience,'merchant');assert.equal(tourist.audience,'tourist')
+  assert.ok(renderBadgeSvg(merchant).includes('data-merchant-emblem="trust"'))
+  assert.ok(!renderBadgeSvg(tourist).includes('data-merchant-emblem'))
+  assert.ok(!renderBadgeSvg({...merchant,color:'#fe12ab'},false).includes('#fe12ab'))
+  for(const tier of [-1,NaN,1.5,99])assert.ok(!/undefined|NaN/.test(renderBadgeSvg({...merchant,tier})))
+})
 t('分类与顺序：9 类，勋章墙顺序固定，小程序用语里没有链相关词，后台叫「链上勋章」', () => {
   assert.equal(CATEGORY_ORDER.length, 9); assert.deepEqual([...CATEGORY_ORDER, 'mlevel', 'mhonor'].sort(), Object.keys(CATEGORIES).sort(), '游客 9 类 + 商户 2 类')
   assert.equal(CATEGORIES.trusted.label, '可信勋章'); assert.equal(CATEGORIES.trusted.adminLabel, '链上勋章')
