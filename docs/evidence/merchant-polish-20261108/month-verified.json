@@ -1,0 +1,24 @@
+{
+  "batch": "MM20261108",
+  "orders": 120,
+  "days": 30,
+  "from": "2026-10-10",
+  "to": "2026-11-08",
+  "states": {
+    "30": 1,
+    "40": 3,
+    "50": 86,
+    "70": 30
+  },
+  "paidFen": 4152000,
+  "refundFen": 1428000,
+  "netFen": 2724000,
+  "passes": 240,
+  "verifiedPasses": 178,
+  "oldOrdersUnchanged": true,
+  "oldLedgerUnchanged": true,
+  "historicalRootsUnchanged": true,
+  "secretsUnchanged": true,
+  "newLedgerBalanced": true,
+  "realMoneyTransferred": false
+}

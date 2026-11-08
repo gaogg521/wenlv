@@ -1,9 +1,12 @@
 <merchant-nav id="merchant-navigation" title="对账结算" />
+<view class="page-heading"><view class="page-eyebrow">RECONCILIATION</view><view class="page-title">每一笔经营，清楚有据</view><view class="page-caption">逐期核对金额，跟进真实支付进度</view></view>
+<view class="paper-metrics"><view><text class="paper-number">{{pendingCount || 0}}</text><text class="paper-label">待确认账单</text></view><view><text class="paper-number">¥{{pendingAmount || '0.00'}}</text><text class="paper-label">待确认应结金额</text></view></view>
+<view class="filter-chips settlement-filters"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{state === item.k ? 'active' : ''}}" bindtap="filterState" data-k="{{item.k}}">{{item.n}}</view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
-<view class="card fade-up" wx:for="{{list}}" wx:key="id" wx:for-item="s">
-  <view class="sec-title">{{s.periodTitle}}
-    <text class="pill {{s.status === 3 ? 'p50' : 'p30'}}" style="margin-left:8rpx">{{s.statusText}}</text>
-  </view>
+<view class="card settlement-paper" wx:for="{{visibleList}}" wx:key="id" wx:for-item="s">
+  <view class="bill-heading" bindtap="toggleBill" data-id="{{s.id}}"><view class="bill-title">{{s.periodTitle}}</view><text class="status-label">{{s.statusText}}</text></view>
+  <view class="bill-amount" bindtap="toggleBill" data-id="{{s.id}}"><view><text class="paper-label">本店应结</text><view>¥{{s.payableLabel}}</view></view><view class="bill-count">{{s.order_count}} 笔订单<text>{{expanded[s.id] ? '收起账单 −' : '展开账单 +'}}</text></view></view>
+  <block wx:if="{{expanded[s.id]}}">
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
     <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
       <view style="font-size:34rpx;font-weight:800">¥{{s.total_amount/100}}</view></view>
@@ -45,6 +48,7 @@
       <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
     </view>
   </view>
+  </block>
 </view>
-<view wx:if="{{!list.length && loaded}}" class="empty"><view class="e-ico">🧮</view>暂无结算单（每周一出账）</view>
+<view wx:if="{{!visibleList.length && loaded && !error}}" class="empty"><view class="empty-mark">≋</view>暂无符合条件的结算单<view class="page-caption">账单生成后可在此核对，确认不代表已到账</view></view>
 <view class="note">请逐单核对本店应结金额，有差异可提交异议。财务复核后实际付款，支付回单可追溯。</view>

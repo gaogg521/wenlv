@@ -1,0 +1,38 @@
+{
+  "freshDatabase": "wanderlust_qa_mpolish1108",
+  "suiteExitCodes": {
+    "scenario": 0,
+    "test": 0,
+    "test:db": 0,
+    "test:chain": 0,
+    "merchant-catalog": 0,
+    "merchant-navigation": 0,
+    "merchant-history": 0
+  },
+  "historyTests": {
+    "ordersBeyond50": 60,
+    "pagesChecked": 5,
+    "historicalDate": "2024-02-29",
+    "merchantIsolation": true,
+    "staffIsolation": true,
+    "historicalStockExplicit": true,
+    "verificationUsesVerificationDate": true
+  },
+  "stock": {
+    "groupByProductId": true,
+    "defaultCollapsed": true,
+    "searchAndDateAndStateFilters": true
+  },
+  "demoSamples": {
+    "newOrders": 6,
+    "waiting": 4,
+    "mockCompleted": 2,
+    "newTodaySessions": 3,
+    "newSyntheticUsers": 1,
+    "changedOriginalHistoricalDates": false,
+    "actualMoneyTransferred": false,
+    "idempotentNewOrders": 0
+  },
+  "uiPreviewBase": "http://127.0.0.1:18246",
+  "uiProductionOrRealDeviceAcceptance": false
+}

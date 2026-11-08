@@ -4,6 +4,7 @@
     <view class="shop-date">{{dateLabel}}<text>WANDERLUST BUSINESS</text></view>
     <view class="shop-name">{{merchant ? merchant.name : '经营美好，从这里开始'}}</view>
     <view class="shop-meta"><text>{{greet}}，{{merchant ? roleLabel : '欢迎来到商户端'}}</text><text wx:if="{{merchant}}" class="role-tag">本店工作空间</text></view>
+    <view class="workbench-period" wx:if="{{merchant}}"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view>{{periodNames[periodIndex]}}经营　⌄</view></picker><picker wx:if="{{periodIndex === 3}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker><text wx:else>可切换查看历史</text></view>
   </view>
   <view wx:if="{{err === 'login'}}" class="welcome-panel">
     <view class="welcome-title">让每一次到店，都被妥善接待</view>
@@ -12,18 +13,19 @@
   </view>
   <block wx:else>
     <view class="overview" wx:if="{{wb}}">
-      <view class="overview-head"><text>今日经营</text><text class="overview-caption">仅本店数据</text></view>
-      <view class="overview-money" wx:if="{{role >= 2}}"><text class="currency">¥</text>{{wb.todayGmv}}<text class="money-label">今日流水</text></view>
-      <view class="overview-money" wx:else>{{wb.myVerified}}<text class="money-label">今日我的核销</text></view>
+      <view class="overview-head"><text>{{periodLabel}}经营</text><text class="overview-caption">仅本店数据</text></view>
+      <view class="overview-money" wx:if="{{role >= 2}}"><text class="currency">¥</text>{{wb.todayGmv}}<text class="money-label">所选期间流水</text></view>
+      <view class="overview-money" wx:else>{{wb.myVerified}}<text class="money-label">所选期间我的核销</text></view>
       <view class="overview-bottom">
-        <view bindtap="goOrders" wx:if="{{role >= 2}}"><text class="metric-value">{{wb.todayOrders}}</text><text class="metric-label">今日订单</text></view>
+        <view bindtap="goOrders" wx:if="{{role >= 2}}"><text class="metric-value">{{wb.todayOrders}}</text><text class="metric-label">期间订单</text></view>
         <view bindtap="goRecords" wx:else><text class="metric-value">{{wb.myVerified}}</text><text class="metric-label">核销记录</text></view>
-        <view bindtap="goVerify"><text class="metric-value">{{wb.pendingVerify}}</text><text class="metric-label">待核销凭证</text></view>
+        <view bindtap="goVerify"><text class="metric-value">{{wb.pendingVerify}}</text><text class="metric-label">当前待核销凭证</text></view>
         <view class="honor-link" bindtap="goHonor"><text>{{wb.level.name || '经营荣誉'}}</text><text class="metric-label">查看门店成长　↗</text></view>
       </view>
     </view>
     <view class="loading-panel" wx:elif="{{loading}}">正在更新本店经营数据…</view>
     <view class="error-panel" wx:else><view>{{err}}</view><button bindtap="retry">重新加载</button></view>
+    <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
     <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
     <view class="section-heading"><text>常用服务</text><text class="section-note">让日常更有条理</text></view>
     <view class="service-grid">
@@ -36,10 +38,11 @@
     <view class="attention" wx:if="{{wb}}" bindtap="goVerify"><view class="attention-dot"></view><view><view>{{wb.pendingVerify ? '今天的接待，从这张凭证开始' : '接待准备就绪'}}</view><text>{{wb.pendingVerify ? wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码' : '有游客到店时，可从上方进入扫码核销'}}</text></view><text>›</text></view>
     <view class="announcement" wx:if="{{notice}}"><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '展开 +'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
     <view class="trend-panel" wx:if="{{stats && role >= 2}}">
-      <view class="section-heading"><text>近 7 日订单</text><text class="week-total">{{weekTotal}} <text>单</text></text></view>
-      <view class="trend-chart"><view wx:for="{{bars}}" wx:key="d" class="trend-day"><view class="trend-column"><view style="height:{{item.hp}}%"></view></view><text>{{item.dLabel}}</text></view></view>
+      <view class="section-heading"><text>所选期间订单</text><text class="week-total">{{weekTotal}} <text>单</text></text></view>
+      <scroll-view scroll-x><view class="trend-chart" style="width:{{chartWidth}}rpx"><view wx:for="{{bars}}" wx:key="d" class="trend-day"><view class="trend-column"><view style="height:{{item.hp}}%"></view></view><text>{{item.dLabel}}</text></view></view></scroll-view>
     </view>
     <view class="review-panel" wx:if="{{stats && stats.latestReview}}"><view class="section-heading"><text>游客的声音</text><text class="review-rating">{{stats.latestReview.rating}} ★</text></view><view class="review-copy">{{stats.latestReview.content}}</view><text class="review-author">{{stats.latestReview.nickname}}</text></view>
   </block>
+  <view class="growth-links" wx:if="{{merchant}}"><view bindtap="goHonor"><text>◇　等级与勋章</text><text>查看成长　↗</text></view><view bindtap="goCredentials"><text>✓　可信凭证</text><text>查看记录　↗</text></view></view>
   <view class="workbench-footer">向往的自由 · 用心经营每一次相遇</view>
 </view>
