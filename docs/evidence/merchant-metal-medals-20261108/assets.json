@@ -1,0 +1,42 @@
+[
+  {
+    "name": "bronze",
+    "width": 1254,
+    "height": 1254,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "cornerAlpha": 0
+  },
+  {
+    "name": "silver",
+    "width": 1254,
+    "height": 1254,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "cornerAlpha": 0
+  },
+  {
+    "name": "gold",
+    "width": 1254,
+    "height": 1254,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "cornerAlpha": 0
+  },
+  {
+    "name": "diamond",
+    "width": 1254,
+    "height": 1254,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "cornerAlpha": 1
+  },
+  {
+    "name": "blackgold",
+    "width": 1254,
+    "height": 1254,
+    "alphaMin": 0,
+    "alphaMax": 255,
+    "cornerAlpha": 0
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "url": "http://127.0.0.1:8080/#badges",
+  "materialPreview": ["bronze", "silver", "gold", "diamond", "blackgold"],
+  "loadedPngs": 5,
+  "imageWidth": 256,
+  "existingBusinessLevels": 4,
+  "method": "Browser DOM image.decode verification of five material previews"
+}
