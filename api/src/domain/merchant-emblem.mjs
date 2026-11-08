@@ -6,8 +6,9 @@ const PALETTES = [
   { rim:'#c3a260', face:'#f4e7c3', ink:'#937136', light:'#fff9e5' },
   { rim:'#c5aa70', face:'#355442', ink:'#efdeb3', light:'#54715a' },
 ]
+const CERT_PALETTES=[PALETTES[0],{rim:'#b5bcbf',face:'#edf0ef',ink:'#71807d',light:'#fafcf8'},PALETTES[2],{rim:'#a5bfc2',face:'#e5efeb',ink:'#547e76',light:'#f5faf6'},{rim:'#bda46e',face:'#383d34',ink:'#e9d9ad',light:'#505747'}]
 const OFF = {rim:'#cbc9bc',face:'#eae8df',ink:'#a6a496',light:'#f5f3ec'}
-const rank = n => Math.max(1,Math.min(4,Math.trunc(Number(n)||1)))
+const rank = n => Math.max(1,Math.min(5,Math.trunc(Number(n)||1)))
 const rgba = c => /^#[0-9a-fA-F]{6}$/.test(c||'')
 const SYMBOLS = {
   store:'<path d="M24 5L30 17L43 19L33 29L35 42L24 36L13 42L15 29L5 19L18 17Z"/>',
@@ -29,7 +30,7 @@ const leaf = p => `<g fill="none" stroke="${p.rim}" stroke-width="2.8" stroke-li
 export function merchantEmblem(o={},owned=true,fallbackSymbol='') {
   const tier=rank(o.tier),kind=o.category==='mlevel'?'certification':o.category==='trusted'?'trust':'honor'
   const rarity={common:1,rare:2,epic:3,legend:4}[o.rarity]||1
-  const p={...(owned?PALETTES[kind==='honor'?rarity-1:kind==='trust'?3:tier-1]:OFF)}
+  const p={...(owned?(kind==='certification'?CERT_PALETTES[tier-1]:PALETTES[kind==='honor'?rarity-1:3]):OFF)}
   if(owned&&rgba(o.color))p.rim=o.color
   const prefix='me'+kind+tier+rarity+(owned?'on':'off')
   const defs=`<linearGradient id="${prefix}rim" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${p.light}"/><stop offset=".35" stop-color="${p.rim}"/><stop offset="1" stop-color="${p.ink}"/></linearGradient><linearGradient id="${prefix}face" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="${p.light}"/><stop offset=".45" stop-color="${p.face}"/><stop offset="1" stop-color="${p.face}"/></linearGradient>`
@@ -37,13 +38,16 @@ export function merchantEmblem(o={},owned=true,fallbackSymbol='') {
   // 相同的旧 trend 键用于订单和流水时，仍应有可辨认的业务图形。
   if(o.rule_type==='m_orders'&&key!=='crown')key='ticket'
   if(o.rule_type==='m_months'&&tier>=3)key='lantern'
-  const markup=SYMBOLS[o.icon_key]?SYMBOLS[key]:(fallbackSymbol||SYMBOLS[key])
+  if(kind==='certification')key=tier>=4?'diamond':tier===3?'crown':tier===2?'shieldcheck':'star'
+  const diamond='<path d="M5 17L14 7H34L43 17L24 42ZM5 17H43M14 7L18 17L24 42L30 17L34 7M18 17L24 7L30 17"/>'
+  const markup=kind==='certification'?(key==='diamond'?diamond:SYMBOLS[key]):SYMBOLS[o.icon_key]?SYMBOLS[key]:(fallbackSymbol||SYMBOLS[key])
   const symbol=`<g transform="translate(78 61) scale(2.08)" fill="none" stroke="${p.ink}" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round">${markup}</g>`
   let body=`<g data-merchant-emblem="${kind}" data-owned="${owned?'yes':'no'}">`
   if(kind==='certification') {
-    // 圆拱认证牌；一至四级由材质与四点刻度共同区分，不依赖颜色。
-    const shape='M128 22C152 22 170 35 181 47H199Q222 47 222 70V191Q222 210 203 210H53Q34 210 34 191V70Q34 47 57 47H75C86 35 104 22 128 22Z'
-    body+=`<path d="${shape}" transform="translate(0 5)" fill="#665637" opacity=".09"/><path d="${shape}" fill="url(#${prefix}rim)"/><path d="${shape}" transform="translate(128 119) scale(.94) translate(-128 -119)" fill="url(#${prefix}face)"/><path d="M61 78V184H195V78" fill="none" stroke="${p.rim}" stroke-width="1.6" opacity=".55"/><path d="M96 48Q128 24 160 48" fill="none" stroke="${p.rim}" stroke-width="2"/>${symbol}${dots(tier,p)}<path d="M85 219L94 234H162L171 219" fill="${p.face}" stroke="${p.rim}" stroke-width="2"/>`
+    // 与经营荣誉共用圆章、细边和枝叶语言；主图为星/盾/冠/菱形，无房屋或写实图。
+    body+=`<circle cx="128" cy="123" r="101" fill="#665637" opacity=".07"/><circle cx="128" cy="119" r="101" fill="url(#${prefix}rim)"/><circle cx="128" cy="119" r="96" fill="url(#${prefix}face)"/><circle cx="128" cy="119" r="86" fill="none" stroke="${p.rim}" stroke-width="1.5" opacity=".7"/>${leaf(p)}${symbol}`
+    body+=Array.from({length:tier},(_,i)=>`<circle cx="${128-(tier-1)*8+i*16}" cy="192" r="4" fill="${p.ink}"/>`).join('')
+    body+=`<path d="M91 217L99 237L128 226L157 237L165 217" fill="${p.face}" stroke="${p.rim}" stroke-width="2.3"/>`
   } else if(kind==='honor') {
     body+=`<circle cx="128" cy="123" r="101" fill="#665637" opacity=".07"/><circle cx="128" cy="119" r="101" fill="url(#${prefix}rim)"/><circle cx="128" cy="119" r="96" fill="url(#${prefix}face)"/><circle cx="128" cy="119" r="86" fill="none" stroke="${p.rim}" stroke-width="1.5" opacity=".7"/>${leaf(p)}${symbol}${dots(tier,p)}<path d="M91 217L99 237L128 226L157 237L165 217" fill="${p.face}" stroke="${p.rim}" stroke-width="2.3"/>`
   } else {

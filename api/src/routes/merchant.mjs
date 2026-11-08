@@ -38,7 +38,7 @@ import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_T
 async function levelBrief(mid, req) {
   const mr = await one("SELECT level FROM merchant WHERE id = ?", [mid]), lvs = await merchantLevel.levels()
   const cur = lvs.find((l) => l.lv === Number(mr && mr.level)) || lvs[0]
-  return { lv: cur.lv, name: cur.name, art: apiImg('/badge-art/mlevel/' + cur.lv + '.png?v=merchant-metal-20261108', req) }
+  return { lv: cur.lv, name: cur.name, art: apiImg('/badge-art/mlevel/' + cur.lv + '.png?v=merchant-consistent-20261108', req) }
 }
 
 const m = {
@@ -84,7 +84,7 @@ const m = {
     const mid = u.merchantId
     const fresh = await badgeDomain.evaluateMerchantSafe(mid)
     const lvl = await merchantLevel.progress(mid)
-    const art = (n, on) => apiImg('/badge-art/mlevel/' + n + '.png?v=merchant-metal-20261108' + (on ? '' : '&state=off'), req)
+    const art = (n, on) => apiImg('/badge-art/mlevel/' + n + '.png?v=merchant-consistent-20261108' + (on ? '' : '&state=off'), req)
     lvl.art = art(lvl.lv, true)
     lvl.levels = lvl.levels.map((l) => ({ ...l, art: art(l.lv, l.lv <= lvl.lv) }))
     const defs = (await q('SELECT * FROM badge')).filter(badgeDomain.isMerchantBadge)
@@ -96,7 +96,7 @@ const m = {
       const got = owned.find((o) => Number(o.badge_id) === Number(b.id))
       const cat = badgeArt.CATEGORIES[pp.category] ? pp.category : 'mhonor'
       const ev = got ? evs.find((e) => e.biz_ref === 'mbadge-' + mid + '-' + b.id) : null
-      return { id: b.id, name: b.name, iconImg: pp.icon_img || null, art: apiImg('/badge-art/' + b.id + '.png?state=' + (got ? 'on' : 'off') + '&v=merchant-metal-20261108', req), category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label,
+      return { id: b.id, name: b.name, iconImg: pp.icon_img || null, art: apiImg('/badge-art/' + b.id + '.png?state=' + (got ? 'on' : 'off') + '&v=merchant-consistent-20261108', req), category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label,
         series: pp.series || '', tier: Number(pp.tier) || 0, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通', color: pp.color || null,
         description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0, owned: !!got, granted_at: got ? got.granted_at : null,
         progress: got ? null : badgeDomain.merchantProgressOf(b, lvl.metrics, lvl.lv), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1, status: Number(ev.status), confirmed: Number(ev.status) === 2 } : null }
