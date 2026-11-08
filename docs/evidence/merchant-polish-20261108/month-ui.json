@@ -1,0 +1,12 @@
+{
+  "base": "http://127.0.0.1:8080",
+  "monthlyOrders": 120,
+  "refunds": 30,
+  "pages": 11,
+  "oldestDayOrders": 4,
+  "groupInitial": 6,
+  "groupAfterMore": 12,
+  "trendDays": 30,
+  "summaryMatchesTrend": true,
+  "exceptions": []
+}

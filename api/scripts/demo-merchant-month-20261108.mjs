@@ -21,6 +21,7 @@ try{
   if(!process.argv.includes('--apply'))console.log(JSON.stringify({apply:false,batch,from:plan[0].date,to:bizDay(),orders:plan.length,states:plan.reduce((r,p)=>(r[p.kind]=(r[p.kind]||0)+1,r),{})},null,2))
   else{
     assert.equal(process.env.ALLOW_DEMO_MONTH,'1','必须明确放行演示月度样例')
+    assert.equal(bizDay(),'2026-11-08','固定日期批次，跨日请另建批次，禁止滚动重复生成')
     assert.notEqual(process.env.NODE_ENV,'production');assert.ok(process.env.ADMIN_PASSWORD)
     const db=process.env.DB_NAME || ''
     assert.ok(db==='wanderlust' || db.startsWith('wanderlust_qa_'),'仅演示或隔离验证库')
@@ -104,7 +105,7 @@ try{
     for(const product of catalog){
       const open=await q("SELECT id FROM tour_session WHERE product_id=? AND status=1 AND JSON_UNQUOTE(JSON_EXTRACT(profile,'$.note')) LIKE ?",[product.id,batch+'|%'])
       for(const s of open)await call('POST','/m/supply/'+s.id,{action:'stop_sell'},merchant.token)
-      await call('POST','/admin/products/'+product.id+'/status',{status:0},admin.token)
+      if(Number(product.status)!==0)await call('POST','/admin/products/'+product.id+'/status',{status:0},admin.token)
     }
     const report={batch,from:plan[0].date,to:bizDay(),orders:results.length,created:results.filter(r=>r.created).length,rows:results,realMoneyTransferred:false,historicalLedgerOrSealTimesChanged:false,archiveProductsNotListedForSale:true}
     if(process.env.DEMO_REPORT)fs.writeFileSync(process.env.DEMO_REPORT,JSON.stringify(report,null,2))
