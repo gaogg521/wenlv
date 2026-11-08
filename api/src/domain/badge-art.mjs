@@ -352,7 +352,8 @@ let resvgMod
 async function toPng(svg, size) {
   if (resvgMod === undefined) { try { resvgMod = (await import('@resvg/resvg-js')).Resvg } catch { resvgMod = null } }
   if (!resvgMod) return null
-  return new resvgMod(svg, { fitTo: { mode: 'width', value: size } }).render().asPng()
+  // 本文件的字形也由路径绘制；无需每张图扫描 Windows 全部字体。
+  return new resvgMod(svg, { font: { loadSystemFonts: false }, fitTo: { mode: 'width', value: size } }).render().asPng()
 }
 const cache = new Map() // 路径 + 查询 → PNG；上限 400 张
 

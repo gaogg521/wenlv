@@ -1,0 +1,8 @@
+{
+  "url": "http://127.0.0.1:8080/#badges",
+  "merchantRows": 20,
+  "loadedImages": 20,
+  "redesignedImages": 20,
+  "touristTrustedPreserved": true,
+  "method": "Browser DOM image.decode and live SVG response verification"
+}

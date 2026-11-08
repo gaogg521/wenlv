@@ -1,0 +1,26 @@
+[
+  {
+    "category": "mlevel",
+    "msDefault": 247,
+    "msPathOnly": 2,
+    "identicalPixels": true
+  },
+  {
+    "category": "mhonor",
+    "msDefault": 266,
+    "msPathOnly": 3,
+    "identicalPixels": true
+  },
+  {
+    "category": "trusted",
+    "msDefault": 257,
+    "msPathOnly": 2,
+    "identicalPixels": true
+  },
+  {
+    "category": "country",
+    "msDefault": 237,
+    "msPathOnly": 4,
+    "identicalPixels": true
+  }
+]

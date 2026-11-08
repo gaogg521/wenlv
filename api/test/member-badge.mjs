@@ -84,6 +84,15 @@ await (async () => {
   const big = await serveBadgeArt('/badge-art/level/3.png', new URLSearchParams('size=512'))
   const off = await serveBadgeArt('/badge-art/bean.png', new URLSearchParams())
   const isPng = (b) => Buffer.isBuffer(b) && b.subarray(1, 4).toString() === 'PNG'
+  if(Buffer.isBuffer(png)){
+    const {Resvg}=await import('@resvg/resvg-js'),pairs=[]
+    for(const category of ['mlevel','mhonor','trusted','country']){
+      const query=new URLSearchParams({category,tier:'2',icon_key:'shieldcheck',country_code:'CN',audience:'merchant'})
+      const svg=await serveBadgeArt('/badge-art/preview.svg',query)
+      pairs.push([await serveBadgeArt('/badge-art/preview.png',query),new Resvg(svg,{fitTo:{mode:'width',value:256}}).render().asPng()])
+    }
+    t('PNG关闭系统字体扫描后，认证/荣誉/可信/国家字形与原渲染逐字节相同',()=>{for(const [actual,reference] of pairs)assert.deepEqual(actual,reference)})
+  }
   t('同一路径把 .svg 换成 .png 得到 PNG（没装 resvg 时回退为 SVG 字符串）；size 生效；不存在的返回空', () => {
     if (typeof png === 'string') { assert.ok(png.startsWith('<svg') && big.startsWith('<svg') && off.startsWith('<svg'), '回退为 SVG'); return }
     assert.ok(isPng(png) && isPng(big) && isPng(off))
