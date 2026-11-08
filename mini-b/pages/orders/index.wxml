@@ -5,7 +5,7 @@
 <view class="list-summary"><text>已加载 {{matchedCount || 0}} 笔</text><text>其中待接待 {{waitingCount || 0}} 笔</text></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="order-paper" wx:for="{{visibleOrders}}" wx:key="order_no" bindtap="goDetail" data-no="{{item.order_no}}">
-  <view class="order-top"><text class="order-number">{{item.order_no}}</text><text class="status-label">{{item.statusText}}</text></view>
+  <view class="order-top"><text class="order-number">{{item.order_no}}</text><text class="status-label status-{{item.status}}">{{item.statusText}}</text></view>
   <view class="order-title">{{item.title}}</view>
   <view class="order-info"><text>{{item.contactLabel}} · {{item.qty}} 人</text><text class="order-price">¥{{item.priceLabel}}</text></view>
   <view wx:if="{{item.isDemo}}" class="demo-notice">演示样例 · 模拟支付，不代表真实成交</view>

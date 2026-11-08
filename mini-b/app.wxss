@@ -1,8 +1,8 @@
 /* ===== 向往的自由 · 商户端 B 设计系统 =====
-   主题：商户紫 #7b5aa6 · 渐变 hero · 浮起卡片 · 扫码脉冲动效 */
+   主题：暖纸面 · 林绿经营卡 · 陶土色操作 · 清晰状态 */
 page {
-  --brand: #7b5aa6; --brand-deep: #5f4484; --brand-soft: #f3edf9;
-  --ink: #1a2233; --ink2: #4d5665; --sub: #8a919c; --bg: #f5f4f8; --line: #ecedf1;
+  --brand: #57704f; --brand-deep: #40563d; --brand-soft: #f3efe5;
+  --ink: #354034; --ink2: #746d5e; --sub: #a39783; --bg: #f8f6f1; --line: #e8dfd1;
   --green: #0f9d58; --red: #e5484d;
   background: var(--bg); color: var(--ink); font-size: 28rpx;
   --shadow: 0 2rpx 8rpx rgba(30,30,60,.06), 0 8rpx 24rpx rgba(30,30,60,.06);
@@ -11,7 +11,7 @@ page {
 /* ---- hero：渐变 + 装饰光斑 ---- */
 .hero {
   position: relative; overflow: hidden; color: #fff;
-  background: linear-gradient(140deg, #8a67b8 0%, #7b5aa6 45%, #4d3a72 100%);
+  background: linear-gradient(140deg, #4d6550 0%, #57704f 45%, #293f35 100%);
   padding: 44rpx 36rpx 56rpx; border-radius: 0 0 48rpx 48rpx;
 }
 .hero::before { content: ""; position: absolute; width: 340rpx; height: 340rpx; border-radius: 50%;
@@ -75,7 +75,7 @@ page {
 /* ---- pill ---- */
 .pill { display: inline-block; font-size: 20rpx; font-weight: 600; padding: 5rpx 18rpx; border-radius: 999rpx; }
 .p10{background:#fdf3e0;color:#b45309}.p20{background:#e8effd;color:#1d4ed8}.p30{background:#f1e9fd;color:#6d28d9}
-.p40{background:var(--brand-soft);color:#5f4484}.p50{background:#e3f6ec;color:#0b7a45}.p70{background:#fdecec;color:#c53030}.p90{background:#eef1f5;color:#6b7280}
+.p40{background:var(--brand-soft);color:#40563d}.p50{background:#e3f6ec;color:#0b7a45}.p70{background:#fdecec;color:#c53030}.p90{background:#eef1f5;color:#6b7280}
 
 /* ---- 按钮 ---- */
 .btn { background: var(--brand); color: #fff; border-radius: 999rpx; text-align: center; padding: 22rpx 0; font-size: 28rpx; font-weight: 600; margin: 20rpx 24rpx; }
@@ -108,7 +108,7 @@ page {
 .scan-frame .c3 { left: 0; bottom: 0; border-right: none; border-top: none; border-radius: 0 0 0 18rpx; }
 .scan-frame .c4 { right: 0; bottom: 0; border-left: none; border-top: none; border-radius: 0 0 18rpx 0; }
 .scan-frame .beam { position: absolute; left: 20rpx; right: 20rpx; height: 4rpx; border-radius: 4rpx;
-  background: linear-gradient(90deg, transparent, #b79ae0, transparent); box-shadow: 0 0 16rpx #7b5aa6; animation: beam 2.2s ease-in-out infinite; }
+  background: linear-gradient(90deg, transparent, #b79ae0, transparent); box-shadow: 0 0 16rpx #57704f; animation: beam 2.2s ease-in-out infinite; }
 @keyframes beam { 0%,100% { top: 30rpx; } 50% { top: 366rpx; } }
 .scan-frame .mid { font-size: 100rpx; opacity: .35; }
 
@@ -168,9 +168,9 @@ page {
 .hero.tier-black .sub2 { color: #dcb862; }
 .hero.tier-black .tier-name { color: #dcb862; }
 
-/* 商户端统一工作空间：与新版首页共享的纸面、墨紫、细边框体系。 */
-.demo-notice{font-size:20rpx;line-height:1.5;color:#b09a80;text-align:center;margin-top:13rpx}
-page{--brand:#705383;--brand-deep:#4c365e;--brand-soft:#f0eaf6;--ink:#302638;--ink2:#6d5d77;--sub:#a094aa;--bg:#f7f6fa;--line:#ede7f1;background:var(--bg)}
-.hero{margin:28rpx;padding:30rpx;border-radius:26rpx;background:linear-gradient(115deg,#30263f,#594370)}
-.hero::before,.hero::after{display:none}.hero .hi{font-size:38rpx;line-height:1.45;letter-spacing:0}.hero .sub2{font-size:23rpx;line-height:1.7;color:#d2c4dd;opacity:1}
-.card{margin:20rpx 28rpx;padding:27rpx;border:1rpx solid #eae5ef;box-shadow:none;border-radius:24rpx}.sec-title{font-size:28rpx;font-weight:650;color:#44334e}.sec-title::before{display:none}.row{padding:22rpx 0;border-bottom-color:#f1edf5}.row .sub{line-height:1.6;color:#9d90a8}.row b{font-weight:600;color:#4b3958}.btn{border-radius:16rpx;font-weight:500;background:#705383}.btn.ghost{border-color:#ddd0e7;background:#f7f3fa;color:#765a88}.money{color:#705383;font-variant-numeric:tabular-nums}.note{color:#a79aaf;font-size:21rpx;line-height:1.8}.empty{padding:65rpx 30rpx;color:#92829d;line-height:1.8}.empty-mark{font-size:50rpx;color:#b2a0bf;margin-bottom:16rpx}.page-heading{padding:30rpx 30rpx 10rpx}.page-eyebrow{font-size:18rpx;letter-spacing:3rpx;color:#aa9a99}.page-title{font-size:38rpx;font-weight:650;line-height:1.5;color:#3c2a48;margin-top:10rpx}.page-caption{font-size:23rpx;line-height:1.7;color:#a191ab;margin-top:8rpx}.filter-panel{margin:20rpx 28rpx;padding:24rpx;background:white;border:1rpx solid #eae5ef;border-radius:23rpx}.search-field{display:flex;gap:16rpx;align-items:center;background:#f6f3f9;border:1rpx solid #eee7f3;border-radius:14rpx;padding:18rpx 20rpx}.search-field>text{font-size:32rpx;color:#ab96ba}.search-field input{flex:1;min-width:0;font-size:25rpx;color:#564063;height:42rpx}.filter-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:22rpx;font-size:23rpx;color:#8c729c}.range-picker{padding:6rpx 0}.text-action{color:#8c6a9e;font-size:22rpx;padding:10rpx 0}.filter-chips{display:flex;gap:12rpx;flex-wrap:wrap;margin-top:20rpx}.filter-chip{font-size:22rpx;color:#9b8aa7;padding:12rpx 18rpx;background:#f8f5fa;border-radius:11rpx;border:1rpx solid #f0eaf5}.filter-chip.active{background:#ebe2f3;border-color:#d9cbe4;color:#705085}.list-summary{display:flex;justify-content:space-between;font-size:21rpx;color:#a496ae;padding:0 32rpx;margin:24rpx 0 14rpx}.compact-button{font-size:22rpx;line-height:1.5;padding:11rpx 18rpx;border-radius:12rpx;border:1rpx solid #e4d8ed;background:#f5eff9;color:#80618f;width:auto;min-width:0;box-sizing:border-box}.compact-button::after{border:0}.status-label{display:inline-block;font-size:20rpx;color:#9c90a5;background:#f3eff6;padding:5rpx 13rpx;border-radius:7rpx}.status-label.positive{color:#678475;background:#edf3ef}.paper-metrics{display:flex;margin:22rpx 28rpx;padding:26rpx;background:#fff;border:1rpx solid #eae5ef;border-radius:24rpx;gap:16rpx}.paper-metrics>view{flex:1;min-width:0}.paper-number{font-size:35rpx;color:#674b79;font-weight:600;display:block}.paper-label{font-size:21rpx;color:#a191ad;display:block;margin-top:9rpx}
+/* 商户端统一工作空间：与新版首页共享的暖纸面、林绿、陶土色与细边框体系。 */
+.demo-notice{font-size:20rpx;line-height:1.5;color:#a59680;text-align:center;margin-top:13rpx}
+page{--brand:#57704f;--brand-deep:#40563d;--brand-soft:#e9eedf;--ink:#354034;--ink2:#746d5e;--sub:#a39783;--bg:#f8f6f1;--line:#e8dfd1;background:var(--bg)}
+.hero{margin:28rpx;padding:30rpx;border-radius:26rpx;background:linear-gradient(115deg,#293f35,#4d6550)}
+.hero::before,.hero::after{display:none}.hero .hi{font-size:38rpx;line-height:1.45;letter-spacing:0}.hero .sub2{font-size:23rpx;line-height:1.7;color:#c9d4be;opacity:1}
+.card{margin:20rpx 28rpx;padding:27rpx;border:1rpx solid #e8dfd1;box-shadow:none;border-radius:24rpx}.sec-title{font-size:28rpx;font-weight:650;color:#3c4836}.sec-title::before{display:none}.row{padding:22rpx 0;border-bottom-color:#eee7db}.row .sub{line-height:1.6;color:#9d927d}.row b{font-weight:600;color:#4b5842}.btn{border-radius:16rpx;font-weight:500;background:#ad603d}.btn.ghost{border-color:#d8d0bb;background:#f3efe5;color:#697b5c}.money{color:#ad603d;font-variant-numeric:tabular-nums}.note{color:#a39882;font-size:21rpx;line-height:1.8}.empty{padding:65rpx 30rpx;color:#948971;line-height:1.8}.empty-mark{font-size:50rpx;color:#b3a17a;margin-bottom:16rpx}.page-heading{padding:30rpx 30rpx 10rpx}.page-eyebrow{font-size:18rpx;letter-spacing:3rpx;color:#a58e69}.page-title{font-size:38rpx;font-weight:650;line-height:1.5;color:#394632;margin-top:10rpx}.page-caption{font-size:23rpx;line-height:1.7;color:#9c9079;margin-top:8rpx}.filter-panel{margin:20rpx 28rpx;padding:24rpx;background:white;border:1rpx solid #e8dfd1;border-radius:23rpx}.search-field{display:flex;gap:16rpx;align-items:center;background:#f5f0e6;border:1rpx solid #e9e0d1;border-radius:14rpx;padding:18rpx 20rpx}.search-field>text{font-size:32rpx;color:#a99a7c}.search-field input{flex:1;min-width:0;font-size:25rpx;color:#536044;height:42rpx}.filter-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:22rpx;font-size:23rpx;color:#788267}.range-picker{padding:6rpx 0}.text-action{color:#8b7550;font-size:22rpx;padding:10rpx 0}.filter-chips{display:flex;gap:12rpx;flex-wrap:wrap;margin-top:20rpx}.filter-chip{font-size:22rpx;color:#9f9178;padding:12rpx 18rpx;background:#f8f4eb;border-radius:11rpx;border:1rpx solid #eee7d9}.filter-chip.active{background:#e7ecde;border-color:#d2dcc4;color:#59704c}.list-summary{display:flex;justify-content:space-between;font-size:21rpx;color:#a29680;padding:0 32rpx;margin:24rpx 0 14rpx}.compact-button{font-size:22rpx;line-height:1.5;padding:11rpx 18rpx;border-radius:12rpx;border:1rpx solid #dbd7c5;background:#f1eee2;color:#6b7e59;width:auto;min-width:0;box-sizing:border-box}.compact-button::after{border:0}.status-label{display:inline-block;font-size:20rpx;color:#998c74;background:#f1ecdf;padding:5rpx 13rpx;border-radius:7rpx}.status-label.positive{color:#678475;background:#edf3ef}.paper-metrics{display:flex;margin:22rpx 28rpx;padding:26rpx;background:#fff;border:1rpx solid #e8dfd1;border-radius:24rpx;gap:16rpx}.paper-metrics>view{flex:1;min-width:0}.paper-number{font-size:35rpx;color:#60764e;font-weight:600;display:block}.paper-label{font-size:21rpx;color:#9d9079;display:block;margin-top:9rpx}
