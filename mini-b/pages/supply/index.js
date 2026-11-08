@@ -10,12 +10,17 @@ Page({
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
     api.request('/m/supply?history=1').then((l) => { this.setData({ list: l, loaded: true }); this.applyFilters(); done && done() }).catch(e => { this.setData({ loaded: true, list: [], error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
   },
-  applyFilters() { this.setData(stockView(this.data.list, this.data)) },
+  applyFilters() {
+    const view = stockView(this.data.list, this.data), limit = this.data.sessionLimit || 6
+    view.groups = view.groups.map(g => Object.assign({}, g, { sessions: g.expanded ? g.sessions.slice(0, limit) : [], hasMore: g.expanded && g.sessions.length > limit }))
+    this.setData(view)
+  },
+  moreSessions() { this.setData({ sessionLimit: (this.data.sessionLimit || 6) + 6 }); this.applyFilters() },
   onSearch(e) { this.setData({ kw: e.detail.value }); this.applyFilters() },
   filterStatus(e) { this.setData({ status: e.currentTarget.dataset.k }); this.applyFilters() },
   filterRange(e) { const i = Number(e.detail.value); this.setData({ rangeIndex: i, range: ['future','week','month','past','all'][i] }); this.applyFilters() },
   resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.applyFilters() },
-  toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key }); this.applyFilters() },
+  toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },
   manageSession(e) {
     if (this.data.role < 2) return
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))

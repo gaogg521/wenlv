@@ -18,6 +18,7 @@
       <view class="session-main"><view><view class="session-date">{{s.date}}</view><view class="group-sub">剩余 {{s.left}} / {{s.quota}} 席</view></view><view class="session-price">¥{{s.priceLabel}}<view class="status-label {{s.canSell ? 'positive' : ''}}">{{s.statusLabel}}</view></view></view>
       <view class="session-bottom"><text class="group-sub">{{s.early_price ? '早鸟 ¥' + s.earlyLabel + ' · 提前' + s.early_days + '天' : '常规团期价格'}}</text><button wx:if="{{role >= 2}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
     </view>
+    <view wx:if="{{g.hasMore}}" class="group-footer" bindtap="moreSessions"><text>本组共 {{g.count}} 个团期</text><text>再显示 6 个　⌄</text></view>
   </block>
 </view>
 <view wx:if="{{loaded && !groups.length && !error}}" class="empty"><view class="empty-mark">▦</view><view>没有符合条件的团期</view><view class="page-caption">试试其他关键词、日期范围或状态</view><view class="text-action" bindtap="resetFilters">重置筛选</view></view>
