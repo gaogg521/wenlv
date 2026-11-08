@@ -913,7 +913,7 @@ async function web3dash(opt = {}) {
   const pendingN = demo ? batches.filter((b) => Number(b.status) === 0).reduce((s, b) => s + Number(b.leaf_count), 0) : Number(d.pendingEvents)
   const anchorN = demo ? batches.filter((b) => Number(b.status) === 2).reduce((s, b) => s + Number(b.leaf_count), 0) : d.anchoredEvents
   const totalN = demo ? batches.reduce((s, b) => s + Number(b.leaf_count), 0) : d.events
-  const lastSeq = fetched.length ? fetched[fetched.length - 1].seq : 0   // 区块高度永远取最新批，不随翻页变
+  const lastSeq = fetched.length ? fetched[fetched.length - 1].seq : 0   // 锚定批次序号永远取最新批，不随翻页变
   window.__chainMap = Object.fromEntries(batches.map((b) => [b.id, b]))
   const descs = []   // 链路节点描述：branch=账本日终（下沉一档的分支块），连线与换行由 chainTrackHTML 统一生成
   batches.forEach((b) => descs.push({ b, branch: Number(b.is_day_close) === 1 }))   // 节点按档位在 chainTrackHTML 里渲染
@@ -958,7 +958,7 @@ async function web3dash(opt = {}) {
       <span class="chain-name">⛓ 向往自由链 · 链路视图</span><span class="chain-live"><i></i>LIVE</span>
       ${demo ? '<span class="chip demo">演示数据</span>' : ''}
       <span class="chip">适配器 ${esc((d.chain && d.chain.label) || '—')}</span>
-      <span class="chip">区块高度 <b>#${lastSeq}</b></span>
+      <span class="chip" title="我们自己的批次序号，不是链上区块高度；链上区块高度见批次详情的「链上块高」">锚定批次 <b>#${lastSeq}</b></span>
       <span class="chip">待打包 <b>${pendingN}</b></span>
       <span style="flex:1"></span>
       <label class="chain-auto"><input type="checkbox" id="chainAuto" ${auto ? 'checked' : ''} onchange="window.__chainAuto=this.checked;chainTimerSetup()"> 30s 自动刷新</label>

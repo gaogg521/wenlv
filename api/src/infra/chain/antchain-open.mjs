@@ -112,6 +112,43 @@ export function parseContentV2(s) {
   return { tenant, bizid, kind, root, prevRoot, ts, sig }
 }
 
+// ===== v3：在 v2 的签名范围内多放一段"批内构成"摘要 =====
+// 只放「业务类型=数量」，例如 n=20;badge=17;settlement=3；不放金额、订单号、手机号、用户标识。
+// 目的：在区块链浏览器里不用回到我们后台，也能一眼看出这一批装的是哪几类事，各几条。
+const SUMMARY_RE = /^[a-z0-9_]{1,24}=\d{1,9}(;[a-z0-9_]{1,24}=\d{1,9}){0,24}$/
+
+/** 摘要必须是纯 ASCII「键=数」，且被签名覆盖；不合规就不用 v3（回落 v2），不让任何字符串混进链上原文 */
+export function summaryValid(summary) { return typeof summary === 'string' && summary.length <= 400 && SUMMARY_RE.test(summary) }
+
+/** v3 签名原文（不含签名本身）：v2 的七段 + 摘要 */
+export function signPayloadV3({ tenant, bizid, kind, root, prevRoot, ts, summary }) {
+  return ['wl-anchor/3', String(tenant), String(bizid), String(kind || 'biz'), String(root),
+    String(prevRoot || '0'.repeat(64)), String(ts), String(summary)].join('|')
+}
+
+/** v3 上链原文：签名附在最后 */
+export function contentV3({ tenant, bizid, kind, root, prevRoot, ts, summary, sig }) {
+  return signPayloadV3({ tenant, bizid, kind, root, prevRoot, ts, summary }) + '|' + String(sig)
+}
+
+/** 拆分 v3 原文；不是 v3 返回 null */
+export function parseContentV3(s) {
+  const parts = String(s || '').split('|')
+  if (parts.length !== 9 || parts[0] !== 'wl-anchor/3') return null
+  const [, tenant, bizid, kind, root, prevRoot, ts, summary, sig] = parts
+  return { tenant, bizid, kind, root, prevRoot, ts, summary, sig }
+}
+
+/** 把 n=20;badge=17;settlement=3 拆成 { total: 20, types: { badge: 17, settlement: 3 } } */
+export function parseSummary(summary) {
+  if (!summaryValid(summary)) return null
+  const types = {}; let total = 0
+  for (const kv of summary.split(';')) {
+    const [k, v] = kv.split('='); if (k === 'n') total = Number(v); else types[k] = Number(v)
+  }
+  return { total, types }
+}
+
 /**
  * 展示用：把上链原文拆成"人话四要素"，给验证接口/对外页直接渲染。
  * 认不出格式就返回 {version:0}，绝不假装解析成功。
@@ -119,6 +156,17 @@ export function parseContentV2(s) {
 export function describeContent(raw) {
   const str = String(raw || '')
   if (!str) return { version: 0, note: '该批次没有留存上链原文（v1 早期批次）' }
+  const v3 = parseContentV3(str)
+  if (v3) {
+    return {
+      version: 3, raw: str,
+      subject: { tenant: v3.tenant, chainId: v3.bizid, kind: v3.kind },
+      root: v3.root, prevRoot: v3.prevRoot,
+      tsMs: Number(v3.ts), tsIso: new Date(Number(v3.ts)).toISOString(),
+      summary: parseSummary(v3.summary), summaryRaw: v3.summary,
+      signature: { algo: 'RSA-SHA256', value: v3.sig, length: v3.sig.length },
+    }
+  }
   const v2 = parseContentV2(str)
   if (v2) {
     return {
@@ -159,6 +207,18 @@ export function verifyContentV2(content, pubPem) {
     const ok = crypto.verify('RSA-SHA256', Buffer.from(payload, 'utf8'), key, Buffer.from(c.sig, 'hex'))
     return { ok, reason: ok ? '' : '签名与内容不匹配', payload }
   } catch (e) { return { ok: false, reason: '公钥不可用：' + e.message, payload } }
+}
+
+/** v2 / v3 通用验签：按原文自带的版本选对应的签名原文；认不出版本返回 ok:false */
+export function verifyContent(content, pubPem) {
+  const v3 = parseContentV3(content)
+  if (!v3) return verifyContentV2(content, pubPem)
+  const payload = signPayloadV3({ tenant: v3.tenant, bizid: v3.bizid, kind: v3.kind, root: v3.root, prevRoot: v3.prevRoot, ts: v3.ts, summary: v3.summary })
+  try {
+    const key = crypto.createPublicKey(pubPem || publicKeyPemOf(E.ANTOPEN_ACCESS_KEY))
+    const ok = crypto.verify('RSA-SHA256', Buffer.from(payload, 'utf8'), key, Buffer.from(v3.sig, 'hex'))
+    return { ok, reason: ok ? '' : '签名与内容不匹配', payload }
+  } catch (e) { return { ok: false, reason: '验签异常：' + e.message } }
 }
 
 // 同一进程内所有请求串行并留间隔（免费版 TPS=1）；失败也占用间隔
@@ -238,17 +298,23 @@ export default {
       note: `链 ${e.bizid} · 托管账户存证（DEPOSIT）· gas 上限 ${e.gas}；需已给账户分配燃料`,
     }
   },
-  async anchor({ root, prevRoot, bizDate, kind }) {
+  async anchor({ root, prevRoot, bizDate, kind, summary }) {
     if (missing().length) return { txRef: null, block: null, mode: 'noop' }
     if (!HASH64.test(root || '')) throw new Error('antchain-open 根必须是 64 位十六进制')
     const e = env()
     // §7.6 四要素：哈希指纹(根) + 时间戳(毫秒) + 主体标识(租户/链) + 签名(平台私钥 RSA-SHA256)
     const ts = Date.now()
     const prev = prevRoot || '0'.repeat(64)
-    const payload = signPayload({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts })
+    // 有合规的"批内构成"摘要就用 v3（摘要在签名范围内）；没有或不合规就回落 v2，绝不把任意字符串写上链
+    const useV3 = summaryValid(summary)
+    const payload = useV3
+      ? signPayloadV3({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts, summary })
+      : signPayload({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts })
     let sig = 'nosig'
     try { sig = signWith(e.accessKey, payload) } catch { sig = 'nosig' } // 密钥不可用如实降级，绝不假装签过
-    const content = contentV2({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts, sig })
+    const content = useV3
+      ? contentV3({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts, summary, sig })
+      : contentV2({ tenant: e.tenant, bizid: e.bizid, kind: kind || 'biz', root, prevRoot: prev, ts, sig })
     if (content.length > CONTENT_MAX) throw hard('CONTENT_TOO_LONG', `上链原文 ${content.length} 字符，超过实测安全上限 ${CONTENT_MAX}`)
     // orderId 是业务方唯一标识（官方：用于重试去重），按根派生：同一批重试得到同一个 orderId
     const orderId = 'wl_' + root.slice(0, 32).toLowerCase()
@@ -311,11 +377,13 @@ export default {
     // 链上原文里的业务字段必须与批次当前行一致：提交后批次行的根/前根被改动（库内篡改或脏写）
     // 重试必然重演 → 转人工，不能照旧置为已锚定（确认语义：交易内容"确实是这枚根"）。
     // v1 原文带业务日一并比对；v2 原文只有根/前根（ts 是提交时刻，不是业务日）
+    const onChainV3 = parseContentV3(r.content)
     const onChainV2 = parseContentV2(r.content)
-    const onChain = onChainV2 || parseContentV1(r.content)
+    const onChainNew = onChainV3 || onChainV2   // v2/v3 的时间戳是提交时刻，不是业务日
+    const onChain = onChainNew || parseContentV1(r.content)
     if (onChain) {
       const fieldsBad = onChain.root !== String(root) || String(onChain.prevRoot || '') !== String(prevRoot || '0'.repeat(64))
-        || (!onChainV2 && Number(onChain.bizDate) !== Number(dateNum(bizDate)))
+        || (!onChainNew && Number(onChain.bizDate) !== Number(dateNum(bizDate)))
       if (fieldsBad) {
         throw hard('CONTENT_MISMATCH', 'antchain-open 链上内容与批次不一致（根/前根）：批次在提交后被改动，'
           + '同一根重提也会重演不一致，需人工核对决定是否换根重提')
@@ -323,11 +391,12 @@ export default {
     }
     // v2 还要验签：链上那串里的签名，必须真的是平台私钥对"这串内容"的签名
     const v2 = parseContentV2(r.content)
-    if (v2) {
-      const v = verifyContentV2(r.content)
+    const signedNew = !!(v2 || onChainV3)
+    if (signedNew) {
+      const v = verifyContent(r.content)
       if (!v.ok) throw hard('SIG_INVALID', 'antchain-open 链上原文签名校验失败：' + v.reason)
     }
-    return { final: true, block: String(r.block), confirmations: 1, signed: v2 ? true : false, contentV2: !!v2 }
+    return { final: true, block: String(r.block), confirmations: 1, signed: signedNew, contentV2: !!v2, contentV3: !!onChainV3 }
   },
   async queryByRoot() { return null },
   /** 连通性探测：握手 + 查最新块高，只读，不产生交易、不耗燃料 */
