@@ -20,7 +20,10 @@ function periodTitle(p) {
   return m ? m[1] + ' 周结算单（补充 ' + m[2] + '）' : p + ' 周结算单'
 }
 Page({
-  data: { list: [], loaded: false, detail: {} },
+  data: { list: [], visibleList: [], loaded: false, detail: {}, expanded: {}, state: 'all', filters: [{k:'all',n:'全部账单'},{k:'pending',n:'待确认'},{k:'processing',n:'处理中'},{k:'paid',n:'已登记回单'}] },
+  filterState(e) { this.setData({state:e.currentTarget.dataset.k}); this.applyFilter() },
+  applyFilter() { this.setData({visibleList:this.data.list.filter(s=>this.data.state==='all' || this.data.state==='pending' && s.status===0 || this.data.state==='paid' && s.status===3 || this.data.state==='processing' && [1,2,4].includes(s.status))}) },
+  toggleBill(e) { const id=e.currentTarget.dataset.id; this.setData({['expanded.'+id]:!this.data.expanded[id]}) },
   // 展开/收起结算单订单明细（对账逐单可查）
   async toggleDetail(e) {
     const id = e.currentTarget.dataset.id
@@ -32,11 +35,11 @@ Page({
   },
   onShow() { this.fetch() },
   fetch() {
-    if (!getApp().globalData.token) return this.setData({ loaded: true })
-    api.request('/m/settlements').then((l) => this.setData({ list: l.map(s => ({ ...s, ...splitInfo(s), periodTitle: periodTitle(s.period), statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status],
+    if (!getApp().globalData.token) { this.setData({ loaded: true, list: [], visibleList: [] }); return }
+    api.request('/m/settlements').then((l) => { const list=l.map(s => ({ ...s, ...splitInfo(s), totalLabel:(Number(s.total_amount)/100).toFixed(2), periodTitle: periodTitle(s.period), statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status],
       // 应结 = 履约结算 + 退改手续费分成（分成比例生成时快照，见后台参数中心/商户资料）
       payableLabel: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0)) / 100).toFixed(2),
-      feeShareText: s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—' })), loaded: true, error: '' })).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
+      feeShareText: s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—' }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
   },
   dispute(e) {
     const id = e.currentTarget.dataset.id

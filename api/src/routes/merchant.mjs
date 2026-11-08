@@ -14,6 +14,7 @@ import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { whereMobile, sealMobile, openMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
+import { merchantRange, merchantPaging } from '../infra/merchant-range.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
 import * as vc from '../domain/vc.mjs'
@@ -67,11 +68,12 @@ const m = {
   'GET /m/workbench': async (req) => {
     const u = requireUser(req)
     const mid = u.merchantId
+    const period = merchantRange(req.query, 1, 31)
     const today = await one(`SELECT COUNT(*) c, COALESCE(SUM(amount_pay),0) gmv FROM orders
-      WHERE merchant_id = ? AND status IN (20,30,40,50) AND DATE(paid_at) = CURDATE()`, [mid])
+      WHERE merchant_id = ? AND status IN (20,30,40,50) AND paid_at >= ? AND paid_at < DATE_ADD(?,INTERVAL 1 DAY)`, [mid,period.from,period.to])
     const pending = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
       WHERE o.merchant_id = ? AND tp.status = 1`, [mid])
-    return { todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND DATE(created_at)=CURDATE()',[mid,u.uid]),
+    return { period, demo: process.env.NODE_ENV !== 'production' && !wxpay.isLive(), todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND created_at>=? AND created_at<DATE_ADD(?,INTERVAL 1 DAY)',[mid,u.uid,period.from,period.to]),
       level: await levelBrief(mid, req) }
   },
 
@@ -97,7 +99,7 @@ const m = {
       return { id: b.id, name: b.name, iconImg: pp.icon_img || null, art: apiImg('/badge-art/' + b.id + '.png?state=' + (got ? 'on' : 'off'), req), category: cat, categoryLabel: badgeArt.CATEGORIES[cat].label,
         series: pp.series || '', tier: Number(pp.tier) || 0, rarity: pp.rarity || 'common', rarityLabel: pp.rarity_label || '普通', color: pp.color || null,
         description: pp.description || '', ruleDesc: pp.rule_desc || '', order: Number(pp.display_order) || 0, owned: !!got, granted_at: got ? got.granted_at : null,
-        progress: got ? null : badgeDomain.merchantProgressOf(b, lvl.metrics, lvl.lv), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1 } : null }
+        progress: got ? null : badgeDomain.merchantProgressOf(b, lvl.metrics, lvl.lv), proof: ev ? { code: String(ev.payload_hash).slice(0, 8).toUpperCase(), sealed: Number(ev.status) >= 1, status: Number(ev.status), confirmed: Number(ev.status) === 2 } : null }
     }).sort((a, b) => (b.owned - a.owned) || (a.order - b.order))
     return { level: lvl, card: cardOf('merchant', lvl.lv, (lvl.levels || []).length), badges, fresh, groups: badgeArt.MERCHANT_CATEGORY_ORDER.map((k) => ({ key: k, label: badgeArt.CATEGORIES[k].label })) }
   },
@@ -199,18 +201,28 @@ const m = {
 
   'GET /m/verify/records': async (req) => {
     const u = requireUser(req)
+    const range = merchantRange(req.query), paging = merchantPaging(req.query)
     // A-46：核销流水时间去毫秒
     return await q(`SELECT v.id, v.pass_id, v.result, DATE_FORMAT(v.created_at, '%Y-%m-%d %H:%i') created_at, o.order_no, p.name pass_name
       FROM verification_log v JOIN travel_pass p ON p.id = v.pass_id LEFT JOIN orders o ON o.id = p.order_id
-      WHERE v.merchant_id = ? AND (? >= 2 OR v.staff_id = ?) ORDER BY v.id DESC LIMIT 50`, [u.merchantId, u.role, u.uid])
+      WHERE v.merchant_id = ? AND (? >= 2 OR v.staff_id = ?) ${range ? 'AND v.created_at >= ? AND v.created_at < DATE_ADD(?,INTERVAL 1 DAY)' : ''}
+      ORDER BY v.id DESC LIMIT ? OFFSET ?`, [u.merchantId, u.role, u.uid,...(range?[range.from,range.to]:[]),paging.size,paging.offset])
   },
 
   'GET /m/orders': async (req) => {
     const u = requireUser(req)
+    const range = merchantRange(req.query), paging = merchantPaging(req.query)
+    const kw = String(req.query.kw || '').trim().slice(0,100), state = String(req.query.state || 'all')
+    const states = { all:'', waiting:'AND o.status IN (20,30)', done:'AND o.status IN (40,50)', refund:'AND o.status IN (60,70)' }
+    if (!Object.prototype.hasOwnProperty.call(states,state)) throw new BizError(1001,'订单状态筛选无效')
     // A-01：rebook 标记 = 免费改签单（实收 ¥0，改签成本商户承担），商户端要能一眼认出
-    const rows = await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name, (o.rebook_of IS NOT NULL) AS rebook
+    const rows = await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name, s.depart_date, (o.rebook_of IS NOT NULL) AS rebook
       FROM orders o JOIN tour_product p ON p.id = o.product_id
-      WHERE o.merchant_id = ? AND o.status >= 20 ORDER BY o.id DESC LIMIT 50`, [u.merchantId])
+      JOIN tour_session s ON s.id=o.session_id
+      WHERE o.merchant_id = ? AND o.status >= 20 ${states[state]}
+      ${range ? 'AND o.paid_at >= ? AND o.paid_at < DATE_ADD(?,INTERVAL 1 DAY)' : ''}
+      ${kw ? 'AND (p.title LIKE ? OR o.order_no LIKE ? OR o.contact_name LIKE ?)' : ''}
+      ORDER BY o.id DESC LIMIT ? OFFSET ?`, [u.merchantId,...(range?[range.from,range.to]:[]),...(kw?['%'+kw+'%','%'+kw+'%','%'+kw+'%']:[]),paging.size,paging.offset])
     return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
   },
 
@@ -232,9 +244,9 @@ const m = {
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
     return await q(`SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
-      s.early_price, s.early_days, s.min_go, s.status, p.title
+      s.early_price, s.early_days, s.min_go, s.status, p.id AS product_id, p.title
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE p.merchant_id = ? AND s.depart_date >= CURDATE() - INTERVAL 7 DAY ORDER BY s.depart_date`, [u.merchantId])
+      WHERE p.merchant_id = ? ${req.query.history === '1' ? '' : 'AND s.depart_date >= CURDATE() - INTERVAL 7 DAY'} ORDER BY s.depart_date`, [u.merchantId])
   },
 
   'POST /m/supply/:sid': async (req) => {
@@ -297,25 +309,27 @@ const m = {
   'GET /m/stats': async (req) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
-    const weekRaw = await q(`SELECT o2.d, COUNT(*) orders, COALESCE(SUM(v.n), 0) verifies FROM (
-      SELECT DISTINCT DATE(paid_at) d, id FROM orders WHERE merchant_id = ? AND paid_at >= NOW() - INTERVAL 7 DAY AND status IN (20,30,40,50)
-    ) o2 LEFT JOIN (
-      SELECT tp.order_id, 1 n FROM verification_log v2 JOIN travel_pass tp ON tp.id = v2.pass_id
-      WHERE v2.result = 1 AND v2.merchant_id = ? AND DATE(v2.created_at) >= CURDATE() - INTERVAL 6 DAY GROUP BY tp.order_id, DATE(v2.created_at)
-    ) v ON v.order_id = o2.id GROUP BY o2.d ORDER BY o2.d`, [u.merchantId, u.merchantId])
+    const period = merchantRange(req.query,7,31)
+    const weekRaw = await q(`SELECT DATE(paid_at) d,COUNT(*) orders FROM orders
+      WHERE merchant_id=? AND paid_at>=? AND paid_at<DATE_ADD(?,INTERVAL 1 DAY) AND status IN (20,30,40,50)
+      GROUP BY DATE(paid_at) ORDER BY d`,[u.merchantId,period.from,period.to])
+    const verified = await q(`SELECT DATE(created_at) d,COUNT(*) n FROM verification_log
+      WHERE merchant_id=? AND result=1 AND created_at>=? AND created_at<DATE_ADD(?,INTERVAL 1 DAY)
+      GROUP BY DATE(created_at)`,[u.merchantId,period.from,period.to])
     const byDay = Object.fromEntries(weekRaw.map((w) => [String(w.d), w]))
+    const byVerified = Object.fromEntries(verified.map(v=>[String(v.d),Number(v.n)]))
     const week = []
-    for (let i = 6; i >= 0; i--) {
-      const d = bizDay(-i)
+    for (let i = 0; i < period.days; i++) {
+      const d = new Date(Date.parse(period.from+'T00:00:00Z')+i*86400000).toISOString().slice(0,10)
       const hit = byDay[d]
-      week.push({ d, orders: hit ? Number(hit.orders) : 0, verifies: hit ? Number(hit.verifies) : 0 })
+      week.push({ d, orders: hit ? Number(hit.orders) : 0, verifies: byVerified[d] || 0 })
     }
     const agg = await one(`SELECT COALESCE(AVG(r.rating),0) avg, COUNT(*) count FROM review r
       JOIN orders o ON o.id = r.order_id WHERE o.merchant_id = ? AND r.status = 1`, [u.merchantId])
     const latest = await one(`SELECT r.rating, r.content, DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i') created_at, u.nickname, p.title FROM review r
       JOIN orders o ON o.id = r.order_id JOIN user_account u ON u.id = r.user_id JOIN tour_product p ON p.id = r.product_id
       WHERE o.merchant_id = ? AND r.status = 1 ORDER BY r.id DESC LIMIT 1`, [u.merchantId])
-    return { week, rating: { avg: Math.round(Number(agg.avg) * 10) / 10, count: Number(agg.count) }, latestReview: latest || null }
+    return { period, week, rating: { avg: Math.round(Number(agg.avg) * 10) / 10, count: Number(agg.count) }, latestReview: latest || null }
   },
 
   'GET /m/settlements': async (req) => {    const u = requireUser(req)

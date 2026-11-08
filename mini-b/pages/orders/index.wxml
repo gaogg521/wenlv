@@ -1,13 +1,18 @@
 <merchant-nav id="merchant-navigation" title="门店订单" tab="{{true}}" />
+<view class="page-heading"><view class="page-eyebrow">GUEST ORDERS</view><view class="page-title">每一段旅程，用心接待</view><view class="page-caption">本店履约进度 · 日期按支付时间筛选</view></view>
+<view class="filter-panel"><view class="search-field"><text>⌕</text><input value="{{kw}}" bindinput="onSearch" placeholder="搜索商品、订单号或联系人" /></view><view class="filter-chips"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{status === item.k ? 'active' : ''}}" bindtap="filterStatus" data-k="{{item.k}}">{{item.n}}</view></view></view>
+<view class="order-date-filter"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view class="range-picker">{{periodNames[periodIndex]}}　⌄</view></picker><picker wx:if="{{periodIndex === 4}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker></view>
+<view class="list-summary"><text>已加载 {{matchedCount || 0}} 笔</text><text>其中待接待 {{waitingCount || 0}} 笔</text></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
-<view class="card fade-up" wx:if="{{orders.length}}">
-  <view class="row" bindtap="goDetail" data-no="{{item.order_no}}" wx:for="{{orders}}" wx:key="order_no">
-    <view style="flex:1;min-width:0"><b>{{item.title}}</b>
-      <view class="sub">{{item.order_no}} · {{item.contact_name || '游客'}} · {{item.qty}}人</view>
-      <view wx:if="{{item.rebook}}" class="sub" style="color:#d97706">免费改签单 · 实收 ¥0（改签成本由本店承担）</view></view>
-    <view style="text-align:right;flex-shrink:0"><view class="money">¥{{item.amount_pay / 100}}</view>
-      <view class="pill p{{item.status}}" style="margin-top:8rpx">{{item.statusText}}</view></view>
-  </view>
+<view class="order-paper" wx:for="{{visibleOrders}}" wx:key="order_no" bindtap="goDetail" data-no="{{item.order_no}}">
+  <view class="order-top"><text class="order-number">{{item.order_no}}</text><text class="status-label">{{item.statusText}}</text></view>
+  <view class="order-title">{{item.title}}</view>
+  <view class="order-info"><text>{{item.contactLabel}} · {{item.qty}} 人</text><text class="order-price">¥{{item.priceLabel}}</text></view>
+  <view wx:if="{{item.isDemo}}" class="demo-notice">演示样例 · 模拟支付，不代表真实成交</view>
+  <view wx:if="{{item.rebook}}" class="rebook-label">免费改签单 · 实收 ¥0，改签成本由本店承担</view>
+  <view class="order-foot"><text>{{item.depart_date || '出行时间见详情'}}</text><text>查看订单　↗</text></view>
 </view>
-<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">📋</view>暂无已支付订单</view>
+<view wx:if="{{hasMore}}" class="load-more" bindtap="loadMore">{{loadingMore ? '正在加载…' : '继续查看历史订单　⌄'}}</view>
+<view wx:if="{{loaded && !visibleOrders.length && !error}}" class="empty"><view class="empty-mark">☰</view>暂无符合条件的订单<view class="page-caption">可尝试其他关键词或状态</view></view>
+<view wx:if="{{!loaded}}" class="empty">正在加载本店订单…</view>
 <view class="note">仅展示本店订单 · 游客隐私已脱敏</view>

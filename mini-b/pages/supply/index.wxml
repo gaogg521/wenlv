@@ -1,18 +1,25 @@
 <merchant-nav id="merchant-navigation" title="库存与价格" tab="{{true}}" />
-<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
-<view class="card fade-up" wx:if="{{list.length}}">
-  <view class="row stock-row" wx:for="{{list}}" wx:key="id">
-    <view style="flex:1;min-width:0"><b>{{item.title}}</b>
-      <view class="sub">{{item.depart_date}} · 余 {{item.left_seats}}/{{item.quota}}
-        <text wx:if="{{item.left_seats <= 2}}" style="color:var(--red)">（紧张）</text> · ¥{{item.price_adult/100}}<text wx:if="{{item.early_price}}" style="color:var(--ok)"> · 🐦早鸟 ¥{{item.early_price/100}}（提前{{item.early_days}}天）</text></view></view>
-    <view wx:if="{{role >= 2}}" style="display:flex;gap:12rpx;flex-shrink:0">
-      <view class="pill p30" bindtap="addQuota" data-id="{{item.id}}">加名额</view>
-      <view class="pill p20" bindtap="changePrice" data-id="{{item.id}}" data-price="{{item.price_adult}}">改价</view>
-      <view class="pill p20" bindtap="setEarly" data-id="{{item.id}}" data-early="{{item.early_price}}" data-earlydays="{{item.early_days}}">早鸟</view>
-      <view class="pill p90" wx:if="{{item.status === 1}}" bindtap="stopSell" data-id="{{item.id}}">停售</view>
-      <view class="pill p50" wx:else>已停售</view>
-    </view>
-  </view>
-  <view class="note" style="padding-bottom:8rpx">{{role >= 2 ? '余量紧张自动预警 · 名额与价格调整实时生效' : '当前为只读库存，调整请联系店长或老板'}}</view>
+<view class="page-heading"><view class="page-eyebrow">AVAILABILITY</view><view class="page-title">把每一席，安排妥当</view><view class="page-caption">按商品管理团期、名额与价格</view></view>
+<view class="filter-panel">
+  <view class="search-field"><text>⌕</text><input value="{{kw}}" bindinput="onSearch" placeholder="搜索商品名称或出发日期" /></view>
+  <view class="filter-bottom"><picker range="{{rangeNames}}" value="{{rangeIndex}}" bindchange="filterRange"><view class="range-picker">{{rangeNames[rangeIndex]}}　⌄</view></picker><text class="text-action" bindtap="resetFilters">重置筛选</text></view>
+  <view class="filter-chips"><view wx:for="{{statusOptions}}" wx:key="k" class="filter-chip {{status === item.k ? 'active' : ''}}" bindtap="filterStatus" data-k="{{item.k}}">{{item.n}}</view></view>
 </view>
-<view wx:elif="{{loaded}}" class="empty"><view class="e-ico">📦</view>暂无团期</view>
+<view class="list-summary"><text>{{productCount || 0}} 项商品 · {{filteredCount || 0}} 个团期</text><text>可售余量 {{availableSeats || 0}} 席</text></view>
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
+<view class="product-group" wx:for="{{groups}}" wx:key="key" wx:for-item="g">
+  <view class="group-heading" bindtap="toggleProduct" data-key="{{g.key}}">
+    <view class="group-initial">{{g.count}}<text>团期</text></view>
+    <view class="group-copy"><view class="group-title">{{g.title}}</view><view class="group-sub">最近 {{g.nextDate}} · ¥{{g.priceLabel}}起</view></view><text class="group-arrow">{{g.expanded ? '−' : '+'}}</text>
+  </view>
+  <view class="group-footer" wx:if="{{!g.expanded}}" bindtap="toggleProduct" data-key="{{g.key}}"><text>本组可售余量 {{g.seats}} 席</text><text>展开管理　⌄</text></view>
+  <block wx:if="{{g.expanded}}">
+    <view class="session-item" wx:for="{{g.sessions}}" wx:key="id" wx:for-item="s">
+      <view class="session-main"><view><view class="session-date">{{s.date}}</view><view class="group-sub">剩余 {{s.left}} / {{s.quota}} 席</view></view><view class="session-price">¥{{s.priceLabel}}<view class="status-label {{s.canSell ? 'positive' : ''}}">{{s.statusLabel}}</view></view></view>
+      <view class="session-bottom"><text class="group-sub">{{s.early_price ? '早鸟 ¥' + s.earlyLabel + ' · 提前' + s.early_days + '天' : '常规团期价格'}}</text><button wx:if="{{role >= 2}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
+    </view>
+  </block>
+</view>
+<view wx:if="{{loaded && !groups.length && !error}}" class="empty"><view class="empty-mark">▦</view><view>没有符合条件的团期</view><view class="page-caption">试试其他关键词、日期范围或状态</view><view class="text-action" bindtap="resetFilters">重置筛选</view></view>
+<view wx:if="{{!loaded}}" class="empty">正在加载本店库存…</view>
+<view class="note">{{role >= 2 ? '改价、名额和停售仅对所选团期生效' : '库存为只读，调整请联系店长或老板'}}</view>

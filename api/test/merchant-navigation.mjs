@@ -18,7 +18,7 @@ tab.setData = d => Object.assign(tab.data, d)
 tab.methods.sync.call(tab); assert.equal(tab.data.role, 2); assert.equal(tab.data.selected, 2)
 role = 1; tab.methods.sync.call(tab); assert.equal(tab.data.role, 1, '角色变更须刷新导航')
 let page, requests = 0
-load('pages/index/index.js', { Page: p => { page = p }, require: () => ({ request: () => { requests++; return Promise.resolve({}) } }), getApp: () => ({ globalData: { role: 0, token: '', merchant: null } }), wx: { getStorageSync() {} } })
+load('pages/index/index.js', { Page: p => { page = p }, require: p => p.endsWith('period') ? {day:()=> '2026-11-08',periodQuery:()=>''} : ({ request: () => { requests++; return Promise.resolve({}) } }), getApp: () => ({ globalData: { role: 0, token: '', merchant: null } }), wx: { getStorageSync() {} } })
 page.data.wb = { todayGmv: '旧门店金额' }; page.data.stats = { week: [] }
 page.setData = d => Object.assign(page.data, d)
 page.onShow(); assert.equal(page.data.wb, null); assert.equal(page.data.stats, null); assert.equal(page.data.err, 'login'); assert.equal(requests, 0)

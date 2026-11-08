@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const app = getApp()
 Page({
-  data: { merchant: null, role: 0, midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
+  data: { merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
     if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
@@ -68,8 +68,9 @@ Page({
       wx.showToast({ title: d.unbound ? '请凭邀请码加入门店' : '登录成功', icon: 'none' }); this.fetchApplications(); if (d.role >= 2) this.fetchInvite(); if (d.role >= 3) this.fetchStaff()
     }).catch((e) => wx.showToast({ title: e.msg || '登录失败', icon: 'none' }))
   },
-  logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ merchant: null, role: 0, staff: [], inviteCode: '', applications: [] }) },
+  logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ merchant: null, role: 0, qr:'', staff: [], inviteCode: '', applications: [] });const bar=this.getTabBar && this.getTabBar();if(bar && bar.sync)bar.sync() },
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
+  goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
   // 门店码：官方 getUnlimitedQRCode，游客扫码带商户归因进入首页
   async storeQrcode() {

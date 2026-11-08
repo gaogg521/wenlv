@@ -1,7 +1,10 @@
 <merchant-nav id="merchant-navigation" title="经营等级与荣誉" />
+<view class="page-heading"><view class="page-eyebrow">GROWTH &amp; TRUST</view><view class="page-title">认真经营，自有回响</view><view class="page-caption">门店成长、勋章与可信记录</view></view>
+<view class="honor-tabs"><view wx:for="{{tabs}}" wx:key="k" bindtap="switchTab" data-k="{{item.k}}" class="honor-tab {{active === item.k ? 'active' : ''}}">{{item.n}}</view></view>
 <view wx:if="{{!d}}" class="empty" style="padding:120rpx 40rpx;text-align:center;color:#8a919c">{{loadTxt}}</view>
 <block wx:else>
-  <view class="hero hn-hero {{d.card ? 'tier-' + d.card.tier : ''}}">
+  <block wx:if="{{active === 'level'}}">
+  <view class="hero hn-hero">
     <image class="hn-crest" src="{{d.level.art}}" mode="aspectFit" />
     <view class="hn-info">
       <view class="tier-row" wx:if="{{d.card}}"><text>{{d.card.series}}</text><text class="tier-name">{{d.card.tierName}}</text></view>
@@ -34,12 +37,14 @@
     </view>
   </view>
 
-  <view class="sec-title" style="margin:24rpx 28rpx 0">经营徽章 <text class="tiny" style="margin-left:auto">已点亮 {{ownedCount}}/{{total}}</text></view>
+  </block>
+  <block wx:if="{{active === 'badges'}}">
+  <view class="paper-metrics"><view><text class="paper-number">{{ownedCount}}</text><text class="paper-label">已点亮勋章</text></view><view><text class="paper-number">{{total}}</text><text class="paper-label">可探索勋章</text></view></view>
   <block wx:for="{{groups}}" wx:key="key" wx:for-item="g">
     <view class="hn-group">{{g.label}}<text class="tiny" style="margin-left:12rpx">{{g.got}}/{{g.items.length}}</text></view>
     <view class="hn-wall">
       <view class="hn-b {{item.owned ? 'on' : ''}}" wx:for="{{g.items}}" wx:key="id" bindtap="showBadge" data-id="{{item.id}}">
-        <view class="hn-seal" wx:if="{{item.proof && item.proof.sealed}}">✓</view>
+        <view class="hn-seal" wx:if="{{item.proof && item.proof.confirmed}}">✓</view>
         <image class="hn-b-img" src="{{item.iconImg || item.art}}" mode="aspectFit" />
         <view class="hn-b-n">{{item.name}}</view>
         <view class="hn-b-prog" wx:if="{{!item.owned && item.progress}}"><view class="hn-b-fill" style="width:{{item.progress.pct}}%"></view></view>
@@ -48,6 +53,16 @@
         <view class="hn-b-r" wx:if="{{!item.owned && !item.progress}}">未获得</view>
       </view>
     </view>
+  </block>
+  </block>
+  <block wx:if="{{active === 'proof'}}">
+    <view class="trust-intro"><view class="trust-symbol">◇</view><view><view>每一份认可，都有据可查</view><text>凭证对应本店已获得的勋章，处理状态如实展示</text></view></view>
+    <view class="proof-paper" wx:for="{{proofRecords}}" wx:key="id">
+      <view class="proof-top"><image src="{{item.iconImg || item.art}}" mode="aspectFit" /><view class="proof-title"><view>{{item.name}}</view><text>获得于 {{item.dateLabel}}</text></view><text class="status-label {{item.proof.confirmed ? 'positive' : ''}}">{{item.proofState}}</text></view>
+      <view class="proof-code" wx:if="{{item.proof}}"><view><text>记录编号</text><view selectable>{{item.proof.code}}</view></view><button class="compact-button" bindtap="copyProof" data-code="{{item.proof.code}}">复制编号</button></view>
+      <view wx:else class="page-caption">可信记录尚未生成，请稍后刷新查看。</view>
+    </view>
+    <view wx:if="{{!proofRecords.length}}" class="empty"><view class="empty-mark">◇</view>还没有可展示的勋章凭证<view class="page-caption">获得勋章后，可在这里查看对应记录</view></view>
   </block>
   <view class="note">经营数据来自平台订单、核销与游客评价；等级与徽章每日重评，订单完成与新评价时也会即时更新。</view>
 </block>
