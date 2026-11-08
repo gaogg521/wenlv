@@ -86,7 +86,7 @@ await (async () => {
   const isPng = (b) => Buffer.isBuffer(b) && b.subarray(1, 4).toString() === 'PNG'
   const medalPng=[]
   for(let tier=1;tier<=5;tier++)for(const state of ['on','off'])medalPng.push(await serveBadgeArt('/badge-art/mlevel/'+tier+'.png',new URLSearchParams({state,size:'64'})))
-  t('五款金属图稿均可生成64px已获得与未获得PNG',()=>{for(const b of medalPng)if(Buffer.isBuffer(b)){assert.ok(isPng(b));assert.equal(b.readUInt32BE(16),64)}else assert.ok(b.startsWith('<svg'))})
+  t('五款同系列图形均可生成64px已获得与未获得PNG',()=>{for(const b of medalPng)if(Buffer.isBuffer(b)){assert.ok(isPng(b));assert.equal(b.readUInt32BE(16),64)}else assert.ok(b.startsWith('<svg'))})
   if(Buffer.isBuffer(png)){
     const {Resvg}=await import('@resvg/resvg-js'),pairs=[]
     for(const category of ['mlevel','mhonor','trusted','country']){
@@ -125,7 +125,7 @@ t('商户等级配置错误被拒：数量 / 编号 / 评分无评价数 / 门�
     [mk(1, { minOrders: 0, minReviews: 0, minRating: 0, maxRefundPct: 100 }), '没有区分度'], [mk(1, { perks: ['链上权益'] }), '禁用词'], [mk(0, { minOrders: 5 }), 'Lv1 不设门槛'], [mk(1, { minRating: 51 }), '评分门槛'], [mk(1, { maxRefundPct: 120 }), '退款率']]
   for (const [cfg, key] of bad) assert.throws(() => ml.parseLevels(cfg), (e) => e.message.includes(key), '应拒绝：' + key)
 })
-t('商户认证金属奖牌按等级换材质、经营荣誉随稀有度换色、未获得灰阶；与游客徽章造型不同', () => {
+t('商户认证图形按等级变化、经营荣誉随稀有度换色、未获得灰阶；与游客徽章造型不同', () => {
   const lv = [1, 2, 3, 4].map((n) => renderBadgeSvg({ category: 'mlevel', tier: n })); assert.equal(new Set(lv).size, 4)
   const h = ['common', 'rare', 'epic', 'legend'].map((r) => renderBadgeSvg({ category: 'mhonor', icon_key: 'trend', rarity: r })); assert.equal(new Set(h).size, 4)
   assert.notEqual(renderBadgeSvg({ category: 'mlevel', tier: 2 }), renderBadgeSvg({ category: 'mlevel', tier: 2 }, false))
@@ -133,13 +133,13 @@ t('商户认证金属奖牌按等级换材质、经营荣誉随稀有度换色�
   assert.notEqual(renderBadgeSvg({ category: 'mhonor', icon_key: 'star', rarity: 'rare' }), renderBadgeSvg({ category: 'creator', icon_key: 'star', rarity: 'rare' }))
   assert.equal(renderBadgeSvg({ category: 'mlevel', tier: 1 }), renderBadgeSvg({ category: 'mlevel', tier: 1, icon_key: 'nope' }), '认证奖牌不回退为店铺')
 })
-t('五款金属授勋图稿均可选；现有四档材质及无房屋主图固定',()=>{
+t('五款同系列图形配色可预览；现有四档无写实图或房屋主图',()=>{
   const materials=['bronze','silver','gold','diamond','blackgold']
   for(const [i,metal] of materials.entries()){
     const svg=renderBadgeSvg({category:'mlevel',tier:i+1})
-    assert.ok(svg.includes('data-medal-material="'+metal+'"'))
-    assert.ok(svg.includes('href="data:image/png;base64,'))
-    assert.ok(renderBadgeSvg({category:'mlevel',tier:1,metal}).includes('data-medal-material="'+metal+'"'))
+    assert.ok(svg.includes('data-merchant-emblem="certification"'))
+    assert.ok(!svg.includes('<image'))
+    assert.ok(!renderBadgeSvg({category:'mlevel',tier:1,metal}).includes('<image'))
   }
   assert.equal(ml.DEFAULT_LEVELS.length,4,'设计图稿不应虚增经营等级')
 })
