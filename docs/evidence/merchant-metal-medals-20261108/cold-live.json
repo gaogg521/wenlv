@@ -1,0 +1,9 @@
+{
+  "base": "http://127.0.0.1:8080",
+  "cold40Ms": 1918,
+  "pngImages": 40,
+  "merchantBadgeCount": 20,
+  "versionedImages": 20,
+  "formalMerchantAppId": false,
+  "realPhoneAcceptance": false
+}
