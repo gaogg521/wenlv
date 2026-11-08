@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const app = getApp()
 Page({
-  data: { merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
+  data: { loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
     if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
@@ -65,10 +65,11 @@ Page({
   doLogin() {
     api.login().then((d) => {
       this.setData({ merchant: d.merchant || null, role: d.role || 0 })
+      this.setData({ loginTip: d.unbound ? '这个微信还没有绑定门店：请在下方填写邀请码加入；没有邀请码可提交入驻申请。' : '' })
       wx.showToast({ title: d.unbound ? '请凭邀请码加入门店' : '登录成功', icon: 'none' }); this.fetchApplications(); if (d.role >= 2) this.fetchInvite(); if (d.role >= 3) this.fetchStaff()
     }).catch((e) => wx.showToast({ title: e.msg || '登录失败', icon: 'none' }))
   },
-  logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ merchant: null, role: 0, qr:'', staff: [], inviteCode: '', applications: [] });const bar=this.getTabBar && this.getTabBar();if(bar && bar.sync)bar.sync() },
+  logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ loginTip: '', merchant: null, role: 0, qr:'', staff: [], inviteCode: '', applications: [] });const bar=this.getTabBar && this.getTabBar();if(bar && bar.sync)bar.sync() },
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
