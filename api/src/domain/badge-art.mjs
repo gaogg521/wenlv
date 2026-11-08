@@ -8,6 +8,7 @@
 // 配色 = 稀有度（普通铜 / 稀有宝石蓝 / 史诗紫晶 / 传说金）；系列勋章用小圆点标阶数；未获得 = 灰阶。
 // 后台上传了「勋章图」（icon_img）时仍以上传图为准；这里是默认形象，也是后台编辑器的实时预览。
 import { q, one } from '../db.mjs'
+import { merchantEmblem } from './merchant-emblem.mjs'
 
 export const CATEGORIES = {
   level: { label: '会员等级', adminLabel: '会员等级' },
@@ -19,8 +20,8 @@ export const CATEGORIES = {
   explore: { label: '足迹', adminLabel: '足迹' },
   creator: { label: '创作', adminLabel: '创作' },
   special: { label: '特别', adminLabel: '特别' },
-  mlevel: { label: '商户等级', adminLabel: '商户等级' }, // 商户端：门楼招牌
-  mhonor: { label: '经营荣誉', adminLabel: '经营荣誉' }, // 商户端：花结奖章
+  mlevel: { label: '商户等级', adminLabel: '商户等级' }, // 商户端：圆拱认证牌
+  mhonor: { label: '经营荣誉', adminLabel: '经营荣誉' }, // 商户端：暖色珐琅奖章
 }
 export const CATEGORY_ORDER = ['level', 'member', 'city', 'country', 'trusted', 'journey', 'explore', 'creator', 'special'] // 游客端勋章墙
 export const MERCHANT_CATEGORY_ORDER = ['mlevel', 'mhonor', 'trusted'] // 商户端勋章墙
@@ -189,59 +190,6 @@ function levelBadge(o, owned, u) {
   return { defs, body: out.join('') }
 }
 
-/** 商户等级：门楼招牌——屋檐 + 两根吊绳 + 金属匾额；铜 / 翡翠 / 金 / 钻蓝随等级，匾额下沿点亮等级星 */
-function merchantLevelBadge(o, owned, u) {
-  const lv = Math.max(1, Math.min(8, Number(o.tier) || 1))
-  const m = METAL[owned ? LEVEL_METAL[(lv - 1) % LEVEL_METAL.length] : 'off']
-  const icon = ICONS[o.icon_key] ? o.icon_key : 'store'
-  const body = 'M40 74 H216 a10 10 0 0 1 10 10 V196 a10 10 0 0 1 -10 10 H40 a10 10 0 0 1 -10 -10 V84 a10 10 0 0 1 10 -10 Z'
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]], 0.35, 0.25, 0.95)
-    + lin(u + 'rf', owned ? [[0, '#6b3a17'], [1, '#2e1707']] : [[0, '#b8b8b8'], [1, '#8f8f8f']], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.55 : 0.3], [1, '#fff', 0]])
-    + rad(u + 'gl', [[0, m.glow, owned ? 0.5 : 0.15], [1, m.glow, 0]], 0.5, 0.5, 0.5) + '<clipPath id="' + u + 'c"><path d="' + body + '"/></clipPath>'
-  const out = []
-  if (owned && lv >= 3) out.push('<ellipse cx="128" cy="140" rx="126" ry="100" fill="url(#' + u + 'gl)"/>')
-  out.push('<ellipse cx="128" cy="248" rx="80" ry="6" fill="#000" opacity="0.10"/>')
-  // 吊绳
-  out.push('<path d="M74 52 V76 M182 52 V76" stroke="' + m.s[3] + '" stroke-width="4" stroke-linecap="round"/><circle cx="74" cy="76" r="5" fill="' + m.s[1] + '" stroke="' + m.s[3] + '" stroke-width="1.5"/><circle cx="182" cy="76" r="5" fill="' + m.s[1] + '" stroke="' + m.s[3] + '" stroke-width="1.5"/>')
-  // 屋檐
-  out.push('<path d="M18 52 Q128 -4 238 52 Z" fill="url(#' + u + 'rf)"/><path d="M18 52 Q128 -4 238 52" fill="none" stroke="' + m.s[1] + '" stroke-width="3.5"/><path d="M12 54 H244" stroke="' + m.s[2] + '" stroke-width="6" stroke-linecap="round"/>')
-  out.push('<path d="M52 44 Q128 10 204 44" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="3"/>')
-  // 匾额
-  out.push('<path d="' + body + '" fill="url(#' + u + 'r)"/><path d="' + body + '" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="2.4" ' + sc(0.985, 128, 140) + '/>')
-  out.push('<path d="' + body + '" fill="url(#' + u + 'rr)" opacity="0.9" ' + sc(0.9, 128, 140) + '/><path d="' + body + '" fill="url(#' + u + 'f)" ' + sc(0.86, 128, 140) + '/>')
-  for (const [x, y] of [[48, 92], [208, 92], [48, 188], [208, 188]]) out.push('<circle cx="' + x + '" cy="' + y + '" r="4.5" fill="' + m.s[2] + '" stroke="' + m.s[3] + '" stroke-opacity="0.6"/>')
-  out.push('<circle cx="128" cy="134" r="46" fill="none" stroke="' + m.s[2] + '" stroke-opacity="0.5" stroke-width="1.6" stroke-dasharray="' + (owned ? '1.5 4.5' : '0') + '" stroke-linecap="round"/>')
-  out.push(engraved(icon, 1.7, 128, 134, m.ink))
-  const n = Math.min(lv, 5)
-  for (let i = 0; i < n; i++) out.push(star(f(128 - (n - 1) * 15 + i * 30), 190, 8, owned ? m.s[1] : '#cfcfcf', 'stroke="' + m.s[3] + '" stroke-opacity="0.6" stroke-width="1"'))
-  out.push('<g clip-path="url(#' + u + 'c)"><path d="M10 120 L100 60 L150 60 L40 170 Z" fill="url(#' + u + 'sh)"/><ellipse cx="96" cy="100" rx="70" ry="18" fill="#fff" opacity="' + (owned ? 0.25 : 0.14) + '" transform="rotate(-12 96 100)"/></g>')
-  if (owned && lv >= 4) out.push(star(24, 30, 10, '#ffffff') + star(236, 40, 8, '#ffffff'))
-  return { defs, body: out.join('') }
-}
-
-/** 经营荣誉：花结奖章——波纹圆章 + 两条垂带；金属随稀有度，系列阶数画在垂带上 */
-function merchantHonorBadge(o, owned, rarity, u) {
-  const m = METAL[owned ? RARITY_METAL[rarity] : 'off']
-  const accent = owned && hex(o.color) ? o.color : m.s[2]
-  const ink = owned && hex(o.color) ? shade(o.color, -0.55) : m.ink
-  const ribbon = owned ? [shade(accent, 0.05), shade(accent, -0.35)] : ['#d0d0d0', '#a8a8a8']
-  const defs = lin(u + 'r', metalStops(m)) + lin(u + 'rr', metalStops(m), 1, 1, 0, 0) + rad(u + 'f', [[0, mix(m.s[0], m.s[1], 0.4)], [1, mix(m.s[1], m.s[2], 0.5)]])
-    + lin(u + 'rb', [[0, ribbon[0]], [1, ribbon[1]]], 0, 0, 0, 1) + lin(u + 'sh', [[0, '#fff', 0], [0.5, '#fff', owned ? 0.6 : 0.3], [1, '#fff', 0]]) + '<clipPath id="' + u + 'c"><circle cx="128" cy="112" r="68"/></clipPath>'
-  const out = ['<ellipse cx="128" cy="250" rx="52" ry="5" fill="#000" opacity="0.10"/>']
-  out.push('<path d="M82 160 L58 246 L92 230 L104 250 L124 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/><path d="M174 160 L198 246 L164 230 L152 250 L132 168 Z" fill="url(#' + u + 'rb)" stroke="' + ribbon[1] + '" stroke-opacity="0.6" stroke-width="1.5"/>')
-  out.push('<path d="M98 200 L88 232 M158 200 L168 232" stroke="#fff" stroke-opacity="0.35" stroke-width="2"/>')
-  const tier = Math.max(0, Math.min(5, Number(o.tier) || 0))
-  if (tier > 0 && o.series) out.push(pips(tier, 128, 232, owned ? '#fff3d6' : '#f0f0f0', ribbon[1], 13, 4))
-  const ruffle = poly(Array.from({ length: 40 }, (_, i) => polar(i % 2 ? 76 : 88, i * 9, 128, 112)))
-  out.push('<path d="' + ruffle + '" fill="url(#' + u + 'r)"/><circle cx="128" cy="112" r="72" fill="none" stroke="#fff" stroke-opacity="0.65" stroke-width="2.2"/>')
-  out.push('<circle cx="128" cy="112" r="66" fill="url(#' + u + 'rr)"/><circle cx="128" cy="112" r="60" fill="url(#' + u + 'f)"/><circle cx="128" cy="112" r="50" fill="none" stroke="' + accent + '" stroke-opacity="0.55" stroke-width="1.8" stroke-dasharray="' + (owned ? '1.5 4.5' : '0') + '" stroke-linecap="round"/>')
-  out.push(engraved(o.icon_key, 1.6, 128, 112, ink))
-  out.push('<g clip-path="url(#' + u + 'c)"><path d="M50 60 L150 40 L190 40 L80 130 Z" fill="url(#' + u + 'sh)"/><ellipse cx="102" cy="76" rx="48" ry="16" fill="#fff" opacity="' + (owned ? 0.28 : 0.15) + '" transform="rotate(-24 102 76)"/></g>')
-  if (owned && rarity === 'legend') out.push(star(34, 40, 12, accent) + star(222, 54, 9, accent) + star(212, 176, 7, accent))
-  if (owned && rarity === 'epic') out.push(star(40, 46, 9, accent) + star(216, 58, 7, accent))
-  return { defs, body: out.join('') }
-}
-
 /** 会员荣誉：月桂花环 + 缎带 */
 function memberBadge(o, owned, rarity, u) {
   const m = METAL[owned ? RARITY_METAL[rarity] : 'off'], j = METAL[owned ? 'jade' : 'off']
@@ -357,7 +305,7 @@ function trustedBadge(o, owned, rarity, u) {
 
 /**
  * 生成勋章 SVG
- * @param {{icon_key?, rarity?, category?, tier?, series?, color?, country_code?, seed?, metal?}} o
+ * @param {{icon_key?, rarity?, category?, tier?, series?, color?, country_code?, seed?, metal?, audience?, rule_type?}} o
  * @param {boolean} owned 已获得 true；未获得 false（灰阶）
  */
 export function renderBadgeSvg(o = {}, owned = true) {
@@ -370,10 +318,11 @@ export function renderBadgeSvg(o = {}, owned = true) {
   let parts
   if (category === 'level') parts = levelBadge(oo, owned, u)
   else if (category === 'member') parts = memberBadge(oo, owned, rarity, u)
-  else if (category === 'mlevel') parts = merchantLevelBadge(oo, owned, u)
-  else if (category === 'mhonor') parts = merchantHonorBadge(oo, owned, rarity, u)
+  else if (category === 'mlevel') parts = merchantEmblem(oo, owned, ICONS[oo.icon_key])
+  else if (category === 'mhonor') parts = merchantEmblem(oo, owned, ICONS[oo.icon_key])
   else if (category === 'city') parts = cityBadge(oo, owned, rarity, u)
   else if (category === 'country') parts = countryBadge(oo, owned, rarity, u)
+  else if (category === 'trusted' && oo.audience === 'merchant') parts = merchantEmblem(oo, owned, ICONS[oo.icon_key])
   else if (category === 'trusted') parts = trustedBadge(oo, owned, rarity, u)
   else parts = metalBadge(oo, METAL[owned ? RARITY_METAL[rarity] : 'off'], owned, rarity, u)
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs>${parts.defs}</defs>${parts.body}</svg>`
@@ -412,7 +361,7 @@ const prof = (b) => ((typeof b.profile === 'string' ? JSON.parse(b.profile || '{
 /** 数据行 → 绘制参数 */
 export function artOptions(b) {
   const pf = prof(b)
-  return { icon_key: b.icon_key, rarity: pf.rarity, category: pf.category, tier: pf.tier, series: pf.series, color: pf.color, country_code: pf.country_code, seed: 'b' + b.id }
+  return { audience: /^m_/.test(b.rule_type || '') ? 'merchant' : 'tourist', rule_type: b.rule_type, icon_key: b.icon_key, rarity: pf.rarity, category: pf.category, tier: pf.tier, series: pf.series, color: pf.color, country_code: pf.country_code, seed: 'b' + b.id }
 }
 
 /**
@@ -445,7 +394,7 @@ export async function serveBadgeArt(pathname, query) {
   const m = /^\/badge-art\/(\d+|preview)\.svg$/.exec(pathname)
   if (!m) return null
   if (m[1] === 'preview') {
-    return renderBadgeSvg({ icon_key: query.get('icon_key'), rarity: query.get('rarity'), category: query.get('category'), tier: query.get('tier'), country_code: query.get('country_code'), color: query.get('color'),
+    return renderBadgeSvg({ audience: query.get('audience') === 'merchant' || query.get('series') === '可信经营' ? 'merchant' : 'tourist', icon_key: query.get('icon_key'), rarity: query.get('rarity'), category: query.get('category'), tier: query.get('tier'), country_code: query.get('country_code'), color: query.get('color'),
       series: query.get('series') || (Number(query.get('tier')) ? 'x' : ''), seed: query.get('seed') || 'preview' }, owned)
   }
   const b = await one('SELECT * FROM badge WHERE id = ?', [Number(m[1])])
