@@ -41,8 +41,8 @@ async function describeChainOf(e, anchored) {
     tsMs: e.chain_ts_ms || desc.tsMs || null,
     tsIso: e.chain_ts_ms ? new Date(Number(e.chain_ts_ms)).toISOString() : (desc.tsIso || null),
   }
-  if (desc.version === 2) {
-    const v = m.verifyContentV2(e.chain_content)
+  if (desc.version === 2 || desc.version === 3) {
+    const v = m.verifyContent(e.chain_content)
     return { ...base, ...desc, signatureVerified: v.ok, signatureNote: v.ok ? '签名可被平台公钥验证' : v.reason }
   }
   return { ...base, ...desc, signatureVerified: null,

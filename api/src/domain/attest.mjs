@@ -162,6 +162,7 @@ export async function anchorToChain(batchId) {
     r = existed || await chain.submit({
       root: b.merkle_root, prevRoot: b.prev_root, leafCount: b.leaf_count,
       bizDate: b.biz_date, merkleKind: b.merkle_kind,
+      summary: await batchSummary(b),
     })
     if (!r || !r.txRef) throw new Error('链适配器未返回交易号')
   } catch (e) {
@@ -182,6 +183,21 @@ export async function anchorToChain(batchId) {
   await q('UPDATE attest_batch SET chain_provider = ?, chain_content = ?, chain_ts_ms = ? WHERE id = ?',
     [chain.providerId(), content, tsMs, batchId])
   return await markAnchored(batchId, r.txRef, r.block, null, !!existed)
+}
+
+/**
+ * 上链原文里的"批内构成"：只放业务类型和条数（如 n=20;badge=17;settlement=3），
+ * 方便在区块链浏览器里直接看出这批装了什么。不含金额、订单号、手机号、用户标识。
+ * 取不到（查询失败、类型名不合规）就返回 undefined，适配器会回落到不带摘要的格式，不影响锚定。
+ */
+export async function batchSummary(b) {
+  try {
+    const rows = await q('SELECT biz_type, COUNT(*) n FROM attest_event WHERE batch_id = ? GROUP BY biz_type ORDER BY n DESC, biz_type', [b.id])
+    const parts = rows.filter((r) => /^[a-z0-9_]{1,24}$/.test(String(r.biz_type))).map((r) => `${r.biz_type}=${Number(r.n)}`)
+    // 旅豆日终封存的叶子是流水行，不在 attest_event 里：按批次类型给一个总数
+    if (!parts.length) parts.push(`${String(b.merkle_kind || 'batch').replace(/[^a-z0-9_]/g, '').slice(0, 24) || 'batch'}=${Number(b.leaf_count)}`)
+    return [`n=${Number(b.leaf_count)}`, ...parts].join(';')
+  } catch { return undefined }
 }
 
 async function markAnchored(batchId, txRef, block, confirmations, reused = false) {

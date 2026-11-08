@@ -3,7 +3,7 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import assert from 'node:assert/strict'
-import antopen, { toPem, contentOf, handshakeSecret, parseContentV2, verifyContentV2 } from '../src/infra/chain/antchain-open.mjs'
+import antopen, { toPem, contentOf, handshakeSecret, parseContentV2, verifyContentV2, parseContentV3, verifyContent, summaryValid, parseSummary, describeContent } from '../src/infra/chain/antchain-open.mjs'
 
 let pass = 0
 const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', name) } catch (e) { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 } }
@@ -97,6 +97,40 @@ try {
     assert.equal(contentOf({ root: ROOT, prevRoot: '', bizDate: '2026-11-04' }), `wl-anchor/1|${ROOT}|${'0'.repeat(64)}|20261104`, 'v1 兼容函数要保持原样')
     await antopen.anchor({ root: 'c'.repeat(64), bizDate: '2026-11-04' })
     assert.equal(st.handshakes, 1, '第二次提交复用 token')
+  })
+  await t('v3：带"批内构成"摘要上链；摘要在签名范围内；篡改摘要签名必须失效；摘要只有「类型=条数」', async () => {
+    conf(); st.deposits.length = 0
+    const SUMMARY = 'n=20;badge=17;settlement=3'
+    const r = await antopen.anchor({ root: ROOT, prevRoot: PREV, bizDate: '2026-11-04', kind: 'biz', summary: SUMMARY })
+    const d = st.deposits[0]
+    const c = parseContentV3(d.content)
+    assert.ok(c, '应是 v3 格式：' + d.content.slice(0, 40)); assert.equal(c.summary, SUMMARY); assert.equal(c.root, ROOT); assert.equal(c.prevRoot, PREV)
+    assert.equal(c.tenant, 'TENANT1'); assert.match(c.ts, /^\d{13}$/); assert.match(c.sig, /^[0-9a-f]{512}$/)
+    assert.equal(r.content, d.content); assert.equal(r.signed, true)
+    assert.equal(verifyContent(d.content).ok, true, 'v3 签名验不过')
+    assert.equal(verifyContent(d.content.replace('badge=17', 'badge=18')).ok, false, '摘要被改动后签名必须失效')
+    assert.equal(parseContentV2(d.content), null, 'v3 不能被误认成 v2')
+    const desc = describeContent(d.content)
+    assert.equal(desc.version, 3); assert.deepEqual(desc.summary, { total: 20, types: { badge: 17, settlement: 3 } }); assert.equal(desc.root, ROOT)
+    assert.ok(!/[一-龥]/.test(d.content), '上链原文不含中文，避免编码问题')
+  })
+  await t('v3 摘要守门：带 | 、中文、大写、超长、空串、非字符串一律不合规，回落 v2，绝不把任意字符串写上链', async () => {
+    for (const bad of ['', 'n=1|x=2', 'n=1;勋章=2', 'N=1', 'n=1;badge', 'n=a', 'a=1;'.repeat(60), null, undefined, 123, 'n=1;a=1;\n']) {
+      assert.equal(summaryValid(bad), false, '应拒绝：' + String(bad).slice(0, 20))
+    }
+    assert.equal(summaryValid('n=20;badge=17;settlement=3'), true); assert.equal(parseSummary('n=1;a=1').total, 1); assert.equal(parseSummary('x|y'), null)
+    conf(); st.deposits.length = 0
+    await antopen.anchor({ root: 'a'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04', summary: 'n=1|evil=1' })
+    assert.ok(parseContentV2(st.deposits[0].content), '摘要不合规必须回落 v2'); assert.equal(parseContentV3(st.deposits[0].content), null)
+  })
+  await t('confirm 认 v3：内容逐字一致且验签 → final；链上摘要被换 → 硬错误', async () => {
+    conf()
+    const r = await antopen.anchor({ root: 'b'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04', summary: 'n=2;badge=2' })
+    st.txs.get(r.txRef).block = 185031370
+    const arg = { txRef: r.txRef, root: 'b'.repeat(64), prevRoot: PREV, bizDate: '2026-11-04', content: r.content }
+    const fin = await antopen.confirm(arg)
+    assert.equal(fin.final, true); assert.equal(fin.signed, true); assert.equal(fin.contentV3, true); assert.equal(fin.contentV2, false)
+    await assert.rejects(() => antopen.confirm({ ...arg, content: r.content.replace('badge=2', 'badge=9') }), (e) => e.code === 'CONTENT_MISMATCH')
   })
   await t('上链原文长度守门：超过实测安全上限直接拒绝，不让它"返回成功但链上查无此交易"', async () => {
     conf()
