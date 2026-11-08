@@ -10,7 +10,7 @@ const OFF = {rim:'#cbc9bc',face:'#eae8df',ink:'#a6a496',light:'#f5f3ec'}
 const rank = n => Math.max(1,Math.min(4,Math.trunc(Number(n)||1)))
 const rgba = c => /^#[0-9a-fA-F]{6}$/.test(c||'')
 const SYMBOLS = {
-  store:'<path d="M7 19V40H41V19M4 18L9 7H39L44 18M4 18C4 24 14 24 14 18C14 24 24 24 24 18C24 24 34 24 34 18C34 24 44 24 44 18M19 40V29H29V40"/>',
+  store:'<path d="M24 5L30 17L43 19L33 29L35 42L24 36L13 42L15 29L5 19L18 17Z"/>',
   ticket:'<path d="M7 11H41V19C34 19 34 29 41 29V37H7V29C14 29 14 19 7 19ZM28 13V16M28 23V26M28 33V35M15 14H21M15 34H21"/>',
   trend:'<path d="M7 38V27H15V38M21 38V20H29V38M35 38V11H43V38M7 18L19 11L29 15L41 5M34 5H41V12"/>',
   crown:'<path d="M7 12L16 21L24 7L32 21L41 12L37 34H11ZM12 41H36"/>',
