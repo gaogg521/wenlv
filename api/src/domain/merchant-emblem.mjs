@@ -1,13 +1,13 @@
-// 商户专属珐琅徽记：清楚的轮廓、大图形、暖纸面，64px 下仍能辨认。
+// 商户专属珐琅徽记：清楚的轮廓、大图形、饱和亮色，64px 下仍能辨认。
 // 这里只画外观，不读取或推断经营等级、发放资格、可信记录确认状态。
 const PALETTES = [
-  { rim:'#c5a17a', face:'#f3e7d6', ink:'#8c6543', light:'#fff8eb' },
-  { rim:'#a3af82', face:'#e7eddc', ink:'#5b744c', light:'#fafcef' },
-  { rim:'#c3a260', face:'#f4e7c3', ink:'#937136', light:'#fff9e5' },
-  { rim:'#c5aa70', face:'#355442', ink:'#efdeb3', light:'#54715a' },
+  { rim:'#ffb25a', face:'#dc641f', ink:'#fff4dc', light:'#ff9b35' },
+  { rim:'#8ecfff', face:'#2678cc', ink:'#f0fbff', light:'#4daaf0' },
+  { rim:'#ffdc68', face:'#f0ad0c', ink:'#7b3c00', light:'#ffd24b' },
+  { rim:'#73e2bd', face:'#078970', ink:'#eafff5', light:'#2bc69c' },
 ]
-const CERT_PALETTES=[PALETTES[0],{rim:'#b5bcbf',face:'#edf0ef',ink:'#71807d',light:'#fafcf8'},PALETTES[2],{rim:'#a5bfc2',face:'#e5efeb',ink:'#547e76',light:'#f5faf6'},{rim:'#bda46e',face:'#383d34',ink:'#e9d9ad',light:'#505747'}]
-const OFF = {rim:'#cbc9bc',face:'#eae8df',ink:'#a6a496',light:'#f5f3ec'}
+const CERT_PALETTES=[PALETTES[0],PALETTES[1],PALETTES[2],PALETTES[3],{rim:'#ffd15c',face:'#303b61',ink:'#ffe59d',light:'#4c62a0'}]
+const OFF = {rim:'#a5b1aa',face:'#d4ded6',ink:'#75867c',light:'#e3e9e1'}
 const rank = n => Math.max(1,Math.min(5,Math.trunc(Number(n)||1)))
 const rgba = c => /^#[0-9a-fA-F]{6}$/.test(c||'')
 const SYMBOLS = {
