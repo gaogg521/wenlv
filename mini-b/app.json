@@ -11,8 +11,9 @@
     "pages/honor/index"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#7b5aa6",
-    "navigationBarTextStyle": "white",
+    "navigationStyle": "custom",
+    "navigationBarBackgroundColor": "#f7f6fa",
+    "navigationBarTextStyle": "black",
     "navigationBarTitleText": "向往的自由 · 商户端",
     "backgroundColor": "#f4f5f7"
   },
@@ -49,6 +50,7 @@
     ],
     "custom": true
   },
+  "usingComponents": { "merchant-nav": "/components/merchant-nav/index" },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"

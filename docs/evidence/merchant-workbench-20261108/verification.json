@@ -1,0 +1,31 @@
+{
+  "changedBackendPermissions": false,
+  "pricing": {
+    "merchantOwner": "existing role >= 2 guard includes owner role 3",
+    "merchantManager": "role 2 same-store pricing",
+    "platformOperator": "admin product entity roles super/ops unchanged"
+  },
+  "npmTestExit": 0,
+  "navigationTestExit": 0,
+  "allMerchantWxmlCompiled": true,
+  "simulator": {
+    "servicesAndReturn": [
+      "orders",
+      "supply",
+      "settlement",
+      "records"
+    ],
+    "orderDetailReturnsToOrders": true,
+    "directEntryReturnsHome": [
+      "verify",
+      "honor",
+      "me"
+    ],
+    "managerServices": 4,
+    "clerkServices": 2,
+    "roleBasedTabBarSynced": true
+  },
+  "databaseMigrations": 0,
+  "demoPaymentsOrNotifications": 0,
+  "realPhoneAccepted": false
+}

@@ -11,7 +11,15 @@ Component({
       { path: '/pages/me/index', text: '我的', ico: '👤' },
     ],
   },
+  lifetimes: { attached() { this.sync() } },
+  pageLifetimes: { show() { this.sync() } },
   methods: {
+    sync() {
+      const pages = getCurrentPages(), current = pages[pages.length - 1]
+      const path = current ? '/' + current.route : ''
+      const selected = this.data.list.findIndex(item => item.path === path)
+      this.setData({ role: Number(getApp().globalData.role) || 0, selected: selected < 0 ? 0 : selected })
+    },
     tap(e) {
       const { path, index } = e.currentTarget.dataset
       wx.switchTab({ url: path })

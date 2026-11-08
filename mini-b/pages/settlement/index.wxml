@@ -1,3 +1,4 @@
+<merchant-nav id="merchant-navigation" title="对账结算" />
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
 <view class="card fade-up" wx:for="{{list}}" wx:key="id" wx:for-item="s">
   <view class="sec-title">{{s.periodTitle}}

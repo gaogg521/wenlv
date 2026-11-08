@@ -1,3 +1,4 @@
+<merchant-nav id="merchant-navigation" title="门店订单" tab="{{true}}" />
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="card fade-up" wx:if="{{orders.length}}">
   <view class="row" bindtap="goDetail" data-no="{{item.order_no}}" wx:for="{{orders}}" wx:key="order_no">
