@@ -4,7 +4,7 @@
 <view class="filter-chips settlement-filters"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{state === item.k ? 'active' : ''}}" bindtap="filterState" data-k="{{item.k}}">{{item.n}}</view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
 <view class="card settlement-paper" wx:for="{{visibleList}}" wx:key="id" wx:for-item="s">
-  <view class="bill-heading" bindtap="toggleBill" data-id="{{s.id}}"><view class="bill-title">{{s.periodTitle}}</view><text class="status-label">{{s.statusText}}</text></view>
+  <view class="bill-heading" bindtap="toggleBill" data-id="{{s.id}}"><view class="bill-title">{{s.periodTitle}}</view><text class="status-label status-{{s.status}}">{{s.statusText}}</text></view>
   <view class="bill-amount" bindtap="toggleBill" data-id="{{s.id}}"><view><text class="paper-label">本店应结</text><view>¥{{s.payableLabel}}</view></view><view class="bill-count">{{s.order_count}} 笔订单<text>{{expanded[s.id] ? '收起账单 −' : '展开账单 +'}}</text></view></view>
   <block wx:if="{{expanded[s.id]}}">
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
@@ -15,18 +15,18 @@
   </view>
   <view wx:if="{{s.total_amount > 0}}" style="font-size:22rpx;color:var(--sub);margin-top:6rpx">五口径分账（总额拆分，恒等校验）</view>
   <view class="split-bar" wx:if="{{s.total_amount > 0}}">
-    <i style="width:{{s.amt_fulfill / s.total_amount * 100}}%;background:#7b5aa6"></i>
-    <i style="width:{{s.amt_service / s.total_amount * 100}}%;background:#a97fd1"></i>
-    <i style="width:{{s.amt_promoter / s.total_amount * 100}}%;background:#f0b429"></i>
-    <i style="width:{{s.amt_beanbudget / s.total_amount * 100}}%;background:#38bdf8"></i>
-    <i style="width:{{s.amt_retained / s.total_amount * 100}}%;background:#0f9d58"></i>
+    <i style="width:{{s.amt_fulfill / s.total_amount * 100}}%;background:#57704f"></i>
+    <i style="width:{{s.amt_service / s.total_amount * 100}}%;background:#9fa77a"></i>
+    <i style="width:{{s.amt_promoter / s.total_amount * 100}}%;background:#ad603d"></i>
+    <i style="width:{{s.amt_beanbudget / s.total_amount * 100}}%;background:#cfb77c"></i>
+    <i style="width:{{s.amt_retained / s.total_amount * 100}}%;background:#7a9690"></i>
   </view>
   <view class="split-legend" wx:if="{{s.total_amount > 0}}">
-    <text><em style="background:#7b5aa6"></em>履约 ¥{{s.amt_fulfill/100}}</text>
-    <text><em style="background:#a97fd1"></em>服务费 ¥{{s.amt_service/100}}</text>
-    <text><em style="background:#f0b429"></em>推广 ¥{{s.amt_promoter/100}}</text>
-    <text><em style="background:#38bdf8"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
-    <text><em style="background:#0f9d58"></em>留存 ¥{{s.amt_retained/100}}</text>
+    <text><em style="background:#57704f"></em>履约 ¥{{s.amt_fulfill/100}}</text>
+    <text><em style="background:#9fa77a"></em>服务费 ¥{{s.amt_service/100}}</text>
+    <text><em style="background:#ad603d"></em>推广 ¥{{s.amt_promoter/100}}</text>
+    <text><em style="background:#cfb77c"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
+    <text><em style="background:#7a9690"></em>留存 ¥{{s.amt_retained/100}}</text>
   </view>
   <view class="split-rate" wx:if="{{s.splitText}}">{{s.splitNote}}：{{s.splitText}}</view>
   <view class="fee-box" wx:if="{{s.fee_total > 0}}">
