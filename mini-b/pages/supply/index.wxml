@@ -1,3 +1,4 @@
+<merchant-nav id="merchant-navigation" title="库存与价格" tab="{{true}}" />
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
 <view class="card fade-up" wx:if="{{list.length}}">
   <view class="row stock-row" wx:for="{{list}}" wx:key="id">

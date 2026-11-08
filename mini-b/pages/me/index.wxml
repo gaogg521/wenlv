@@ -1,3 +1,4 @@
+<merchant-nav id="merchant-navigation" title="我的门店" tab="{{true}}" />
 <view class="hero">
   <block wx:if="{{merchant}}"><view class="hi">{{merchant.name}}</view>
     <view class="sub2">商户号 {{merchant.merchant_no}} · 已安全绑定门店</view></block>

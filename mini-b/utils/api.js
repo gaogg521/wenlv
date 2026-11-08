@@ -23,6 +23,9 @@ function login(merchantId, retried) {
       request('/m/auth/login', 'POST', { code: r.code, merchantId }, retried).then((d) => {
         g().token = d.token; g().merchant = d.merchant; g().role = d.role || 0
         wx.setStorageSync('mtoken', d.token); wx.setStorageSync('merchant', d.merchant || null); wx.setStorageSync('mrole', d.role || 0)
+        const pages = getCurrentPages(), page = pages[pages.length - 1]
+        const bar = page && page.getTabBar && page.getTabBar()
+        if (bar && bar.sync) bar.sync()
         resolve(d)
       }).catch(reject)
     }, fail: reject })

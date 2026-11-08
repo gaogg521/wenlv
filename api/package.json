@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
+    "test:merchant-navigation": "node test/merchant-navigation.mjs",
     "start:win": "node --env-file=.env src/index.mjs",
     "migrate": "node scripts/migrate.mjs",
     "test": "node scripts/check-syntax.mjs && node test/import-paths.mjs && node test/web3-core.mjs && node test/refund-policy.mjs && node test/secrets-key.mjs && node test/wording-guard.mjs && node test/mfa-senders.mjs && node test/miniapp-map.mjs && node test/mobile.mjs && node test/member-badge.mjs && node test/tbaas.mjs && node test/antchain-open.mjs && node test/antchain-contract.mjs && node test/pdf-title.mjs && node test/web3-chain-ui.mjs && node test/web3-click.mjs && node test/web3-trust-layout.mjs && node test/chain-contract-guard.mjs && node test/admin-default-pwd.mjs && node test/audit-p0-admin-xss.mjs && node test/audit-p1-static.mjs && node test/audit-mini-handlers.mjs && node test/subscribe-gesture.mjs && node test/wx-callback.mjs && node test/mini-media.mjs && node test/production-boot.mjs",
