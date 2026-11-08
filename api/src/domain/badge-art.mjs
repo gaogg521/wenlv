@@ -9,6 +9,7 @@
 // 后台上传了「勋章图」（icon_img）时仍以上传图为准；这里是默认形象，也是后台编辑器的实时预览。
 import { q, one } from '../db.mjs'
 import { merchantEmblem } from './merchant-emblem.mjs'
+import { merchantMedal } from './merchant-medal.mjs'
 
 export const CATEGORIES = {
   level: { label: '会员等级', adminLabel: '会员等级' },
@@ -318,7 +319,7 @@ export function renderBadgeSvg(o = {}, owned = true) {
   let parts
   if (category === 'level') parts = levelBadge(oo, owned, u)
   else if (category === 'member') parts = memberBadge(oo, owned, rarity, u)
-  else if (category === 'mlevel') parts = merchantEmblem(oo, owned, ICONS[oo.icon_key])
+  else if (category === 'mlevel') parts = merchantMedal(oo, owned)
   else if (category === 'mhonor') parts = merchantEmblem(oo, owned, ICONS[oo.icon_key])
   else if (category === 'city') parts = cityBadge(oo, owned, rarity, u)
   else if (category === 'country') parts = countryBadge(oo, owned, rarity, u)
@@ -389,13 +390,13 @@ export async function serveBadgeArt(pathname, query) {
   const owned = query.get('state') !== 'off'
   if (pathname === '/badge-art/bean.svg') return renderBeanSvg()
   const mm = /^\/badge-art\/mlevel\/(\d{1,2})\.svg$/.exec(pathname)
-  if (mm) return renderBadgeSvg({ category: 'mlevel', tier: Number(mm[1]), seed: 'ml' + mm[1] }, owned)
+  if (mm) return renderBadgeSvg({ category: 'mlevel', tier: Number(mm[1]), metal: query.get('metal'), seed: 'ml' + mm[1] }, owned)
   const lm = /^\/badge-art\/level\/(\d{1,2})\.svg$/.exec(pathname)
   if (lm) return renderBadgeSvg({ category: 'level', tier: Number(lm[1]), seed: 'lv' + lm[1] }, owned)
   const m = /^\/badge-art\/(\d+|preview)\.svg$/.exec(pathname)
   if (!m) return null
   if (m[1] === 'preview') {
-    return renderBadgeSvg({ audience: query.get('audience') === 'merchant' || query.get('series') === '可信经营' ? 'merchant' : 'tourist', icon_key: query.get('icon_key'), rarity: query.get('rarity'), category: query.get('category'), tier: query.get('tier'), country_code: query.get('country_code'), color: query.get('color'),
+    return renderBadgeSvg({ metal: query.get('metal'), audience: query.get('audience') === 'merchant' || query.get('series') === '可信经营' ? 'merchant' : 'tourist', icon_key: query.get('icon_key'), rarity: query.get('rarity'), category: query.get('category'), tier: query.get('tier'), country_code: query.get('country_code'), color: query.get('color'),
       series: query.get('series') || (Number(query.get('tier')) ? 'x' : ''), seed: query.get('seed') || 'preview' }, owned)
   }
   const b = await one('SELECT * FROM badge WHERE id = ?', [Number(m[1])])
