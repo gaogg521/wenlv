@@ -27,20 +27,20 @@
     <view class="error-panel" wx:else><view>{{err}}</view><button bindtap="retry">重新加载</button></view>
     <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
     <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
-    <view class="section-heading"><text>常用服务</text><text class="section-note">让日常更有条理</text></view>
+    <view class="section-heading services-heading"><text>门店日常</text><text class="section-note">把接待安排得井井有条</text></view>
     <view class="service-grid">
-      <button wx:if="{{role >= 2}}" bindtap="goOrders"><view class="service-icon">☰</view><view>门店订单</view><text>查看与跟进</text></button>
-      <button wx:if="{{role >= 2}}" bindtap="goSupply"><view class="service-icon">▦</view><view>库存与价格</view><text>名额与团期</text></button>
-      <button wx:if="{{role >= 2}}" bindtap="goSettle"><view class="service-icon">≋</view><view>对账结算</view><text>账单与回单</text></button>
-      <button bindtap="goRecords"><view class="service-icon">↺</view><view>核销记录</view><text>每一笔可追溯</text></button>
+      <button class="service-order" wx:if="{{role >= 2}}" bindtap="goOrders"><view class="service-icon">☰</view><view>门店订单</view><text>跟进预约与游客安排</text><view class="service-arrow">↗</view></button>
+      <button class="service-stock" wx:if="{{role >= 2}}" bindtap="goSupply"><view class="service-icon">▦</view><view>库存与价格</view><text>管理团期、名额与定价</text><view class="service-arrow">↗</view></button>
+      <button class="service-bill" wx:if="{{role >= 2}}" bindtap="goSettle"><view class="service-icon">≋</view><view>对账结算</view><text>核对账单与结算进度</text><view class="service-arrow">↗</view></button>
+      <button class="service-record" bindtap="goRecords"><view class="service-icon">↺</view><view>核销记录</view><text>每一次接待都有记录</text><view class="service-arrow">↗</view></button>
       <button wx:if="{{role < 2}}" bindtap="goHonor"><view class="service-icon">◇</view><view>门店荣誉</view><text>查看成长与权益</text></button>
     </view>
     <view class="attention" wx:if="{{wb}}" bindtap="goVerify"><view class="attention-dot"></view><view><view>{{wb.pendingVerify ? '今天的接待，从这张凭证开始' : '接待准备就绪'}}</view><text>{{wb.pendingVerify ? wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码' : '有游客到店时，可从上方进入扫码核销'}}</text></view><text>›</text></view>
-    <view class="announcement" wx:if="{{notice}}"><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '展开 +'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
     <view class="trend-panel" wx:if="{{stats && role >= 2}}">
       <view class="section-heading"><text>所选期间订单</text><text class="week-total">{{weekTotal}} <text>单</text></text></view>
       <scroll-view scroll-x><view class="trend-chart" style="width:{{chartWidth}}rpx"><view wx:for="{{bars}}" wx:key="d" class="trend-day"><view class="trend-column"><view style="height:{{item.hp}}%"></view></view><text>{{item.dLabel}}</text></view></view></scroll-view>
     </view>
+    <view class="announcement" wx:if="{{notice}}"><view class="announcement-kicker">商户资讯 · PLATFORM NEWS</view><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '阅读全文 ↗'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
     <view class="review-panel" wx:if="{{stats && stats.latestReview}}"><view class="section-heading"><text>游客的声音</text><text class="review-rating">{{stats.latestReview.rating}} ★</text></view><view class="review-copy">{{stats.latestReview.content}}</view><text class="review-author">{{stats.latestReview.nickname}}</text></view>
   </block>
   <view class="growth-links" wx:if="{{merchant}}"><view bindtap="goHonor"><text>◇　等级与勋章</text><text>查看成长　↗</text></view><view bindtap="goCredentials"><text>✓　可信凭证</text><text>查看记录　↗</text></view></view>

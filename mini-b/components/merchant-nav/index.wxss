@@ -4,4 +4,5 @@
 .brand-mark{width:46rpx;height:46rpx;line-height:46rpx;text-align:center;border-radius:15rpx;background:#4d3868;color:#f2dfbf;font-size:26rpx;font-family:Georgia,serif}
 .nav-back{margin:0;padding:0 12rpx 0 0;background:transparent;color:#5f477d;border:0;display:flex;align-items:center;gap:8rpx;font-size:25rpx;line-height:40px;min-width:130rpx;width:auto;flex-shrink:0;text-align:left}
 .nav-back::after{border:0}.back-arrow{font-size:56rpx;line-height:36px;font-weight:300}
+.home-nav{background:#f3edE2;color:#3b4638;border-bottom-color:#e8dfd0}.home-nav .brand-mark{background:#42593f;color:#f0ddbd}
 .nav-title{position:absolute;left:100px;right:100px;text-align:center;pointer-events:none;font-size:28rpx;font-weight:650;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
