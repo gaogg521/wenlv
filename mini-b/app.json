@@ -8,7 +8,8 @@
     "pages/records/index",
     "pages/settlement/index",
     "pages/order-detail/index",
-    "pages/honor/index"
+    "pages/honor/index",
+    "pages/proof/index"
   ],
   "window": {
     "navigationStyle": "custom",

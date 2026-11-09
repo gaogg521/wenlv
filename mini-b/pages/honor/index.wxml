@@ -59,7 +59,7 @@
     <view class="trust-intro"><view class="trust-symbol">◇</view><view><view>每一份认可，都有据可查</view><text>凭证对应本店已获得的勋章，处理状态如实展示</text></view></view>
     <view class="proof-paper" wx:for="{{proofRecords}}" wx:key="id">
       <view class="proof-top"><image src="{{item.iconImg || item.art}}" mode="aspectFit" /><view class="proof-title"><view>{{item.name}}</view><text>获得于 {{item.dateLabel}}</text></view><text class="status-label {{item.proof.confirmed ? 'positive' : ''}}">{{item.proofState}}</text></view>
-      <view class="proof-code" wx:if="{{item.proof}}"><view><text>记录编号</text><view selectable>{{item.proof.code}}</view></view><button class="compact-button" bindtap="copyProof" data-code="{{item.proof.code}}">复制编号</button></view>
+      <view class="proof-code" wx:if="{{item.proof}}"><view><text>记录编号</text><view selectable>{{item.proof.code}}</view></view><view class="proof-acts"><button class="compact-button" bindtap="goProof" data-code="{{item.proof.code}}">复核</button><button class="compact-button" bindtap="copyProof" data-code="{{item.proof.code}}">复制编号</button></view></view>
       <view wx:else class="page-caption">可信记录尚未生成，请稍后刷新查看。</view>
     </view>
     <view wx:if="{{!proofRecords.length}}" class="empty"><view class="empty-mark">◇</view>还没有可展示的勋章凭证<view class="page-caption">获得勋章后，可在这里查看对应记录</view></view>
