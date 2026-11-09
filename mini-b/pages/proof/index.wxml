@@ -1,0 +1,19 @@
+<merchant-nav id="merchant-navigation" title="记录复核" />
+<view class="page-heading"><view class="page-title">核对一条记录</view><view class="page-caption">输入勋章或订单记录上的 8 位编号，核对它有没有被改动</view></view>
+<view class="pf-search">
+  <input class="pf-input" type="text" maxlength="8" value="{{input}}" placeholder="记录编号，如 DEF45B80" confirm-type="search" bindinput="onInput" bindconfirm="submit" />
+  <button class="pf-btn" bindtap="submit" loading="{{loading}}" disabled="{{loading}}">复核</button>
+</view>
+<view wx:if="{{err}}" class="pf-err">{{err}}</view>
+<view class="pf-card" wx:for="{{records}}" wx:key="date">
+  <view class="pf-result {{item.result}}"><view class="pf-mark">{{item.result === 'ok' ? '✓' : (item.result === 'bad' ? '!' : '·')}}</view><view><view class="pf-result-t">{{item.resultText}}</view><text>{{item.resultNote}}</text></view></view>
+  <view class="pf-row"><text>类型</text><view>{{item.kind}}</view></view>
+  <view class="pf-row"><text>名称</text><view>{{item.title}}</view></view>
+  <view class="pf-row"><text>日期</text><view>{{item.date}}</view></view>
+  <view class="pf-row"><text>记录编号</text><view selectable>{{code}}</view></view>
+  <view class="pf-row"><text>处理状态</text><view>{{item.stateText}}{{item.batchText ? ' · ' + item.batchText : ''}}</view></view>
+</view>
+<view wx:if="{{records.length > 1}}" class="note">前 8 位相同的记录有 {{records.length}} 条，已全部列出，请对照名称和日期。</view>
+<button wx:if="{{records.length}}" class="pf-link" bindtap="copyLink">复制复核链接（用浏览器自己再算一遍）</button>
+<view wx:if="{{!tried && !loading}}" class="empty"><view class="empty-mark">◇</view>输入编号开始复核<view class="page-caption">编号在「经营等级与荣誉 → 可信凭证」的每张凭证上</view></view>
+<view class="note">本页只展示记录类型、名称、日期和校验结果，不展示单号与金额。</view>

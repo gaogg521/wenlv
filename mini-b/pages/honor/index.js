@@ -40,5 +40,6 @@ Page({
       b.owned ? '获得于 ' + String(b.granted_at).slice(0, 10) : '尚未获得']
     wx.showModal({ title: b.name + ' · ' + b.rarityLabel, content: lines.filter(Boolean).join('\n'), showCancel: false, confirmText: '知道了' })
   },
+  goProof(e) { const code = e.currentTarget.dataset.code; wx.navigateTo({ url: '/pages/proof/index' + (code ? '?code=' + encodeURIComponent(code) : '') }) },
   copyProof(e) { const code = e.currentTarget.dataset.code; if (code) wx.setClipboardData({data:String(code)}) },
 })
