@@ -19,3 +19,28 @@
   .dx-live-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) 1px repeat(2, minmax(0, 1.1fr)); }
   .dx-sep { display: block; }
 }
+
+/* ===== 手机宽度（≤760px）补丁 =====
+   1. 很多页面把 KPI 栅格的列数写在行内 style（repeat(3,1fr)/repeat(5,1fr)），媒体查询压不住它，
+      手机上 3~5 列挤成竖排文字。这里用 !important 统一收成 2 列。
+   2. 小程序装修页：说明区内边距、映射表整体撑宽页面 → 缩边距，表格横向滚动。
+   3. 链路总览的流水线行：右侧说明固定 150px 且右对齐，手机上溢出 → 折到下一行。
+   4. 卡片里的宽表格统一允许横向滚动，不撑破页面。 */
+@media (max-width: 760px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  /* 窄卡片里图标在上、文字在下；数字不拆字，放不下就缩字号 */
+  .kpi-grid .kpi:not(.dx-kpi) { min-width: 0; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
+  .kpi-grid .kpi:not(.dx-kpi) > div:last-child { min-width: 0; max-width: 100%; }
+  .kpi-grid .kpi .v { font-size: 17px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mp-hero { grid-template-columns: minmax(0, 1fr); padding: 18px 14px; gap: 18px; }
+  .mp-phone { transform-origin: top center; max-width: 100%; }
+  .mp-map { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .mp-map table { min-width: 560px; }
+  .pipe-meta { min-width: 0; width: 100%; text-align: left; }
+  .card { min-width: 0; }
+  .card table:not(.mp-map table) { max-width: 100%; }
+  .mp-stats { flex-wrap: wrap; gap: 10px; }
+  .mp-stats div { min-width: 0; flex: 1 1 90px; padding: 10px 12px; }
+  .row { flex-wrap: wrap; }
+  .row .muted, .row .pill { max-width: 100%; white-space: normal; word-break: break-all; }
+}
