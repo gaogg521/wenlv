@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="经营等级与荣誉" />
-<view class="page-heading"><view class="page-eyebrow">GROWTH &amp; TRUST</view><view class="page-title">认真经营，自有回响</view><view class="page-caption">门店成长、勋章与可信记录</view></view>
+<view class="page-heading"><view class="page-eyebrow">GROWTH & TRUST</view><view class="page-title">认真经营，自有回响</view><view class="page-caption">门店成长、勋章与可信记录</view></view>
 <view class="honor-tabs"><view wx:for="{{tabs}}" wx:key="k" bindtap="switchTab" data-k="{{item.k}}" class="honor-tab {{active === item.k ? 'active' : ''}}">{{item.n}}</view></view>
 <view wx:if="{{!d}}" class="empty" style="padding:120rpx 40rpx;text-align:center;color:#8a919c">{{loadTxt}}</view>
 <block wx:else>
