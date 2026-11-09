@@ -94,6 +94,14 @@ await t('用语合规：页面源码里没有区块链 / 虚拟资产类用语�
   assert.ok(!/\.note\b|r\.note|d\.note/.test(js), '页面 JS 不该读接口的 note 字段')
   const hit = BANNED.filter((w) => src.includes(w)); assert.deepEqual(hit, [])
 })
+await t('版式（真机渲染里量到的）：两个按钮各 136rpx 固定宽度，不会把「复制编号」挤出卡片；标题里的 & 不能写成 &amp;（微信不转义，会原样显示）', () => {
+  const css = read('mini-b/pages/honor/index.wxss')
+  assert.match(css, /.proof-acts{display:flex;gap:12rpx;flex:none}.proof-acts .compact-button{flex:none;width:136rpx;min-width:0;margin:0;padding:11rpx 0;text-align:center}/)
+  const bad = []
+  const walk = (d) => { for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) { const p = d + '/' + e.name; if (e.isDirectory()) { if (!/node_modules|miniprogram_npm/.test(p)) walk(p) } else if (e.name.endsWith('.wxml') && /&(amp|lt|gt|quot);/.test(read(p))) bad.push(p) } }
+  walk('mini-a'); walk('mini-b')
+  assert.deepEqual(bad, [], '这些 wxml 里写了 HTML 实体，真机 / 模拟器会原样显示出来：' + bad)
+})
 await t('入口接上了：页面已登记 app.json；勋章页每张凭证有「复核」按钮并带编号跳转', () => {
   const pages = JSON.parse(read('mini-b/app.json')).pages
   assert.ok(pages.includes('pages/proof/index'), 'app.json 没登记')
