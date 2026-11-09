@@ -6,6 +6,11 @@
   <block wx:else><view class="hi">绑定门店</view><view class="sub2">微信安全登录 · 凭门店邀请加入</view></block>
 </view>
 <view wx:for="{{applications}}" wx:key="id" class="card"><view class="sec-title">{{item.name}}</view><view>{{item.statusText}}</view><view class="note">申请编号 {{item.merchant_no}}</view></view>
+<view class="card" wx:if="{{!merchant && demoAvailable}}">
+  <view class="sec-title">演示体验</view>
+  <view class="note" style="margin:12rpx 0 24rpx">安麓大夫第 · 朱家角 · 店长视角。模拟支付，不代表真实成交。</view>
+  <button id="demo-login" class="btn demo-entry" bindtap="enterDemo" loading="{{demoBusy}}" disabled="{{demoBusy}}">一键进入演示门店</button>
+</view>
 <view class="card" wx:if="{{!merchant}}">
   <view class="btn" bindtap="doLogin">微信登录已有门店</view>
   <view class="note" wx:if="{{loginTip}}" style="margin-top:16rpx;color:var(--brand,#a8603f)">{{loginTip}}</view>
@@ -34,7 +39,7 @@
     <view class="row" wx:if="{{role >= 2}}" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>
     <view class="row" bindtap="storeQrcode"><text>门店码</text><text class="v">{{qr ? '查看' : '生成'}} ›</text></view>
     <view class="row" wx:if="{{role >= 2}}" bindtap="copyInvite"><text>店员邀请码</text><text class="v">{{inviteCode || '生成中…'}} ⧉</text></view>
-    <view class="row" bindtap="logout"><text style="color:var(--red)">退出登录</text></view>
+    <view id="merchant-logout" class="row" bindtap="logout"><text style="color:var(--red)">退出登录</text></view>
   </view>
 </block>
 

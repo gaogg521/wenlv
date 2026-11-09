@@ -1,8 +1,9 @@
 const api = require('../../utils/api')
 const app = getApp()
 Page({
-  data: { loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
+  data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
+    this.setData({ demoAvailable: api.canDemoLogin() })
     if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
     if (app.globalData.token) this.fetchApplications()
@@ -61,6 +62,16 @@ Page({
       this.setData({ applyName: '', applyContact: '', applyMobile: '' }); this.fetchApplications()
     } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }
   },
+  async enterDemo() {
+    if (this.data.demoBusy) return
+    this.setData({ demoBusy: true })
+    try {
+      const d = await api.demoLogin()
+      this.setData({ merchant: d.merchant, role: d.role, loginTip: '' })
+      wx.switchTab({ url: '/pages/index/index' })
+    } catch (e) { wx.showToast({ title: e.msg || '演示登录失败，请重试', icon: 'none' }) }
+    finally { this.setData({ demoBusy: false }) }
+  },
   onMid(e) { this.setData({ midInput: e.detail.value }) },
   doLogin() {
     api.login().then((d) => {
@@ -69,7 +80,7 @@ Page({
       wx.showToast({ title: d.unbound ? '请凭邀请码加入门店' : '登录成功', icon: 'none' }); this.fetchApplications(); if (d.role >= 2) this.fetchInvite(); if (d.role >= 3) this.fetchStaff()
     }).catch((e) => wx.showToast({ title: e.msg || '登录失败', icon: 'none' }))
   },
-  logout() { wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ loginTip: '', merchant: null, role: 0, qr:'', staff: [], inviteCode: '', applications: [] });const bar=this.getTabBar && this.getTabBar();if(bar && bar.sync)bar.sync() },
+  logout() { wx.removeStorageSync('mloginMode'); wx.removeStorageSync('mtoken'); wx.removeStorageSync('mrole'); app.globalData.role = 0; wx.removeStorageSync('merchant'); app.globalData.token = ''; app.globalData.merchant = null; this.setData({ loginTip: '', merchant: null, role: 0, qr:'', staff: [], inviteCode: '', applications: [] });const bar=this.getTabBar && this.getTabBar();if(bar && bar.sync)bar.sync() },
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
