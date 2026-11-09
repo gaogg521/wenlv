@@ -47,7 +47,10 @@ Page({
   copyLink() {
     const code = this.data.code
     if (!code) return
-    wx.setClipboardData({ data: getApp().globalData.apiBase + '/verify?mode=t1&no=' + code })
-    wx.showToast({ title: '复核链接已复制，用浏览器打开即可', icon: 'none' })
+    wx.setClipboardData({
+      data: getApp().globalData.apiBase + '/verify?mode=t1&no=' + code,
+      // 复制成功时微信会自己弹「内容已复制」，把紧接着的提示盖掉（真机渲染里看到的）；等它收起，再告诉商户下一步怎么做
+      success: () => setTimeout(() => wx.showToast({ title: '复核链接已复制，用浏览器打开即可', icon: 'none', duration: 2600 }), 1600),
+    })
   },
 })

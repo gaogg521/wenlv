@@ -13,14 +13,14 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8')
 let pass = 0
 const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', name) } catch (e) { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 } }
 
-let reqs = [], reply = null, clip = [], toasts = []
+let reqs = [], reply = null, clip = [], toasts = [], delays = []
 const apiStub = { request: (p) => { reqs.push(p); return typeof reply === 'function' ? reply(p) : Promise.resolve(reply) } }
 let pageDef = null
 const sandbox = {
-  Page: (d) => { pageDef = d }, wx: { setClipboardData: (o) => clip.push(o.data), showToast: (o) => toasts.push(o.title) },
+  Page: (d) => { pageDef = d }, wx: { setClipboardData: (o) => { clip.push(o.data); if (o.success) o.success() }, showToast: (o) => toasts.push(o.title) },
   getApp: () => ({ globalData: { apiBase: 'http://127.0.0.1:8080' } }),
   require: (m) => { if (m === '../../utils/api') return apiStub; throw new Error('页面不该依赖 ' + m) },
-  console, Promise, String, Number, Object, Array, setTimeout,
+  console, Promise, String, Number, Object, Array, setTimeout: (fn, ms) => { delays.push(ms); fn() },   // 页面里的延时立刻执行并记下时长
 }
 vm.createContext(sandbox)
 vm.runInContext(read('mini-b/pages/proof/index.js'), sandbox, { filename: 'mini-b/pages/proof/index.js' })
@@ -76,9 +76,10 @@ await t('连点两次：先发的慢请求晚到，不能盖掉后发的结果',
   assert.equal(p.data.records.length, 1); assert.equal(p.data.records[0].title, '新的'); assert.equal(p.data.code, 'BBBBBBBB')
 })
 await t('复制复核链接：带 mode=t1（商户口径）和编号；没查过时不复制', async () => {
-  clip = []; toasts = []; const p = mk(); p.copyLink(); assert.deepEqual(clip, [])
+  clip = []; toasts = []; delays = []; const p = mk(); p.copyLink(); assert.deepEqual(clip, [])
   reply = { records: [REC()] }; await p.check('def45b80'); p.copyLink()
   assert.deepEqual(clip, ['http://127.0.0.1:8080/verify?mode=t1&no=DEF45B80']); assert.match(toasts[0], /复核链接已复制/)
+  assert.ok(delays.some((ms) => ms >= 1500), '说明要等微信自带的「内容已复制」收起（约 1.5 秒）再弹，否则会被盖掉；延时：' + delays)
 })
 await t('页面不展示指纹原文、批次根、业务单号、金额：wxml 只引用白名单字段', () => {
   const wxml = read('mini-b/pages/proof/index.wxml')
