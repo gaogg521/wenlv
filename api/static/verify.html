@@ -94,7 +94,7 @@
   <div class="card" id="searchCard">
     <h2>查询</h2>
     <div class="search">
-      <input id="q" placeholder="订单号（如 WL2026…）或账本日期（如 2026-10-26）" autocomplete="off">
+      <input id="q" placeholder="订单号（如 WL2026…）、记录编号（8 位，如 DEF45B80）或账本日期（如 2026-10-26）" autocomplete="off">
       <button class="btn primary" onclick="go()">复核</button>
     </div>
     <div class="note">扫描存证证明上的二维码会自动带上参数；也可手工输入。无需登录。</div>
@@ -103,7 +103,7 @@
   <div id="intro">
     <div class="card">
       <h2>三步复核</h2>
-      <div class="step"><div class="n">1</div><div>扫描存证证明上的二维码，或在上方输入订单号 / 账本日期</div></div>
+      <div class="step"><div class="n">1</div><div>扫描存证证明上的二维码，或在上方输入订单号 / 记录编号（小程序里勋章、订单记录上的 8 位编号） / 账本日期</div></div>
       <div class="step"><div class="n">2</div><div>本页取回该记录的「载荷哈希」与「证明路径」，在<strong>你本机浏览器</strong>逐层计算 sha256</div></div>
       <div class="step"><div class="n">3</div><div>算出的末值应等于平台公布的 Merkle 根；若已上链，还会显示链上交易编号供进一步查询</div></div>
     </div>
@@ -190,17 +190,19 @@ async function go() {
   const raw = ($('#q').value || '').trim()
   if (!raw) return
   const isDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-  const url = isDate ? '/open/verify/bean-day/' + raw : '/open/verify/order/' + encodeURIComponent(raw)
+  const isCode = !isDate && /^[0-9a-fA-F]{8}$/.test(raw)   // 记录编号：小程序里勋章 / 订单记录上的 8 位编号
+  const url = isDate ? '/open/verify/bean-day/' + raw : isCode ? '/open/verify/record/' + raw : '/open/verify/order/' + encodeURIComponent(raw)
   shell('<div class="card"><h2>复核中</h2><div class="note">正在读取记录…</div></div>')
   try {
     const r = await fetch(url).then((x) => x.json())
     if (!r.data) throw new Error(r.msg || '未找到记录')
     if (isDate) return renderBean(r.data)
+    if (isCode) return renderRecords(r.data)
     let flow = null
     try { flow = (await fetch('/open/attest/flow/' + encodeURIComponent(raw)).then((x) => x.json())).data } catch (_) {}
     renderOrder(r.data, flow)
   } catch (e) {
-    shell(`<div class="card err"><h2>未能复核</h2><div class="note" style="color:#8a1f11">${esc(e.message)}<br>请确认单号是否正确；未打包的记录也会查不到。</div></div>`)
+    shell(`<div class="card err"><h2>未能复核</h2><div class="note" style="color:#8a1f11">${esc(e.message)}<br>请确认单号 / 编号是否正确；还没封存的记录也会查不到。</div></div>`)
   }
 }
 
@@ -235,7 +237,14 @@ function flowStrip(f) {
   </div>`
 }
 
-async function renderOrder(d, flow) {
+/** 记录编号查询：先看到业务摘要（类型 / 名称 / 日期），再是本地重算；同一编号命中多条时列出来让人选 */
+function renderRecords(d) {
+  window.__recs = d.records
+  const pick = (i) => { window.scrollTo(0, 0); renderOrder(window.__recs[i], null, { code: d.code, n: window.__recs.length, i }) }
+  window.__pickRec = pick
+  pick(0)
+}
+async function renderOrder(d, flow, meta) {
   const anchored = !!d.chainRef
   const path = d.leafPath || []
   const { root, steps } = path.length ? await recomputeLeaf(d.payloadHash, path, d.merkleVersion) : { root: null, steps: [] }
@@ -261,9 +270,16 @@ async function renderOrder(d, flow) {
 
   ${flow ? flowStrip(flow) : ''}
 
+  ${meta && meta.n > 1 ? `<div class="card"><h2>这个编号对应 ${meta.n} 条记录</h2><div class="note" style="margin:0 0 8px">前 8 位相同的记录都列在这里，点一条查看：</div>
+    ${window.__recs.map((x, k) => `<button class="btn ${k === meta.i ? 'primary' : 'ghost'}" style="margin:0 8px 8px 0" onclick="__pickRec(${k})">${esc(x.title)} · ${esc(x.date)}</button>`).join('')}</div>` : ''}
   <div class="card">
     <h2>记录</h2>
-    <div class="row"><div class="k">业务单号</div><div class="v mono">${esc(d.bizRef)}</div></div>
+    ${meta
+      ? `<div class="row"><div class="k">记录编号</div><div class="v mono">${esc(meta.code)}</div></div>
+         <div class="row"><div class="k">类型</div><div class="v">${esc(d.kind)}</div></div>
+         <div class="row"><div class="k">名称</div><div class="v">${esc(d.title)}</div></div>
+         <div class="row"><div class="k">日期</div><div class="v">${esc(d.date)}</div></div>`
+      : `<div class="row"><div class="k">业务单号</div><div class="v mono">${esc(d.bizRef)}</div></div>`}
     <div class="row"><div class="k">记录版本</div><div class="v">v${esc(d.versionNo)}</div></div>
     <div class="row"><div class="k">${W.hash}</div><div class="v mono">${esc(d.payloadHash)}</div></div>
     <div class="row"><div class="k">${W.batch}</div><div class="v">#${esc(d.batchSeq ?? '—')} · 第 ${esc(d.leafIndex ?? '—')} 片${d.leafCount ? ' / 共 ' + esc(d.leafCount) + ' 片' : ''}</div></div>
@@ -298,7 +314,7 @@ async function renderOrder(d, flow) {
   </div>` : ''}
 
   <div class="bar">
-    <a class="btn primary" href="/open/report/order/${encodeURIComponent(d.bizRef)}" target="_blank" rel="noopener">⬇ 下载${T1 ? '可信记录' : '存证证明'}（PDF）</a>
+    ${meta ? '' : `<a class="btn primary" href="/open/report/order/${encodeURIComponent(d.bizRef)}" target="_blank" rel="noopener">⬇ 下载${T1 ? '可信记录' : '存证证明'}（PDF）</a>`}
     <button class="btn ghost" onclick="window.print()">打印本页</button>
   </div>`)
 }

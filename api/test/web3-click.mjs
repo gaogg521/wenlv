@@ -21,9 +21,10 @@ const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', n
 const noop = () => {}
 const mkEl = () => ({ innerHTML: '', hidden: false, dataset: {}, style: {}, classList: { add: noop, remove: noop, contains: () => false }, scrollIntoView: noop, appendChild: noop, setAttribute: noop, querySelectorAll: () => [], addEventListener: noop })
 const app = mkEl()
+const detailBox = mkEl(), drawers = []
 let apiData = {}, toasts = [], calls = [], scrolls = [], domRows = [], hasDetailBox = true
 const ctx = {
-  document: { querySelector: () => mkEl(), getElementById: (id) => (id === 'blockDetail' && hasDetailBox ? mkEl() : null), createElement: mkEl, querySelectorAll: (sel) => (sel === '#blockDetail tbody tr' ? domRows : []), addEventListener: noop, body: mkEl() },
+  document: { querySelector: () => mkEl(), getElementById: (id) => (id === 'blockDetail' && hasDetailBox ? detailBox : null), createElement: mkEl, querySelectorAll: (sel) => (sel === '#blockDetail tbody tr' ? domRows : []), addEventListener: noop, body: mkEl() },
   window: {}, localStorage: { getItem: () => '', setItem: noop }, navigator: { clipboard: { writeText: () => Promise.resolve() } },
   console, setTimeout, clearInterval, setInterval, Date, Math, JSON, Number, String, Object, Array, Promise, innerHeight: 900, innerWidth: 1400,
 }
@@ -33,6 +34,7 @@ ctx.toast = (m, err) => toasts.push({ m, err: !!err })
 ctx.$ = (sel) => (sel === '#app' ? app : mkEl())
 ctx.api = (m, url) => { calls.push(url); const v = apiData[url.split('?')[0]]; return Promise.resolve(typeof v === 'function' ? v(url) : (v ?? {})) }
 ctx.go = noop
+ctx.drawer = (title, html) => drawers.push({ title, html }); ctx.closeModal = noop
 // P-03/P-04 后 web3.js 的办理按钮按 adminCan('system.jobRun') 门控；沙箱按超管渲染（与真实浏览器 core.js 全局一致）
 ctx.adminCan = () => true
 ctx.ADMIN_CAPABILITIES = { role: 'super', modules: [], actions: {} }
@@ -45,7 +47,8 @@ ctx.dxKey = vm.runInContext(dash.match(/^const dxKey = (.+?)\s*\/\//m)[1], vm.cr
 ctx.globalThis = ctx
 vm.createContext(ctx)
 vm.runInContext(code, ctx, { filename: 'admin/pages/web3.js' })
-const run = (src) => vm.runInContext(src, ctx)          // 顶层 const 不挂在 ctx 上，得在上下文里求值
+const run = (src) => vm.runInContext(src, ctx)
+const realOpenBlock = ctx.openBlock   // 前面有测试把 openBlock 换成桩，详情页的测试要用真的          // 顶层 const 不挂在 ctx 上，得在上下文里求值
 
 const B = (o = {}) => ({ id: 7, seq: 3, biz_date: '2026-11-04', merkle_root: 'a'.repeat(64), prev_root: 'b'.repeat(64), leaf_count: 10, is_day_close: 0, status: 2, attempt: 0, chain_tx_ref: 'c'.repeat(64), ...o })
 const EV = [
@@ -232,6 +235,93 @@ await t('所有放进 onclick 的业务值都经 w3Arg 转义：单号里带引�
   const html = run(`evRefLink({ biz_type: 'order', biz_ref: 'A"B\\'C', batch_id: 1 })`)
   assert.ok(!/onclick="[^"]*A"B/.test(html), '引号没有被转义，属性被拆坏')
   assert.match(html, /A\\&quot;B/)
+})
+
+console.log('== 区块详情：字段说明 / 完整指纹 / 验证过程 ==')
+ctx.openBlock = realOpenBlock
+const H64 = (c) => c.repeat(64)
+await t('业务区块：每个字段有说明；根 / 前根 / 交易号显示完整 64 位；指纹显示 10…6 并带完整值悬停与复制；说明里讲清「验证」', async () => {
+  apiData['/admin/attest/batch/7'] = { batch: B({ prev_root: H64('b'), chain_provider: 'antchainopen', chain_block: '185033127', anchored_at: '2026-11-04 19:55:00' }), events: [{ id: 1, biz_type: 'badge', biz_ref: 'badge-1-2', version_no: 1, leaf_index: 0, payload_hash: 'd'.repeat(10) + 'e'.repeat(48) + 'f'.repeat(6), status: 2, created_at: '2026-11-04 20:00:00' }, { id: 2, biz_type: 'order', biz_ref: 'WL1', version_no: 50, leaf_index: 1, payload_hash: H64('9'), status: 2, created_at: '2026-11-04 20:01:00' }] }
+  await run('openBlock(7)')
+  const h = detailBox.innerHTML
+  for (const full of [H64('a'), H64('b'), H64('c')]) assert.ok(h.includes('<code class="hash-full">' + full + '</code>'), '根 / 前根 / 交易号要完整显示：' + full.slice(0, 6))
+  assert.match(h, /<code title="d{10}e{48}f{6}">d{10}…f{6}<\/code>/, '指纹显示前 10 + 后 6，悬停是完整值')
+  assert.match(h, /copyText\(&quot;d{10}e{48}f{6}&quot;\)/, '指纹要能复制完整值')
+  for (const k of ['打包类型', '业务日', '事件数', 'Merkle 根', '前根 prev_root', '链上交易', '链上块高', '锚定时间']) assert.ok(h.includes('>' + k + '<'), '缺字段：' + k)
+  assert.match(h, /class="bd-k" title="[^"]+">Merkle 根/, '字段名要带悬停说明')
+  assert.match(h, /「验证」是什么？[\s\S]*你不需要做任何事/); assert.match(h, /不含姓名、手机号、金额/)
+  assert.match(h, /title="系统自动重算指纹与证明路径，你不需要做任何事" onclick="verifyEventInline\(&quot;badge&quot;/)
+  assert.match(h, /href="\/verify\?no=WL1">公开复核<\/a>/); assert.ok((h.match(/>验证<\/button>/g) || []).length === 2, '订单也保留「验证」')
+  assert.match(h, /存证指纹（SHA-256）/); assert.ok(!/payload 指纹/.test(h), '表头不再用 payload 术语')
+})
+await t('链起点（没有前根）写「创世区块」；状态 5「已提交·待确认」有标签（原来是空白）', async () => {
+  apiData['/admin/attest/batch/7'] = { batch: B({ prev_root: null, status: 5, chain_tx_ref: null }), events: [] }
+  await run('openBlock(7)')
+  assert.match(detailBox.innerHTML, /链起点（创世区块）/); assert.match(detailBox.innerHTML, /已提交·待确认/); assert.match(detailBox.innerHTML, /空批次/)
+})
+await t('账本日终块：不查业务事件，改取当天流水；写清「账本日终是什么」；流水逐笔列出方向 / 数量 / 余额 / 叶指纹', async () => {
+  apiData['/admin/attest/batch/9'] = { batch: B({ id: 9, seq: 4, is_day_close: 1, leaf_count: 2, biz_date: '2026-11-08' }), events: [] }
+  const rows = [{ leafIndex: 0, id: 11, txNo: 'bt-1', direction: 1, amount: 120, afterBal: 120, bizType: 8, bizRef: 'seed-1', createdAt: '2026-11-08 09:00:00', leafHash: H64('1') }, { leafIndex: 1, id: 12, txNo: 'bt-1', direction: 2, amount: 120, afterBal: 5880, bizType: 8, bizRef: 'seed-1', createdAt: '2026-11-08 09:00:00', leafHash: H64('2') }]
+  apiData['/admin/attest/bean-day/2026-11-08'] = { found: true, bizDate: '2026-11-08', live: false, sealed: { leafCount: 2 }, now: { leafCount: 2, debitSum: 120, creditSum: 120, merkleRoot: H64('a') }, rootMatches: true, balanced: true, truncated: false, rows }
+  calls = []; await run('openBlock(9)')
+  const h = detailBox.innerHTML
+  assert.ok(calls.some((u) => u === '/admin/attest/bean-day/2026-11-08'), '要取当天流水：' + calls)
+  assert.match(h, /账本日终是什么？/); assert.match(h, /没有「业务单号」/); assert.match(h, /当天旅豆流水（2）/)
+  assert.match(h, /bd-check ok[^>]*>✓ 已用当天 <b>2<\/b> 笔流水重新算出 Merkle 根，与封存时存下的根<b>一致<\/b>/); assert.match(h, /借方合计 120 = 贷方合计 120/)
+  assert.match(h, /期初余额导入/, '业务类型 8 不能显示成「类型8」'); assert.ok(!h.includes('类型8'))
+  assert.match(h, /贷 · 增加/); assert.match(h, /借 · 减少/); assert.ok(h.includes('1'.repeat(10) + '…' + '1'.repeat(6)), '叶指纹显示 10…6')
+  assert.ok(!h.includes('空批次'), '日终块不能再显示「空批次」（这是用户看到的缺陷）')
+  assert.match(h, /封存证明 PDF/)
+})
+await t('日终重算三种结果：一致 / 当天还在增长（正常）/ 不一致（红色，说明封存后被改过）', async () => {
+  apiData['/admin/attest/batch/9'] = { batch: B({ id: 9, seq: 4, is_day_close: 1, leaf_count: 5, biz_date: '2026-11-09' }), events: [] }
+  const mk = (o) => ({ found: true, bizDate: '2026-11-09', live: false, sealed: { leafCount: 5 }, now: { leafCount: 7, debitSum: 1, creditSum: 1, merkleRoot: H64('a') }, rootMatches: false, balanced: true, truncated: false, rows: [], ...o })
+  apiData['/admin/attest/bean-day/2026-11-09'] = mk({ live: true }); await run('openBlock(9)')
+  assert.match(detailBox.innerHTML, /bd-check live[^>]*>当天账本还在增长/); assert.ok(!/bd-check bad/.test(detailBox.innerHTML))
+  apiData['/admin/attest/bean-day/2026-11-09'] = mk({}); await run('openBlock(9)')
+  assert.match(detailBox.innerHTML, /bd-check bad[^>]*>✗ 重算的根与封存时存下的根<b>不一致<\/b>/); assert.match(detailBox.innerHTML, /封存 5 笔、现在 7 笔/)
+  apiData['/admin/attest/bean-day/2026-11-09'] = mk({ truncated: true, rows: [{ leafIndex: 0, id: 1, txNo: 't', direction: 1, amount: 1, afterBal: 1, bizType: 1, bizRef: null, createdAt: '2026-11-09 01:00:00', leafHash: H64('3') }] }); await run('openBlock(9)')
+  assert.match(detailBox.innerHTML, /仅显示前 1 笔，共 7 笔；重算的根用的是全部流水/)
+})
+await t('验证过程抽屉：三步各自的结论与依据；通过 / 未上链 / 失败 / 未打包 四种状态说得清', async () => {
+  const base = { found: true, bizType: 'badge', bizRef: 'badge-1-2', versionNo: 1, payloadHash: H64('9'), canonicalValid: true, proofValid: true, merkleRoot: H64('a'), leafIndex: 3, leafCount: 10, batchSeq: 4, leafPath: [{ h: H64('5'), p: 'R' }, { h: H64('6'), p: 'L' }], verifyTip: 'v2（RFC 6962）：…', chainRef: H64('c'), chainBlock: '185033127', anchoredAt: '2026-11-04T19:55:00', chain: { provider: 'antchainopen', signatureNote: '签名可被平台公钥验证' }, note: '已锚定上链' }
+  const open = async (o) => { drawers.length = 0; apiData['/admin/attest/verify'] = { ...base, ...o }; await run("verifyDetail('badge', 'badge-1-2')"); return drawers[drawers.length - 1].html }
+  let h = await open({})
+  assert.match(h, /bd-check ok[^>]*>验证通过：内容没被改过，且批次根已上链固定/)
+  assert.equal((h.match(/class="vstep ok"/g) || []).length, 3, '三步都通过')
+  assert.match(h, /第 1 步 · 指纹复算/); assert.match(h, /第 2 步 · 证明路径/); assert.match(h, /第 3 步 · 批次上链/)
+  assert.match(h, /顺着 <b>2<\/b> 步兄弟哈希/); assert.match(h, /区块 #4 里（第 3 片叶子，共 10 片）/)
+  assert.ok(h.includes('<code class="hash-full">' + H64('9') + '</code>') && h.includes('<code class="hash-full">' + H64('a') + '</code>') && h.includes('<code class="hash-full">' + H64('c') + '</code>'), '指纹 / 根 / 交易号完整显示')
+  assert.match(h, /<em>兄弟在右<\/em><code>5{64}<\/code>/); assert.match(h, /<em>兄弟在左<\/em>/); assert.match(h, /签名可被平台公钥验证/)
+  assert.match(h, /你需要做什么？<\/b>什么都不用做/)
+  h = await open({ chainRef: null, chainBlock: null, anchoredAt: null, chain: null, note: '已打包·待锚定：根已生成，链凭据到位后补锚' })
+  assert.match(h, /bd-check ok[^>]*>验证通过：内容没被改过；批次根还没上链/); assert.equal((h.match(/class="vstep ok"/g) || []).length, 2); assert.match(h, /没上链不代表有问题/)
+  h = await open({ proofValid: false })
+  assert.match(h, /bd-check bad/); assert.match(h, /class="vstep bad"/); assert.ok(!/验证通过/.test(h), '失败时绝不能出现「验证通过」')
+  h = await open({ canonicalValid: false })
+  assert.match(h, /bd-check bad/); assert.match(h, /重新算出的指纹和存证里的<b>不一致<\/b>/)
+  h = await open({ proofValid: null, canonicalValid: null, leafPath: null, merkleRoot: null, chainRef: null, chain: null })
+  assert.match(h, /bd-check live[^>]*>还没有出根，暂时无法验证/); assert.ok(!/验证通过/.test(h), '待打包不能说验证通过'); assert.match(h, /没有保存规范化内容/)
+  drawers.length = 0; apiData['/admin/attest/verify'] = { found: false }; await run("verifyDetail('order', 'WLX')")
+  assert.match(drawers[drawers.length - 1].html, /没找到「WLX」/)
+})
+await t('验证后的小标签：说清是系统自动重算、无需操作，并带「看验证过程」入口；失败标签没有「通过」', async () => {
+  const mk = () => { const chips = []; const parent = { querySelectorAll: () => ({ forEach: () => {} }) }; return { parentNode: parent, insertAdjacentHTML: (_, h) => chips.push(h), chips } }
+  apiData['/admin/attest/verify'] = { found: true, proofValid: true, canonicalValid: true, chainRef: 'c'.repeat(64), note: '已锚定上链：可用 leafPath 从 payloadHash 独立重算出 Merkle 根' }
+  let a = mk(); await run('verifyEventInline')('order', 'WL1', 0, a)
+  assert.match(a.chips[0], /验证通过（系统已自动重算，无需操作）/); assert.match(a.chips[0], /批次根已上链/); assert.ok(!/leafPath|payloadHash/.test(a.chips[0]), '小标签里不再露出 leafPath / payloadHash 这类术语'); assert.match(a.chips[0], /看验证过程 ›/); assert.match(a.chips[0], /verifyDetail\(&quot;order&quot;,&quot;WL1&quot;\)/)
+  apiData['/admin/attest/verify'] = { found: true, proofValid: false, canonicalValid: true }
+  a = mk(); await run('verifyEventInline')('order', 'WL1', 0, a); assert.ok(!/验证通过/.test(a.chips[0]))
+  apiData['/admin/attest/verify'] = { found: false }
+  a = mk(); await run('verifyEventInline')('order', 'NOPE', 0, a); assert.ok(!/看验证过程/.test(a.chips[0]), '没找到就没有过程可看')
+})
+await t('悬停卡与图例：日终块有一句人话解释；「bean_day · v2」这种内部写法不再直接露出', async () => {
+  const day = B({ id: 9, is_day_close: 1, merkle_kind: 'bean_day', merkle_version: 2 })
+  run('window.__chainMap = ' + JSON.stringify({ 9: day }))
+  const html = run('blockTipHtml(window.__chainMap[9])')
+  assert.match(html, /账本日终 = 每天一次，把当天所有旅豆流水打成一个根上链/); assert.match(html, /当天旅豆流水（借贷平衡的账本）/); assert.match(html, /Merkle 算法[\s\S]*v2（RFC 6962）/)
+  assert.ok(!html.includes('bean_day'), '内部类型码不该露给运营'); assert.match(html, /点击查看当天流水与证明路径/)
+  assert.match(run('blockTipHtml(' + JSON.stringify(B({ merkle_version: 2 })) + ')'), /业务事件指纹/)
 })
 
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)

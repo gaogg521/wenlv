@@ -102,6 +102,7 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/chain/hub', 'chainhub', 'view'],
   ['GET', '/admin/attest/center', 'attest', 'view'],
   ['GET', '/admin/attest/batch/:id', 'attest', 'view'],
+  ['GET', '/admin/attest/bean-day/:date', 'attest', 'view'],
   ['GET', '/admin/attest/search', 'attest', 'view'],
   ['GET', '/admin/attest/flow/:orderNo', 'attest', 'view'],
   ['GET', '/admin/creators', 'creators', 'view'],
