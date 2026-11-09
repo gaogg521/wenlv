@@ -42,6 +42,38 @@ const open = {
     }
   },
 
+  // 记录编号查询（商户 / 游客拿着小程序里的「记录编号 / 校验码」来复核）：编号 = 这条记录指纹（SHA-256）的前 8 位。
+  // 只认勋章与订单两类（这两类在小程序里本来就给用户看编号）；只回业务摘要（类型、勋章名、日期）和可本地重算的证明，
+  // **不回业务单号、用户 / 商户 id、金额与任何明细**。同一个前缀命中多条时全部列出（最多 6 条），让用户自己对。
+  'GET /open/verify/record/:code': async (req) => {
+    const code = String(req.params.code || '').trim().toLowerCase()
+    if (!/^[0-9a-f]{8}$/.test(code)) throw new BizError(1001, '记录编号是 8 位数字或字母（0-9、A-F），例如 DEF45B80')
+    const rows = await q(`SELECT e.*, b.merkle_root, b.prev_root, b.chain_tx_ref, b.chain_block, b.anchored_at,
+        b.seq, b.leaf_count, b.is_day_close, b.merkle_version, b.status AS batch_status,
+        b.chain_provider, b.chain_content, b.chain_ts_ms
+      FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
+      WHERE e.biz_type IN ('badge', 'order') AND e.payload_hash LIKE ? ORDER BY e.id DESC LIMIT 6`, [code + '%'])
+    if (!rows.length) throw new BizError(1004, '没有找到这个记录编号')
+    const records = []
+    for (const e of rows) {
+      const r = await web3._verifyRow(e)
+      let title = '订单记录', kind = '订单', date = String(e.created_at).slice(0, 10)
+      const m = String(e.biz_ref).match(/^(m?)badge-(\d+)-(\d+)$/)
+      if (e.biz_type === 'badge' && m) {
+        const bd = await one('SELECT name FROM badge WHERE id = ?', [Number(m[3])])
+        title = bd ? bd.name : '勋章'; kind = m[1] ? '商户勋章' : '勋章'
+      } else if (e.biz_type === 'order') title = Number(e.version_no) >= 50 ? '订单完成' : '订单支付成功'
+      records.push({
+        kind, title, date, versionNo: r.versionNo, status: r.status,
+        payloadHash: r.payloadHash, canonicalValid: r.canonicalValid,
+        merkleRoot: r.merkleRoot, merkleVersion: r.merkleVersion, leafIndex: r.leafIndex, leafPath: r.leafPath,
+        prevRoot: r.prevRoot, leafCount: r.leafCount, proofValid: r.proofValid, batchSeq: r.batchSeq,
+        chainRef: r.chainRef, chainBlock: r.chainBlock, anchoredAt: r.anchoredAt, note: r.note,
+      })
+    }
+    return { code: code.toUpperCase(), records, platform: '向往的自由 · 记录复核', privacy: '本接口只返回记录类型、名称、日期和可重算的校验证明，不返回业务单号、用户 / 商户信息、金额与明细' }
+  },
+
   // 单流程公开复核（一单六锚）：只回步骤/时点/指纹，**不回姓名、金额、商品与联系方式**
   'GET /open/attest/flow/:orderNo': async (req) => {
     const orderNo = String(req.params.orderNo || '').trim()

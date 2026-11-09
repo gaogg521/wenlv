@@ -8,6 +8,7 @@
 //   用法：PORT=… DB_NAME=… JWT_SECRET=… API_BASE=… node test/chain-e2e.mjs（服务在跑，且库里已有跑过业务流程的数据，如先 seed:scenario + test:db）
 import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/chain-e2e.mjs')
+import fs from 'node:fs'
 import assert from 'node:assert/strict'
 import { q, one } from '../src/db.mjs'
 import * as attest from '../src/domain/attest.mjs'
@@ -140,6 +141,67 @@ await t('结算单与旅豆日终：对外验证已锚定且借贷平衡', async
   const d = await one(`SELECT DATE(l.created_at) d FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id < 999999000000 ORDER BY l.id DESC LIMIT 1`)
   const day = new Date(d.d).toISOString().slice(0, 10); const bd = ok(await call('GET', '/open/verify/bean-day/' + day))
   assert.equal(bd.found, true); assert.equal(bd.balanced, true); assert.ok(bd.chainRef, '日终根应已锚定')
+})
+await t('账本日终块的批内明细：当天流水逐笔列出、用它们重算的根与封存的根一致、借贷平衡；日期非法 / 没封存 / 未登录都被拒绝', async () => {
+  const roots = await q('SELECT biz_date, leaf_count, merkle_root, debit_sum, credit_sum FROM bean_day_root ORDER BY biz_date')
+  assert.ok(roots.length >= 1, '需要至少一个已封存的日终（前面的步骤已封存）')
+  for (const r of roots) {
+    const day = new Date(r.biz_date).toISOString().slice(0, 10)
+    const d = ok(await call('GET', '/admin/attest/bean-day/' + day, null, A))
+    const live = day >= new Date().toISOString().slice(0, 10)   // 当天账本还在增长：封存之后又有流水，现在的笔数 / 根和封存时不同是正常的
+    assert.equal(d.found, true); assert.equal(d.sealed.leafCount, Number(r.leaf_count)); assert.equal(d.sealed.merkleRoot, r.merkle_root); assert.equal(d.live, live)
+    if (live) assert.ok(d.now.leafCount >= d.sealed.leafCount, '当天只会多不会少')
+    else {
+      assert.equal(d.rows.length, Math.min(500, Number(r.leaf_count))); assert.equal(d.now.merkleRoot, r.merkle_root, day + ' 重算的根应与封存的根一致')
+      assert.equal(d.rootMatches, true, day + '：历史日封存后不可变，重算必须一致')
+      assert.equal(d.balanced, true); assert.equal(d.now.debitSum, Number(r.debit_sum)); assert.equal(d.now.creditSum, Number(r.credit_sum))
+    }
+    d.rows.forEach((x, i) => assert.equal(x.leafIndex, i, '叶序从 0 连续'))
+    // 叶指纹独立重算：不信接口，按公开的叶定义自己算一遍
+    const raw = await one('SELECT id, tx_no, account_id, direction, amount, after_bal, biz_type, biz_ref FROM bean_ledger WHERE id = ?', [d.rows[0].id])
+    assert.equal(d.rows[0].leafHash, attest.hashOf(attest.canonicalize({ id: Number(raw.id), txNo: raw.tx_no, accountId: Number(raw.account_id), direction: Number(raw.direction), amount: Number(raw.amount), afterBal: Number(raw.after_bal), bizType: Number(raw.biz_type), bizRef: raw.biz_ref })))
+    // 隐私：字段必须在白名单内（没有昵称 / 手机号 / 用户 id 一类）；再扫一遍剩余内容。流水号是 BT+毫秒时间戳、业务引用是单号、叶指纹是 64 位十六进制，里面的长数字串不是手机号，扫描前先剔掉
+    const ROW_KEYS = ['leafIndex', 'id', 'txNo', 'direction', 'amount', 'afterBal', 'bizType', 'bizRef', 'createdAt', 'leafHash']
+    d.rows.forEach((x) => assert.deepEqual(Object.keys(x), ROW_KEYS, '流水行出现了白名单之外的字段'))
+    assert.deepEqual(Object.keys(d), ['found', 'bizDate', 'live', 'batch', 'sealed', 'now', 'rootMatches', 'balanced', 'truncated', 'rows'])
+    const scrub = JSON.stringify({ ...d, rows: d.rows.map((x) => ({ ...x, txNo: '', bizRef: '', leafHash: '' })) }).replace(/[0-9a-f]{64}/g, '')
+    assert.ok(!/(?<!\d)1[3-9]\d{9}(?!\d)/.test(scrub), '流水明细里不能出现手机号')
+  }
+  const batch = await one('SELECT id FROM attest_batch WHERE is_day_close = 1 ORDER BY seq DESC LIMIT 1')
+  assert.equal(ok(await call('GET', '/admin/attest/batch/' + batch.id, null, A)).events.length, 0, '日终批没有业务事件：前端必须改取流水明细（这就是用户看到的空表）')
+  assert.equal((await call('GET', '/admin/attest/bean-day/2020-01-01', null, A)).code, 1201)
+  assert.equal((await call('GET', '/admin/attest/bean-day/not-a-date', null, A)).code, 1001)
+  assert.notEqual((await call('GET', '/admin/attest/bean-day/' + new Date(roots[0].biz_date).toISOString().slice(0, 10))).code, 0, '未登录要拒绝')
+})
+await t('记录编号查询（公开）：8 位编号 → 业务摘要 + 可本地重算的证明；不回业务单号 / 用户 / 商户 / 金额；非法 / 不存在 / 非勋章订单类都按规矩拒绝', async () => {
+  const ev = await one("SELECT e.biz_ref, e.payload_hash FROM attest_event e WHERE e.biz_type = 'badge' AND e.status = 2 AND e.biz_ref LIKE 'badge-%' ORDER BY e.id DESC LIMIT 1")
+  assert.ok(ev, '需要一条已锚定的游客勋章事件')
+  const code = ev.payload_hash.slice(0, 8)
+  for (const form of [code.toUpperCase(), code.toLowerCase()]) {
+    const d = ok(await call('GET', '/open/verify/record/' + form))   // 无需登录；大小写都认
+    assert.equal(d.code, code.toUpperCase()); assert.ok(d.records.length >= 1)
+    const r = d.records.find((x) => x.payloadHash === ev.payload_hash); assert.ok(r, '命中的记录里要有这条')
+    const bd = await one('SELECT name FROM badge WHERE id = ?', [Number(String(ev.biz_ref).split('-')[2])])
+    assert.equal(r.title, bd.name); assert.equal(r.kind, '勋章'); assert.match(r.date, /^\d{4}-\d{2}-\d{2}$/)
+    assert.equal(r.proofValid, true, '证明路径要能重算出批次根'); assert.equal(r.canonicalValid, true); assert.ok(r.leafPath.length >= 0 && r.merkleRoot)
+    // 隐私：字段白名单 + 不出现业务单号、用户 id
+    assert.deepEqual(Object.keys(r).sort(), ['anchoredAt', 'batchSeq', 'canonicalValid', 'chainBlock', 'chainRef', 'date', 'kind', 'leafCount', 'leafIndex', 'leafPath', 'merkleRoot', 'merkleVersion', 'note', 'payloadHash', 'prevRoot', 'proofValid', 'status', 'title', 'versionNo'])
+    assert.ok(!JSON.stringify(d).includes(ev.biz_ref), '不能带出业务单号（里面有用户 id）')
+  }
+  const mb = await one("SELECT e.payload_hash FROM attest_event e WHERE e.biz_type = 'badge' AND e.biz_ref LIKE 'mbadge-%' ORDER BY e.id DESC LIMIT 1")
+  if (mb) assert.ok(ok(await call('GET', '/open/verify/record/' + mb.payload_hash.slice(0, 8))).records.some((x) => x.kind === '商户勋章'), '商户勋章编号要认')
+  const od = await one("SELECT e.payload_hash, e.biz_ref FROM attest_event e WHERE e.biz_type = 'order' ORDER BY e.id DESC LIMIT 1")
+  const odr = ok(await call('GET', '/open/verify/record/' + od.payload_hash.slice(0, 8)))
+  assert.ok(odr.records.every((x) => x.kind === '订单') || odr.records.length >= 1); assert.ok(!JSON.stringify(odr).includes(od.biz_ref), '订单编号查询也不回订单号')
+  const other = await one("SELECT payload_hash FROM attest_event WHERE biz_type NOT IN ('badge', 'order') LIMIT 1")
+  if (other) {   // 不对外的类型：要么直接 1004，要么（前缀碰巧撞上别的勋章 / 订单）列表里绝不能有它自己
+    const rr = await call('GET', '/open/verify/record/' + other.payload_hash.slice(0, 8))
+    assert.ok(rr.code === 1004 || !rr.data.records.some((x) => x.payloadHash === other.payload_hash), '提现 / 实名 / 结算这类事件不对外按编号查')
+  }
+  assert.equal((await call('GET', '/open/verify/record/ZZZZZZZZ')).code, 1001); assert.equal((await call('GET', '/open/verify/record/abc')).code, 1001)
+  assert.equal((await call('GET', '/open/verify/record/00000000')).code, 1004)
+  const page = fs.readFileSync(new URL('../static/verify.html', import.meta.url), 'utf8')
+  assert.match(page, /\/open\/verify\/record\//); assert.match(page, /\^\[0-9a-fA-F\]\{8\}\$/); assert.match(page, /记录编号/)
 })
 await t('游客侧"可信记录"：该订单已封存，校验码取最新版本（不是支付时的那一条）', async () => {
   const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [full.user_id])

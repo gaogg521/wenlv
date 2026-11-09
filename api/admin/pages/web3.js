@@ -718,7 +718,8 @@ function blockTipHtml(b) {
     ${tipRow('事件数', Number(b.leaf_count) + ' 条')}
     <div class="tip-hash"><span>Merkle 根</span><code>${esc(b.merkle_root || '')}</code></div>
     <div class="tip-hash"><span>前根 prev_root</span><code>${b.prev_root ? esc(b.prev_root) : '— 创世区块'}</code></div>
-    ${tipRow('算法', b.merkle_kind ? esc(b.merkle_kind) + (b.merkle_version ? ' · v' + Number(b.merkle_version) : '') : (b.merkle_version ? 'v' + Number(b.merkle_version) : ''))}
+    ${tipRow('打包内容', day ? '当天旅豆流水（借贷平衡的账本）' : '业务事件指纹')}
+    ${tipRow('Merkle 算法', b.merkle_version ? 'v' + Number(b.merkle_version) + (Number(b.merkle_version) === 2 ? '（RFC 6962）' : '') : '')}
     ${tipRow('链适配器', b.chain_provider ? esc(b.chain_provider) : '')}
     ${tipRow('交易', b.chain_tx_ref ? `<code>${esc(String(b.chain_tx_ref).slice(0, 22))}${String(b.chain_tx_ref).length > 22 ? '…' : ''}</code>` : '')}
     ${tipRow('链上区块 / 确认数', b.chain_block ? esc(b.chain_block) + (b.confirmations != null ? ' / ' + Number(b.confirmations) : '') : '')}
@@ -727,7 +728,8 @@ function blockTipHtml(b) {
     ${Number(b.attempt) ? tipRow('重试次数', Number(b.attempt)) : ''}
     ${b.last_err ? `<div class="tip-err">最近错误：${esc(String(b.last_err).slice(0, 120))}</div>` : ''}
     <div class="tip-mix">${mix === undefined ? '<span class="muted">事件构成加载中…</span>' : mix === null ? '' : Object.entries(mix).map(([k, n]) => `<span>${esc(BIZ_CN[k] || k)} <b>${n}</b></span>`).join('')}</div>
-    <div class="tip-foot">点击查看批内事件与证明路径</div>`
+    ${day ? '<div class="tip-note">账本日终 = 每天一次，把当天所有旅豆流水打成一个根上链，证明没有超发。</div>' : ''}
+    <div class="tip-foot">点击查看${day ? '当天流水' : '批内事件'}与证明路径</div>`
 }
 function flowTipHtml(i) {
   const s = ((window.__flowData || {}).steps || [])[i]
@@ -979,7 +981,7 @@ async function web3dash(opt = {}) {
     ${!demo && Number(d.batches) > batches.length && batches.length ? chainPagerHtml(page, batches, Number(d.batches)) : ''}
     <div class="chain-legend">
       ${CHAIN_LEGEND.map(([k, n]) => `<span><i class="lg" style="background:${bizColor(k)}66;border:1px solid ${bizColor(k)}"></i>${n}</span>`).join('')}
-      <span><i class="lg" style="background:${DAY_CLOSE_COLOR}66;border:1px solid ${DAY_CLOSE_COLOR}"></i>账本日终（分支）</span>
+      <span title="账本日终 = 每天一次，把当天所有旅豆流水打成一个根上链，证明账本借贷平衡、没有超发"><i class="lg" style="background:${DAY_CLOSE_COLOR}66;border:1px solid ${DAY_CLOSE_COLOR}"></i>账本日终（每天一次，封存当天旅豆流水）</span>
       <span><i class="lg dash"></i>待打包</span>
       <span class="muted" style="margin-left:auto;color:#7f92bd">一批含多种业务时六个面分别上色 · 半透明 = 还没锚定 · 点击区块查看批内事件</span>
     </div>
@@ -1016,6 +1018,44 @@ function chainTimerSetup() {
     web3dash({ silent: true })
   }, 30000)
 }
+/* ---- 区块详情：字段说明 + 完整指纹 + 验证过程 ---- */
+const LEDGER_BIZ = { 1: '消费返豆', 2: '任务奖励', 3: '内容奖励', 4: '下单抵扣', 5: '退款冲正', 6: '过期回收', 7: '风控调整', 8: '期初余额导入' }
+/** 指纹类字段：前 10 位 + 后 6 位，悬停看全文，旁边一个复制按钮；完整值从不丢 */
+function hashCell(full) {
+  const h = String(full || '')
+  if (!h) return '<span class="muted">—</span>'
+  const short = h.length > 20 ? h.slice(0, 10) + '…' + h.slice(-6) : h
+  return `<span class="hash-cell"><code title="${esc(h)}">${esc(short)}</code><button class="copy-chip" type="button" title="复制完整值" onclick="event.stopPropagation();copyText(${w3Arg(h)})">复制</button></span>`
+}
+/** 完整哈希（64 位）：可换行显示，给根 / 前根 / 交易号这类要核对的字段用 */
+function hashFull(full) {
+  const h = String(full || '')
+  return h ? `<code class="hash-full">${esc(h)}</code><button class="copy-chip" type="button" title="复制完整值" onclick="copyText(${w3Arg(h)})">复制</button>` : '<span class="muted">—</span>'
+}
+const BD_STATUS = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>', '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定重试</span>', '<span class="pill s70">人工处理</span>', '<span class="pill warn">已提交·待确认</span>']
+const bdField = (k, v, tip) => `<div class="bd-f"><span class="bd-k"${tip ? ` title="${esc(tip)}"` : ''}>${k}</span><div class="bd-v">${v}</div></div>`
+/** 批次信息：一块一格，每个字段名都带悬停说明；根 / 前根 / 交易号显示完整值 */
+function batchFieldsHtml(b, day) {
+  const ts = (t) => (t ? esc(String(t).slice(0, 19).replace('T', ' ')) : '')
+  return `<div class="bd-grid">
+    ${bdField('打包类型', day ? '旅豆账本日终' : '业务事件批次', day ? '每天一次，把当天全部旅豆流水打成一个根' : '业务事件按小时打包成一个根')}
+    ${bdField('业务日', esc(String(b.biz_date).slice(0, 10)))}
+    ${bdField(day ? '流水数' : '事件数', Number(b.leaf_count) + ' 条')}
+    ${bdField('状态', BD_STATUS[Number(b.status)] || '', '待打包 → 已打包 → 已提交 → 已锚定；锚定 = 根已写入链并确认')}
+    ${bdField('Merkle 根', hashFull(b.merkle_root), '这一批所有叶子汇成的指纹；上链的就是它，原始内容不上链')}
+    ${bdField('前根 prev_root', b.prev_root ? hashFull(b.prev_root) : '<span class="muted">— 链起点（创世区块）</span>', '上一批的根。每批都带着上一批的根，改任何一批都会让后面全部对不上')}
+    ${b.chain_provider ? bdField('上链到', esc(b.chain_provider), '提交这批根的链适配器') : ''}
+    ${b.chain_tx_ref ? bdField('链上交易', hashFull(b.chain_tx_ref), '链上这笔交易的编号，可到链浏览器核对') : ''}
+    ${b.chain_block ? bdField('链上块高', esc(b.chain_block)) : ''}
+    ${b.anchored_at ? bdField('锚定时间', ts(b.anchored_at)) : ''}
+    ${b.submitted_at ? bdField('提交时间', ts(b.submitted_at)) : ''}
+    ${Number(b.attempt) ? bdField('重试次数', Number(b.attempt)) : ''}
+  </div>`
+}
+const BD_EXPL_BIZ = `<b>这是什么？</b>一个区块 = 一批业务事件打成的 Merkle 树，上链的只有根。下表每一行是一条事件，只留指纹（SHA-256），<b>不含姓名、手机号、金额</b>。
+  <b>「验证」是什么？</b>系统用公开算法重算这条事件的指纹，再顺着证明路径算出批次根，对上了才说明它入链后没被改过。<b>你不需要做任何事</b>，点一下看结果；点「看验证过程」可以看到每一步。`
+const BD_EXPL_DAY = `<b>账本日终是什么？</b>每天一次，把<b>当天所有旅豆流水分录</b>（每笔入账 / 出账）打成一个根并上链。它证明当天账本<b>借贷合计相等、没有超发</b>，封存后任何改动都会让根对不上。
+  它不是业务事件，所以没有「业务单号」，下表列的是当天的旅豆流水。每笔流水都有借贷两条分录（用户户一条、预算 / 平台户一条）。`
 async function openBlock(id, opt = {}) {
   // 记住展开的是哪一块：链路视图每 30 秒自动刷新会整体重画 #app，不记住的话
   // 用户点开的事件表在下一次刷新时被抹掉 —— 体感就是"点了没反应 / 点完就消失"
@@ -1028,7 +1068,7 @@ async function openBlock(id, opt = {}) {
   if (!box) return
   if (!opt.silent) box.innerHTML = `<div class="card">${skel(3)}</div>`
   const demo = !!window.__demoChain && id >= 900
-  let b, evs = []
+  let b, evs = [], dayD = null
   if (demo) {
     b = mockChain().find((x) => x.id === id)
     if (!b) { box.innerHTML = ''; return }
@@ -1036,33 +1076,88 @@ async function openBlock(id, opt = {}) {
   } else {
     const r = await api('GET', '/admin/attest/batch/' + id)
     b = r.batch; evs = r.events || []
+    // 日终批的叶子是当天的旅豆流水，不是 attest_event：单独取流水明细（并带回重算结果）
+    if (Number(b.is_day_close)) {
+      try { dayD = await api('GET', '/admin/attest/bean-day/' + String(b.biz_date).slice(0, 10)) } catch (e) { dayD = { error: e.message } }
+    }
   }
-  const BST = ['<span class="pill warn">待打包</span>', '<span class="pill s20">已打包·待锚定</span>', '<span class="pill ok">已锚定</span>', '<span class="pill s70">锚定重试</span>', '<span class="pill s70">人工处理</span>']
-  box.innerHTML = `
-  <div class="card block-detail-card">
-    <div class="card-head"><h3>区块 #${b.seq} · 批内事件（${Number(b.leaf_count)}${demo ? '，演示取前 10' : ''}）</h3>
-      <span class="muted">${Number(b.is_day_close) ? '旅豆账本日终封存批 · ' : ''}打包于 ${esc(String(b.biz_date).slice(0, 10))}${demo ? ' · 演示数据' : ''}<button class="btn ghost sm" style="margin-left:8px" onclick="closeBlock()">收起</button></span></div>
-    <div class="row" style="gap:18px;flex-wrap:wrap;font-size:12.5px">
-      <span>Merkle 根 <code>${esc(b.merkle_root)}</code><button class="copy-chip" title="复制完整根" onclick="copyText('${escJs(b.merkle_root)}')">复制</button></span>
-      <span>前根 ${b.prev_root ? `<code>${esc(b.prev_root)}</code><button class="copy-chip" title="复制前根" onclick="copyText('${escJs(b.prev_root)}')">复制</button>` : '<code>—（链起点）</code>'}</span>
-      ${b.chain_tx_ref ? `<span>链上编号 <code>${esc(b.chain_tx_ref)}</code><button class="copy-chip" title="复制交易哈希" onclick="copyText('${escJs(b.chain_tx_ref)}')">复制</button></span>` : ''}
-      ${b.chain_block ? `<span>链上块高 <code>${esc(b.chain_block)}</code></span>` : ''}
-      ${b.anchored_at ? `<span>锚定时间 ${esc(String(b.anchored_at).slice(0, 19))}</span>` : ''}
-      <span>尝试 ${Number(b.attempt) || 0} 次</span>
-      ${!demo && Number(b.is_day_close) ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/bean-day/${esc(String(b.biz_date).slice(0, 10))}">封存证明 PDF</a>
-        <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${esc(String(b.biz_date).slice(0, 10))}">公开复核</a>` : ''}
-    </div>
-    <table style="margin-top:10px"><thead><tr><th>叶序</th><th>类型</th><th>业务单号</th><th>版本</th><th>payload 指纹</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>
+  const day = Number(b.is_day_close) === 1
+  const links = !demo && day ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/open/report/bean-day/${esc(String(b.biz_date).slice(0, 10))}">封存证明 PDF</a>
+    <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?date=${esc(String(b.biz_date).slice(0, 10))}">公开复核</a>` : ''
+  let body
+  if (day && dayD && !dayD.error) body = dayLedgerHtml(dayD)
+  else if (day && dayD && dayD.error) body = `<div class="bd-check bad">读取当天流水失败：${esc(dayD.error)}</div>`
+  else body = `<table class="bd-table"><thead><tr>
+      <th title="Merkle 树里的第几片叶子，从 0 起">叶序</th><th>类型</th><th>业务单号</th><th title="同一单号状态变化会产生新版本，旧版本不删">版本</th>
+      <th title="这条事件规范化后的 SHA-256；悬停看完整值，点「复制」带走">存证指纹（SHA-256）</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${evs.map((e) => `<tr><td class="num">${Number(e.leaf_index)}</td><td>${bizTag(esc(e.biz_type))}</td>
       <td class="num">${esc(e.biz_ref)}</td><td class="num">v${Number(e.version_no ?? 1)}</td>
-      <td class="td-sub"><code>${esc(String(e.payload_hash).slice(0, 12))}…</code></td>
-      <td>${BST[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
-      <td>${!demo && e.biz_type === 'order' ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>`
-        : (demo ? '' : `<button class="btn ghost sm" onclick="verifyEventInline(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.id)},this)">验证</button>`)}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
-    </tbody></table>
+      <td>${hashCell(e.payload_hash)}</td>
+      <td>${BD_STATUS[e.status] || ''}</td><td class="td-sub">${esc(String(e.created_at).slice(5, 19))}</td>
+      <td class="bd-ops">${demo ? '' : `<button class="btn ghost sm" title="系统自动重算指纹与证明路径，你不需要做任何事" onclick="verifyEventInline(${w3Arg(e.biz_type)},${w3Arg(e.biz_ref)},${Number(e.id)},this)">验证</button>${e.biz_type === 'order' ? ` <a class="btn ghost sm" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(e.biz_ref)}">公开复核</a>` : ''}`}</td></tr>`).join('') || '<tr><td colspan="8" class="td-sub">空批次</td></tr>'}
+    </tbody></table>`
+  box.innerHTML = `
+  <div class="card block-detail-card">
+    <div class="card-head"><h3>区块 #${Number(b.seq)} · ${day ? '当天旅豆流水' : '批内事件'}（${Number(b.leaf_count)}${demo ? '，演示取前 10' : ''}）</h3>
+      <span class="muted">${demo ? '演示数据 · ' : ''}${links}<button class="btn ghost sm" style="margin-left:8px" onclick="closeBlock()">收起</button></span></div>
+    ${batchFieldsHtml(b, day)}
+    <div class="bd-expl">${day ? BD_EXPL_DAY : BD_EXPL_BIZ}</div>
+    ${body}
   </div>`
   // block:'start' 才保证用户真的“看见”结果；nearest 在很多情况下等于不滚动
   if (!opt.silent) box.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+/** 日终块的流水明细 + 重算结果：重算根与封存时的根一致 = 封存后账本没被动过 */
+function dayLedgerHtml(d) {
+  const n = Number(d.sealed.leafCount)
+  const check = d.rootMatches
+    ? `<div class="bd-check ok">✓ 已用当天 <b>${n}</b> 笔流水重新算出 Merkle 根，与封存时存下的根<b>一致</b>：封存后账本没被动过。${d.balanced ? ` 借方合计 ${fmtN(d.now.debitSum)} = 贷方合计 ${fmtN(d.now.creditSum)}，账本平衡、没有超发。` : ''}</div>`
+    : d.live
+      ? `<div class="bd-check live">当天账本还在增长：现在有 ${Number(d.now.leafCount)} 笔流水，封存时是 ${n} 笔，所以重算的根和封存时不同——这是正常的，次日封存后就固定了。</div>`
+      : `<div class="bd-check bad">✗ 重算的根与封存时存下的根<b>不一致</b>：封存后这一天的旅豆流水被改动过（封存 ${n} 笔、现在 ${Number(d.now.leafCount)} 笔）。请联系技术核查。</div>`
+  return `${check}
+    <table class="bd-table"><thead><tr><th title="Merkle 树里的第几片叶子，从 0 起；与封存顺序一致">叶序</th><th>流水号</th><th>业务</th>
+      <th title="贷 = 账户余额增加，借 = 减少。每笔流水有借贷两条分录">方向</th><th>数量</th><th>变动后余额</th><th>业务引用</th>
+      <th title="这条分录规范化后的 SHA-256；悬停看完整值，点「复制」带走">叶指纹（SHA-256）</th><th>时间</th></tr></thead><tbody>
+    ${d.rows.map((r) => `<tr><td class="num">${r.leafIndex}</td><td class="td-sub mono">${esc(r.txNo)}</td><td>${esc(LEDGER_BIZ[r.bizType] || '类型' + r.bizType)}</td>
+      <td>${r.direction === 1 ? '<span class="pill ok">贷 · 增加</span>' : '<span class="pill s20">借 · 减少</span>'}</td>
+      <td class="num">${fmtN(r.amount)}</td><td class="num">${fmtN(r.afterBal)}</td><td class="td-sub mono">${esc(r.bizRef || '—')}</td>
+      <td>${hashCell(r.leafHash)}</td><td class="td-sub">${esc(String(r.createdAt).slice(5, 19).replace('T', ' '))}</td></tr>`).join('')}
+    </tbody></table>
+    ${d.truncated ? `<div class="muted" style="margin-top:8px">仅显示前 ${d.rows.length} 笔，共 ${Number(d.now.leafCount)} 笔；重算的根用的是全部流水。</div>` : ''}`
+}
+/** 「验证」的完整过程：三步各自通过没有、依据是什么，以及你需要做什么（不需要） */
+async function verifyDetail(bizType, bizRef) {
+  drawer('验证过程', skel(3))
+  let r
+  try { r = await api('GET', '/admin/attest/verify?bizType=' + encodeURIComponent(bizType) + '&bizRef=' + encodeURIComponent(bizRef)) } catch (e) { closeModal(); return toast(e.message, true) }
+  if (!r.found) return drawer('验证过程', `<div class="bd-check bad">没找到「${esc(bizRef)}」这条存证。</div>`)
+  const step = (state, n, title, body) => `<section class="vstep ${state}"><i>${state === 'ok' ? '✓' : state === 'bad' ? '✗' : '·'}</i><div><h4>第 ${n} 步 · ${title}</h4>${body}</div></section>`
+  const bad = r.proofValid === false || r.canonicalValid === false
+  const anchored = !!r.chainRef
+  const s1 = r.canonicalValid === true ? step('ok', 1, '指纹复算', `<p>把这条事件的规范化内容重新算一遍 SHA-256，得到的指纹和存证里的<b>一致</b>：内容没被改过。</p><div class="vrow"><span>存证指纹</span>${hashFull(r.payloadHash)}</div>`)
+    : r.canonicalValid === false ? step('bad', 1, '指纹复算', `<p>重新算出的指纹和存证里的<b>不一致</b>：内容与入链时不同。</p><div class="vrow"><span>存证指纹</span>${hashFull(r.payloadHash)}</div>`)
+    : step('todo', 1, '指纹复算', `<p>这条事件没有保存规范化内容（早期数据），跳过这一步；下一步仍然有效。</p><div class="vrow"><span>存证指纹</span>${hashFull(r.payloadHash)}</div>`)
+  const path = r.leafPath || []
+  const s2 = r.proofValid === true ? step('ok', 2, '证明路径', `<p>从这条事件的指纹出发，顺着 <b>${path.length}</b> 步兄弟哈希往上算，得到的根和批次记录的根<b>一致</b>：它确实在区块 #${Number(r.batchSeq)} 里（第 ${Number(r.leafIndex)} 片叶子，共 ${Number(r.leafCount)} 片）。</p>
+      <div class="vrow"><span>批次 Merkle 根</span>${hashFull(r.merkleRoot)}</div>
+      <details><summary>展开 ${path.length} 步证明路径</summary><ol class="vpath">${path.map((p) => `<li><em>${p.p === 'L' ? '兄弟在左' : '兄弟在右'}</em><code>${esc(p.h)}</code></li>`).join('')}</ol><p class="muted">${esc(r.verifyTip || '')}</p></details>`)
+    : r.proofValid === false ? step('bad', 2, '证明路径', `<p>顺着证明路径算出的根和批次记录的根<b>不一致</b>。</p><div class="vrow"><span>批次 Merkle 根</span>${hashFull(r.merkleRoot)}</div>`)
+    : step('todo', 2, '证明路径', '<p>这条事件还在待打包队列里，没有证明路径。小时级打包后才会出根。</p>')
+  const c = r.chain || {}
+  const s3 = anchored ? step('ok', 3, '批次上链', `<p>批次根已写入链并确认，可到链浏览器按交易编号核对。</p>
+      <div class="vrow"><span>链上交易</span>${hashFull(r.chainRef)}</div>
+      <div class="vrow"><span>块高 / 时间</span>${esc(r.chainBlock || '—')} · ${esc(String(r.anchoredAt || '').slice(0, 19).replace('T', ' '))}</div>
+      ${c.provider ? `<div class="vrow"><span>链</span>${esc(c.provider)}</div>` : ''}
+      ${c.signatureNote ? `<div class="vrow"><span>上链原文签名</span>${esc(c.signatureNote)}</div>` : ''}`)
+    : step('todo', 3, '批次上链', `<p>${esc(r.note || '这批还没有上链')}。没上链不代表有问题：前两步已经可以证明它在批次里，上链后才多一层「根已被链固定」的证明。</p>`)
+  const head = bad ? ['bad', '验证失败：存证内容或证明路径对不上，请联系技术核查。'] : r.proofValid == null ? ['live', '还没有出根，暂时无法验证；打包后再看。'] : ['ok', anchored ? '验证通过：内容没被改过，且批次根已上链固定。' : '验证通过：内容没被改过；批次根还没上链，上链后会多一层证明。']
+  drawer(esc(BIZ_CN[bizType] || bizType) + ' · ' + esc(bizRef), `
+    <div class="bd-check ${head[0]}">${head[1]}</div>
+    <div class="vsteps">${s1}${s2}${s3}</div>
+    <div class="bd-expl" style="margin-top:14px"><b>你需要做什么？</b>什么都不用做：以上每一步都是系统用公开算法自动算的，页面上的 ✓ 就是结果。
+      想自己核对的话，复制「存证指纹」和证明路径，按下面这条规则离线重算，看是否得到「批次 Merkle 根」：<br><span class="muted">${esc(r.verifyTip || '')}</span>
+      ${bizType === 'order' ? `<br><a class="btn ghost sm" style="margin-top:8px" target="_blank" rel="noopener" href="/verify?no=${encodeURIComponent(bizRef)}">打开对外公开复核页</a>` : ''}</div>`)
 }
 function closeBlock() {
   window.__openBlockId = undefined
@@ -1097,12 +1192,12 @@ async function verifyEventInline(bizType, bizRef, id, anchor) {
   const bad = r.found && (r.proofValid === false || r.canonicalValid === false)
   const pending = r.found && !bad && r.proofValid == null
   const kind = !r.found ? 'warn' : bad ? 's70' : pending ? 'warn' : 'ok'
-  const text = !r.found ? '未找到该单号' : bad ? '验证失败：证明路径或指纹对不上根' : pending ? '尚未入链 · ' + (r.note || '待打包') : '验证通过 · ' + (r.note || '')
+  const text = !r.found ? '未找到该单号' : bad ? '验证失败：证明路径或指纹对不上根' : pending ? '尚未入链 · ' + (r.note || '待打包') : '验证通过（系统已自动重算，无需操作）' + (r.chainRef ? ' · 批次根已上链' : (r.note ? ' · ' + r.note : ''))
   toast(text, kind === 's70')
   // toast 一闪而过：结果同时留在被点的位置旁边，人没看到 toast 也不等于没验证
   if (anchor && anchor.parentNode) {
     anchor.parentNode.querySelectorAll('.verify-chip').forEach((n) => n.remove())
-    anchor.insertAdjacentHTML('afterend', `<span class="pill ${kind} verify-chip" style="margin-left:6px;white-space:normal">${esc(text)}</span>`)
+    anchor.insertAdjacentHTML('afterend', `<span class="pill ${kind} verify-chip" style="margin-left:6px;white-space:normal">${esc(text)}${r.found ? ` <button class="ref-link" type="button" onclick="verifyDetail(${w3Arg(bizType)},${w3Arg(bizRef)})">看验证过程 ›</button>` : ''}</span>`)
   }
 }
 // ---- 单流程视角：一单六锚（一笔订单的 6 步链上锚点） ----

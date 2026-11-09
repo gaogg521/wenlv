@@ -87,6 +87,44 @@ export async function packBatch(opts = {}) {
   })
 }
 
+/** 旅豆流水的叶哈希：封存（closeBeanDay）与后台重算（beanDayDetail）共用这一个定义 */
+export const beanLeafHash = (r) => hashOf(canonicalize({
+  id: Number(r.id), txNo: r.tx_no, accountId: Number(r.account_id), direction: Number(r.direction),
+  amount: Number(r.amount), afterBal: Number(r.after_bal), bizType: Number(r.biz_type), bizRef: r.biz_ref,
+}))
+
+/**
+ * 日终块的「批内明细」：账本日终的叶子是当天的旅豆流水（不是业务事件），所以点开日终块要看的是流水分录。
+ * 同时用当天流水**重新算一遍** Merkle 根，和封存时存下的根比对：对得上 = 封存后账本没被动过。
+ * 当日账本还在增长：重算和封存时的根可能不同，这不是篡改，返回 live=true 让页面如实说明。
+ * 只返回前 limit 笔（叶序从 0 起、与封存顺序一致）；总数、借贷合计、重算结果都是全量算出来的。
+ */
+export async function beanDayDetail(day, { limit = 500 } = {}) {
+  const d = await one('SELECT * FROM bean_day_root WHERE biz_date = ?', [day])
+  if (!d) return { found: false }
+  const b = d.batch_id ? await one('SELECT id, seq, status, merkle_version, chain_provider, chain_tx_ref, chain_block, anchored_at FROM attest_batch WHERE id = ?', [d.batch_id]) : null
+  const rows = await q(
+    `SELECT id, tx_no, account_id, direction, amount, after_bal, biz_type, biz_ref, created_at
+       FROM bean_ledger WHERE DATE(created_at) = ? ORDER BY id`, [day])
+  const leaves = rows.map(beanLeafHash)
+  const recomputed = leaves.length ? merkle.buildTree(leaves, b ? Number(b.merkle_version) || 1 : undefined).root : null
+  const sum = (dir) => rows.filter((r) => Number(r.direction) === dir).reduce((s, r) => s + Number(r.amount), 0)
+  const live = day >= bizDay()
+  return {
+    found: true, bizDate: day, live,
+    batch: b ? { id: Number(b.id), seq: Number(b.seq), status: Number(b.status), chainProvider: b.chain_provider, chainTx: b.chain_tx_ref, chainBlock: b.chain_block, anchoredAt: b.anchored_at } : null,
+    sealed: { leafCount: Number(d.leaf_count), debitSum: Number(d.debit_sum), creditSum: Number(d.credit_sum), merkleRoot: d.merkle_root, prevRoot: d.prev_root },
+    now: { leafCount: rows.length, debitSum: sum(2), creditSum: sum(1), merkleRoot: recomputed },
+    rootMatches: recomputed != null && recomputed === d.merkle_root,
+    balanced: sum(1) === sum(2),
+    truncated: rows.length > limit,
+    rows: rows.slice(0, limit).map((r, i) => ({
+      leafIndex: i, id: Number(r.id), txNo: r.tx_no, direction: Number(r.direction), amount: Number(r.amount), afterBal: Number(r.after_bal),
+      bizType: Number(r.biz_type), bizRef: r.biz_ref, createdAt: r.created_at, leafHash: leaves[i],
+    })),
+  }
+}
+
 /**
  * 旅豆账本日终根（D6 原文：旅豆账本日终 Merkle 根）
  * 叶 = 当日全部 bean_ledger 流水；根上链 = "严禁超发"的唯一外部证明
@@ -117,10 +155,7 @@ export async function closeBeanDay(bizDate, opts = {}) {
     return { ok: false, bizDate: day, creditSum, debitSum, reason: '借贷不平，拒绝封存' }
   }
 
-  const leaves = rows.map((r) => hashOf(canonicalize({
-    id: Number(r.id), txNo: r.tx_no, accountId: Number(r.account_id), direction: Number(r.direction),
-    amount: Number(r.amount), afterBal: Number(r.after_bal), bizType: Number(r.biz_type), bizRef: r.biz_ref,
-  })))
+  const leaves = rows.map(beanLeafHash)
 
   const out = await tx(async (c) => {
     const { seq, prevRoot } = await nextSeq(c)

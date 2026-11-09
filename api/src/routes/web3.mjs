@@ -97,6 +97,12 @@ const web3 = {
       FROM attest_event e LEFT JOIN attest_batch b ON b.id = e.batch_id
       WHERE e.biz_type = ? AND e.biz_ref = ? ORDER BY e.id DESC LIMIT 1`, [bizType, bizRef])
     if (!e) return { found: false }
+    return web3._verifyRow(e)
+  },
+
+  // 已取到事件行（含批次字段）后的验证：_verify 按业务号取最新一条，公开「记录编号」查询按指纹前缀取到具体某一版，共用这段
+  async _verifyRow(e) {
+    const bizType = e.biz_type, bizRef = e.biz_ref
     const path = e.leaf_path || null
     const mv = Number(e.merkle_version || 1)
     const proofValid = path && e.merkle_root ? attestDomain.verifyProof(e.payload_hash, path, e.merkle_root, mv) : null
@@ -187,6 +193,16 @@ const web3 = {
     const events = await q(`SELECT id, biz_type, biz_ref, version_no, leaf_index, payload_hash, status, created_at
       FROM attest_event WHERE batch_id = ? ORDER BY leaf_index, id`, [b.id])
     return { batch: b, events, chain: chain.chainStatus() }
+  },
+
+  // 账本日终块的批内明细：当天的旅豆流水分录 + 用它们重算 Merkle 根的结果（日终批的叶子不是业务事件，查 attest_event 永远是空的）
+  'GET /admin/attest/bean-day/:date': async (req) => {
+    await requireAdmin(req)
+    const date = String(req.params.date || '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BizError(1001, '日期格式应为 YYYY-MM-DD')
+    const r = await attestDomain.beanDayDetail(date)
+    if (!r.found) throw new BizError(1201, '该日没有封存记录')
+    return r
   },
 
   // 存证统一检索：一个入口吃多种标识，不用先知道"这是什么"再找对应页面
