@@ -78,19 +78,22 @@ export async function orderCostSnapshot(productId, qty, at = bizDay(), c = { q }
 
 /** 单笔订单经营明细（B12 订单口径）。o 需含 amount_pay/insurance_fee/cost_total_fen/price_snapshot 等。
  *  全额退款单：净销售额与成本按退款冲减口径计 0（快照保留供追溯）。 */
-export function orderEconomics(o) {
+export function orderEconomics(o, extras = {}) {
   const goodsCashFen = Number(o.amount_pay) - Number(o.insurance_fee || 0)
   const refunded = Number(o.status) === 70
+  // B04：部分退款冲减——净销售额扣实退现金，成本扣已退项成本快照
+  const partialFen = Number(extras.partialRefundFen || 0)
+  const refundedItemCostFen = Number(extras.refundedItemCostFen || 0)
   const costKnown = o.cost_total_fen != null
-  const netSalesFen = refunded ? 0 : goodsCashFen
-  const costFen = refunded ? 0 : (costKnown ? Number(o.cost_total_fen) : null)
+  const netSalesFen = refunded ? 0 : goodsCashFen - partialFen
+  const costFen = refunded ? 0 : (costKnown ? Math.max(0, Number(o.cost_total_fen) - refundedItemCostFen) : null)
   const profitFen = costFen == null ? null : netSalesFen - costFen
   const marginPct = profitFen == null || netSalesFen <= 0 ? null : Math.round(profitFen / netSalesFen * 10000) / 100
   const snap = o.price_snapshot ? (typeof o.price_snapshot === 'string' ? JSON.parse(o.price_snapshot) : o.price_snapshot) : null
   return {
     originalGoodsFen: snap ? snap.originalGoodsFen : null,
     effectiveGoodsFen: snap ? snap.effectiveGoodsFen : null,
-    goodsCashFen, netSalesFen, refunded,
+    goodsCashFen, netSalesFen, refunded, partialRefundFen: partialFen,
     freedomDiscountFen: snap?.freedom?.discountFen ?? 0,
     beanDeductFen: Number(o.amount_bean_ded) || 0,
     insuranceFen: Number(o.insurance_fee) || 0,
@@ -106,9 +109,9 @@ export function summarizeEconomics(rows, commissions = new Map()) {
   const mkAgg = () => ({ orders: 0, qty: 0, netSales: 0, cost: 0, profit: 0, costMissing: 0, negative: 0 })
   const total = mkAgg()
   const byProduct = new Map(), byCity = new Map()
-  let refundCash = 0, refunedOrders = 0, commissionTotal = 0
+  let refundCash = 0, refunedOrders = 0, commissionTotal = 0, partialCount = 0, partialCash = 0
   for (const o of rows) {
-    const e = orderEconomics(o)
+    const e = orderEconomics(o, { partialRefundFen: o.partialRefundFen, refundedItemCostFen: o.refundedItemCostFen })
     const add = t => {
       t.orders++; t.qty += Number(o.qty); t.netSales += e.netSalesFen
       if (e.costFen == null) t.costMissing++
@@ -119,7 +122,9 @@ export function summarizeEconomics(rows, commissions = new Map()) {
     add(byProduct.get(Number(o.product_id)))
     if (!byCity.has(o.city_code)) byCity.set(o.city_code, mkAgg())
     add(byCity.get(o.city_code))
+    if (!e.refunded && e.partialRefundFen > 0) partialCount++
     if (e.refunded) { refunedOrders++; refundCash += Number(o.amount_pay) - Number(o.insurance_fee || 0) }
+    if (!e.refunded && e.partialRefundFen > 0) partialCash += e.partialRefundFen
     commissionTotal += Number(commissions.get(Number(o.id)) || 0)
   }
   const pctOf = (p, s) => s <= 0 ? null : Math.round(p / s * 10000) / 100
@@ -138,7 +143,7 @@ export function summarizeEconomics(rows, commissions = new Map()) {
     costFen: hasMissing ? null : total.cost, costMissing: total.costMissing,
     profitFen: hasMissing ? null : total.profit,
     marginPct: hasMissing || total.netSales <= 0 ? null : pctOf(total.profit, total.netSales),
-    negativeProfit: total.negative, refunedOrders, refundCashFen: refundCash,
+    negativeProfit: total.negative, refunedOrders, refundCashFen: refundCash + partialCash, partialRefunds: partialCount,
     commissionFen: commissionTotal,
     operatingIncomeFen: hasMissing ? null : total.profit - commissionTotal,
     confirmed: { status: 'not_available', note: '确认成本/应付/实付随B04结算单元接入，未接入前一律未确认' },

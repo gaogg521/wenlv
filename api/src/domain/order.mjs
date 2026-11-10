@@ -126,16 +126,42 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
     const cost = await orderCostSnapshot(s.product_id, qty, bizDay(), c)
     await c.q('UPDATE orders SET cost_snapshot=?, cost_total_fen=? WHERE order_no=?',
       [cost ? JSON.stringify(cost) : null, cost ? cost.totalFen : null, orderNo])
+    // B02/B04/B17：套餐产品生成订单项快照（三路占比分摊、尾差归最后正额项、项成本独立快照）
+    const pkg = await import('./package.mjs')
+    const orderItems = await pkg.buildOrderItemsInTx(c, { orderNo, productId: s.product_id, qty, goodsFen: goods, freedomFen: freedomFace, beanFen: beanDedFen })
     return { orderNo, amountPay: pay, freedomDiscount: freedomFace, beanDeducted: beans, insuranceFee: insFee,
       insuranceNote: insFee > 0 ? prod.insurance_note : null,
-      pricing: { priceType: pricing.type, effectiveUnitFen: pricing.unitFen, goodsFen: goods, originalGoodsFen: pricing.originalFen * qty } }
+      pricing: { priceType: pricing.type, effectiveUnitFen: pricing.unitFen, goodsFen: goods, originalGoodsFen: pricing.originalFen * qty },
+      orderItems }
   })
 }
 
 export async function byNo(orderNo) { return await one('SELECT * FROM orders WHERE order_no = ?', [orderNo]) }
 
-/** 事务内出票（acceptPayment 与免费改签共用）：凭证数校验 → 逐张建凭证 + 签发存证，全部在同一事务 */
+/** 事务内出票（acceptPayment 与免费改签共用）：凭证数校验 → 逐张建凭证 + 签发存证，全部在同一事务。
+ *  B02/B03：套餐订单按订单项出票（按人凭证项 pass_total 张、凭证挂项），无项产品保持原整单出票。 */
 export async function issuePassesInTx(c, o, orderNo) {
+  const items = await c.q('SELECT * FROM order_item WHERE order_id = ? AND kind = 1 ORDER BY id', [o.id])
+  if (items.length) {
+    const total = items.reduce((a, i) => a + Number(i.pass_total), 0)
+    const issued = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_id=?', [o.id])
+    if (Number(issued.c) > total) throw new BizError(2002, '订单凭证数量异常')
+    let issuedAll = Number(issued.c)
+    for (const it of items) {
+      const mine = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_item_id=?', [it.id])
+      for (let k = Number(mine.c); k < Number(it.pass_total); k++) {
+        const passId = await c.ins('INSERT INTO travel_pass(user_id,order_id,kind,name,product_id,status,order_item_id) VALUES(?,?,1,?,?,1,?)',
+          [o.user_id, o.id, escItemName(it.name) + '·凭证' + (k + 1) + '·' + orderNo, o.product_id, it.id])
+        await attest('pass_issue', 'pass-' + passId, {
+          passId: Number(passId), orderNo, kind: 1, qty: total, orderItemId: Number(it.id), itemMerchantId: Number(it.merchant_id),
+          productId: Number(o.product_id), merchantId: Number(o.merchant_id), cityCode: o.city_code,
+        }, c, 1)
+        issuedAll++
+      }
+    }
+    if (issuedAll !== total) throw new BizError(2002, '套餐凭证数量不平（' + issuedAll + '/' + total + '）')
+    return
+  }
   const issued = await c.one('SELECT COUNT(*) c FROM travel_pass WHERE order_id=?', [o.id])
   if (Number(issued.c) > Number(o.qty)) throw new BizError(2002, '订单凭证数量异常')
   for (let i = Number(issued.c); i < Number(o.qty); i++) {
@@ -147,6 +173,7 @@ export async function issuePassesInTx(c, o, orderNo) {
     }, c, 1)
   }
 }
+const escItemName = n => String(n || '套餐项').replace(/[\r\n<>&"']/g, '').slice(0, 60)
 
 /** 支付入账、状态事件与出票在同一事务中提交；微信重试不会留下“有支付记录但无票”的半状态。 */
 export async function acceptPayment(orderNo, transNo, mock = false) {

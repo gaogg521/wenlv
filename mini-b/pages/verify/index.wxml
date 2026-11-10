@@ -26,6 +26,17 @@
 </view>
 <view class="btn" bindtap="scan">📷 打开相机扫码</view>
 <view class="btn ghost" style="margin-top:16rpx" bindtap="phraseInput">🎭 剧本游 · 对暗号核销</view>
+<!-- B03 套餐服务项履约：本店待履约清单，逐项核销（幂等） -->
+<view class="card fade-up" wx:if="{{svcItems.length}}">
+  <view class="sec-title">套餐服务项 · 待履约（{{svcItems.length}}）</view>
+  <view wx:for="{{svcItems}}" wx:key="id" style="display:flex;align-items:center;gap:16rpx;padding:16rpx 0;border-bottom:1rpx solid var(--line)">
+    <view style="flex:1;min-width:0">
+      <view style="font-weight:600">{{item.name}} <text class="tiny">×{{item.qty}}</text></view>
+      <view class="tiny">{{item.product_title || ''}} · {{item.order_no}} · {{item.contact_name || ''}}</view>
+    </view>
+    <view class="btn sm" style="padding:14rpx 30rpx" data-i="{{index}}" bindtap="redeemSvc">完成履约</view>
+  </view>
+</view>
 <view class="card fade-up">
   <view class="sec-title">手动输码</view>
   <view class="tiny" style="margin-bottom:16rpx">屏幕破损/码被遮挡时：输入游客展示的 6 位数字</view>

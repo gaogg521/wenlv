@@ -20,6 +20,8 @@ Page({
       // A-42：分包 wxml 只做取值——保险相关在 JS 预计算（复杂表达式会静默炸分包编译）
       d.hasInsurance = Number(d.insurance_fee) > 0 && d.insuranceAvailable !== false
       d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
+      // B02：套餐组成项（预订页展示包含内容；空数组=非套餐）
+      d.pkgItems = (d.packageItems || []).map((i) => ({ name: i.name, qtyText: '×' + i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName }))
       this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv }, () => this.updatePrice())

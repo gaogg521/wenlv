@@ -110,7 +110,15 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode, offli
   const pass = await one('SELECT * FROM travel_pass WHERE id = ?', [passId])
   if (!pass) return { ok: false, reason: '凭证不存在', passId }
   const owner = await one('SELECT merchant_id, status, session_id FROM orders WHERE id = ?', [pass.order_id])
-  if (!owner || Number(owner.merchant_id) !== Number(merchantId)) return { ok: false, reason: '非本店凭证', passId }
+  // B03 跨店隔离：套餐分项凭证按订单项归属店核销；无项凭证按订单履约店
+  let verifyMerchantId = Number(owner.merchant_id)
+  if (pass.order_item_id != null) {
+    const item = await one('SELECT id, merchant_id, status FROM order_item WHERE id = ?', [pass.order_item_id])
+    if (!item) return { ok: false, reason: '订单项不存在', passId }
+    if (Number(item.status) === 2) return { ok: false, reason: '该项已退款，凭证已冲正', passId }
+    verifyMerchantId = Number(item.merchant_id)
+  }
+  if (verifyMerchantId !== Number(merchantId)) return { ok: false, reason: '非本店凭证', passId }
   if (Number(owner.status) !== 30 && pass.status === 1) return { ok: false, reason: '订单当前不可核销', passId }
   if (pass.status !== 1) {
     await q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,2,?)',
@@ -133,6 +141,9 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode, offli
       [staffId, passId, hit])
     if (n !== 1) return false
     await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ?', [passId])
+    if (pass.order_item_id != null) {
+      await c.upd('UPDATE order_item SET pass_done = pass_done + 1 WHERE id = ? AND pass_done < pass_total', [pass.order_item_id])
+    }
     await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,1,?)',
       [passId, merchantId, staffId, cityCode])
     // 核销即锚定（与核销同事务）。biz_ref 带窗口号：同一凭证的不同窗口是不同事件，不能互相覆盖
@@ -144,7 +155,10 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode, offli
   if (!consumed) return { ok: false, reason: '已核销（重复·并发拦截）', passId }
 
   const remaining = await one('SELECT COUNT(*) c FROM travel_pass WHERE order_id = ? AND status = 1', [pass.order_id])
-  if (Number(remaining.c) === 0) {
+  // B03：套餐订单存在未履约项时不触发整单核销完成（部分完成不提前发奖励/不推进状态机）
+  const pendingItems = await one('SELECT COUNT(*) n FROM order_item WHERE order_id = ? AND status = 0', [pass.order_id])
+  const allItemsDone = Number(pendingItems.n) === 0
+  if (Number(remaining.c) === 0 && allItemsDone) {
     const o = await one('SELECT order_no FROM orders WHERE id = ?', [pass.order_id])
     await order.fire(o.order_no, 'VERIFY_ALL', 'merchant:' + merchantId, async () => '全部核销完成')
   }

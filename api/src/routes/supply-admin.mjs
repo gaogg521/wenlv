@@ -103,7 +103,9 @@ export const supplyAdminRoutes = {
     await requireAdmin(req, ['super', 'finance'])
     const o = await one('SELECT o.*, p.title FROM orders o JOIN tour_product p ON p.id=o.product_id WHERE o.order_no=?', [req.params.no])
     if (!o) throw new BizError(2003, '订单不存在')
-    const e = supply.orderEconomics(o)
+    const partial = await one('SELECT COALESCE(SUM(cash_fen),0) s FROM partial_refund WHERE order_id = ? AND status = 2', [o.id])
+    const ric = await one('SELECT COALESCE(SUM(cost_fen),0) s FROM order_item WHERE order_id = ? AND status = 2 AND cost_fen IS NOT NULL', [o.id])
+    const e = supply.orderEconomics(o, { partialRefundFen: Number(partial.s), refundedItemCostFen: Number(ric.s) })
     const cost = o.cost_snapshot ? (typeof o.cost_snapshot === 'string' ? JSON.parse(o.cost_snapshot) : o.cost_snapshot) : null
     const price = o.price_snapshot ? (typeof o.price_snapshot === 'string' ? JSON.parse(o.price_snapshot) : o.price_snapshot) : null
     const commission = await q('SELECT promoter_id, base_amount, rate_bp, amount, status FROM commission WHERE order_id=?', [o.id])
@@ -123,9 +125,13 @@ export const supplyAdminRoutes = {
     const args = [from, to]
     if (productId) { cond.push('o.product_id = ?'); args.push(productId) }
     if (city) { cond.push('o.city_code = ?'); args.push(city) }
-    // 实际成交口径含全额退款单（净销售额冲减为0，退款单另列）；60 退款中暂计入"处理中"不进汇总
-    const rows = await q(`SELECT o.id, o.product_id, o.city_code, o.qty, o.status, o.amount_pay, o.insurance_fee, o.amount_bean_ded, o.cost_total_fen, o.cost_snapshot, o.price_snapshot, o.paid_at
-      FROM orders o WHERE ${cond.join(' AND ')}`, args)
+    // 实际成交口径含全额退款单（净销售额冲减为0，退款单另列）与部分退款冲减；60 退款中暂计入"处理中"不进汇总
+    const rows = await q(`SELECT o.id, o.product_id, o.city_code, o.qty, o.status, o.amount_pay, o.insurance_fee, o.amount_bean_ded, o.cost_total_fen, o.cost_snapshot, o.price_snapshot, o.paid_at,
+        COALESCE(pr.pf, 0) AS partialRefundFen, COALESCE(ric.rc, 0) AS refundedItemCostFen
+      FROM orders o
+      LEFT JOIN (SELECT order_id, SUM(cash_fen) pf FROM partial_refund WHERE status = 2 GROUP BY order_id) pr ON pr.order_id = o.id
+      LEFT JOIN (SELECT order_id, SUM(cost_fen) rc FROM order_item WHERE status = 2 AND cost_fen IS NOT NULL GROUP BY order_id) ric ON ric.order_id = o.id
+      WHERE ${cond.join(' AND ')}`, args)
     const ids = rows.map(r => Number(r.id))
     const commissions = new Map(ids.length ? (await q(`SELECT order_id, SUM(amount) amt FROM commission WHERE order_id IN (?) AND status IN (0,2) GROUP BY order_id`, [ids])).map(r => [Number(r.order_id), Number(r.amt)]) : [])
     const summary = supply.summarizeEconomics(rows, commissions)

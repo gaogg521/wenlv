@@ -7,6 +7,26 @@ async function orderDrawer(no) {
   // B12 订单经营明细：成本/毛利/毛利率仅平台经营（super/finance）可取；其他角色拿不到也不展示
   let econ = null
   if (['super', 'finance'].includes(ME?.role)) { try { econ = await api('GET', `/admin/orders/${no}/economics`) } catch { econ = null } }
+  // B02/B03/B04：套餐订单项（快照分摊/履约状态/部分退款明细）；可退项一键部分退款（super/finance）
+  let itemsData = null
+  try { itemsData = await api('GET', `/admin/orders/${no}/items`) } catch { itemsData = null }
+  const IT_ST = { 0: '<span class="pill s20">待履约</span>', 1: '<span class="pill ok">已完成</span>', 2: '<span class="pill off">已退款</span>', 3: '<span class="pill warn">赠送</span>' }
+  const itemsBlock = itemsData && itemsData.items.length ? (() => {
+    const rows = itemsData.items.map((i) => `<tr>
+      <td class="td-main">${esc(i.name)}<div class="td-sub">${esc(i.merchant_name || i.merchant_id)} · ${Number(i.kind) === 1 ? '按人凭证' : '服务项'}${Number(i.kind) === 1 ? ` · 凭证 ${i.pass_done}/${i.pass_total}` : ''}</div></td>
+      <td class="num">×${i.qty}</td>
+      <td class="money num">${fen(i.goods_fen)}</td>
+      <td class="num">${fen(i.cash_fen)}</td>
+      <td class="num">${itemsData.showCost ? (i.cost_fen != null ? fen(i.cost_fen) : '<span class="muted">未挂</span>') : '—'}</td>
+      <td>${IT_ST[i.status] || i.status}</td>
+      ${['super','finance'].includes(ME?.role) && Number(i.status) === 0 && Number(i.pass_done) === 0 && Number(i.cash_fen) > 0 ? `<td><button class="btn danger sm" onclick="partialRefundModal('${escJs(no)}', ${i.id}, '${escJs(i.name)}', ${i.cash_fen})">退此项</button></td>` : '<td></td>'}
+    </tr>`).join('')
+    const prRows = (itemsData.partials || []).map((p) => `<tr><td class="num td-sub">${esc(p.refund_no)}</td><td>${fen(p.cash_fen)}${Number(p.fee_fen) ? '<div class="td-sub">手续费 ' + fen(p.fee_fen) + '</div>' : ''}</td><td><span class="pill ${Number(p.status) === 2 ? 's50' : 's60'}">${Number(p.status) === 2 ? '已退款' : '处理中'}</span><div class="td-sub">${esc(p.reason || '')}</div></td></tr>`).join('')
+    return `<h3 style="margin:16px 0 8px">套餐订单项（快照分摊 · ${Number(o.qty)} 份）</h3>
+    <table><thead><tr><th>项目 / 提供方</th><th>数量</th><th>项原价</th><th>现金分摊</th><th>成本</th><th>履约</th>${['super','finance'].includes(ME?.role) ? '<th></th>' : ''}</tr></thead><tbody>${rows}</tbody></table>
+    ${prRows ? `<h3 style="margin:12px 0 6px">部分退款记录</h3><table><thead><tr><th>退款单</th><th>实退</th><th>状态</th></tr></thead><tbody>${prRows}</tbody></table>` : ''}
+    <p class="td-sub">分摊口径：现金/券/旅豆按项原价占比、尾差归最后正额项（Σ=订单金额恒等）；部分退款只退未核销项现金分摊，旅豆/券仅全退冲回。</p>`
+  })() : ''
   const econBlock = econ ? (() => {
     const e = econ.economics
     const yuan = (f) => f == null ? '—' : fen(f)
@@ -56,6 +76,7 @@ async function orderDrawer(no) {
         <td><span class="pill ${Number(r.status) === 2 ? 's50' : 's60'}">${['申请', '处理中', '已退款', '已拒绝'][r.status] || r.status}</span></td></tr>`).join('')}</table>` : ''}
     <h3 style="margin:16px 0 10px">客服处理记录</h3>
     ${(o.serviceRecords || []).map(r => { let v = r.after_val; if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } } return `<div class="rv-box"><b>${r.action === 'contact-update' ? '联系人修正' : '客服备注'}</b><p>${esc(v?.note || [v?.name,v?.phone,v?.reason].filter(Boolean).join(' · '))}</p><span class="td-sub">${esc(r.actor)} · ${esc(String(r.created_at).slice(0,19))}</span></div>` }).join('') || '<p class="muted">暂无客服处理记录</p>'}
+    ${itemsBlock}
     ${econBlock}
     <h3 style="margin:16px 0 10px">状态机时间线（order_event 审计）</h3>
     <ul class="tl">${(o.events || []).map((e) => `<li>
@@ -153,7 +174,8 @@ async function products() {
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
-          ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>` : ''}
+          ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="packageItemsDrawer(${p.id})">套餐项</button>` : ''}
           ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
@@ -312,6 +334,87 @@ async function promoDiscountList() {
         <button class="btn ghost sm" onclick="promoDiscountStatus(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '停用' : '启用'}</button>` : '<span class="muted">仅查看</span>'}</div></td>
     </tr>`}).join('')}</tbody></table>` : emptyBox('暂无折扣规则——点右上「新增折扣规则」创建（如：新品上市 8 折）')
 }
+/* ============ B02/B03/B04 套餐项与部分退款 ============ */
+// 订单抽屉里对单个未核销项发起部分退款（super/finance；平台原因不扣手续费，留审计）
+window.partialRefundModal = (no, itemId, name, cashFen) => {
+  modal('按项部分退款 · ' + esc(no), `
+    <p class="td-sub">退「${esc(name)}」现金分摊 <b>${fen(cashFen)}</b>。平台原因退款不扣手续费；游客自助部分退款按退改梯度扣手续费。旅豆/券不在部分退款中冲回（全退才走既有冲回流程）。</p>
+    <div class="field"><label>退款原因 *（4–300 字，进入审计）</label><input id="prReason" maxlength="300" placeholder="如：客人临时取消该单项服务"></div>
+    <div id="prErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="partialRefundSubmit('${escJs(no)}', ${itemId})">确认退款</button>`)
+}
+window.partialRefundSubmit = async (no, itemId) => {
+  try {
+    const r = await api('POST', `/admin/orders/${no}/partial-refund`, { itemIds: [itemId], reason: document.getElementById('prReason').value.trim() })
+    closeModal(); toast(r.refunded ? '部分退款完成：' + fen(r.cashFen) : '退款已受理（' + r.refundNo + '）'); orderDrawer(no)
+  } catch (e) { document.getElementById('prErr').textContent = e.message }
+}
+// 产品套餐项配置（B02）：按人凭证/服务项、提供方门店、成本来源、单价与每份数量
+window.packageItemsDrawer = async (pid) => {
+  if (!['super', 'ops', 'finance'].includes(ME?.role)) return toast('套餐项查看需平台权限', true)
+  const [d, merchants, items] = await Promise.all([api('GET', `/admin/products/${pid}/package-items`), api('GET', '/admin/merchants'), api('GET', '/admin/supply-items?pageSize=100').catch(() => ({ rows: [] }))])
+  const sum = d.rows.reduce((a, r) => a + Number(r.unit_price_fen) * Number(r.qty_per_unit), 0)
+  drawer('套餐项配置 · 产品 #' + pid, `
+    ${['super','ops'].includes(ME?.role) ? `<div class="row" style="margin:0 0 10px"><button class="btn primary sm" onclick="packageItemEditor(${pid})">＋ 新增套餐项</button></div>` : '<span class="muted">套餐项维护需运营/超管权限</span>'}
+    <p class="td-sub">项原价之和 = ¥${(sum / 100).toFixed(2)}（应与团期定价一致；不一致时下单以 Σ项价×缩放为准，早鸟/折扣按比例作用于各项）。配置改动只影响未来订单，已售订单保留下单快照。</p>
+    ${d.rows.length ? `<table><thead><tr><th>项目</th><th>类型</th><th>提供方门店</th><th>单价×每份</th><th>成本来源</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.rows.map((r) => `<tr><td class="td-main">${esc(r.name)}<div class="td-sub">v${r.version} · ${esc(r.operator || '')}</div></td>
+      <td>${Number(r.kind) === 1 ? '按人凭证' : '服务项'}</td>
+      <td class="td-sub">${esc((merchants.find((m) => Number(m.id) === Number(r.merchant_id)) || {}).name || r.merchant_id)}</td>
+      <td class="num">${fen(r.unit_price_fen)} × ${r.qty_per_unit}</td>
+      <td class="td-sub">${r.supply_item_id ? '#' + r.supply_item_id + ' ' + esc((items.rows.find((x) => Number(x.id) === Number(r.supply_item_id)) || {}).name || '') : '—'}</td>
+      <td>${r.status === 1 ? '<span class="pill ok">启用</span>' : '<span class="pill off">停用</span>'}</td>
+      <td><div class="td-actions">${['super','ops'].includes(ME?.role) ? `<button class="btn ghost sm" onclick="packageItemEditor(${pid}, ${r.id})">编辑</button>
+        <button class="btn ghost sm" onclick="packageItemStatus(${pid}, ${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '停用' : '启用'}</button>` : '<span class="muted">仅查看</span>'}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('该产品暂未配置套餐项——非套餐产品无需配置')}
+    <p class="td-sub">下单后订单项快照见订单详情「套餐订单项」；服务项由提供方商户端「待履约」核销，按人凭证项随订单出票、凭证挂项并由归属店核销。</p>`)
+}
+window.packageItemEditor = async (pid, id) => {
+  if (!['super', 'ops'].includes(ME?.role)) return toast('套餐项维护需运营/超管权限', true)
+  let r = {}
+  if (id) {
+    const d = await api('GET', `/admin/products/${pid}/package-items`)
+    r = d.rows.find((x) => Number(x.id) === Number(id)) || {}
+    if (!r.id) return toast('套餐项不存在', true)
+  }
+  const merchants = await api('GET', '/admin/merchants')
+  const items = await api('GET', '/admin/supply-items?pageSize=100').catch(() => ({ rows: [] }))
+  modal((id ? '编辑套餐项 v' + r.version : '新增套餐项'), `
+    <div class="field"><label>项目名称 *</label><input id="piName" maxlength="80" value="${esc(r.name || '')}" placeholder="如：景区大门票（成人）"></div>
+    <div class="field"><label>类型 *</label><select id="piKind">
+      <option value="1" ${Number(r.kind) === 1 || !r.kind ? 'selected' : ''}>按人凭证（出票、扫码核销）</option>
+      <option value="2" ${Number(r.kind) === 2 ? 'selected' : ''}>服务项（商户端履约核销）</option></select></div>
+    <div class="field"><label>提供方门店 *（跨店隔离：仅该店可核销）</label><select id="piMerchant">${merchants.filter((m) => m.status === 1).map((m) => `<option value="${m.id}" ${Number(r.merchant_id) === Number(m.id) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" value="${r.qty_per_unit || 1}"></div>
+    <div class="field"><label>成本来源供给项（选填，B01）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
+    <div class="field"><label>操作依据 *（4–300 字）</label><input id="piReason" maxlength="300"></div>
+    <div id="piErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="packageItemSave(${pid}, ${id || 0})">保存套餐项</button>`)
+}
+window.packageItemSave = async (pid, id) => {
+  try {
+    await api('POST', `/admin/products/${pid}/package-items`, {
+      id: id || undefined, name: document.getElementById('piName').value.trim(), kind: Number(document.getElementById('piKind').value),
+      merchantId: Number(document.getElementById('piMerchant').value), unitPriceFen: Math.round(Number(document.getElementById('piPrice').value) * 100),
+      qtyPerUnit: Number(document.getElementById('piQty').value), supplyItemId: document.getElementById('piSupply').value || null,
+      reason: document.getElementById('piReason').value.trim(),
+    })
+    closeModal(); toast('套餐项已保存'); packageItemsDrawer(pid)
+  } catch (e) { document.getElementById('piErr').textContent = e.message }
+}
+window.packageItemStatus = (pid, id, status) => {
+  modal(status === 1 ? '启用套餐项' : '停用套餐项', `
+    <p class="muted">${status === 1 ? '启用后新订单包含该项目。' : '停用后新订单不再包含；已售订单快照不变。'}该项原价变化会影响套餐原价合计，请同步核对团期定价。</p>
+    <div class="field"><label>操作依据 *（4–300 字）</label><input id="piStReason" maxlength="300"></div><div id="piStErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${status === 1 ? 'primary' : 'danger'}" onclick="packageItemStatusSubmit(${pid}, ${id}, ${status})">确认</button>`)
+}
+window.packageItemStatusSubmit = async (pid, id, status) => {
+  try {
+    await api('POST', `/admin/products/${pid}/package-items/status`, { id, status, reason: document.getElementById('piStReason').value.trim() })
+    closeModal(); toast(status === 1 ? '已启用' : '已停用'); packageItemsDrawer(pid)
+  } catch (e) { document.getElementById('piStErr').textContent = e.message }
+}
+
 window.promoDiscountEditor = async (id) => {
   if (!['super', 'ops'].includes(ME?.role)) return toast('折扣规则维护需运营/超管权限', true)
   let r = {}
