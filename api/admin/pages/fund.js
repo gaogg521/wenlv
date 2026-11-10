@@ -4,6 +4,7 @@ async function fund() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const d = await api('GET', '/admin/fund-workbench')
   const yuan = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+  const showEcon = ['super', 'finance', 'ops'].includes(ME.role)
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>资金待办全景</h2>${['super','finance','ops'].includes(ME.role)?'<button class="btn ghost sm" onclick="freedomPanel()">自由豆规则与发放</button>':''}${['super','finance'].includes(ME.role)?'<button class="btn primary sm" onclick="freedomFinance()">自由豆补贴对账</button>':''}<span class="muted">只读聚合 · 每条线保留各自账本与办理入口，点「去办理」下钻源业务</span></div>
@@ -16,6 +17,16 @@ async function fund() {
       <div style="margin-top:8px"><button class="btn primary sm" onclick="event.stopPropagation();go('${l.goto}')">去办理 →</button></div></div></div>`).join('')}
     </div>
   </div>
+  ${showEcon ? `<div class="card"><div class="card-head"><h2>经营看板 · 商品毛利与已知费用后收益</h2><span class="muted">实际成交口径（退款冲减）· 支付时间统计</span></div>
+    <div class="row" style="margin:8px 0">
+      <input id="ecFrom" type="date" value="${econDefaultFrom()}"> <span class="td-sub">—</span> <input id="ecTo" type="date" value="${econDefaultTo()}">
+      <input id="ecProduct" type="number" min="1" placeholder="产品ID（可空）" style="width:130px">
+      <input id="ecCity" type="text" placeholder="城市代码（可空）" maxlength="6" style="width:110px">
+      <button class="btn primary sm" onclick="economicsBoard()">查询</button>
+    </div>
+    <div id="econBoard">${skel(3)}</div>
+    <p class="td-sub" style="margin-top:8px">"已知费用后收益"只扣减已接入的推广佣金；未含税费、工资、房租及全部期间费用，不冒充公司最终净利润；留存金额/GMV 均不等于平台净利润。汇总毛利率＝合计毛利÷合计同口径净销售额，不平均各单毛利率。</p>
+  </div>` : ''}
   <div class="card">
     <div class="card-head"><h2>对账口径说明</h2></div>
     <ul class="tl">
@@ -25,4 +36,35 @@ async function fund() {
       <li><div class="t">外部确认</div><div class="d"><b>未接入</b>：无银行/支付渠道回执核对，"登记已付"即本系统终点，不宣称到账</div></li>
     </ul>
   </div>`
+  if (showEcon) economicsBoard().catch((e) => { const el = document.getElementById('econBoard'); if (el) el.innerHTML = `<p class="muted">经营看板加载失败：${esc(e.message)}</p>` })
+}
+// ===== B12 经营看板 =====
+const econStat = (label, value, sub) => `<div class="pstat"><div class="l">${label}</div><div class="v">${value}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`
+function econDateLocal(d) { return d.toLocaleDateString('en-CA') } // 本地日期（toISOString 是 UTC，凌晨会少一天）
+function econDefaultFrom() { return econDateLocal(new Date(Date.now() - 29 * 86400000)) }
+function econDefaultTo() { return econDateLocal(new Date()) }
+async function economicsBoard() {
+  const el = document.getElementById('econBoard')
+  if (!el) return
+  const from = document.getElementById('ecFrom').value, to = document.getElementById('ecTo').value
+  const pid = document.getElementById('ecProduct').value.trim(), city = document.getElementById('ecCity').value.trim()
+  el.innerHTML = '<div class="sk" style="height:80px"></div>'
+  const d = await api('GET', `/admin/economics/dashboard?from=${from}&to=${to}${pid ? '&productId=' + pid : ''}${city ? '&city=' + city : ''}`)
+  const num = (v) => v == null ? '<span class="muted">—</span>' : fen(v)
+  const dimRows = (rows, keyLabel) => rows.length ? `<table><thead><tr><th>${keyLabel}</th><th>订单/人数</th><th>净销售额</th><th>直接成本</th><th>毛利</th><th>毛利率</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr><td class="td-main">${esc(r.title || r.key)}${r.costMissing ? `<div class="td-sub">⚠ ${r.costMissing} 单成本未维护（不可计算，未按0计）</div>` : ''}</td>
+      <td class="num">${r.orders} / ${r.qty}</td><td class="num">${fen(r.netSalesFen)}</td><td class="num">${num(r.costFen)}</td>
+      <td class="num">${r.profitFen != null ? '<b style="color:' + (r.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + fen(r.profitFen) + '</b>' : '—'}${r.negativeProfit ? ' <span class="pill warn">含负毛利</span>' : ''}</td>
+      <td class="num" style="white-space:nowrap">${r.marginPct != null ? r.marginPct.toFixed(2) + '%' : '—'}</td></tr>`).join('')}</tbody></table>` : `<p class="td-sub">该维度暂无订单</p>`
+  el.innerHTML = `
+  <div class="pstats">
+    ${econStat('净销售额', num(d.netSalesFen), d.orders + ' 单 · ' + d.qty + ' 人 · ' + esc(d.caliber))}
+    ${econStat('直接成本', num(d.costFen), d.costMissing ? d.costMissing + ' 单成本未维护（不按0计）' : '下单快照合计')}
+    ${econStat('商品经营毛利', d.profitFen != null ? num(d.profitFen) : '—', d.marginPct != null ? '毛利率 ' + d.marginPct.toFixed(2) + '%' : '毛利率 —（净销售额为0或成本缺失）')}
+    ${econStat('已知费用后收益', d.operatingIncomeFen != null ? num(d.operatingIncomeFen) : '—', '扣推广佣金 ' + fen(d.commissionFen) + '；未含税费/工资/房租')}
+  </div>
+  <p class="td-sub">全额退款 ${d.refunedOrders} 单（冲减现金 ${fen(d.refundCashFen)}，实退以退款单为准）${d.pendingOrders ? ' · 另有 ' + d.pendingOrders + ' 单待支付/退款中未计入' : ''}${d.negativeProfit ? ' · 含 ' + d.negativeProfit + ' 单负毛利（保留并提示）' : ''} · 统计口径 ${esc(d.period.by)}，含税/未税与订单状态口径一致</p>
+  <div class="rv-grid"><div><div class="rv-box"><div class="rv-h">按产品下钻（点单号看订单经营明细）</div>${dimRows(d.byProduct, '产品')}</div></div>
+  <div><div class="rv-box"><div class="rv-h">按城市下钻</div>${dimRows(d.byCity, '城市')}</div></div></div>
+  <p class="td-sub">确认成本/应付/实付：${esc(d.confirmed.note)}。资金来源与五口径关系随 B04 交付资金桥表。</p>`
 }

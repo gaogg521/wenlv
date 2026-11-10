@@ -296,7 +296,8 @@ await t('A03-1 游客取消未支付单：旅豆全额退回、名额释放、�
   const sid = await mkSession({ days: 41 })
   const r = await order.place({ userId: u.id, sessionId: sid, qty: 2, wantedBeans: 200, withInsurance: false })
   created.orders.push(r.orderNo)
-  assert.equal(await bean.balance(u.id), 300)
+  // D01：抵扣上限锚定最终实付 B ≤ r×X → floor(0.1×20000/1.1/10)=181 豆（旧商品额口径 200）
+  assert.equal(await bean.balance(u.id), 319)
   const b1 = ok(await call('POST', `/c/orders/${r.orderNo}/refund`, { reason: '用户申请' }, u.token))
   assert.equal(Number((await order.byNo(r.orderNo)).status), 90, '取消后关单')
   assert.equal(await bean.balance(u.id), 500, '抵扣旅豆应全额退回')
@@ -330,7 +331,8 @@ await t('A03-3 未成团自动取消：未支付单的抵扣旅豆同样退回',
   const sid = await mkSession({ days: 1, minGo: 99 })
   const r = await order.place({ userId: u.id, sessionId: sid, qty: 1, wantedBeans: 100, withInsurance: false })
   created.orders.push(r.orderNo)
-  assert.equal(await bean.balance(u.id), 400)
+  // D01：floor(0.1×10000/1.1/10)=90 豆实抵（旧口径 100）
+  assert.equal(await bean.balance(u.id), 410)
   await group.cancelDueSessions()
   const o = await order.byNo(r.orderNo)
   assert.equal(Number(o.status), 90, '未成团取消关单')

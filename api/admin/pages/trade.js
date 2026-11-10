@@ -4,6 +4,27 @@
 /* ============ 订单 ============ */
 async function orderDrawer(no) {
   const o = await api('GET', '/admin/orders/' + no)
+  // B12 订单经营明细：成本/毛利/毛利率仅平台经营（super/finance）可取；其他角色拿不到也不展示
+  let econ = null
+  if (['super', 'finance'].includes(ME?.role)) { try { econ = await api('GET', `/admin/orders/${no}/economics`) } catch { econ = null } }
+  const econBlock = econ ? (() => {
+    const e = econ.economics
+    const yuan = (f) => f == null ? '—' : fen(f)
+    const costRows = (econ.costSnapshot?.items || []).map((i) => `<tr><td>#${i.itemId} ${esc(i.name)}</td><td>${esc(i.unitCostFen != null ? fen(i.unitCostFen) : '')}/${esc(i.unit === 'per_order' ? '每单' : i.unit === 'room_night' ? '房晚' : '每人')}</td><td class="num">×${i.mapQty}</td><td class="num">${fen(i.lineUnitFen)}</td></tr>`).join('')
+    return `<h3 style="margin:16px 0 8px">经营明细（实际成交口径 · ${esc(e.caliber)}）</h3>
+    <table>
+      <tr><td class="td-sub" style="width:130px">原价商品额</td><td class="num">${yuan(e.originalGoodsFen)}</td></tr>
+      <tr><td class="td-sub">实际商品成交额（早鸟/折扣后）</td><td class="num">${yuan(e.effectiveGoodsFen)}</td></tr>
+      <tr><td class="td-sub">自由豆补贴 / 旅豆抵扣</td><td class="num">${yuan(e.freedomDiscountFen)} / ${yuan(e.beanDeductFen)}</td></tr>
+      <tr><td class="td-sub">实际现金（商品口径）</td><td class="num"><b>${yuan(e.goodsCashFen)}</b>　<span class="td-sub">保费/代收款 ${yuan(e.insuranceFen)} 另列，不算销售收入</span></td></tr>
+      <tr><td class="td-sub">直接成本（下单快照）</td><td class="num">${e.costFen != null ? yuan(e.costFen) : '<span class="muted">未维护/不可计算</span>'}${e.costConfirmedFen != null ? ' · 已确认 ' + yuan(e.costConfirmedFen) : ' · <span class="td-sub">确认成本未接入（B04）</span>'}</td></tr>
+      ${e.refunded ? `<tr><td class="td-sub">退款冲减</td><td>已全额退款：净销售额与成本计 0（实退现金以退款单为准）</td></tr>` : ''}
+      <tr><td class="td-sub">商品经营毛利 / 毛利率</td><td class="num">${e.profitFen != null ? '<b style="color:' + (e.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + yuan(e.profitFen) + ' / ' + e.marginPct.toFixed(2) + '%</b>' : '—'}${e.profitFen != null && e.profitFen < 0 ? ' <span class="pill warn">负毛利</span>' : ''}</td></tr>
+    </table>
+    ${costRows ? `<details style="margin-top:6px"><summary class="td-sub">成本快照来源（下单时点供给项明细）</summary><table><thead><tr><th>供给项</th><th>单价/单位</th><th>数量</th><th>小计</th></tr></thead><tbody>${costRows}</tbody></table></details>` : (econ.costSnapshot ? '' : '<p class="td-sub">商品未维护供给项成本——在「商品与团期 → 供给项台账」配置后新订单才可计算。</p>')}
+    ${(econ.commissions || []).length ? `<p class="td-sub">推广佣金 ${econ.commissions.map((c) => fen(c.amount) + '（' + (c.rate_bp / 100) + '%）').join('、')}——经营收益等已知费用后在资金看板汇总，本单不重复扣减。</p>` : ''}
+    <p class="td-sub">本页毛利≠平台最终净利润：未含税费、工资、房租及全部期间费用；促销减价与官方补贴不是可退现金。</p>`
+  })() : ''
   drawer(`订单 ${esc(o.order_no)}`, `
     <div class="order-service-actions">
       ${adminCan('order.service') ? `<button class="btn primary sm" onclick="editOrderContact('${escJs(o.order_no)}')" ${[10,20,30].includes(Number(o.status)) ? '' : 'disabled title="已核销或已终结订单保留原联系人"'}>修正联系人</button><button class="btn ghost sm" onclick="orderServiceNote('${escJs(o.order_no)}')">添加客服备注</button>` : '<span class="muted">当前角色可查看订单；联系人修正与备注需运营权限</span>'}
@@ -35,6 +56,7 @@ async function orderDrawer(no) {
         <td><span class="pill ${Number(r.status) === 2 ? 's50' : 's60'}">${['申请', '处理中', '已退款', '已拒绝'][r.status] || r.status}</span></td></tr>`).join('')}</table>` : ''}
     <h3 style="margin:16px 0 10px">客服处理记录</h3>
     ${(o.serviceRecords || []).map(r => { let v = r.after_val; if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } } return `<div class="rv-box"><b>${r.action === 'contact-update' ? '联系人修正' : '客服备注'}</b><p>${esc(v?.note || [v?.name,v?.phone,v?.reason].filter(Boolean).join(' · '))}</p><span class="td-sub">${esc(r.actor)} · ${esc(String(r.created_at).slice(0,19))}</span></div>` }).join('') || '<p class="muted">暂无客服处理记录</p>'}
+    ${econBlock}
     <h3 style="margin:16px 0 10px">状态机时间线（order_event 审计）</h3>
     <ul class="tl">${(o.events || []).map((e) => `<li>
       <div class="t">${ST[e.from_st] || e.from_st} → ${ST[e.to_st] || e.to_st}</div>
@@ -131,9 +153,15 @@ async function products() {
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
+          ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>` : ''}
           ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-head"><h2>供给项台账 · 成本与参考零售价</h2>${['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="supplyItemEditor()">＋ 新增供给项</button>` : '<span class="muted">供给项维护需运营/超管权限；成本仅平台经营/财务身份可见</span>'}</div>
+    <p class="muted" style="margin-bottom:6px">采购/履约成本单价、计价单位（每人/每单/房晚）、生效期与协议版本在此维护；产品通过「成本构成」挂用（×数量）。成本缺失显示"未维护/不可计算"，不默认为 0；真实零成本须填依据。已售订单按下单时点快照复算，新改成本不改历史。</p>
+    <div id="supplyItemBox">${skel(3)}</div>
   </div>
   <div class="card" style="margin-top:16px">
     <div class="card-head"><h2>促销折扣 / 价格规则</h2>${['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="promoDiscountEditor()">＋ 新增折扣规则</button>` : '<span class="muted">折扣规则维护需运营/超管权限</span>'}</div>
@@ -141,6 +169,120 @@ async function products() {
     <div id="promoDiscountBox">${skel(3)}</div>
   </div>`
   promoDiscountList().catch((e) => { document.getElementById('promoDiscountBox').innerHTML = `<p class="muted">折扣规则加载失败：${esc(e.message)}</p>` })
+  supplyItemList().catch((e) => { document.getElementById('supplyItemBox').innerHTML = `<p class="muted">供给项加载失败：${esc(e.message)}</p>` })
+}
+
+/* ============ B01 供给项台账 ============ */
+const SI_KIND = { 1: '采购', 2: '履约', 3: '赠送' }
+const SI_STATE = { 1: '<span class="pill ok">生效</span>', 0: '<span class="pill off">停用</span>' }
+async function supplyItemList() {
+  const d = await api('GET', '/admin/supply-items?pageSize=50')
+  const box = document.getElementById('supplyItemBox')
+  if (!box) return
+  const canManage = ['super', 'ops'].includes(ME?.role)
+  box.innerHTML = d.rows.length ? `<table><thead><tr><th>供给项</th><th>类型/单位</th><th>成本单价</th><th>参考零售价</th><th>提供方</th><th>生效期/协议</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.rows.map((r) => `<tr>
+      <td class="td-main">${esc(r.name)}<div class="td-sub">v${r.version} · ${esc(r.operator || '')}${r.note ? '<br>依据：' + esc(r.note) : ''}</div></td>
+      <td>${SI_KIND[r.kind] || r.kind}<div class="td-sub">${esc(d.unitCn[r.unit] || r.unit)}</div></td>
+      <td class="money num">${fen(r.unit_cost_fen)}${Number(r.unit_cost_fen) === 0 ? '<div class="td-sub">真实零成本（有依据）</div>' : ''}</td>
+      <td class="num">${r.ref_retail_fen != null ? fen(r.ref_retail_fen) : '—'}<div class="td-sub">参考值，非实际售价</div></td>
+      <td class="td-sub">${esc(r.provider_name || (r.provider_type ? r.provider_type + '#' + (r.provider_id || '—') : '平台'))}</td>
+      <td class="td-sub">${r.valid_from || '不限'} — ${r.valid_to || '不限'}<br>${esc(r.agreement || '无协议号')}</td>
+      <td>${SI_STATE[r.status] || r.status}</td>
+      <td><div class="td-actions">${canManage ? `<button class="btn ghost sm" onclick="supplyItemEditor(${r.id})">编辑</button>
+        <button class="btn ghost sm" onclick="supplyItemStatus(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '停用' : '启用'}</button>` : '<span class="muted">仅查看</span>'}</div></td>
+    </tr>`).join('')}</tbody></table>` : emptyBox('暂无供给项——先录入采购/履约成本，再到具体产品「成本构成」挂用')
+}
+window.supplyItemEditor = async (id) => {
+  if (!['super', 'ops'].includes(ME?.role)) return toast('供给项维护需运营/超管权限', true)
+  let r = {}
+  if (id) {
+    const d = await api('GET', '/admin/supply-items?pageSize=50')
+    r = d.rows.find((x) => Number(x.id) === Number(id)) || {}
+    if (!r.id) return toast('供给项不存在', true)
+  }
+  modal((id ? '编辑供给项 v' + r.version : '新增供给项'), `
+    <p class="muted">成本按"分"存储、界面按元展示；计价单位决定如何乘数量（每人/房晚随出行份数放大，每单固定）。参考零售价只是参考，不能冒充产品实际售价。</p>
+    <div class="field"><label>名称 *</label><input id="siName" maxlength="80" value="${esc(r.name || '')}" placeholder="如：景区门票采购（成人）"></div>
+    <div class="field"><label>类型 *</label><select id="siKind">
+      ${[1, 2, 3].map((k) => `<option value="${k}" ${Number(r.kind) === k ? 'selected' : ''}>${SI_KIND[k]}</option>`).join('')}</select></div>
+    <div class="field"><label>计价单位 *</label><select id="siUnit">
+      <option value="per_person" ${r.unit === 'per_person' || !r.unit ? 'selected' : ''}>每人</option>
+      <option value="per_order" ${r.unit === 'per_order' ? 'selected' : ''}>每单</option>
+      <option value="room_night" ${r.unit === 'room_night' ? 'selected' : ''}>房晚</option></select></div>
+    <div class="field"><label>成本单价（元）* <span class="td-sub">0=真实零成本，必须填依据</span></label><input id="siCost" type="number" step="0.01" min="0" value="${r.unit_cost_fen != null ? (Number(r.unit_cost_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>参考零售价（元，选填）</label><input id="siRetail" type="number" step="0.01" min="0" value="${r.ref_retail_fen != null ? (Number(r.ref_retail_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>提供方类型</label><select id="siPType">
+      <option value="" ${!r.provider_type ? 'selected' : ''}>平台/不指定</option>
+      <option value="scenic" ${r.provider_type === 'scenic' ? 'selected' : ''}>景区</option>
+      <option value="supplier" ${r.provider_type === 'supplier' ? 'selected' : ''}>供应商</option>
+      <option value="merchant" ${r.provider_type === 'merchant' ? 'selected' : ''}>商户</option></select></div>
+    <div class="field"><label>提供方ID（按类型填对应资源ID，可空）</label><input id="siPid" type="number" min="1" value="${esc(r.provider_id || '')}"></div>
+    <div class="field"><label>生效期起（选填）</label><input id="siFrom" type="date" value="${esc(r.valid_from || '')}"></div>
+    <div class="field"><label>生效期止（选填）</label><input id="siTo" type="date" value="${esc(r.valid_to || '')}"></div>
+    <div class="field"><label>协议版本/编号（选填，≤120字）</label><input id="siAgreement" maxlength="120" value="${esc(r.agreement || '')}"></div>
+    <div class="field"><label>成本依据与调整说明 *（真实零成本必填，≥4字）</label><textarea id="siNote" maxlength="300">${esc(r.note || '')}</textarea></div>
+    <div class="field"><label>操作依据 *（4–300 字，进入审计）</label><input id="siReason" maxlength="300" placeholder="如：2026年采购合同审批单 XX"></div>
+    <div id="siErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="supplyItemSave(${id || 0})">保存供给项</button>`)
+}
+window.supplyItemSave = async (id) => {
+  const numOrNull = (k) => { const v = document.getElementById(k).value; return v === '' ? null : Math.round(Number(v) * 100) }
+  try {
+    await api('POST', '/admin/supply-items', {
+      id: id || undefined, name: document.getElementById('siName').value.trim(), kind: Number(document.getElementById('siKind').value),
+      unit: document.getElementById('siUnit').value, unitCostFen: numOrNull('siCost'), refRetailFen: numOrNull('siRetail'),
+      providerType: document.getElementById('siPType').value || null, providerId: document.getElementById('siPid').value || null,
+      validFrom: document.getElementById('siFrom').value || null, validTo: document.getElementById('siTo').value || null,
+      agreement: document.getElementById('siAgreement').value.trim(), note: document.getElementById('siNote').value.trim(),
+      reason: document.getElementById('siReason').value.trim(),
+    })
+    closeModal(); toast('供给项已保存'); products()
+  } catch (e) { document.getElementById('siErr').textContent = e.message }
+}
+window.supplyItemStatus = (id, status) => {
+  modal(status === 1 ? '启用供给项' : '停用供给项', `
+    <p class="muted">${status === 1 ? '启用后新订单按该成本快照；已售订单不受影响。' : '停用后不再计入产品成本构成（已售订单保留原快照）。'}</p>
+    <div class="field"><label>操作依据 *（4–300 字）</label><input id="siStReason" maxlength="300"></div><div id="siStErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${status === 1 ? 'primary' : 'danger'}" onclick="supplyItemStatusSubmit(${id}, ${status})">确认</button>`)
+}
+window.supplyItemStatusSubmit = async (id, status) => {
+  try {
+    await api('POST', '/admin/supply-items/status', { id, status, reason: document.getElementById('siStReason').value.trim() })
+    closeModal(); toast(status === 1 ? '已启用' : '已停用'); products()
+  } catch (e) { document.getElementById('siStErr').textContent = e.message }
+}
+// 产品成本构成：挂用供给项×数量，实时预览每份成本与团期预计毛利
+window.productSupplyEditor = async (pid) => {
+  if (!['super', 'ops'].includes(ME?.role)) return toast('成本构成维护需运营/超管权限', true)
+  const [items, prev] = await Promise.all([api('GET', '/admin/supply-items?pageSize=100'), api('GET', `/admin/products/${pid}/cost-preview`)])
+  const cur = prev.breakdown ? prev.breakdown.items.map((i) => ({ itemId: i.itemId, qty: i.mapQty })) : []
+  window.__siRows = cur.length ? cur : [{ itemId: items.rows[0]?.id, qty: 1 }]
+  const rowHtml = () => (window.__siRows || []).map((x, i) => `<div class="row" style="gap:6px;margin:4px 0">
+    <select class="inp" onchange="window.__siRows[${i}].itemId=Number(this.value)" style="flex:1;min-width:0">${items.rows.map((it) => `<option value="${it.id}" ${Number(x.itemId) === Number(it.id) ? 'selected' : ''}>#${it.id} ${esc(it.name)}（${fen(it.unit_cost_fen)}/${esc(items.unitCn[it.unit] || it.unit)}）</option>`).join('')}</select>
+    <input class="inp" type="number" min="1" max="9999" value="${x.qty}" onchange="window.__siRows[${i}].qty=Number(this.value)" style="width:76px" title="数量">
+    <button class="btn ghost sm" onclick="window.__siRows.splice(${i},1);document.getElementById('siRows').innerHTML=siRowHtml()">删</button></div>`).join('')
+  window.siRowHtml = rowHtml
+  const previewRows = prev.rows.map((s) => `<tr><td>${esc(s.departDate)}</td><td class="money num">${fen(s.unitFen)}</td>
+    <td class="num">${s.costFen != null ? fen(s.costFen) : '<span class="muted">未维护</span>'}</td>
+    <td class="num">${s.profitFen != null ? '<b style="color:' + (s.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + fen(s.profitFen) + '</b>' : '—'}</td>
+    <td class="num">${s.marginPct != null ? s.marginPct.toFixed(2) + '%' : '—'}</td></tr>`).join('')
+  modal('成本构成 · 产品 #' + pid, `
+    <p class="muted">预计成本 = Σ（供给项成本单价×数量）＋按单位随出行份数放大；下方预览按当前生效配置×各团期实时价实时计算。修改价格或成本时不需手算表格；已售订单按下单时点快照，不受本次调整影响。</p>
+    <div id="siRows">${rowHtml()}</div>
+    <button class="btn ghost sm" onclick="window.__siRows.push({itemId:${items.rows[0]?.id || 0},qty:1});document.getElementById('siRows').innerHTML=siRowHtml()">＋ 添加供给项</button>
+    <h3 style="margin:12px 0 6px">团期预计毛利（当前配置 × 实时价）</h3>
+    <table><thead><tr><th>出发日</th><th>有效单价</th><th>每份成本</th><th>预计毛利</th><th>毛利率</th></tr></thead><tbody>${previewRows || '<tr><td colspan="5" class="muted">暂无在售团期</td></tr>'}</tbody></table>
+    <p class="td-sub">参考零售价之和不能冒充套餐实际售价；确认成本随 B04 结算接入前一律"未确认"。</p>
+    <div class="field"><label>操作依据 *（4–300 字）</label><input id="psReason" maxlength="300"></div>
+    <div id="psErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="productSupplySave(${pid})">保存成本构成</button>`)
+}
+window.productSupplySave = async (pid) => {
+  try {
+    await api('POST', `/admin/products/${pid}/supply`, { items: window.__siRows, reason: document.getElementById('psReason').value.trim() })
+    closeModal(); toast('成本构成已保存'); products()
+  } catch (e) { document.getElementById('psErr').textContent = e.message }
 }
 
 /* ============ D01 促销折扣规则 ============ */
