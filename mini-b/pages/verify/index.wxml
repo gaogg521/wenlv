@@ -32,7 +32,7 @@
   <view wx:for="{{svcItems}}" wx:key="id" style="display:flex;align-items:center;gap:16rpx;padding:16rpx 0;border-bottom:1rpx solid var(--line)">
     <view style="flex:1;min-width:0">
       <view style="font-weight:600">{{item.name}} <text class="tiny">×{{item.qty}}</text></view>
-      <view class="tiny">{{item.product_title || ''}} · {{item.order_no}} · {{item.contact_name || ''}}</view>
+      <view class="tiny">{{item.product_title || ''}} · {{item.order_no}} · {{item.contact_name || ''}}</view><view class="tiny" wx:if="{{item.benefit_desc}}" style="color:#7b5aa6">{{item.benefit_desc}}</view>
     </view>
     <view class="btn sm" style="padding:14rpx 30rpx" data-i="{{index}}" bindtap="redeemSvc">完成履约</view>
   </view>

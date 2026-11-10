@@ -795,7 +795,7 @@ const admin = {
   'POST /admin/uploads': async (req) => {
     await requireAdmin(req)
     const { data, ext = 'jpg' } = req.body || {}
-    if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) throw new BizError(1001, '仅支持 jpg/png/webp')
+    if (!['png', 'jpg', 'jpeg', 'webp', 'mp4'].includes(ext)) throw new BizError(1001, '仅支持 jpg/png/webp/mp4')
     const buf = Buffer.from(String(data || ''), 'base64')
     if (buf.length === 0 || buf.length > 2 * 1024 * 1024) throw new BizError(1001, '图片需在 2MB 内')
     const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'uploads')
@@ -1492,6 +1492,7 @@ const admin = {
     // 返豆 + 佣金 + 成长值 + 存证（同一动作位，生产在 beanWorker）
     const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
     if (budget && Number(o.amount_pay) > 0) await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
+    await bean.productExtraReward({ ...o, order_no: orderNo }) // B14 产品专属完成奖励（幂等）
     // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费）累计，与 jobs.completeOrder 同口径
     const goodsCash = Number(o.amount_pay) - Number(o.insurance_fee || 0)
     if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // 成长值与等级不依赖旅豆预算

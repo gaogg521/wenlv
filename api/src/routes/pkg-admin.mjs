@@ -26,11 +26,11 @@ export const pkgAdminRoutes = {
         itemId = id(req.body.id)
         const old = await c.one('SELECT * FROM package_item WHERE id=? FOR UPDATE', [itemId])
         if (!old) throw new BizError(1004, '套餐项不存在')
-        await c.q('UPDATE package_item SET name=?,kind=?,merchant_id=?,supply_item_id=?,unit_price_fen=?,qty_per_unit=?,version=version+1,operator=? WHERE id=?',
-          [item.name, item.kind, item.merchant_id, item.supply_item_id, item.unit_price_fen, item.qty_per_unit, actor(a), itemId])
+        await c.q('UPDATE package_item SET name=?,kind=?,merchant_id=?,supply_item_id=?,unit_price_fen=?,qty_per_unit=?,benefit_desc=?,benefit_rules=?,version=version+1,operator=? WHERE id=?',
+          [item.name, item.kind, item.merchant_id, item.supply_item_id, item.unit_price_fen, item.qty_per_unit, item.benefit_desc, item.benefit_rules, actor(a), itemId])
       } else {
-        itemId = await c.ins('INSERT INTO package_item(product_id,name,kind,merchant_id,supply_item_id,unit_price_fen,qty_per_unit,sort,operator) VALUES(?,?,?,?,?,?,?,?,?)',
-          [pid, item.name, item.kind, item.merchant_id, item.supply_item_id, item.unit_price_fen, item.qty_per_unit, Number(req.body.sort) || 0, actor(a)])
+        itemId = await c.ins('INSERT INTO package_item(product_id,name,kind,merchant_id,supply_item_id,unit_price_fen,qty_per_unit,benefit_desc,benefit_rules,sort,operator) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+          [pid, item.name, item.kind, item.merchant_id, item.supply_item_id, item.unit_price_fen, item.qty_per_unit, item.benefit_desc, item.benefit_rules, Number(req.body.sort) || 0, actor(a)])
       }
       await audit(c, actor(a), 'package', req.body.id ? 'item-update' : 'item-create', 'pi-' + itemId, null, { item, reason: why })
       return { id: Number(itemId) }

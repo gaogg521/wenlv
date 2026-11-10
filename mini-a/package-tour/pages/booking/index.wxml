@@ -23,7 +23,7 @@
   <view class="sec-title">2 · 出行人数与联系人</view>
   <view class="card bk-head" wx:if="{{p.pkgItems.length}}">
     <view class="sec-title" style="margin:0 0 8rpx">套餐包含</view>
-    <view class="muted2" wx:for="{{p.pkgItems}}" wx:key="name" style="font-size:24rpx;line-height:1.7">› {{item.name}} {{item.qtyText}}（{{item.kindText}} · {{item.merchantName}}）</view>
+    <view class="muted2" wx:for="{{p.pkgItems}}" wx:key="name" style="font-size:24rpx;line-height:1.7">› {{item.name}} {{item.qtyText}}（{{item.kindText}} · {{item.merchantName}}）{{item.benefit}}</view>
   </view>
   <view class="card">
     <view class="kv"><text>出行人数</text>

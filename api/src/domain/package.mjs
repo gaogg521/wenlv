@@ -21,7 +21,11 @@ export function templateInput(b) {
   const qtyPerUnit = Number(b.qtyPerUnit)
   if (!Number.isSafeInteger(qtyPerUnit) || qtyPerUnit < 1 || qtyPerUnit > 99) throw new BizError(1001, '每份数量应为1–99')
   const supplyItemId = b.supplyItemId != null && b.supplyItemId !== '' ? id(b.supplyItemId) : null
-  return { name, kind, merchant_id: merchantId, supply_item_id: supplyItemId, unit_price_fen: unitPrice, qty_per_unit: qtyPerUnit }
+  const benefitDesc = String(b.benefitDesc || '').trim()
+  if (benefitDesc.length > 500) throw new BizError(1001, '权益说明过长（≤500字）')
+  const benefitRules = String(b.benefitRules || '').trim()
+  if (benefitRules.length > 300) throw new BizError(1001, '使用规则过长（≤300字）')
+  return { name, kind, merchant_id: merchantId, supply_item_id: supplyItemId, unit_price_fen: unitPrice, qty_per_unit: qtyPerUnit, benefit_desc: benefitDesc || null, benefit_rules: benefitRules || null }
 }
 
 export async function templatesFor(productId, c = { q }) {
@@ -70,10 +74,10 @@ export async function buildOrderItemsInTx(c, { orderNo, productId, qty, goodsFen
     }
     const passTotal = Number(t.kind) === 1 ? Number(t.pass_qty || t.qty_per_unit) * qty : 0
     const itemId = await c.ins(`INSERT INTO order_item(order_id, template_id, product_id, merchant_id, name, kind, unit_price_fen, qty, goods_fen,
-      cash_fen, subsidy_fen, bean_fen, cost_fen, supply_item_id, supply_version, status, pass_total)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
+      cash_fen, subsidy_fen, bean_fen, cost_fen, supply_item_id, supply_version, status, pass_total, benefit_desc, benefit_rules)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)`,
       [orderId, t.id, productId, t.merchant_id, t.name, t.kind, t.unit_price_fen, itemQty, goods,
-       cashShares[i], subsidyShares[i], beanShares[i], costFen, t.supply_item_id, costFen != null ? 1 : null, passTotal])
+       cashShares[i], subsidyShares[i], beanShares[i], costFen, t.supply_item_id, costFen != null ? 1 : null, passTotal, t.benefit_desc, t.benefit_rules])
     items.push({ id: Number(itemId), name: t.name, kind: Number(t.kind), merchantId: Number(t.merchant_id), qty: itemQty, goodsFen: goods, cashFen: cashShares[i], subsidyFen: subsidyShares[i], beanFen: beanShares[i], costFen, passTotal })
   }
   return items
@@ -114,7 +118,7 @@ export async function redeemServiceItem({ itemId, merchantId, staffId, idemKey, 
 export async function pendingItemsForStore(merchantId, pg = {}) {
   const limit = Math.min(Math.max(Number(pg.pageSize) || 20, 1), 100)
   const offset = (Math.max(Number(pg.page) || 1, 1) - 1) * limit
-  const rows = await q(`SELECT oi.id, oi.name, oi.kind, oi.qty, oi.pass_total, oi.pass_done, oi.status, oi.service_done,
+  const rows = await q(`SELECT oi.id, oi.name, oi.kind, oi.qty, oi.pass_total, oi.pass_done, oi.status, oi.service_done, oi.benefit_desc, oi.benefit_rules,
       o.order_no, o.contact_name, o.status order_status, s.depart_date, p.title product_title
     FROM order_item oi JOIN orders o ON o.id = oi.order_id JOIN tour_product p ON p.id = o.product_id
     LEFT JOIN tour_session s ON s.id = o.session_id

@@ -21,6 +21,7 @@ export async function completeOrder(orderNo) {
   })
   // 返豆：账号冻结时不发，记为待补发，解冻后补发（实收 0 的免费改签单天然不返）
   await bean.rebateOrder({ ...o, order_no: orderNo })
+  await bean.productExtraReward({ ...o, order_no: orderNo }) // B14 产品专属完成奖励（幂等）
   const amt = Number(o.amount_pay)
   // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费）累计，与返豆/佣金同一口径
   const goodsCash = amt - Number(o.insurance_fee || 0)
