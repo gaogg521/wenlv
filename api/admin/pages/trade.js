@@ -529,6 +529,7 @@ async function settlements() {
       <div class="split-legend" ${Number(s.total_amount) > 0 ? '' : 'hidden'}>${NAMES.map((n, i) => `<span><em style="width:9px;height:9px;border-radius:3px;display:inline-block;background:${COLORS[i]};margin-right:5px"></em>${n} ${fen(parts[i])}</span>`).join('')}</div>
       ${Number(s.fee_total) ? `<div class="fee-line"><span>退改手续费 <b>${fen(s.fee_total)}</b>（${s.fee_count} 笔）</span>
         <span>商户分成 ${s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—'} · <b>${fen(s.fee_merchant)}</b></span><span>平台 <b>${fen(s.fee_platform)}</b></span></div>` : ''}
+      ${s.cost_total != null ? `<div class="payable-line" style="color:var(--ink2)">确认成本 <b>${fen(s.cost_total)}</b><span class="muted"> · 部分退款冲减 ${fen(s.partial_deduct || 0)} · 毛利（收入−成本） ${fen(Number(s.total_amount) - Number(s.cost_total))}</span></div>` : ``}
       ${s.split_snapshot ? (() => { const sp = typeof s.split_snapshot === 'string' ? JSON.parse(s.split_snapshot) : s.split_snapshot; return `<p class="muted" style="margin:6px 0 0">本单比例快照：履约 ${sp.fulfill / 100}% · 服务费 ${sp.service / 100}% · 权益 ${sp.beanbudget / 100}%（参数中心 settlement.split_*）</p>` })() : ''}
       <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}</span></div>
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}

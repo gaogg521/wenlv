@@ -139,8 +139,9 @@ export async function generateSettlement(merchantId, period) {
   // A-01：免费改签单（rebook_of 非空）实收 ¥0、改签成本由商户承担，不进结算金额与共创分润基数
   return await tx(async (c) => {
   await c.one('SELECT id FROM merchant WHERE id = ? FOR UPDATE', [merchantId])
-  const orders = await c.q(`SELECT o.id, o.amount_pay - o.insurance_fee AS amount_pay, COALESCE(SUM(c.amount),0) AS promo_amt
+  const orders = await c.q(`SELECT o.id, (o.amount_pay - o.insurance_fee - COALESCE(pr.pf,0)) AS amount_pay, COALESCE(pr.pf,0) AS partial_deduct_fen, o.cost_total_fen, COALESCE(SUM(c.amount),0) AS promo_amt
     FROM orders o LEFT JOIN commission c ON c.order_id = o.id AND c.status IN (0,1,2)
+    LEFT JOIN (SELECT order_id, SUM(cash_fen) pf FROM partial_refund WHERE status = 2 GROUP BY order_id) pr ON pr.order_id = o.id
     WHERE o.merchant_id = ? AND o.status = 50 AND o.settlement_id IS NULL AND o.rebook_of IS NULL GROUP BY o.id`, [merchantId])
   // 退改手续费：该商户名下已退款成功、扣了手续费、尚未计入任何结算单的退款（每笔只计一次）
   const fees = await c.q(`SELECT r.id, r.fee_amount FROM refunds r JOIN orders o ON o.id = r.order_id
@@ -168,11 +169,15 @@ export async function generateSettlement(merchantId, period) {
   const feeTotal = fees.reduce((a, f) => a + Number(f.fee_amount), 0)
   const feeMerchant = Math.floor(feeTotal * shareBp / 10000)
   const feePlatform = feeTotal - feeMerchant
+  const costTotal = orders.reduce((a, o) => a + (o.cost_total_fen != null ? Number(o.cost_total_fen) : 0), 0)
+  const partialDeduct = orders.reduce((a, o) => a + (Number(o.partial_deduct_fen) || 0), 0)
     const sid = await c.ins(`INSERT INTO settlement (merchant_id, period, order_count, total_amount,
       amt_fulfill, amt_service, amt_promoter, amt_beanbudget, amt_retained, status,
-      fee_count, fee_total, fee_merchant, fee_platform, fee_share_bp, split_snapshot)
-      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained,
-      fees.length, feeTotal, feeMerchant, feePlatform, fees.length ? shareBp : null, JSON.stringify(split)])
+      fee_count, fee_total, fee_merchant, fee_platform, fee_share_bp, split_snapshot, cost_total, partial_deduct)
+      VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?)`, [merchantId, period, orders.length, total, fulfill, service, promo, beanBudget, retained,
+      fees.length, feeTotal, feeMerchant, feePlatform, fees.length ? shareBp : null, JSON.stringify(split), costTotal, partialDeduct])
+  // B04：确认成本回填（订单进入结算=确认时点；未维护成本保持 NULL 不强填）
+  if (orders.length) await c.q(`UPDATE orders SET cost_confirmed_fen = cost_total_fen WHERE id IN (${orders.map((o) => o.id).join(',')}) AND cost_confirmed_fen IS NULL`)
     if (orders.length) await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
     if (fees.length) await c.q(`UPDATE refunds SET settlement_id = ? WHERE id IN (${fees.map((f) => f.id).join(',')}) AND settlement_id IS NULL`, [sid])
     // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）；只有订单收入时才计

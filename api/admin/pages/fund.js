@@ -17,7 +17,7 @@ async function fund() {
       <div style="margin-top:8px"><button class="btn primary sm" onclick="event.stopPropagation();go('${l.goto}')">去办理 →</button></div></div></div>`).join('')}
     </div>
   </div>
-  ${showEcon ? `<div class="card"><div class="card-head"><h2>经营看板 · 商品毛利与已知费用后收益</h2><span class="muted">实际成交口径（退款冲减）· 支付时间统计</span></div>
+  ${showEcon ? `<div class="card"><div class="card-head"><h2>经营看板 · 商品毛利与已知费用后收益</h2><span class="muted">实际成交口径（退款冲减）· 支付时间统计</span><button class="btn ghost sm" onclick="econBridge()">资金桥表</button></div>
     <div class="row" style="margin:8px 0">
       <input id="ecFrom" type="date" value="${econDefaultFrom()}"> <span class="td-sub">—</span> <input id="ecTo" type="date" value="${econDefaultTo()}">
       <input id="ecProduct" type="number" min="1" placeholder="产品ID（可空）" style="width:130px">
@@ -67,4 +67,16 @@ async function economicsBoard() {
   <div class="rv-grid"><div><div class="rv-box"><div class="rv-h">按产品下钻（点单号看订单经营明细）</div>${dimRows(d.byProduct, '产品')}</div></div>
   <div><div class="rv-box"><div class="rv-h">按城市下钻</div>${dimRows(d.byCity, '城市')}</div></div></div>
   <p class="td-sub">确认成本/应付/实付：${esc(d.confirmed.note)}。资金来源与五口径关系随 B04 交付资金桥表。</p>`
+}
+
+// ===== B04 资金桥表：收入→成本→毛利→已知费用→收益（逐项口径、不重复扣减；每次查询落快照） =====
+async function econBridge() {
+  const from = document.getElementById('ecFrom').value, to = document.getElementById('ecTo').value
+  const d = await api('GET', `/admin/economics/bridge?from=${from}&to=${to}`)
+  const rows = d.rows.map((r) => `<tr><td class="td-main">${esc(r.label)}<div class="td-sub">${esc(r.caliber)}${r.note ? " · " + esc(r.note) : ""}</div></td><td class="money num" style="white-space:nowrap">${r.fen == null ? "—" : fen(r.fen)}</td></tr>`).join("")
+  modal('资金桥表 · ' + from + ' → ' + to, `
+    <p class="td-sub">${esc(d.note)} 恒等校验：${d.balanceOk === 1 ? '<b style="color:var(--green)">平</b>' : '<b style="color:var(--red)">不平（请核对）</b>'}</p>
+    <table><thead><tr><th>项目 / 口径</th><th>金额</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="td-sub">确认成本=订单进入结算时回填（B01 快照口径）；未结算完成单按下单快照计为预计并在口径中标注；五口径是收入分配视角，桥表是利润视角，佣金同源不重复扣。</p>
+  `, `<button class="btn ghost" onclick="closeModal()">关闭</button>`)
 }
