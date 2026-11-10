@@ -143,4 +143,50 @@ export const supplyAdminRoutes = {
     return { ...summary, period: { from, to, by: '支付时间' }, pendingOrders: pending,
       incomeNote: '"已知费用后收益"只扣减已接入的推广佣金，未含税费、工资、房租及全部期间费用，不冒充公司最终净利润；留存金额/GMV均不等于平台净利润' }
   },
+
+  // B04 平台资金桥表：收入→成本→毛利→已知费用→经营收益，逐项有口径、同一项不重复扣减。
+  // 期间按支付时间；含全退冲减与部分退款冲减；确认成本取已结算订单回填值（未结算完成单用下单快照并标注）。
+  'GET /admin/economics/bridge': async req => {
+    const a = await requireAdmin(req, ['super', 'finance'])
+    const from = String(req.query.from || '').slice(0, 10), to = String(req.query.to || '').slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw new BizError(1001, '统计期间无效（YYYY-MM-DD 起-止）')
+    // 行1：商品现金收入（总实收−保费−全退冲减−部分退款冲减）
+    const inc = await one(`SELECT COALESCE(SUM(o.amount_pay - o.insurance_fee),0) gross,
+        COALESCE(SUM(CASE WHEN o.status = 70 THEN o.amount_pay - o.insurance_fee ELSE 0 END),0) fullRefunded,
+        COALESCE(SUM(CASE WHEN o.status <> 70 THEN COALESCE(pr.pf,0) ELSE 0 END),0) partialRefunded,
+        SUM(o.insurance_fee) insurance
+      FROM orders o LEFT JOIN (SELECT order_id, SUM(cash_fen) pf FROM partial_refund WHERE status = 2 GROUP BY order_id) pr ON pr.order_id = o.id
+      WHERE o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY AND o.status IN (20,30,40,50,70)`, [from, to])
+    const incomeFen = Number(inc.gross) - Number(inc.fullRefunded) - Number(inc.partialRefunded)
+    // 行2：直接成本（完成且已结算=确认值；未结算完成单用下单快照并标注"预计"）
+    const cost = await one(`SELECT COALESCE(SUM(CASE WHEN o.settlement_id IS NOT NULL THEN o.cost_confirmed_fen ELSE o.cost_total_fen END),0) c,
+        SUM(CASE WHEN o.settlement_id IS NULL AND o.cost_total_fen IS NOT NULL THEN 1 ELSE 0 END) expectedN,
+        SUM(CASE WHEN o.cost_total_fen IS NULL THEN 1 ELSE 0 END) missingN
+      FROM orders o WHERE o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY AND o.status IN (20,30,40,50)`, [from, to])
+    const costFen = Number(cost.missingN) > 0 ? null : Number(cost.c)
+    // 行3：已知费用——推广佣金（计入完成订单）；支付手续费未接入标0；平台承担补贴另列
+    const commission = await one(`SELECT COALESCE(SUM(c.amount),0) s FROM commission c JOIN orders o ON o.id = c.order_id
+      WHERE o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY AND o.status IN (20,30,40,50,70) AND c.status IN (0,2)`, [from, to])
+    const commissionFen = Number(commission.s)
+    const subsidy = await one(`SELECT COALESCE(SUM(used),0) s FROM freedom_budget`) // 平台补贴责任累计（另列不进减项）
+    const subsidyFen = Number(subsidy.s)
+    const operatingFen = costFen == null ? null : incomeFen - costFen - commissionFen
+    const rows = [
+      { label: '商品现金收入（总实收）', fen: Number(inc.gross), caliber: 'Σ(实付−保费)，按支付时间', note: '含全额/部分退款单原实付' },
+      { label: '− 全额退款冲减', fen: -Number(inc.fullRefunded), caliber: '已退款订单的商品现金', note: '实退以退款单为准' },
+      { label: '− 部分退款冲减', fen: -Number(inc.partialRefunded), caliber: '已结算部分退款合计', note: '按项退款 PR 单' },
+      { label: '＝ 商品净销售额', fen: incomeFen, caliber: '实际成交/退款冲减口径', note: '毛利率分母' },
+      { label: '− 直接成本', fen: costFen == null ? null : -costFen, caliber: cost.expectedN > 0 ? '确认成本+预计成本（' + cost.expectedN + '单未结算）' : '确认成本（已结算回填）', note: Number(cost.missingN) > 0 ? '⚠ ' + cost.missingN + ' 单成本未维护，不可计算' : 'B01 供给项快照' },
+      { label: '＝ 商品经营毛利', fen: costFen == null ? null : incomeFen - costFen, caliber: '净销售额−直接成本', note: '毛利率=' + (incomeFen > 0 && costFen != null ? (Math.round((incomeFen - costFen) / incomeFen * 10000) / 100) + '%' : '—') },
+      { label: '− 推广佣金', fen: -commissionFen, caliber: '已计提佣金（status 0/2）', note: '与五口径 amt_promoter 同源不重复扣' },
+      { label: '＝ 已知费用后经营收益', fen: operatingFen, caliber: '毛利−已接入佣金', note: '未含税费/工资/房租及全部期间费用，不冒充最终净利润' },
+      { label: '（另列）平台承担补贴责任累计', fen: subsidyFen, caliber: 'freedom_budget.used', note: '已由券在实付中抵减，不再从收入重复扣减' },
+      { label: '（另列）保费/代收款', fen: Number(inc.insurance), caliber: '直付保险方', note: '不算销售收入、不进成本与佣金基数' },
+    ]
+    const balanceOk = costFen == null ? true : (rows[3].fen === incomeFen && (rows[5].fen === incomeFen - costFen) && (rows[7].fen === incomeFen - costFen - commissionFen)) ? 1 : 0
+    await q(`INSERT INTO econ_bridge (period_from, period_to, rows_snapshot, income_fen, cost_fen, commission_fen, operating_fen, balance_ok, operator)
+      VALUES (?,?,?,?,?,?,?,?,?)`, [from, to, JSON.stringify(rows), incomeFen, costFen, commissionFen, operatingFen, balanceOk, 'admin:' + a.name])
+    return { period: { from, to, by: '支付时间' }, rows, balanceOk,
+      note: '桥表每次查询落一份快照（只增不改）；同一项不重复扣减：佣金与五口径 amt_promoter 同源，补贴已在实付中抵减故仅另列。' }
+  },
 }
