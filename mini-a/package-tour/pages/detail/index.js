@@ -45,6 +45,8 @@ Page({
         minGo: sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
         cityName: CITY[d.city_code] || '',
         rules: rulesOf(d),
+        // B02：套餐组成项（名称/类型/每份数量/提供方）；空数组=非套餐产品不渲染
+        pkgItems: (d.packageItems || []).map((i) => ({ name: i.name, qty: i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName })),
         merchant: d.merchantCard ? { ...d.merchantCard, honor: d.merchantHonor || null, hoursText: (d.merchantCard.business_hours || []).map((h) => (h.days || '每天') + ' ' + h.open + '-' + h.close).join('；') } : null,
         scenic: d.scenicCard || null, faqs: d.relatedFaqs || [], faqOpen: -1,
         // 后台表单引擎维护的扩展资料（profile）：标签、适合人群、行程节点、补充须知等

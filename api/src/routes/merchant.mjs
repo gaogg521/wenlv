@@ -2,6 +2,7 @@ import { q, one, count, tx, BizError } from '../db.mjs'
 import { cfg, cfgAll, cfgNum, cfgArr, loadConfig } from '../config.mjs'
 import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword } from '../auth.mjs'
 import * as order from '../domain/order.mjs'
+import * as pkg from '../domain/package.mjs'
 import * as bean from '../domain/bean.mjs'
 import * as pass from '../domain/pass.mjs'
 import * as promo from '../domain/promo.mjs'
@@ -516,6 +517,20 @@ const mApply = {
     const id = await tx(async cc => cc.ins(`INSERT INTO merchant (city_code,name,merchant_no,status,apply_contact,apply_mobile_enc,apply_note,applicant_user_id)
       VALUES (?,?,?,0,?,?,?,?)`, [cityCode,name,mno,contact,sealMobile(mobile).enc,note || null,u.uid]))
     return { id, merchantNo: mno, msg: '已提交，审核通过后重新登录即可进入门店' }
+  },
+}
+
+// B03 套餐分项履约：本店待办清单 + 服务项幂等核销（跨店隔离在域层校验）
+export const mPkg = {
+  'GET /m/items/pending': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
+    return pkg.pendingItemsForStore(u.merchantId, req.query)
+  },
+  'POST /m/items/:id/redeem': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
+    return pkg.redeemServiceItem({ itemId: req.params.id, merchantId: u.merchantId, staffId: u.uid, idemKey: req.body.idemKey, note: req.body.note })
   },
 }
 

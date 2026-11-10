@@ -104,6 +104,15 @@
     </view><text class="pl-link">›</text>
   </view>
 
+  <!-- B02：套餐组成项（非套餐产品不渲染）；按人凭证项核销前可按项退 -->
+  <block wx:if="{{pkgItems.length}}">
+    <view class="sec-title">套餐包含</view>
+    <view class="card">
+      <view class="hl-item" wx:for="{{pkgItems}}" wx:key="name"><text class="hl-dot ok">›</text>{{item.name}} ×{{item.qty}}（{{item.kindText}} · {{item.merchantName}}）</view>
+      <view class="muted2" style="margin-top:8rpx;font-size:22rpx">分项履约：凭证项由各提供方门店核销；未核销项目可按项申请退款。</view>
+    </view>
+  </block>
+
   <!-- 预订须知：与服务端真实规则一致，不写系统做不到的承诺 -->
   <view class="sec-title">预订须知</view>
   <view class="card">

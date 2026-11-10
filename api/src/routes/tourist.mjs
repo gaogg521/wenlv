@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
 import { annotateSessions, activeRules, scopeMatch, unitPrice } from '../domain/discount.mjs'
+import * as pkg from '../domain/package.mjs'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 // ---------- /c 游客端 ----------
@@ -186,6 +187,9 @@ const c = {
       scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
       relatedFaqs,
       sessions: sessPub,
+      // B02：套餐组成项公开信息（名称/类型/数量/提供方名称；不含成本、分摊等经营字段）
+      packageItems: (await q(`SELECT pi.name, pi.kind, pi.qty_per_unit, m.name merchant_name FROM package_item pi JOIN merchant m ON m.id = pi.merchant_id
+        WHERE pi.product_id = ? AND pi.status = 1 ORDER BY pi.sort, pi.id`, [p.id])).map(i => ({ name: i.name, kind: Number(i.kind), qtyPerUnit: Number(i.qty_per_unit), merchantName: i.merchant_name })),
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
       bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
@@ -320,7 +324,11 @@ const c = {
       await refund.refresh(o.order_no).catch(e => console.error('[refund:query]', e.message))
       o = { ...o, ...(await order.byNo(o.order_no)) }
     }
-    const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
+    const passes = await q('SELECT id, name, status, order_item_id FROM travel_pass WHERE order_id = ?', [o.id])
+    // B02/B04：订单项（游客可见：名称/类型/数量/现金分摊/履约状态；成本与供给来源不下发）
+    const orderItems = await q(`SELECT oi.id, oi.name, oi.kind, oi.qty, oi.cash_fen, oi.status, oi.pass_total, oi.pass_done, m.name merchant_name
+      FROM order_item oi JOIN merchant m ON m.id = oi.merchant_id WHERE oi.order_id = ? ORDER BY oi.id`, [o.id])
+    const itemStatusText = { 0: '待履约', 1: '已完成', 2: '已退款', 3: '赠送' }
     // A-27：时间线下发面向用户的文案——内部事件键（REFUND_APPLY）、actor（user:57）、交易号、内部备注不下发
     const ST_TEXT = { 0: '下单', 10: '待支付', 20: '已支付', 30: '待出行', 40: '已核销', 50: '已完成', 60: '退款处理中', 70: '已退款', 90: '已关闭' }
     const events = (await q('SELECT from_st, to_st, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id]))
@@ -349,7 +357,8 @@ const c = {
     const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
     // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
-    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
+    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact,
+      orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
@@ -590,6 +599,28 @@ const c = {
     const r = await refund.refundOrder({ orderNo: o.order_no, reason: reason || '用户退款', operator: 'user:' + u.uid, applyPolicy: true })
     await q("UPDATE orders SET close_reason = 'user_refund' WHERE order_no = ? AND status = 70", [o.order_no])
     return r
+  },
+
+  // B04 套餐按项部分退款（游客自助）：仅未核销项，按政策扣手续费；套餐订单优先走项级退款
+  'POST /c/orders/:no/partial-refund': async (req) => {
+    const u = requireUser(req)
+    const o = await order.byNo(req.params.no)
+    if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    if (![20, 30].includes(Number(o.status))) throw new BizError(2002, '当前状态不可按项退款')
+    const { reason, itemIds } = req.body
+    if (!Array.isArray(itemIds) || !itemIds.length) throw new BizError(1001, '请选择要退的订单项')
+    const mine = await q('SELECT id FROM order_item WHERE order_id = ? AND id IN (?)', [o.id, itemIds.map(Number)])
+    if (mine.length !== new Set(itemIds.map(Number)).size) throw new BizError(2003, '订单项不存在')
+    return pkg.partialRefund({ orderNo: o.order_no, itemIds, reason: String(reason || '用户按项退款').slice(0, 300), operator: 'user:' + u.uid, applyPolicy: true })
+  },
+
+  // B04 套餐订单可退项试算（游客展示）
+  'GET /c/orders/:no/partial-refund-quote': async (req) => {
+    const u = requireUser(req)
+    const o = await order.byNo(req.params.no)
+    if (!o || Number(o.user_id) !== Number(u.uid)) throw new BizError(2003, '订单不存在')
+    const items = await pkg.refundableItems(o.id)
+    return { items, policy: refundPolicy.describe(await cfg('order.refund_policy')) }
   },
 
   // 免费改签（§4 拼团定稿）：未成团退款单 → 同频道同价团期，免支付出票

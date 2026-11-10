@@ -12,15 +12,36 @@ const listKey = () => 'wl_offline_list_' + ((getApp().globalData.merchant || {})
 const queueKey = () => 'wl_offline_queue_' + ((getApp().globalData.merchant || {}).id || 'unbound') // [{ payload, offlineAt }]
 
 Page({
-  data: { result: null, lastQr: '', input: '', streak: 0, offline: { pending: 0, syncedAt: '', listReady: false } },
+  data: { result: null, lastQr: '', input: '', streak: 0, svcItems: [], offline: { pending: 0, syncedAt: '', listReady: false } },
 
   onShow() {
     this.setData({ result: null })
     this.refreshOfflineBar()
+    this.loadSvcItems()
     this.syncList()
     this.watchNetwork()
   },
   onHide() { if (this._watched) { wx.offNetworkStatusChange(this._onNet); this._watched = false } },
+
+  // B03：套餐服务项待履约清单（本店范围，跨店隔离由服务端校验）
+  async loadSvcItems() {
+    try {
+      const d = await api.request('/m/items/pending')
+      this.setData({ svcItems: (d.rows || []).filter((x) => Number(x.kind) === 2) })
+    } catch (e) { /* 未登录/断网保持空态 */ }
+  },
+  // 服务项履约：幂等键防重放，重复提交返回同一结果
+  async redeemSvc(e) {
+    const it = this.data.svcItems[Number(e.currentTarget.dataset.i)]
+    if (!it) return
+    const key = wx.getStorageSync('wl_svc_idem_' + it.id) || ('SVC-' + it.id + '-' + Date.now().toString(36))
+    wx.setStorageSync('wl_svc_idem_' + it.id, key)
+    try {
+      const r = await api.request('/m/items/' + it.id + '/redeem', 'POST', { idemKey: key, note: '' })
+      wx.showToast({ title: r.repeated ? '已完成（重复提交已拦截）' : '履约完成', icon: r.repeated ? 'none' : 'success' })
+      this.loadSvcItems()
+    } catch (err) { wx.showToast({ title: err.msg || '履约失败', icon: 'none' }) }
+  },
 
   // ── 离线名单：进入页面即同步（在线时）；断网前缓存可覆盖 ~30 分钟窗口 ──
   async syncList() {

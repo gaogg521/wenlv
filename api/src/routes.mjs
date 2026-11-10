@@ -4,7 +4,7 @@ import { one, BizError } from './db.mjs'
 import { requireUser } from './auth.mjs'
 import { handlePayNotify } from './routes/_shared.mjs'
 import { c, cWithdraw, lexicon, cPromo, cNotes, cPhraseKyc, cIdentity } from './routes/tourist.mjs'
-import { m, mSite, mPhrase, mApply } from './routes/merchant.mjs'
+import { m, mSite, mPhrase, mApply, mPkg } from './routes/merchant.mjs'
 import { admin } from './routes/admin.mjs'
 import { adminSys, adminEco, adminEdit, adminNew, adminFin } from './routes/admin-ops.mjs'
 import { adminAccounts } from './routes/admin-accounts.mjs'
@@ -24,8 +24,9 @@ import { salesRoutes } from './routes/sales.mjs'
 import { freedomRoutes } from './routes/freedom.mjs'
 import { promoAdminRoutes } from './routes/promo-admin.mjs'
 import { supplyAdminRoutes } from './routes/supply-admin.mjs'
+import { pkgAdminRoutes } from './routes/pkg-admin.mjs'
 
-export const routes = { ...workAccess, ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes }
+export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')

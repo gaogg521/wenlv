@@ -19,8 +19,11 @@ export async function quoteFor(o) {
   }
   const s = await one('SELECT depart_date FROM tour_session WHERE id = ?', [o.session_id])
   if (!s) return { allowed: false, reason: '团期不存在，请联系客服' }
-  const q = policy.quote({ policy: await cfg('order.refund_policy'), amountPayFen: Number(o.amount_pay), departDate: s.depart_date })
-  return { ...q, departDate: String(s.depart_date).slice(0, 10), amountPayFen: Number(o.amount_pay), beanReturn: Number(o.bean_deducted) || 0 }
+  // B04：基数=剩余可退现金（实付−已结算部分退款）；部分退过款的全退不再重复退
+  const partialSettled = await one('SELECT COALESCE(SUM(cash_fen),0) s FROM partial_refund WHERE order_id = ? AND status = 2', [o.id])
+  const remainingPay = Math.max(0, Number(o.amount_pay) - Number(partialSettled.s))
+  const q = policy.quote({ policy: await cfg('order.refund_policy'), amountPayFen: remainingPay, departDate: s.depart_date })
+  return { ...q, departDate: String(s.depart_date).slice(0, 10), amountPayFen: remainingPay, beanReturn: Number(o.bean_deducted) || 0, partialRefunded: Number(o.amount_pay) - remainingPay }
 }
 
 /**
@@ -36,9 +39,12 @@ export async function refundOrder({ orderNo, reason, operator = 'user', applyPol
   const { refundNo, refundFen, feeFen, feeRate, days } = await tx(async (c) => {
     const o = await c.one('SELECT * FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
     if (![20, 30, 40].includes(Number(o.status))) throw new BizError(2002, '当前状态不可退款')
-    const dup = await c.one('SELECT refund_no FROM refunds WHERE order_id = ? AND status IN (0, 2) LIMIT 1', [o.id])
+    // B04：只拦进行中退款；已结算的部分退款不阻塞后续全退（金额按剩余可退扣减）
+    const dup = await c.one('SELECT refund_no FROM refunds WHERE order_id = ? AND status = 0 LIMIT 1', [o.id])
     if (dup) throw new BizError(2002, '退款已在处理中（' + dup.refund_no + '），请勿重复提交')
-    const total = Number(o.amount_pay)
+    // B04：全退金额=实付−已结算部分退款（资金恒等：Σ退款=实收现金）
+    const partialSettled = await c.one('SELECT COALESCE(SUM(cash_fen),0) s FROM partial_refund WHERE order_id = ? AND status = 2', [o.id])
+    const total = Math.max(0, Number(o.amount_pay) - Number(partialSettled.s))
     let refundFen = total, feeFen = 0, feeRate = null, days = null
     if (applyPolicy) {
       const q = await quoteFor(o)
