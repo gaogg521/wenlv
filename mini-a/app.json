@@ -40,7 +40,8 @@
     {
       "root": "package-promo",
       "pages": [
-        "pages/center/index"
+        "pages/center/index",
+        "pages/work/index"
       ]
     }
   ],

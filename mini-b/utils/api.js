@@ -38,7 +38,7 @@ function request(path, method = 'GET', data = {}, retried = false) {
         // A-35：令牌过期（1002）自动重登一次再重放原请求，此前只会报错让用户干瞪眼
         if (res.data && res.data.code === 1002 && path !== '/m/auth/login' && !retried) {
           getApp().globalData.token = ''; wx.removeStorageSync('mtoken')
-          const relogin = wx.getStorageSync('mloginMode') === 'demo' ? demoLogin() : login(undefined, true)
+          const relogin = wx.getStorageSync('mloginMode') === 'demo' ? demoLogin() : login(g().merchant && g().merchant.id, true)
           return relogin.then(() => request(path, method, data, true)).then(resolve, reject)
         }
         reject(res.data || { msg: '网络错误' })
@@ -57,4 +57,11 @@ function login(merchantId, retried) {
     }, fail: reject })
   })
 }
-module.exports = { request, login, demoLogin, canDemoLogin }
+async function switchStore(merchantId) {
+  const d = await request('/m/auth/switch', 'POST', { merchantId })
+  // Replace the session and discard all page state by relaunching the workbench.
+  saveSession(d, 'wechat')
+  wx.reLaunch({ url: '/pages/index/index' })
+  return d
+}
+module.exports = { request, login, demoLogin, canDemoLogin, switchStore }

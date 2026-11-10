@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
+    "test:phase1": "node test/phase1-client.mjs && node test/phase1.mjs",
     "test:merchant-navigation": "node test/merchant-navigation.mjs",
     "test:merchant-catalog": "node test/merchant-catalog.mjs",
     "test:merchant-history": "node test/merchant-history.mjs",

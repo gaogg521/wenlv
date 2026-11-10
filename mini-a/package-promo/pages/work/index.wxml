@@ -1,0 +1,6 @@
+<view class="hero"><view class="hi">合作身份</view><view class="sub2">按授权主体查询 · 不赋予门店核销权限</view></view>
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><button bindtap="load">重试</button></view>
+<view class="card" wx:if="{{loading}}">正在核对授权…</view>
+<view class="card" wx:if="{{!subjects.length && !error && !loading}}">暂无有效合作授权，请联系平台运营。</view>
+<view class="card" wx:for="{{subjects}}" wx:key="id" data-id="{{item.id}}" bindtap="choose"><view>{{item.name}}</view><view class="note">查看此主体</view></view>
+<view class="card" wx:if="{{current}}"><view class="sec-title">当前主体：{{current.name}}</view><view class="kv" wx:for="{{resources}}" wx:key="id"><text>{{item.label}}</text><text>{{item.name}}</text></view><view class="note">{{note}}</view></view>

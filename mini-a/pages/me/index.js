@@ -3,6 +3,7 @@ const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 const place = require('../../utils/place')
 Page({
+  goWork() { wx.navigateTo({ url: '/package-promo/pages/work/index' }) },
   goPromo() { wx.navigateTo({ url: '/package-promo/pages/center/index' }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/create/index' }) },
   goIdentity() { wx.navigateTo({ url: '/package-content/pages/identity/index' }) },
@@ -14,6 +15,8 @@ Page({
   goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + e.currentTarget.dataset.type }) },
   callService() { place.call(this.data.site.service_phone) },
   onShow() {
+    this.setData({workAvailable:false,canPromote:false})
+    api.request('/c/work-contexts').then(d=>this.setData({workAvailable:d.canCooperate,canPromote:d.canPromote})).catch(()=>{})
     siteData.get().then((site) => this.setData({ site }))
     this.setData({ user: app.globalData.user })
     this.loadMe()

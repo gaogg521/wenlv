@@ -12,15 +12,18 @@ Page({
       // 一旦写进 wxml 会导致整个分包编译失败（开发者工具只记一条“问题”，运行时表现为页面永远注册不上）
       const yuan = (v) => (Number(v || 0) / 100).toFixed(2)
       const ov = ov0 ? Object.assign({}, ov0, {
+        validGmvLabel: '¥' + yuan(ov0.validGmv),
+        rateLabel: Number(ov0.rateBp || 0) / 100 + '%',
+        canWithdraw: !!ov0.active && Number(ov0.withdrawable) > 0 && Number(ov0.withdrawable) >= Number(ov0.withdrawMin) && !ov0.pendingRequests,
+        ruleText: '最低申请 ¥' + yuan(ov0.withdrawMin) + ' · 佣金观察期 ' + Number(ov0.settleDelayDays) + ' 天；放行及实际打款状态分别核对',
         withdrawableYuan: yuan(ov0.withdrawable),
         earnedYuan: yuan(ov0.earned),
         withdrawnYuan: yuan(ov0.withdrawn),
       }) : ov0
-      this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers })
+      this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers, error:'' })
     } catch (e) {
-      // 后端不可达：按"未开通推广资格"状态渲染（页面本身有该状态的完整文案），并提示演示模式
-      this.setData({ ov: null, scene: null, customers: [] })
-      wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
+      this.setData({ ov: null, scene: null, customers: [],error:e.msg || '加载失败，请重试' })
+      wx.showToast({ title: e.msg || '加载失败，请重试', icon: 'none' })
     }
   },
   switchSeg(e) { this.setData({ seg: e.currentTarget.dataset.k }) },
@@ -45,7 +48,8 @@ Page({
     } catch (e) { wx.showToast({ title: e.msg || '生成失败', icon: 'none' }) }
   },
   async withdraw() {
-    const ok = await new Promise((r) => wx.showModal({ title: '申请提现', content: '可提现金额将全数申请，最低提现额与到账时效以下单页提示为准', success: r }))
+    if (!this.data.ov || !this.data.ov.canWithdraw) return
+    const ok = await new Promise((r) => wx.showModal({ title: '申请提现', content: '可提现金额将全数申请，提交后等待财务核对，实际付款以登记结果为准', success: r }))
     if (!ok.confirm) return
     try { await api.request('/c/promote/withdraw', 'POST', { note: '小程序申请' }); wx.showToast({ title: '已提交，等待财务审批' }); this.fetch() }
     catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }

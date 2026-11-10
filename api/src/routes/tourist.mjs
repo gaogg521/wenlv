@@ -13,6 +13,7 @@ import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
+import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
 
 // 游客订单详情可见的订单字段（小程序订单页实际用到的 + 本人订单的基本事实）
 const ORDER_PUBLIC = ['id', 'order_no', 'channel', 'product_id', 'session_id', 'city_code', 'qty', 'amount_goods', 'amount_bean_ded', 'bean_deducted',
@@ -97,7 +98,7 @@ const c = {
     // A-39：groups 过滤下架商品（此前只过滤团期，下架商品仍在列）
     groups: await q(`SELECT s.id session_id, p.id product_id, p.title, p.days_desc, s.depart_date, s.quota - s.booked AS left_seats
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() ORDER BY s.depart_date LIMIT 6`),
+      WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')} ORDER BY s.depart_date LIMIT 6`, [bookingNow()]),
     hot: await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc
       FROM tour_product p WHERE p.status = 1 ORDER BY p.id LIMIT 10`),
   }),
@@ -123,7 +124,7 @@ const c = {
     if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
       price_adult, early_price, early_days, status, profile
-      FROM tour_session WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 ORDER BY depart_date`, [p.id])
+      FROM tour_session s WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 AND ${bookingOpenSql('s')} ORDER BY depart_date`, [p.id, bookingNow()])
     const img = (u) => apiImg(u, req)
     const merchantRow = await one('SELECT * FROM merchant WHERE id = ?', [p.merchant_id])
     const scenicRow = p.scenic_id ? await one('SELECT * FROM scenic_spot WHERE id = ? AND status = 1', [p.scenic_id]) : null
@@ -563,13 +564,15 @@ const c = {
 const cWithdraw = {
   'GET /c/promote/overview': async (req) => {
     const u = requireUser(req)
-    const p = await one('SELECT tier, rate_bp, status FROM promoter WHERE user_id = ?', [u.uid])
+    const p = await one('SELECT tier, rate_bp, status, valid_gmv_90d FROM promoter WHERE user_id = ?', [u.uid])
     if (!p) return { promoter: false }
     const agg = await one(`SELECT COALESCE(SUM(CASE WHEN status IN (1,2) THEN amount ELSE 0 END),0) earned,
       COALESCE(SUM(CASE WHEN status IN (3,4) THEN amount ELSE 0 END),0) reversed FROM commission WHERE promoter_id = ?`, [u.uid])
     const paid = await one(`SELECT COALESCE(SUM(w.amount),0) paid FROM promoter_withdraw w WHERE w.promoter_id = ? AND w.status = 1`, [u.uid])
     const pending = await count('SELECT COUNT(*) c FROM promoter_withdraw WHERE promoter_id = ? AND status = 0', [u.uid])
-    return { promoter: true, tier: p.tier, rateBp: p.rate_bp, earned: Number(agg.earned), withdrawn: Number(paid.paid),
+    const recent = await one(`SELECT COALESCE(SUM(c.base_amount),0) gmv FROM commission c JOIN orders o ON o.id=c.order_id WHERE c.promoter_id=? AND c.status IN (0,1,2) AND o.paid_at>=NOW()-INTERVAL 90 DAY AND o.status IN (20,30,40,50)`,[u.uid])
+    return { promoter: true, active: Number(p.status) === 1, tier: p.tier, rateBp: p.rate_bp, earned: Number(agg.earned), withdrawn: Number(paid.paid),
+      validGmv: Number(recent.gmv), withdrawMin: await cfgNum('promoter.withdraw_min'), settleDelayDays: await cfgNum('commission.settle_delay_days'),
       withdrawable: Number(agg.earned) - Number(paid.paid), pendingRequests: pending }
   },
   'GET /c/promote/qrcode': async (req) => {
@@ -664,8 +667,9 @@ const cPromo = {
       FROM attribution a JOIN attribution_hit h ON h.scene = a.scene
       LEFT JOIN orders o ON o.promo_scene = a.scene AND o.user_id = h.user_id
       WHERE a.promoter_id = ? ORDER BY h.id DESC LIMIT 50`, [u.uid])
+    const names = {10:'待支付',20:'已支付',30:'待使用',40:'已核销',50:'已完成',60:'退款中',70:'已退款',90:'已关闭'}
     return rows.map((r) => ({ when: String(r.hit_at).slice(0, 10), orderNo: r.order_no || null,
-      amount: r.order_no ? Number(r.amount_pay) : null, status: r.order_no ? r.status : null }))
+      amount: r.order_no ? Number(r.amount_pay) : null, status: r.order_no ? r.status : null, statusText: r.order_no ? names[r.status] || '状态待核对' : '仅到访' }))
   },
 }
 

@@ -24,7 +24,8 @@
 </view>
 <view class="card">
   <view class="kv" bindtap="goOrders"><text>我的订单</text><text class="v">›</text></view>
-  <view class="kv" bindtap="goPromo"><text>推广中心</text><text class="v">›</text></view>
+  <view class="kv" wx:if="{{canPromote}}" bindtap="goPromo"><text>推广中心</text><text class="v">我的推广身份 ›</text></view>
+  <view class="kv" wx:if="{{workAvailable}}" bindtap="goWork"><text>合作身份</text><text class="v">切换授权主体 ›</text></view>
   <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
   <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 勋章 · 可信记录 ›</text></view>
   <view class="kv" bindtap="goFaq"><text>常见问题</text><text class="v">返豆 · 核销 · 退改 ›</text></view>

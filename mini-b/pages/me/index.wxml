@@ -34,6 +34,7 @@
 </view>
 <block wx:else>
   <view class="card">
+    <view class="row" bindtap="chooseStore"><text>切换授权门店</text><text class="v">当前门店与岗位 ›</text></view>
     <view class="row" bindtap="goHonor"><text>经营等级与荣誉</text><text class="v">等级 · 权益 · 徽章 ›</text></view>
     <view class="row" bindtap="goCredentials"><text>我的可信凭证</text><text class="v">勋章记录 ›</text></view>
     <view class="row" wx:if="{{role >= 2}}" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>

@@ -10,6 +10,7 @@ import { one, q, BizError } from '../db.mjs'
 import { cfgArr } from '../config.mjs'
 import { sanitizeRich, richTextLength } from '../infra/sanitize.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
+import { validDeadline } from './booking-window.mjs'
 import { findBanned, SUGGEST } from './wording.mjs'
 
 /* ---------------- 共享字典 ---------------- */
@@ -99,7 +100,7 @@ const S = {
         { k: 'status', label: '团期状态', type: 'select', store: 'col', options: [['1', '报名中'], ['2', '已成团'], ['3', '已截止'], ['4', '已取消']], dflt: '1' },
         { k: 'quota', label: '名额', type: 'int', store: 'col', required: true, min: 1, max: 999, unit: '人' },
         { k: 'min_go', label: '成团人数', type: 'int', store: 'col', min: 1, max: 999, unit: '人', dflt: 10 },
-        { k: 'sign_deadline', label: '报名截止', type: 'datetime', help: '展示用，到点请将状态改为"已截止"' },
+        { k: 'sign_deadline', label: '报名截止', type: 'datetime', help: '业务时区；到点服务端停止新下单，已建单仍按原支付时限处理' },
       ] },
       { title: '价格', fields: [
         { k: 'price_adult', label: '成人价', type: 'money', store: 'col', required: true, min: 1, unit: '元' },
@@ -117,6 +118,7 @@ const S = {
       ] },
     ],
     async validate(v, ctx) {
+      if (v.sign_deadline && !validDeadline(v.sign_deadline)) return { sign_deadline: '请输入有效的本地报名截止日期时间' }
       if (v.early_price != null && v.price_adult != null && v.early_price >= v.price_adult) return { early_price: '早鸟价须低于成人价' }
       if (ctx.creating && v.depart_date && v.depart_date < bizDay()) return { depart_date: '出发日期不可早于今天' }
       if (!ctx.creating && v.quota != null && ctx.row && v.quota < Number(ctx.row.booked)) return { quota: `已报名 ${ctx.row.booked} 人，名额不能少于已报名人数` }
@@ -423,7 +425,7 @@ const S = {
       { title: '投资与分润', desc: '分润按结算期自动入账，打款需在列表中登记', fields: [
         { k: 'product_id', label: '共创线路', type: 'ref', ref: 'product', store: 'col', required: true },
         { k: 'invest_amount', label: '投资金额', type: 'money', store: 'col', min: 0, unit: '元' },
-        { k: 'share_pct', label: '分润比例', type: 'bp', store: 'col', required: true, min: 0, max: 50, help: '0~50%，按线路结算金额计提' },
+        { k: 'share_pct', label: '分润比例', type: 'bp', store: 'col', required: true, min: 0, max: 50, help: '0~50%；按结算期留存金额中本线路有效成交占比分配的基数计提，并非按交易总额' },
         { k: 'invest_date', label: '投资日期', type: 'date' },
         { k: 'status', label: '状态', type: 'select', store: 'col', options: [['1', '生效'], ['0', '停用']], dflt: '1' },
         { k: 'goods_desc', label: '供货/投入说明', type: 'textarea', max: 500, span: 2, help: '商品商填写供货内容；资金商填写资金用途' },

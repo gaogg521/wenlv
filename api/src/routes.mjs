@@ -19,8 +19,9 @@ import { open } from './routes/open.mjs'
 import { callback } from './routes/callback.mjs'
 import { people } from './routes/people.mjs'
 import { contentGovernance } from './routes/content-governance.mjs'
+import { workAccess } from './routes/work-access.mjs'
 
-export const routes = { ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
+export const routes = { ...workAccess, ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
@@ -54,6 +55,7 @@ for (const [key, handler] of Object.entries(routes)) {
     const u = requireUser(req)
     const ua = await one('SELECT status FROM user_account WHERE id = ?', [u.uid])
     if (!ua || Number(ua.status) === 0) throw new BizError(1003, '账号已被停用，请联系平台')
+    if (key === 'GET /m/auth/stores' || key === 'POST /m/auth/switch') return handler(req, res)
     if (!M_C_END_ROUTES.has(key)) {
       if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
       const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id

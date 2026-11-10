@@ -1,9 +1,10 @@
 <view class="hero">
-  <view class="sub2">推广服务商{{ov && ov.promoter ? ' · ' + nameMap[ov.tier] : ''}}</view>
+  <view class="sub2">推广服务商{{ov && ov.promoter ? ' · 当前档位费率 ' + ov.rateLabel : ''}}</view>
   <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{ov.withdrawableYuan}}</view>
   <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>
   <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
 </view>
+<view class="card" wx:if="{{error}}"><view>{{error}}</view><button bindtap="fetch">重试</button></view>
 <view class="chips">
   <view class="chip {{seg === 'earn' ? 'on' : ''}}" bindtap="switchSeg" data-k="earn">推广收益</view>
   <view class="chip {{seg === 'invite' ? 'on' : ''}}" bindtap="switchSeg" data-k="invite">邀请收客</view>
@@ -11,12 +12,13 @@
 </view>
 <block wx:if="{{seg === 'earn'}}">
   <view class="card" wx:if="{{ov && ov.promoter}}">
-    <view class="kv"><text>当前档位</text><text class="v">{{nameMap[ov.tier]}}</text></view>
-    <view class="kv"><text>累计有效成交（90天）</text><text class="v">{{overview.validGmvLabel || "以审核通过订单计"}}</text></view>
+    <view class="kv"><text>当前档位费率</text><text class="v">{{ov.rateLabel}}</text></view>
+    <view class="kv"><text>累计有效成交（90天口径）</text><text class="v">{{ov.validGmvLabel}}</text></view>
     <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
   </view>
-  <view class="btn" wx:if="{{ov && ov.withdrawable >= 10000}}" bindtap="withdraw">申请提现</view>
-  <view class="note" wx:else>可提现满 ¥100 后可申请 · 佣金 T+7 到账自动可提</view>
+  <view class="btn" wx:if="{{ov && ov.canWithdraw}}" bindtap="withdraw">申请提现</view>
+  <view class="note" wx:if="{{ov && ov.promoter}}">{{ov.ruleText}}</view>
+  <view class="note" wx:if="{{ov && ov.promoter && !ov.active}}">推广资格已停用，暂停取码及提现。</view>
 </block>
 <block wx:if="{{seg === 'invite'}}">
   <view class="card" style="text-align:center">

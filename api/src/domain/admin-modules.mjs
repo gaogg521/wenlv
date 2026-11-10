@@ -50,6 +50,8 @@ export const cityDenyHit = (moduleKey) => CITY_DENY_MODULES.includes(moduleKey) 
  * GET 不等于无敏感副作用，POST 不等于一律办理——按业务语义逐条登记，不按动词粗分。
  */
 export const ROUTE_MODULES = [
+  ['GET', '/admin/work-access', 'partners', 'view'],
+  ['POST', '/admin/work-access/:action', 'partners', 'manage'],
   // 风控事件：查看 / 处置
   ['GET', '/admin/risk', 'risk', 'view'],
   ['POST', '/admin/risk/:id/handle', 'risk', 'manage'],

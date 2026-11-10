@@ -41,6 +41,7 @@
     { end: '游客端', path: 'package-content/pages/identity/index', name: '我的身份', items: [['勋章墙（勋章图、稀有度、规则、有效期）', [['勋章发行', 'badges']]], ['权益凭证与可信记录', [['存证中心', 'attest'], ['权益账户', 'wallets']]]] },
     { end: '游客端', path: 'package-content/pages/doc/index', name: '协议与说明', items: [['用户协议、隐私政策、关于我们；图片来源与许可可从关于页查看', [['小程序装修 · 客服与协议', 'site']]]] },
     { end: '游客端', path: 'package-promo/pages/center/index', name: '推广中心', items: [['资格、档位与费率', [['推广服务商', 'promoters'], ['逐品佣金', 'rateov']]], ['提现', [['提现审批', 'withdrawals']]], ['规则说明', [['小程序装修 · 旅豆与推广', 'site']]]] },
+    { end: '游客端', path: 'package-promo/pages/work/index', name: '合作身份', items: [['主体、经办人授权与有效期、关联合作档案', [['合伙人中心 → 主体与经办授权', 'partners']]]] },
     { end: '游客端', path: 'pages/faq/index', name: '常见问题', items: [['问题、富文本答案、分类、热门、同义问法', [['常见问题', 'faqs']]]] },
     { end: '游客端', path: 'pages/me/index', name: '我的', items: [['客服电话与服务时间、协议入口、品牌标语', [['小程序装修 · 客服与协议', 'site']]], ['实名认证审核', [['实名认证', 'kyc']]]] },
     { end: '商户端', path: 'pages/index/index', name: '工作台', items: [['平台公告', [['小程序装修 · 商户端', 'site']]], ['今日流水、待核销、近 7 日经营', [['订单', 'orders']]], ['游客评价', [['内容审核 · 评价管理', 'content']]]] },
