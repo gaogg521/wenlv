@@ -30,6 +30,16 @@ export const rebateOf = async (payFen, bonusBp = 0) => Math.round(payFen / 10 * 
 export const clampDeduct = async (wanted, orderFen) =>
   Math.max(0, Math.min(wanted, Math.floor((orderFen * (await cfgNum('bean.deduct_max_pct'))) / 10)))
 
+/** D01 旅豆实付锚定上限（豆数）：抵扣 B（分）须满足 B ≤ r×X，X＝G−C−B → B ≤ r(G−C)/(1+r)。
+ *  以整数 bp 求解避免浮点误差：beans ≤ floor(rBp×net / (10×(10000+rBp)))，每豆抵 10 分。
+ *  禁止直接用 G×r（旧商品额口径会超锚）；net≤0 或 r≤0 时上限为 0。 */
+export function anchorCapBeans(goodsFen, freedomDiscountFen, r) {
+  const net = Number(goodsFen) - Number(freedomDiscountFen || 0)
+  const rBp = Math.round(Number(r) * 10000)
+  if (net <= 0 || rBp <= 0) return 0
+  return Math.floor((rBp * net) / (10 * (10000 + rBp)))
+}
+
 /** 发放（1/2/3）：双闸校验 + 双分录，同事务 */
 export async function grant(userId, amount, bizType, bizRef, budgetId, connection) {
   // 7=RISK：人工权益调整（T06）补发；与 1/2/3 同走预算批次与全局哨兵双闸
@@ -116,14 +126,17 @@ export async function reverse(userId, amount, bizRef, connection) {
  * 账号冻结时不发，订单记为"待补发"（V39 bean_rebate_deferred），解冻后由 releaseDeferredRebates 补发：照常累计、不丢失。
  */
 export async function rebateOrder(o) {
-  if (!(Number(o.amount_pay) > 0)) return 0
+  // D01：返豆按最终实际支付的"适用商品金额"计算（总实付 − 保费/代收款），不用原价或券前金额；
+  // 保费直付保险方，与佣金基数（promo.createCommission）同一口径。
+  const goodsCash = Number(o.amount_pay) - Number(o.insurance_fee || 0)
+  if (!(goodsCash > 0)) return 0
   if (await isUserFrozen(o.user_id)) {
     await q('UPDATE orders SET bean_rebate_deferred = 1 WHERE order_no = ?', [o.order_no])
     return 0
   }
   const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
   if (!budget) return 0
-  const rebate = await rebateOf(Number(o.amount_pay), await member.rebateBonusBp(o.user_id))
+  const rebate = await rebateOf(goodsCash, await member.rebateBonusBp(o.user_id))
   if (rebate > 0) await grant(Number(o.user_id), rebate, BIZ.REBATE, o.order_no, budget.id)
   return rebate
 }
@@ -140,11 +153,12 @@ export async function releaseDeferredRebates(userId) {
   let n = 0
   for (const { order_no: orderNo } of await q('SELECT order_no FROM orders WHERE user_id = ? AND bean_rebate_deferred = 1 ORDER BY id', [userId])) {
     await tx(async (c) => {
-      const o = await c.one('SELECT order_no, status, amount_pay, bean_rebate_deferred FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+      const o = await c.one('SELECT order_no, status, amount_pay, insurance_fee, bean_rebate_deferred FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
       if (!o || !Number(o.bean_rebate_deferred)) return
       const done = await c.one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
         WHERE a.user_id = ? AND l.biz_type = ? AND l.direction = 1 AND l.biz_ref = ? LIMIT 1`, [userId, BIZ.REBATE, orderNo])
-      const rebate = await rebateOf(Number(o.amount_pay), await member.rebateBonusBp(userId))
+      // 与 rebateOrder 同口径：按适用商品金额（总实付 − 保费）补发
+      const rebate = await rebateOf(Number(o.amount_pay) - Number(o.insurance_fee || 0), await member.rebateBonusBp(userId))
       if (!done && Number(o.status) === 50 && rebate > 0) { await grant(Number(userId), rebate, BIZ.REBATE, orderNo, budget.id, c); n++ }
       await c.upd('UPDATE orders SET bean_rebate_deferred = 0 WHERE order_no = ?', [orderNo])
     })

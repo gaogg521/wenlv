@@ -64,11 +64,13 @@ try{
    }
    const obj={status:'available',rule_json:{name:'test',from:date(-1)+' 00:00:00',to:date(2)+' 00:00:00',threshold:10000,discount:5000,products:[],cities:[],channels:[],dates:[]}};assert.ok(freedom.reasonFor(obj,{goods:9900,insurance_fee:1000}).includes('门槛'))
  })
- await check('同单旅豆互斥，跨用户盗用拒绝且库存不变',async()=>{
+ // D01：自由豆与旅豆同单可用、独立记账；余额不足按实际少抵（0 豆照常）；跨用户盗用仍拒绝且库存不变
+ await check('自由豆旅豆同单不再互斥（余额少抵），跨用户盗用拒绝且库存不变',async()=>{
    const before=(await one('SELECT booked FROM tour_session WHERE id=?',[sid])).booked
-   await assert.rejects(()=>place(uids[2],{wantedBeans:1,freedomRightId:right}),/不能.*叠加/)
+   const r=await place(uids[2],{wantedBeans:9999,freedomRightId:right});assert.equal(r.beanDeducted,0);assert.equal(r.amountPay,14900)
    await assert.rejects(()=>place(uids[3],{freedomRightId:right}),/不属于本人/)
-   assert.equal((await one('SELECT booked FROM tour_session WHERE id=?',[sid])).booked,before)
+   assert.equal((await one('SELECT booked FROM tour_session WHERE id=?',[sid])).booked,before+1)
+   await order.closeUnpaid(r.orderNo,'test-d01') // 释放权益，供后续并发/取消用例继续使用
  })
  let no
  await check('并发建单同一权益只成功一次，失败无占位和孤儿单',async()=>{

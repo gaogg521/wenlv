@@ -5,6 +5,7 @@ import { bookingNow, validDeadline, bookingOpenSql } from '../domain/booking-win
 import * as sales from '../domain/sales.mjs'
 import { cfgNum, cfgAll } from '../config.mjs'
 import { priceForSession } from '../domain/order.mjs'
+import { annotateSessions } from '../domain/discount.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
 import { attest } from '../domain/attest.mjs'
 import { subjectContexts } from './work-access.mjs'
@@ -74,13 +75,22 @@ export const salesRoutes={
  'GET /c/promote/products':async req=>{
    const u=requireUser(req);await sales.promoter(u.uid);const {page,pageSize,offset}=paging(req.query),now=bookingNow()
    const cond='g.promoter_id=? AND g.status=1 AND g.valid_from<=? AND g.valid_to>? AND p.status=1 AND m.status=1',args=[u.uid,now,now]
-   const rows=await q(`SELECT p.id,p.title,p.images,p.days_desc,g.valid_from,g.valid_to FROM promoter_product g JOIN tour_product p ON p.id=g.product_id JOIN merchant m ON m.id=p.merchant_id WHERE ${cond} ORDER BY g.id DESC LIMIT ? OFFSET ?`,[...args,pageSize,offset])
-   for(const p of rows){p.cover=apiImg(sales.json(p.images)?.[0]||'',req);delete p.images;p.rate=await sales.effectiveRate(u.uid,p.id);p.sessions=(await q(`SELECT s.id,s.depart_date,s.price_adult,s.early_days,s.early_price,s.quota-s.booked left_seats FROM tour_session s WHERE s.product_id=? AND s.status=1 AND s.depart_date>=CURDATE() AND ${bookingOpenSql('s')} ORDER BY depart_date LIMIT 30`,[p.id,now])).map(s=>({...s,priceNow:priceForSession(s).price}));p.note='授权仅决定推广资格，产品公开售价及首触归因保持原规则'}
+   const rows=await q(`SELECT p.id,p.title,p.images,p.days_desc,p.city_code,p.channel,g.valid_from,g.valid_to FROM promoter_product g JOIN tour_product p ON p.id=g.product_id JOIN merchant m ON m.id=p.merchant_id WHERE ${cond} ORDER BY g.id DESC LIMIT ? OFFSET ?`,[...args,pageSize,offset])
+   for(const p of rows){p.cover=apiImg(sales.json(p.images)?.[0]||'',req);delete p.images;p.rate=await sales.effectiveRate(u.uid,p.id)
+     const sess=await q(`SELECT s.id,s.depart_date,s.price_adult,s.early_days,s.early_price,s.quota-s.booked left_seats FROM tour_session s WHERE s.product_id=? AND s.status=1 AND s.depart_date>=CURDATE() AND ${bookingOpenSql('s')} ORDER BY depart_date LIMIT 30`,[p.id,now])
+     // D01：推广素材与工作台价格同源（早鸟/折扣统一试算），命中折扣附 promo 摘要
+     const hits=await annotateSessions(sess,{product_id:p.id,city_code:p.city_code,channel:p.channel},now)
+     p.sessions=sess.map((s,i)=>({...s,priceNow:hits[i]?.price?hits[i].price.unitFen:priceForSession(s).price,
+       promo:hits[i]?.rule?{name:hits[i].rule.name,zhe:Number(hits[i].rule.discount_bp)/1000,type:hits[i].price.type}:null}))
+     p.note='授权仅决定推广资格，产品公开售价及首触归因保持原规则'}
    return {rows,total:Number((await one(`SELECT COUNT(*) n FROM promoter_product g JOIN tour_product p ON p.id=g.product_id JOIN merchant m ON m.id=p.merchant_id WHERE ${cond}`,args)).n),page,pageSize}
  },
  'POST /c/promote/products/:id/material':async req=>{
    const u=requireUser(req),pid=id(req.params.id),g=await sales.authorizedProduct(u.uid,pid),scene=await sales.productScene(u.uid,pid,req.body.channel||'mini'),path='/package-tour/pages/detail/index?id='+pid+'&scene='+scene
-   const p=await one('SELECT title,images FROM tour_product WHERE id=?',[pid]),available=await q(`SELECT s.price_adult,s.early_days,s.early_price,s.depart_date FROM tour_session s WHERE s.product_id=? AND s.status=1 AND s.depart_date>=CURDATE() AND s.quota>s.booked AND ${bookingOpenSql('s')}`,[pid,bookingNow()]),s={price:available.length?Math.min(...available.map(s=>priceForSession(s).price)):null}
+   const p=await one('SELECT title,images,city_code,channel FROM tour_product WHERE id=?',[pid]),available=await q(`SELECT s.price_adult,s.early_days,s.early_price,s.depart_date FROM tour_session s WHERE s.product_id=? AND s.status=1 AND s.depart_date>=CURDATE() AND s.quota>s.booked AND ${bookingOpenSql('s')}`,[pid,bookingNow()])
+   // D01：分享文案价格与建单试算同源（早鸟/折扣取最低有效单价）
+   const hits=available.length?await annotateSessions(available,{product_id:pid,city_code:p.city_code,channel:p.channel}):[]
+   const prices=hits.map(h=>h?.price?h.price.unitFen:null).filter(v=>v!=null),s={price:prices.length?Math.min(...prices):null}
    const {buffer,mock}=await wxapi.getUnlimitedQRCode(scene,'package-tour/pages/detail/index')
    return {productId:pid,title:p.title,scene,path,cover:apiImg(sales.json(p.images)?.[0]||'',req),price:s?.price||null,image:buffer?.toString('base64')||null,mock,validTo:g.valid_to,
      text:p.title+(s?.price?' · ¥'+(Number(s.price)/100).toFixed(2)+'起（以实时团期价格为准）':''),note:mock?'微信小程序码待配置，分享卡片可使用；没有生成模拟码':'小程序码已生成；价格以实时订单为准，停售或授权到期后来源失效。'}

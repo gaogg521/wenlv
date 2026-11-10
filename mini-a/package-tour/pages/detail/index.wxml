@@ -35,7 +35,14 @@
   <view class="card" wx:if="{{sessPreview.length}}">
     <view class="sess-row" wx:for="{{sessPreview}}" wx:key="id" bindtap="goBooking">
       <view><view class="sess-date">{{item.date}}</view><view class="muted2">{{item.state}}</view></view>
-      <view style="text-align:right"><view class="tour-price" style="font-size:30rpx">¥{{item.price}}</view><view class="muted2">{{item.seats}}</view></view>
+      <view style="text-align:right">
+        <view style="display:flex;align-items:baseline;gap:8rpx;justify-content:flex-end">
+          <text wx:if="{{item.priceOriginal}}" class="muted2" style="text-decoration:line-through;font-size:22rpx">¥{{item.priceOriginal}}</text>
+          <view class="tour-price" style="font-size:30rpx">¥{{item.price}}</view>
+        </view>
+        <view wx:if="{{item.promoTag}}" class="muted2" style="color:#1a9c6b">{{item.promoTag}}</view>
+        <view class="muted2">{{item.seats}}</view>
+      </view>
     </view>
   </view>
   <view class="card" wx:else><view class="muted2">近期暂无可预订团期，可先收藏分享，稍后再来看看。</view></view>

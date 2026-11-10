@@ -320,8 +320,8 @@ await t('A15-1 自买不计佣；按首触归因；基数 = 实付 − 保费（
   const c = await one('SELECT promoter_id, base_amount, amount FROM commission WHERE order_id = (SELECT id FROM orders WHERE order_no = ?)', [r.orderNo])
   assert.ok(c, '佣金已计')
   assert.equal(Number(c.promoter_id), p1u.id, `佣金归首触 p1（实际 ${c.promoter_id} vs p1=${p1u.id}）`)
-  // 决策口径：基数 = 实付 − 保费。¥1000 商品豆抵 ¥100 → 实付 ¥900 = 90000 分（旅豆只减一次）
-  assert.equal(Number(c.base_amount), 90000, `基数 = 实付 900 元（旅豆只减一次），实际 ${c.base_amount}`)
+  // 决策口径：基数 = 实付 − 保费。D01 后抵扣上限锚定最终实付 → floor(0.1×100000/1.1/10)=909 豆，实付 100000−9090=90910 分
+  assert.equal(Number(c.base_amount), 90910, `基数 = 实付（旅豆只减一次、上限锚定实付），实际 ${c.base_amount}`)
   // 自买不计佣
   const sid2 = await mkSession({ days: 31, price: 10000, productId: 1 })
   await promo.hit(s1, p1u.id)

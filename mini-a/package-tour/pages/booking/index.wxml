@@ -50,15 +50,22 @@
 
   <view class="sec-title">3 · 费用确认</view>
   <view class="card" wx:if="{{priceSummary}}">
-    <view class="kv"><text>单价 × 人数</text><text>¥{{priceSummary.unit}} × {{qty}}</text></view>
+    <view class="kv"><text>单价 × 人数</text>
+      <view style="display:flex;flex-direction:column;align-items:flex-end">
+        <view style="display:flex;align-items:baseline;gap:8rpx">
+          <text wx:if="{{priceSummary.showPromo}}" class="muted2" style="text-decoration:line-through;font-size:22rpx">¥{{priceSummary.originalUnit}}</text>
+          <text>¥{{priceSummary.unit}} × {{qty}}</text>
+        </view>
+        <text wx:if="{{priceSummary.showPromo}}" class="muted2" style="font-size:22rpx;color:#1a9c6b">{{priceSummary.promoText}}</text>
+      </view></view>
     <view class="kv"><text>活动费用</text><text>¥{{priceSummary.goods}}</text></view>
     <view class="bk-benefit">
       <view class="bk-benefit-top"><view class="bk-fee-title">自由豆补贴</view><picker mode="selector" range="{{freedomOptions}}" range-key="label" bindchange="chooseFreedom" disabled="{{pricing}}"><view class="bk-benefit-picker">{{pricing ? '试算中' : freedomRightId ? '更换' : '选择补贴'}}<text class="bk-benefit-arrow">›</text></view></picker></view>
       <view wx:if="{{freedomRightId && freedomSelected}}" class="bk-benefit-detail"><view class="bk-benefit-copy"><view class="bk-benefit-rule"><text>满{{freedomSelected.thresholdText}}元</text><text>减{{freedomSelected.discountText}}元</text></view><view class="bk-fee-hint">有效期至 {{freedomSelected.validTo}}</view></view><view class="bk-benefit-amount">{{pricing ? '—' : '−¥' + freedomDiscount}}</view></view>
       <view wx:else class="bk-fee-hint">{{freedomRows.length ? '可选择官方满减补贴' : '暂无适用的补贴'}}</view>
-      <view class="bk-fee-hint" wx:if="{{freedomRightId}}">已选官方补贴，本单不叠加旅豆抵扣</view><view wx:if="{{freedomError}}" class="bk-benefit-error">{{freedomError}}</view>
+      <view class="bk-fee-hint" wx:if="{{freedomRightId}}">官方补贴可与旅豆抵扣同单使用，分别记账</view><view wx:if="{{freedomError}}" class="bk-benefit-error">{{freedomError}}</view>
     </view>
-    <view class="bk-bean-row"><view class="bk-bean-copy"><view class="bk-fee-title">旅豆抵扣</view><view class="bk-fee-hint">余额 {{beanBal}} 豆 · 最多抵 {{priceSummary.capYuan}} 元</view></view><switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
+    <view class="bk-bean-row"><view class="bk-bean-copy"><view class="bk-fee-title">旅豆抵扣</view><view class="bk-fee-hint">余额 {{beanBal}} 豆 · 最多抵 {{priceSummary.capYuan}} 元（按最终实付计算）</view></view><switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
     <view class="kv" wx:if="{{useBean && priceSummary.deduct !== '0.00'}}"><text>抵扣金额</text><text style="color:var(--green)">−¥{{priceSummary.deduct}}</text></view>
     <view class="kv" wx:if="{{priceSummary.showInsRow}}"><text>出行意外险</text><text>¥{{priceSummary.insurance}}</text></view>
   </view>

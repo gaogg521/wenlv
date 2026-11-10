@@ -51,7 +51,9 @@ export async function rights(uid,ctx,pg=null) {
     return {id:r.id,batchId:r.batch_id,name:rule.name,threshold:rule.threshold,discount:rule.discount,from:rule.from,to:rule.to,products:rule.products,cities:rule.cities,channels:rule.channels,dates:rule.dates,status:r.status,orderNo:r.order_no,reason,eligible:!reason}
   })
 }
-export async function reserve(c,uid,rightId,ctx,orderNo,insurance) {
+/** D01：beanDeductFen＝同单旅豆抵扣分。自由豆与旅豆同单可用、账本独立；
+ *  cash_pay 记最终现金（含保费、已减旅豆），与 orders.amount_pay 恒等，供补贴对账复算。 */
+export async function reserve(c,uid,rightId,ctx,orderNo,insurance,beanDeductFen=0) {
   if(!rightId)return null
   await c.one('SELECT id FROM user_account WHERE id=? AND status=1 FOR UPDATE',[uid])
   const r=await c.one('SELECT * FROM freedom_right WHERE id=? AND user_id=? FOR UPDATE',[id(rightId),uid])
@@ -62,7 +64,8 @@ export async function reserve(c,uid,rightId,ctx,orderNo,insurance) {
   if(Number(daily.n)>=rule.daily)throw new BizError(1001,'已达该活动每日使用上限')
   const budget=await c.one('SELECT * FROM freedom_budget WHERE id=? FOR UPDATE',[r.budget_id]);if(!budget||Number(budget.status)!==1)throw new BizError(1001,'该补贴预算已暂停使用')
   if(Number(budget.committed)+Number(budget.used)+Number(budget.recovering)>Number(budget.total))throw new BizError(1001,'补贴追回尚未到账，预算占用超限，暂不可使用')
-  const pay=ctx.goods-rule.discount+insurance
+  const beanDed=Math.max(0,Number(beanDeductFen)||0)
+  const pay=ctx.goods-rule.discount-beanDed+insurance
   if(pay<1)throw new BizError(1001,'优惠后实付金额不符合支付要求')
   await c.q("UPDATE freedom_right SET status='locked',order_no=? WHERE id=?",[orderNo,r.id])
   await c.q('INSERT INTO freedom_order(order_no,right_id,user_id,merchant_id,goods,discount,cash_pay,rule_json) VALUES(?,?,?,?,?,?,?,?)',[orderNo,r.id,uid,ctx.merchant_id,ctx.goods,rule.discount,pay,JSON.stringify(rule)])

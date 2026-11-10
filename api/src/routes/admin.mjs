@@ -1492,7 +1492,9 @@ const admin = {
     // 返豆 + 佣金 + 成长值 + 存证（同一动作位，生产在 beanWorker）
     const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
     if (budget && Number(o.amount_pay) > 0) await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
-    if (Number(o.amount_pay) > 0) await member.addGrowth(o.user_id, Number(o.amount_pay), orderNo) // 成长值与等级不依赖旅豆预算（与 jobs.completeOrder 一致）
+    // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费）累计，与 jobs.completeOrder 同口径
+    const goodsCash = Number(o.amount_pay) - Number(o.insurance_fee || 0)
+    if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // 成长值与等级不依赖旅豆预算
     await promo.createCommission(orderNo)
     await badgeDomain.evaluateSafe(Number(o.user_id))
     await badgeDomain.evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章

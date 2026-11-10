@@ -5,6 +5,8 @@ import { bizDay } from '../infra/bizdate.mjs'
 import { bookingOpen, bookingNow, bookingOpenSql } from './booking-window.mjs'
 import * as bean from './bean.mjs'
 import { attest } from './attest.mjs'
+import { earlyInfo, priceSession } from './discount.mjs'
+import { json } from './sales.mjs'
 
 export const ST = { WAIT_PAY: 10, PAID: 20, CONFIRMED: 30, VERIFIED: 40, COMPLETED: 50, REFUNDING: 60, REFUNDED: 70, CLOSED: 90 }
 
@@ -36,61 +38,93 @@ export async function fire(orderNo, ev, actor, listener) {
   })
 }
 
-/** 早鸟价判定：出发前 early_days 天（含）之前报名享 early_price；未开启返回原价（总方案 §4）。
- *  取较低价兜底：历史上早鸟价可被改到高于现价（A-07），这里保证游客永远不会多付。
- *  A-34：天数按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 少算一天。 */
+/** 早鸟价判定（A-34 业务时区切日；A-07 取较低兜底）：委托 discount.earlyInfo，与折扣叠加试算同源。 */
 export function priceForSession(s) {
-  const days = Math.floor((new Date(String(s.depart_date).slice(0, 10) + 'T00:00:00') - new Date(bizDay() + 'T00:00:00')) / 86400000)
-  const adult = Number(s.price_adult)
-  const earlyEligible = s.early_price != null && s.early_days != null && days >= Number(s.early_days)
-  const early = earlyEligible ? Math.min(Number(s.early_price), adult) : adult
-  return { price: early, isEarly: early !== adult, daysToDepart: days }
+  const e = earlyInfo(s)
+  return { price: e.earlyUnitFen ?? e.originalFen, isEarly: e.eligible && e.earlyUnitFen !== e.originalFen, daysToDepart: e.days }
 }
 
-/** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
-export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, freedomRightId, beanHook }) {
-  if (freedomRightId && Number(wantedBeans)>0) throw new BizError(1001, '自由豆与旅豆不能在同一订单叠加使用')
+/** 下单：条件 UPDATE 锁名额 → 建单(10)。beanHooks 由路由层注入旅豆域。
+ *  D01：有效商品价格＝早鸟/商品折扣统一试算（默认不叠加取低，开启先早鸟再折扣）；
+ *  自由豆与旅豆同单可用、账本独立；自由豆门槛按有效商品金额判断；
+ *  旅豆抵扣上限锚定最终实付（B ≤ r×X），余额不足按实际少抵；
+ *  保费不打折、不凑门槛、不参与优惠。 */
+export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, freedomRightId, beanHook, expectedGoodsFen }) {
   if (withInsurance && process.env.NODE_ENV === 'production') throw new BizError(1001, '保险承保服务尚未接通，暂不可购买保险')
   if (!Number.isInteger(qty) || qty < 1 || qty > 9) throw new BizError(1001, '出行人数应为 1–9 人')
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
   if (!bookingOpen(s.profile)) throw new BizError(2001, '该团期报名已截止')
-  const goods = priceForSession(s).price * qty
-  if (!(goods > 0)) throw new BizError(1001, '商品价格异常，暂不可下单') // A-07 兜底：负价/零价团期落库后不得出负金额订单
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
   const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, p.merchant_id,p.city_code,p.channel, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
   if (!prod || prod.status !== 1 || prod.merchant_status !== 1) throw new BizError(2001, '商品或商户已暂停营业')
   const insFee = withInsurance && prod && Number(prod.insurance_fee) > 0 ? Number(prod.insurance_fee) * qty : 0
-  const clampCap = Math.floor((goods * (await cfgNum('bean.deduct_max_pct'))) / 10) // 豆数上限（10 豆=1 元）
-  const beans = Math.max(0, Math.min(Math.floor(Number(wantedBeans) || 0), clampCap))
-  const dedFen = beans * 10
-  let pay = goods - dedFen + insFee, freedomDiscount=0
-  if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
   // 单号 = WL + 业务日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
   // A-34：日期段用业务时区（此前 toISOString 取 UTC 日期，凌晨下单的订单号日期错一天）
   const suffix = String(Date.now() % 100000000).padStart(8, '0') + String(Math.floor(Math.random() * 90) + 10)
   const orderNo = 'WL' + bizDay().replaceAll('-', '') + suffix
+  const ctx = { product_id: s.product_id, city_code: prod.city_code, channel: prod.channel, depart_date: s.depart_date }
 
-  await tx(async (c) => {
-    // 授权、首触和优惠均在建单事务内保存；后续改费率不改已售快照。
+  return await tx(async (c) => {
+    // 授权、首触、价格与优惠均在建单事务内确定；后续改规则/费率不改已售快照。
     const { orderSnapshot } = await import('./sales.mjs')
-    const snapshot=await orderSnapshot(c,userId,s.product_id,promoScene)
-    const freedom=await import('./freedom.mjs')
-    const discount=await freedom.reserve(c,userId,freedomRightId,{...prod,product_id:s.product_id,depart_date:s.depart_date,goods},orderNo,insFee)
-    if(discount){pay=discount.pay;freedomDiscount=discount.discount}
+    const snapshot = await orderSnapshot(c, userId, s.product_id, promoScene)
+    // 有效商品单价（早鸟/折扣统一试算，同事务内取生效规则，防止直链接口绕过）
+    const pricing = await priceSession(s, ctx, bookingNow(), c)
+    const goods = pricing.unitFen * qty
+    if (!(goods > 0)) throw new BizError(1001, '商品价格异常，暂不可下单') // A-07 兜底：负价/零价团期落库后不得出负金额订单
+    // 试算与建单之间价格上调必须显式刷新确认，不能悄悄提高应付（降价不拦，服务端价格始终为准）
+    if (expectedGoodsFen != null && Number(expectedGoodsFen) < goods) throw new BizError(1001, '价格已更新，请刷新页面后重新提交')
+    // 自由豆：先读券面额（同事务锁定），门槛由 reserve 按有效商品金额校验
+    let freedomFace = 0
+    if (freedomRightId) {
+      const rightRow = await c.one('SELECT id, rule_json FROM freedom_right WHERE id=? AND user_id=? FOR UPDATE', [Number(freedomRightId), userId])
+      if (rightRow) freedomFace = Number(json(rightRow.rule_json).discount) || 0
+    }
+    // 旅豆：同单可用；上限锚定最终实付 B ≤ r×X（X＝G−C−B）整数解；余额不足按实际少抵
+    const maxPct = await cfgNum('bean.deduct_max_pct')
+    const capBeans = bean.anchorCapBeans(goods, freedomFace, maxPct)
+    let beans = Math.max(0, Math.min(Math.floor(Number(wantedBeans) || 0), capBeans))
+    if (beans > 0) {
+      const acc = await c.one('SELECT balance FROM bean_account WHERE user_id = ?', [userId])
+      beans = Math.min(beans, acc ? Number(acc.balance) : 0)
+    }
+    const beanDedFen = beans * 10
+    const freedom = await import('./freedom.mjs')
+    const discount = await freedom.reserve(c, userId, freedomRightId, { ...prod, product_id: s.product_id, depart_date: s.depart_date, goods }, orderNo, insFee, beanDedFen)
+    if (discount) freedomFace = discount.discount
+    const pay = goods - freedomFace - beanDedFen + insFee
+    if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
     const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [qty, sessionId, qty, bookingNow()])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
         amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee)
         SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,?,? FROM tour_product p WHERE p.id = ?`,
-      [orderNo, userId, s.product_id, sessionId, qty, goods, dedFen, beans, pay, promoScene || null, insFee, s.product_id])
+      [orderNo, userId, s.product_id, sessionId, qty, goods, beanDedFen, beans, pay, promoScene || null, insFee, s.product_id])
     await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES ((SELECT id FROM orders WHERE order_no = ?),0,10,?,?)',
       [orderNo, 'user:' + userId, JSON.stringify('下单占位')])
     if (beans > 0) await bean.deduct(userId, beans, bean.BIZ.DEDUCT, orderNo, c)
-    if(snapshot)await c.q('UPDATE orders SET promo_snapshot=? WHERE order_no=?',[JSON.stringify(snapshot),orderNo])
+    if (snapshot) await c.q('UPDATE orders SET promo_snapshot=? WHERE order_no=?', [JSON.stringify(snapshot), orderNo])
+    // D01 价格快照：原价/早鸟/折扣规则版本与折数/自由豆/旅豆/保费/现金应付一次留痕，历史不随新配置改写
+    const priceSnapshot = {
+      version: 1, at: bookingNow(), qty,
+      originalUnitFen: pricing.originalFen, originalGoodsFen: pricing.originalFen * qty,
+      early: { eligible: pricing.earlyEligible, unitFen: pricing.earlyUnitFen, daysToDepart: pricing.daysToDepart },
+      discount: pricing.rule ? {
+        ruleId: pricing.rule.id, ruleVersion: pricing.rule.version, name: pricing.rule.name,
+        discountBp: pricing.rule.discountBp, zhe: pricing.rule.zhe, stack: pricing.stack,
+        type: pricing.type, unitFen: pricing.unitFen,
+      } : null,
+      priceType: pricing.type, effectiveUnitFen: pricing.unitFen, effectiveGoodsFen: goods,
+      freedom: freedomFace > 0 ? { rightId: freedomRightId ? Number(freedomRightId) : null, discountFen: freedomFace } : null,
+      beans: { count: beans, deductFen: beanDedFen, capBeans, anchorPctBp: Math.round(maxPct * 10000) },
+      insuranceFen: insFee, cashPayFen: pay,
+    }
+    await c.q('UPDATE orders SET price_snapshot=? WHERE order_no=?', [JSON.stringify(priceSnapshot), orderNo])
+    return { orderNo, amountPay: pay, freedomDiscount: freedomFace, beanDeducted: beans, insuranceFee: insFee,
+      insuranceNote: insFee > 0 ? prod.insurance_note : null,
+      pricing: { priceType: pricing.type, effectiveUnitFen: pricing.unitFen, goodsFen: goods, originalGoodsFen: pricing.originalFen * qty } }
   })
-  return { orderNo, amountPay: pay, freedomDiscount, beanDeducted: beans, insuranceFee: insFee,
-    insuranceNote: insFee > 0 ? prod.insurance_note : null }
 }
 
 export async function byNo(orderNo) { return await one('SELECT * FROM orders WHERE order_no = ?', [orderNo]) }

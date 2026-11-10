@@ -134,7 +134,94 @@ async function products() {
           ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-head"><h2>促销折扣 / 价格规则</h2>${['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="promoDiscountEditor()">＋ 新增折扣规则</button>` : '<span class="muted">折扣规则维护需运营/超管权限</span>'}</div>
+    <p class="muted" style="margin-bottom:6px">商品促销降价（如原价299元打8折=按原价80%付款239.20元），与早鸟价可配置叠加、默认不叠加（取较低价）；官方补贴（自由豆）在「资金」模块单独配置。游客端展示、试算、建单与退款按同一规则快照执行。</p>
+    <div id="promoDiscountBox">${skel(3)}</div>
   </div>`
+  promoDiscountList().catch((e) => { document.getElementById('promoDiscountBox').innerHTML = `<p class="muted">折扣规则加载失败：${esc(e.message)}</p>` })
+}
+
+/* ============ D01 促销折扣规则 ============ */
+const PD_STATE = { 1: '<span class="pill ok">启用中</span>', 0: '<span class="pill off">已停用</span>' }
+async function promoDiscountList() {
+  const d = await api('GET', '/admin/promo-discounts?pageSize=50')
+  const box = document.getElementById('promoDiscountBox')
+  if (!box) return
+  const canManage = ['super', 'ops'].includes(ME?.role)
+  box.innerHTML = d.rows.length ? `<table><thead><tr><th>活动</th><th>折扣</th><th>生效时间</th><th>适用范围</th><th>叠加策略</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${d.rows.map((r) => {
+      const zhe = (Number(r.discount_bp) / 1000).toFixed(2).replace(/\.?0+$/, '')
+      const scope = []
+      const J = (v) => { try { return typeof v === 'string' ? JSON.parse(v || '[]') : (v || []) } catch { return [] } }
+      if (J(r.products).length) scope.push('产品 #' + J(r.products).join(' #'))
+      if (J(r.cities).length) scope.push('城市 ' + J(r.cities).join('、'))
+      if (J(r.channels).length) scope.push('渠道 ' + J(r.channels).join('、'))
+      if (J(r.dates).length) scope.push('团期 ' + J(r.dates).join('、'))
+      return `<tr>
+      <td class="td-main">${esc(r.name)}<div class="td-sub">v${r.version} · ${esc(r.operator || '')}</div></td>
+      <td class="money num">${esc(zhe)}折<div class="td-sub">按原价 ${Math.round(Number(r.discount_bp) / 100)}% 付款</div></td>
+      <td class="td-sub">${esc(String(r.from_time).slice(0, 16))}<br>— ${esc(String(r.to_time).slice(0, 16))}</td>
+      <td class="td-sub">${scope.length ? scope.join('<br>') : '全部产品/城市/渠道/团期'}</td>
+      <td>${Number(r.stack_early) === 1 ? '<span class="pill warn">与早鸟叠加</span><div class="td-sub">先早鸟价再乘折扣</div>' : '<span class="pill off">不叠加</span><div class="td-sub">早鸟与折扣取较低价</div>'}</td>
+      <td>${PD_STATE[r.status] || r.status}</td>
+      <td><div class="td-actions">${canManage ? `<button class="btn ghost sm" onclick="promoDiscountEditor(${r.id})">编辑</button>
+        <button class="btn ghost sm" onclick="promoDiscountStatus(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '停用' : '启用'}</button>` : '<span class="muted">仅查看</span>'}</div></td>
+    </tr>`}).join('')}</tbody></table>` : emptyBox('暂无折扣规则——点右上「新增折扣规则」创建（如：新品上市 8 折）')
+}
+window.promoDiscountEditor = async (id) => {
+  if (!['super', 'ops'].includes(ME?.role)) return toast('折扣规则维护需运营/超管权限', true)
+  let r = {}
+  if (id) {
+    const d = await api('GET', '/admin/promo-discounts?pageSize=50')
+    r = d.rows.find((x) => Number(x.id) === Number(id)) || {}
+    if (!r.id) return toast('规则不存在', true)
+  }
+  const J = (v) => { try { return typeof v === 'string' ? JSON.parse(v || '[]') : (v || []) } catch { return [] } }
+  const zhe = r.discount_bp != null ? (Number(r.discount_bp) / 1000).toFixed(2).replace(/\.?0+$/, '') : ''
+  modal((id ? '编辑折扣规则 v' + r.version : '新增折扣规则'), `
+    <p class="muted">填「8」表示 8 折（按原价 80% 付款）；折数范围 0–10、最多两位小数。折扣按商品真实定价比例计算，不使用人为抬高的假原价。</p>
+    <div class="field"><label>活动名称 *</label><input id="pdName" maxlength="80" value="${esc(r.name || '')}" placeholder="如：开季特惠 8 折"></div>
+    <div class="field"><label>折扣（折）* <span class="td-sub" id="pdZheHint"></span></label><input id="pdZhe" type="number" step="0.01" min="0.01" max="10" value="${esc(zhe)}" placeholder="8 = 按8折付款"></div>
+    <div class="field"><label>生效时间 *</label><input id="pdFrom" type="datetime-local" value="${esc(r.from_time ? String(r.from_time).slice(0, 16).replace(' ', 'T') : '')}"></div>
+    <div class="field"><label>失效时间 *</label><input id="pdTo" type="datetime-local" value="${esc(r.to_time ? String(r.to_time).slice(0, 16).replace(' ', 'T') : '')}"></div>
+    <div class="field"><label>适用产品ID（逗号分隔，留空全部）</label><input id="pdProducts" value="${esc(J(r.products).join(','))}" placeholder="如：1,3"></div>
+    <div class="field"><label>适用城市代码（逗号分隔，留空全部）</label><input id="pdCities" value="${esc(J(r.cities).join(','))}" placeholder="如：310118"></div>
+    <div class="field"><label>适用渠道（逗号分隔，留空全部）</label><input id="pdChannels" value="${esc(J(r.channels).join(','))}" placeholder="如：main"></div>
+    <div class="field"><label>适用团期日期 YYYY-MM-DD（逗号分隔，留空全部）</label><input id="pdDates" value="${esc(J(r.dates).join(','))}"></div>
+    <div class="field"><label>叠加策略</label><select id="pdStack">
+      <option value="0" ${Number(r.stack_early) !== 1 ? 'selected' : ''}>不叠加（默认）：早鸟价与折扣价取较低者</option>
+      <option value="1" ${Number(r.stack_early) === 1 ? 'selected' : ''}>叠加：先取生效早鸟单价再乘折扣（未命中早鸟按原价乘折扣）</option></select></div>
+    <div class="field"><label>操作依据 *（4–300 字，进入审计）</label><textarea id="pdReason" maxlength="300" placeholder="如：开季促销活动审批单号 XX"></textarea></div>
+    <div id="pdErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="promoDiscountSave(${id || 0})">保存规则</button>`)
+  const hint = () => { const z = Number(document.getElementById('pdZhe').value); document.getElementById('pdZheHint').textContent = Number.isFinite(z) && z > 0 && z <= 10 ? '按原价 ' + Math.round(z * 100) + '% 付款' : '' }
+  document.getElementById('pdZhe').addEventListener('input', hint); hint()
+}
+window.promoDiscountSave = async (id) => {
+  const list = (k) => document.getElementById(k).value.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
+  try {
+    await api('POST', '/admin/promo-discounts', {
+      id: id || undefined, name: document.getElementById('pdName').value.trim(), zhe: Number(document.getElementById('pdZhe').value),
+      from: document.getElementById('pdFrom').value, to: document.getElementById('pdTo').value,
+      products: list('pdProducts'), cities: list('pdCities'), channels: list('pdChannels'), dates: list('pdDates'),
+      stackEarly: Number(document.getElementById('pdStack').value) === 1, reason: document.getElementById('pdReason').value.trim(),
+    })
+    closeModal(); toast('折扣规则已保存'); products()
+  } catch (e) { document.getElementById('pdErr').textContent = e.message }
+}
+window.promoDiscountStatus = (id, status) => {
+  modal(status === 1 ? '启用折扣规则' : '停用折扣规则', `
+    <p class="muted">${status === 1 ? '启用后游客端立即按该规则试算与建单（已售订单快照不变）。' : '停用后不再对新订单生效；已建订单保留其价格快照，活动到期不改旧单金额。'}</p>
+    <div class="field"><label>操作依据 *（4–300 字）</label><input id="pdStReason" maxlength="300"></div><div id="pdStErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn ${status === 1 ? 'primary' : 'danger'}" onclick="promoDiscountStatusSubmit(${id}, ${status})">确认</button>`)
+}
+window.promoDiscountStatusSubmit = async (id, status) => {
+  try {
+    await api('POST', '/admin/promo-discounts/status', { id, status, reason: document.getElementById('pdStReason').value.trim() })
+    closeModal(); toast(status === 1 ? '已启用' : '已停用'); products()
+  } catch (e) { document.getElementById('pdStErr').textContent = e.message }
 }
 
 /* 商品编辑 + 素材（P0 宣传力：实拍图集/行程/费用包含/集合点/安全告知） */

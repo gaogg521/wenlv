@@ -20,10 +20,10 @@ await check('补贴选择与旅豆互斥、数量变化重新服务端试算、�
  const api={ensureLogin:async()=>{},request:async(path,m,b)=>{assert.equal(path,'/c/freedom/quote');if(fail)throw {msg:'权益已被占用'};return {rows:[r],goods:19900*b.qty,insurance:0,discount:b.rightId?5000:0,cashPay:19900*b.qty-(b.rightId?5000:0)}},createOrder:async()=>{calls++}}
  const p=page('package-tour/pages/booking/index.js',api,{showToast(){}})
  Object.assign(p.data,{p:{insurance_fee:0,bookingRules:{beanDeductMaxPct:0.1}},sessions:[{id:1,price_adult:19900,left_seats:5}],beanBal:100,agree:true,contactName:'测试',contactPhone:'13800000000'})
- p.updatePrice();await tick();p.chooseFreedom({detail:{value:1}});await tick();assert.equal(p.data.useBean,false);assert.equal(p.data.freedomRightId,1);assert.equal(p.data.priceSummary.pay,'149.00')
+ p.updatePrice();await tick();p.chooseFreedom({detail:{value:1}});await tick();assert.equal(p.data.useBean,true,'D01：选券不再清空旅豆开关，同单可用');assert.equal(p.data.freedomRightId,1);assert.equal(p.data.priceSummary.pay,'149.00')
  p.addQty();await tick();assert.equal(p.data.priceSummary.pay,'348.00')
  fail=true;p.updatePrice();await tick();await p.submit();assert.equal(calls,0);assert.equal(p.data.freedomError,'权益已被占用')
- p.toggleBean({detail:{value:true}});assert.equal(p.data.freedomRightId,0)
+ p.toggleBean({detail:{value:false}});assert.equal(p.data.freedomRightId,1,'D01：切换旅豆不再清空已选补贴')
 })
 await check('快速切换试算，旧响应不覆盖当前价格',async()=>{
  const pending=[]
