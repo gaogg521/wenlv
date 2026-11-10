@@ -1,0 +1,1 @@
+.chips{display:flex;flex-wrap:wrap;gap:12rpx;padding:24rpx}.sec-title{margin:12rpx 0}

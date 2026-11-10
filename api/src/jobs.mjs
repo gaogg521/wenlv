@@ -37,6 +37,7 @@ export async function completeOrder(orderNo) {
 }
 
 async function tickClose() {
+  await (await import('./domain/freedom.mjs')).sweepExpired()
   const n = await order.closeTimeout()
   if (n) console.log('[job:close]', n, 'closed')
 }

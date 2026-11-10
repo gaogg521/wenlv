@@ -45,7 +45,9 @@ const c = {
     const { code } = req.body
     const ses = await code2Session(code || 'mock-default')
     if (!ses.openid) throw new BizError(1001, 'code2Session 失败: ' + JSON.stringify(ses))
-    let u = await one('SELECT * FROM user_account WHERE mini_a_openid = ? OR (unionid IS NOT NULL AND unionid = ?)', [ses.openid, ses.unionid])
+    const matches=await q('SELECT * FROM user_account WHERE mini_a_openid = ? OR (unionid IS NOT NULL AND unionid = ?)', [ses.openid, ses.unionid||null])
+    if(matches.length>1 || (matches[0]?.mini_a_openid && matches[0].mini_a_openid!==ses.openid) || (ses.unionid&&matches[0]?.unionid&&matches[0].unionid!==ses.unionid))throw new BizError(1003,'微信身份关联冲突，请联系平台核对，不能自动合并')
+    let u=matches[0]||null
     if (!u) {
       const uid = await tx(async (cc) => {
         const id = await cc.ins('INSERT INTO user_account (unionid, mini_a_openid, nickname) VALUES (?,?,?)',
@@ -236,6 +238,7 @@ const c = {
     }
     const r = await order.place({
       userId: u.uid, sessionId, qty, wantedBeans: beanDeduct, promoScene, withInsurance: !!req.body.insurance,
+      freedomRightId:req.body.freedomRightId,
       beanHook: { deduct: (uid, beans, orderNo) => bean.deduct(uid, beans, bean.BIZ.DEDUCT, orderNo) },
     })
     await tx(async (cc) => {
@@ -310,7 +313,7 @@ const c = {
     const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
     // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
-    return { ...pub, contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
+    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact }
   },
 
   'POST /c/orders/:no/pay': async (req) => {
@@ -564,16 +567,17 @@ const c = {
 const cWithdraw = {
   'GET /c/promote/overview': async (req) => {
     const u = requireUser(req)
-    const p = await one('SELECT tier, rate_bp, status, valid_gmv_90d FROM promoter WHERE user_id = ?', [u.uid])
+    const p = await one('SELECT tier, rate_bp, status, valid_gmv_90d,profile FROM promoter WHERE user_id = ?', [u.uid])
     if (!p) return { promoter: false }
     const agg = await one(`SELECT COALESCE(SUM(CASE WHEN status IN (1,2) THEN amount ELSE 0 END),0) earned,
       COALESCE(SUM(CASE WHEN status IN (3,4) THEN amount ELSE 0 END),0) reversed FROM commission WHERE promoter_id = ?`, [u.uid])
     const paid = await one(`SELECT COALESCE(SUM(w.amount),0) paid FROM promoter_withdraw w WHERE w.promoter_id = ? AND w.status = 1`, [u.uid])
-    const pending = await count('SELECT COUNT(*) c FROM promoter_withdraw WHERE promoter_id = ? AND status = 0', [u.uid])
+    const pending = await count('SELECT COUNT(*) c FROM promoter_withdraw WHERE promoter_id = ? AND status IN (0,3)', [u.uid])
     const recent = await one(`SELECT COALESCE(SUM(c.base_amount),0) gmv FROM commission c JOIN orders o ON o.id=c.order_id WHERE c.promoter_id=? AND c.status IN (0,1,2) AND o.paid_at>=NOW()-INTERVAL 90 DAY AND o.status IN (20,30,40,50)`,[u.uid])
-    return { promoter: true, active: Number(p.status) === 1, tier: p.tier, rateBp: p.rate_bp, earned: Number(agg.earned), withdrawn: Number(paid.paid),
+    const pf=typeof p.profile==='string'?JSON.parse(p.profile||'{}'):(p.profile||{})
+    return { promoter: true, active: Number(p.status) === 1, tier: p.tier, rateBp: p.rate_bp, earned: Number(agg.earned), withdrawn: Number(paid.paid),payoutTail:pf.payout_account?'***'+String(pf.payout_account).slice(-4):null,payoutMethod:pf.payout_method||null,
       validGmv: Number(recent.gmv), withdrawMin: await cfgNum('promoter.withdraw_min'), settleDelayDays: await cfgNum('commission.settle_delay_days'),
-      withdrawable: Number(agg.earned) - Number(paid.paid), pendingRequests: pending }
+      ...await (await import('./sales.mjs')).withdrawalBalance({one},u.uid),pendingRequests: pending }
   },
   'GET /c/promote/qrcode': async (req) => {
     const u = requireUser(req)
@@ -584,34 +588,7 @@ const cWithdraw = {
     return { scene, mock, image: buffer ? buffer.toString('base64') : null,
       note: mock ? '未配置 WX_APPID/WX_SECRET：MOCK 模式，配置后返回真实小程序码（scene=' + scene + '）' : null }
   },
-  'POST /c/promote/withdraw': async (req) => {
-    const u = requireUser(req)
-    const p = await one('SELECT status FROM promoter WHERE user_id = ? AND status = 1', [u.uid])
-    if (!p) throw new BizError(6001, '非生效推广服务商')
-    if (await promo.isUserFrozen(u.uid)) throw new BizError(1003, '账号已被停用，提现暂停')
-    const cfgs = await cfgAll()
-    if (String(cfgs['feature.withdraw'] || '"on"').includes('off')) throw new BizError(1003, '提现入口维护中')
-    const ov = await cWithdraw['GET /c/promote/overview'](req)
-    const minFen = await cfgNum('promoter.withdraw_min')
-    if (ov.withdrawable < minFen) throw new BizError(6001, `可提现余额不足 ¥${minFen / 100}`)
-    // 同一推广员同一时刻只能有一张待处理申请：锁推广员行后再查，避免连点 / 并发把同一笔余额申请多次
-    const id = await tx(async (c) => {
-      await c.one('SELECT user_id FROM promoter WHERE user_id = ? FOR UPDATE', [u.uid])
-      const pend = await c.one('SELECT COUNT(*) n FROM promoter_withdraw WHERE promoter_id = ? AND status = 0', [u.uid])
-      if (Number(pend.n) > 0) throw new BizError(6001, '已有待处理的提现申请，请等待审核')
-      // A-12：单日限额（promoter.withdraw_daily_max，方案要求 ≤¥5000/日）——当日待审+已打款合计不得超限
-      const dailyMax = await cfgNum('promoter.withdraw_daily_max')
-      if (dailyMax > 0) {
-        const todaySum = await c.one(`SELECT COALESCE(SUM(amount),0) s FROM promoter_withdraw
-          WHERE promoter_id = ? AND status IN (0,1) AND created_at >= CURDATE()`, [u.uid])
-        if (Number(todaySum.s) + Number(ov.withdrawable) > Number(dailyMax))
-          throw new BizError(6001, `超出单日提现限额 ¥${dailyMax / 100}（今日已申请/已打款 ¥${todaySum.s / 100}）`)
-      }
-      return c.ins('INSERT INTO promoter_withdraw (promoter_id, amount, proposer_note) VALUES (?,?,?)',
-        [u.uid, ov.withdrawable, req.body.note || ''])
-    })
-    return { id, amount: ov.withdrawable }
-  },
+
 }
 
 // 术语字典：一处定义、三处分发（T1 用户端 / T2 后台 / T3 对外）

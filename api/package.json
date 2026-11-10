@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:phase2": "node test/phase2-client.mjs && node test/phase2.mjs",
     "start": "node src/index.mjs",
     "test:phase1": "node test/phase1-client.mjs && node test/phase1.mjs",
     "test:merchant-navigation": "node test/merchant-navigation.mjs",

@@ -1,0 +1,14 @@
+<view class="hero"><view class="hi">可推广产品</view><view class="sub2">人员授权与实时售价 · 首触归因</view></view>
+<view class="card" wx:if="{{error}}">{{error}}<button bindtap="retry">重试</button></view>
+<view class="card" wx:if="{{loading}}">加载中…</view>
+<view class="card" wx:if="{{!rows.length && !error && !loading}}">暂无有效授权产品，请联系平台运营。</view>
+<view class="card" wx:for="{{rows}}" wx:key="id">
+ <image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" style="width:100%;height:280rpx;border-radius:16rpx"/>
+ <view class="sec-title">{{item.title}}</view><view>当前费率 {{item.rateText}}</view><view class="note">授权 {{item.valid_from}} — {{item.valid_to}}</view>
+ <view wx:for="{{item.sessions}}" wx:for-item="s" wx:key="id" class="kv"><text>{{s.depart_date}} · ¥{{s.priceText}}</text><text>余 {{s.left_seats}}</text></view>
+ <view wx:if="{{!item.sessions.length}}" class="note">近期无可售团期</view>
+ <button bindtap="makeMaterial" data-id="{{item.id}}">获取产品推广素材</button>
+</view>
+<view class="chips"><button wx:if="{{page>1}}" bindtap="prev">上一页</button><text>第{{page}}页 · {{total}}项</text><button wx:if="{{hasNext}}" bindtap="next">下一页</button></view>
+<view class="card" wx:if="{{material}}"><view class="sec-title">{{material.title}}</view><view>{{material.text}}</view><view class="note">{{material.note}}</view><image wx:if="{{qrcode}}" src="{{qrcode}}" mode="aspectFit" style="width:360rpx;height:360rpx"/><button open-type="share">分享此产品给好友</button><button bindtap="copy">复制转发文案</button><button wx:if="{{qrcode}}" bindtap="makePoster">制作产品海报</button><image wx:if="{{poster}}" src="{{poster}}" mode="widthFix" style="width:100%"/><button wx:if="{{poster}}" bindtap="save">保存海报到相册</button></view>
+<canvas canvas-id="poster" style="position:fixed;left:-2000px;width:600px;height:800px"/>

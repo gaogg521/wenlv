@@ -121,8 +121,8 @@ async function getBean() {
 }
 
 /** 下单 → 支付参数（真实 V3 或 MOCK）；phoneTicket = 一键获取手机号的短期凭证（A-08） */
-async function createOrder({ sessionId, qty, beanDeduct, promoScene, contactName, contactPhone, phoneTicket }) {
-  return await request('/c/orders', 'POST', { sessionId, qty, beanDeduct, promoScene, contactName, contactPhone, phoneTicket })
+async function createOrder({ sessionId, qty, beanDeduct, freedomRightId, insurance, promoScene, contactName, contactPhone, phoneTicket }) {
+  return await request('/c/orders', 'POST', { sessionId, qty, beanDeduct, freedomRightId, insurance, promoScene, contactName, contactPhone, phoneTicket })
 }
 
 /** 唤起支付：真实通道走 wx.requestPayment；MOCK 直接轮询订单状态 */

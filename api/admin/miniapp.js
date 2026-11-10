@@ -4,6 +4,9 @@
   const E = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   // [内容, [[后台入口名, 页面键], ...]]；页面键 'site' 表示「小程序装修」编辑器，'cfg:xxx' 表示参数中心某参数
   const MINI_MAP = [
+    { end: '游客端', path: 'package-promo/pages/products/index', name: '可推广产品与素材', items: [['人员×产品授权、费率和推广码', [['推广服务商 → 产品销售授权', 'promoters']]]] },
+    { end: '游客端', path: 'package-promo/pages/records/index', name: '佣金和提现明细', items: [['观察期、审批、实际付款与回单', [['提现审批', 'withdrawals']]]] },
+    { end: '游客端', path: 'package-promo/pages/freedom/index', name: '自由豆', items: [['官方满减补贴、发放及使用范围', [['权益账户 → 自由豆补贴', 'wallets']]]] },
     { end: '游客端', path: 'pages/home/index', name: '首页', items: [
       ['眉标、主标题、副标题、搜索提示、目的地快捷行', [['小程序装修 · 首页', 'site']]],
       ['主题入口（频道、名称、图标）', [['小程序装修 · 首页', 'site']]],

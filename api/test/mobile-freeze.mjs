@@ -190,7 +190,7 @@ try {
   })
 } finally {
   if (created.commission.length) await q('DELETE FROM commission WHERE id IN (?)', [created.commission])
-  if (created.withdraw.length) await q('DELETE FROM promoter_withdraw WHERE id IN (?)', [created.withdraw])
+  if (created.withdraw.length) {await q('DELETE FROM promoter_pay_ref WHERE withdraw_id IN (?)',[created.withdraw]);await q('DELETE FROM promoter_withdraw WHERE id IN (?)', [created.withdraw])}
   if (created.merchant.length) await q('DELETE FROM merchant WHERE id IN (?)', [created.merchant])
   await q('DELETE FROM promoter WHERE user_id = ?', [U1.id])
   await q('UPDATE user_account SET status = 1, mobile_enc = NULL, mobile_hmac = NULL WHERE id IN (?)', [uids])

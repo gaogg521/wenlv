@@ -72,5 +72,6 @@
     <view class="btn sm" style="margin:16rpx 0 0;display:block;text-align:center" bindtap="submitReview">提交评价</view>
   </view>
   <view class="note" wx:if="{{o.status === 50 && (o.reviewed || reviewDone)}}">✓ 已评价 · 感谢你的真实分享</view>
+  <view class="card" wx:if="{{o.freedom}}"><view class="sec-title">本单自由豆补贴</view><view>{{o.freedom.name}} · 满{{o.freedom.thresholdText}}减{{o.freedom.discountText}}</view><view>官方减免 ¥{{o.freedom.discountText}} · 实际现金 ¥{{o.freedom.cashText}}</view><view>权益当前状态 {{o.freedom.rightStatus}} · 原有效期至 {{o.freedom.validTo}}</view><view class="note">{{o.freedom.note}}</view></view>
   <view class="note">真实交易 · 退改按平台梯度执行 · 核销后返旅豆</view>
 </block>

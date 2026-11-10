@@ -7,11 +7,9 @@ const CITY = { '310118': '上海·青浦', '330523': '湖州·安吉', '320508':
 Page({
   data: { extra: { tags: [], suitable: '', itinerary: [] }, rules: rulesOf({}), p: null, sessions: [], sessPreview: [], minGo: 0, cityName: '', loading: true, error: '',
     gallery: [], gIdx: 0, illustrated: false, rich: { intro: '', highlights: [], includes: [], excludes: [] }, rv: { avg: 0, count: 0, list: [] } },
-  onLoad(q) {
+  async onLoad(q) {
     this.pid = q.id
-    if (q.scene && /^[pm][0-9a-z-]+$/i.test(decodeURIComponent(q.scene))) {
-      wx.setStorageSync('promoScene', decodeURIComponent(q.scene))
-    }
+    if(q.scene)try{const r=await require('../../../utils/promo-source')(q);this.pid=r.id}catch(e){wx.removeStorageSync('promoScene');wx.showModal({title:'推广来源已失效',content:e.msg||'请重新获取有效推广码',showCancel:false});if(!this.pid)return this.setData({loading:false,error:e.msg||'推广码无效'})}
     this.load()
     // 推广服务商本人：分享自动带自己的归因 scene（好友下单即归因）
     api.request('/c/promote/scene').then((s) => { if (s.promoter) this.myScene = s.scene }).catch(() => {})

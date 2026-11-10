@@ -75,6 +75,7 @@ async function complete(o, refundNo, reason, status) {
   const rf = await one('SELECT amount, fee_amount, fee_rate, close_reason FROM refunds WHERE refund_no = ?', [refundNo])
   const previous = Number(o.status) === 60 ? await one('SELECT from_st FROM order_event WHERE order_id=? AND to_st=60 ORDER BY id DESC LIMIT 1',[o.id]) : {from_st:o.status}
   await order.fire(orderNo, 'REFUND_SUCCESS', 'system', async (cc) => {
+    await (await import('./freedom.mjs')).release(cc,o,true)
     if (Number(o.bean_deducted) > 0) await bean.reverse(Number(o.user_id), Number(o.bean_deducted), orderNo, cc)
     await cc.upd('UPDATE travel_pass SET status=4 WHERE order_id=?', [o.id])
     await cc.upd('UPDATE commission SET status=CASE WHEN status=2 THEN 3 ELSE 4 END WHERE order_id=?', [o.id])

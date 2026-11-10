@@ -706,7 +706,7 @@ const adminFin = {
     const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
     const conds = ['1=1'], args = [], filters = {}
     const status = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
-    if (status != null && [0, 1, 2].includes(status)) { conds.push('w.status = ?'); args.push(status); filters.status = status }
+    if (status != null && [0, 1, 2, 3].includes(status)) { conds.push('w.status = ?'); args.push(status); filters.status = status }
     const kw = String(req.query.kw || '').trim()
     if (kw) { conds.push('u.nickname LIKE ?'); args.push('%' + kw + '%'); filters.kw = kw }
     const W = 'WHERE ' + conds.join(' AND ')
@@ -714,32 +714,6 @@ const adminFin = {
     const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, args)).n)
     const rows = await q(`SELECT w.*, u.nickname, u.status AS user_status ${from} ${W} ORDER BY w.id DESC LIMIT ? OFFSET ?`, [...args, pageSize, (page - 1) * pageSize])
     return { rows, total, page, pageSize, filters }
-  },
-  'POST /admin/withdrawals/:id/verdict': async (req) => {
-    const a = await requireAdmin(req, ['super', 'finance'])
-    const { pass: passed, payRef } = req.body
-    const st = passed ? 1 : 2
-    const finalRef = passed ? String(payRef || '').trim() : null
-    if (passed && (!finalRef || finalRef.length < 6 || finalRef.length > 64)) throw new BizError(1001, '请先完成实际支付，再填写真实打款流水号')
-    // A-12：并发保护——行锁 + 条件更新（此前 SELECT 无锁、UPDATE 不带 status=0，双人/双击会双双成功、pay_ref 互相覆盖）
-    const w = await tx(async (c) => {
-      const row = await c.one('SELECT * FROM promoter_withdraw WHERE id = ? FOR UPDATE', [req.params.id])
-      if (!row) throw new BizError(1004, '申请不存在或已处理')
-      if (Number(row.status) !== 0) throw new BizError(1004, '申请不存在或已处理')
-      // 账号冻结期间暂停打款：可以驳回，不能通过；解冻后再审批
-      if (passed && await promo.isUserFrozen(row.promoter_id)) throw new BizError(6001, '该推广员账号已冻结，暂停打款。请先解冻，或驳回本次申请')
-      const n = await c.upd('UPDATE promoter_withdraw SET status = ?, reviewed_by = ?, reviewed_at = NOW(3), pay_ref = ? WHERE id = ? AND status = 0',
-        [st, 'admin:' + a.name, finalRef, row.id])
-      if (n !== 1) throw new BizError(2002, '并发冲突，请刷新后重试')
-      await audit(c, 'admin:' + a.name, 'withdraw', passed ? 'pay' : 'reject', 'wd-' + row.id, { status: 0 }, { status: st, amount: row.amount })
-      return row
-    })
-    // 资金出账入存证：金额进 canonical（只在库里），链上只有哈希；外部流水号只放哈希，不落明文
-    await attestDomain.attest('withdraw', 'wd-' + w.id, {
-      promoterUserId: Number(w.promoter_id), amountFen: Number(w.amount), result: passed ? 'paid' : 'rejected',
-      payRefHash: finalRef ? crypto.createHash('sha256').update(finalRef).digest('hex') : null,
-    })
-    return { status: st }
   },
 
   // A-11：过期未核销订单的后台手动入口（定时任务每分钟自动跑；这里供运营/超管手动触发与核查）
@@ -765,8 +739,8 @@ const fundWorkbenchAgg = {
     const settlePaid = await one(`SELECT COUNT(*) n FROM settlement WHERE status = 3`)
     const settleDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT payment_ref FROM settlement WHERE status = 3 AND payment_ref IS NOT NULL GROUP BY payment_ref HAVING COUNT(*) > 1) x`)).n)
     // 推广提现：0=待审；1=已打款；冻结账号挂起的待审单
-    const wdPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(w.amount),0) amt FROM promoter_withdraw w WHERE w.status = 0`)
-    const wdFrozen = N((await one(`SELECT COUNT(*) n FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id WHERE w.status = 0 AND u.status = 0`)).n)
+    const wdPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(w.amount),0) amt FROM promoter_withdraw w WHERE w.status IN (0,3)`)
+    const wdFrozen = N((await one(`SELECT COUNT(*) n FROM promoter_withdraw w JOIN user_account u ON u.id = w.promoter_id WHERE w.status IN (0,3) AND u.status = 0`)).n)
     const wdDupRef = N((await one(`SELECT COUNT(*) n FROM (SELECT pay_ref FROM promoter_withdraw WHERE status = 1 AND pay_ref IS NOT NULL GROUP BY pay_ref HAVING COUNT(*) > 1) x`)).n)
     // 现金加奖（约稿投稿通过后的待打款）
     const cashPending = await one(`SELECT COUNT(*) n, COALESCE(SUM(cash_reward),0) amt FROM content_task_entry WHERE cash_status = 1`)

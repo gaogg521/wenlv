@@ -9,6 +9,7 @@ Page({
   async fetch() {
     try {
       const o = await api.getOrder(this.no)
+      if(o.freedom)o.freedom={...o.freedom,discountText:(o.freedom.discount/100).toFixed(2),cashText:(o.freedom.cashPay/100).toFixed(2),thresholdText:(o.freedom.threshold/100).toFixed(2)}
       this.setData({ o, passes: o.passes })
     } catch (e) { wx.showToast({ title: e.msg || '加载失败', icon: 'none' }) }
   },

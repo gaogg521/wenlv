@@ -1,0 +1,1 @@
+.chips{display:flex;align-items:center;flex-wrap:wrap;gap:12rpx;padding:24rpx}button{margin-top:16rpx}
