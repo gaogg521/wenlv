@@ -23,36 +23,73 @@ async function partners() {
     <div class="pagination"><span>第 ${data.page} 页 · 每页 ${data.size} 条</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__partnerQ.page--;partners()">上一页</button><button class="btn ghost sm" ${data.page * data.size >= data.total ? 'disabled' : ''} onclick="window.__partnerQ.page++;partners()">下一页</button></div></div></div>`
 }
 
-async function workAccessPanel() {
+function workAccessTab(tab) {
+  window.__waTab=tab
+  document.querySelectorAll('.wa-tabs [data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)))
+  document.querySelectorAll('.wa-pane').forEach(p=>p.hidden=p.dataset.pane!==tab)
+  if($('#waReasonField'))$('#waReasonField').hidden=tab==='records'
+}
+function workAccessDraft(){
+  const draft={tab:window.__waTab||'subjects'}
+  for(const key of ['Subject','Resource','Kw','User','From','To','Reason','Store','Role'])draft[key]=$('#wa'+key)?.value||''
+  draft.userLabel=$('#waUser')?.selectedOptions[0]?.textContent||''
+  return draft
+}
+async function workAccessPanel(draft=null) {
   try {
-    const d = await api('GET', '/admin/work-access')
-    window.__workAccess = d
-    const names = Object.fromEntries(d.subjects.map(s => [s.id, s.name]))
-    const kinds = {merchant:'履约商户',supplier:'供应商',cocreator:'共创合同'}
-    modal('主体与经办授权', `<p class="td-sub">仅超管维护；本阶段只授合作身份查询，不赋予核销、财务付款权。不按姓名或手机号自动合并。显示最近200个主体、500条授权。</p>
-      <div class="field"><label>新主体名称</label><input id="waName" maxlength="80"><button class="btn ghost" onclick="workAccessSave('subjects')">创建主体</button></div>
-      <div class="field"><label>目标主体</label><select id="waSubject">${d.subjects.map(s=>`<option value="${s.id}">${s.id} · ${esc(s.name)}</option>`).join('')}</select></div>
-      <div class="field"><label>关联档案（沿用既有资料）</label><select id="waResource">${d.catalog.map(r=>`<option value="${r.kind}:${r.id}">${kinds[r.kind]} #${r.id} · ${esc(r.name)}</option>`).join('')}</select><button class="btn ghost" onclick="workAccessSave('resources')">关联</button><button class="btn ghost" onclick="workAccessSave('resources',true)">解除关联</button></div>
-      <div class="field"><label>查找经办用户（昵称/用户ID/已绑定手机号）</label><input id="waKw"><button class="btn ghost" onclick="workAccessUserSearch()">查找</button><select id="waUser"><option value="">先查找并选择用户</option></select></div>
-      <div class="field"><label>有效期（留空起始为现在，结束为空为长期；业务时区）</label><input id="waFrom" type="datetime-local"><input id="waTo" type="datetime-local"></div>
-      <div class="field"><label>核对依据/原因（必填4–300字）</label><input id="waReason" maxlength="300"></div>
-      <button class="btn primary" onclick="workAccessSave('grants')">授权只读经办</button><button class="btn ghost" onclick="workAccessSave('grants',true)">停用经办授权</button>
-      <h3>门店岗位授权（独立于合作只读身份）</h3><select id="waStore">${d.catalog.filter(r=>r.kind==='merchant').map(r=>`<option value="${r.id}">#${r.id} ${esc(r.name)}</option>`).join('')}</select><select id="waRole"><option value="1">核销员</option><option value="2">店长</option><option value="3">老板</option></select><button class="btn primary" onclick="workAccessSave('staff')">保存所选用户的门店岗位</button><button class="btn ghost" onclick="workAccessSave('staff',true)">停用门店岗位</button>
-      <table><tr><th>门店ID</th><th>用户</th><th>岗位</th><th>状态</th></tr>${d.staff.map(s=>`<tr><td>${s.merchant_id}</td><td>#${s.user_id} ${esc(s.nickname)}</td><td>${['','核销员','店长','老板'][s.role]}</td><td>${s.status?'启用':'停用'}</td></tr>`).join('')}</table>
-      <p id="waErr" role="alert" class="td-sub"></p><h3>档案关联</h3><table><tr><th>主体</th><th>类型</th><th>档案ID</th></tr>${d.resources.map(r=>`<tr><td>${esc(names[r.subject_id] || r.subject_id)}</td><td>${kinds[r.kind]}</td><td>${r.resource_id}</td></tr>`).join('')}</table>
-      <h3>经办授权</h3><table><tr><th>主体</th><th>用户</th><th>有效期</th><th>状态</th></tr>${d.grants.map(g=>`<tr><td>${esc(names[g.subject_id] || g.subject_id)}</td><td>#${g.user_id} ${esc(g.nickname)}</td><td>${esc(g.valid_from)} → ${esc(g.valid_to || '长期')}</td><td>${g.status===1?'启用（仍须在有效期内）':'已停用'}</td></tr>`).join('')}</table>`, '<button class="btn ghost" onclick="closeModal()">关闭</button>')
-  } catch(e) { toast(e.message,true) }
+    const d=await api('GET','/admin/work-access');window.__workAccess=d
+    const names=Object.fromEntries(d.subjects.map(s=>[s.id,s.name])),kinds={merchant:'履约商户',supplier:'供应商',cocreator:'共创合同'}
+    const status=s=>`<span class="pill ${Number(s)===1?'ok':'off'}">${Number(s)===1?'启用':'已停用'}</span>`
+    const table=(heads,rows)=>`<div class="wa-table"><table><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.join(''):`<tr><td colspan="${heads.length}" class="wa-empty">暂无记录</td></tr>`}</tbody></table></div>`
+    modal('主体与经办授权',`<p class="wa-intro">合作经办、门店岗位分别授权。先选择办理对象，再选择要维护的授权类型。</p>
+      <section class="wa-target"><h4>本次办理对象</h4><p>合作主体沿用已有商户、供应商和共创合同；不会按姓名或手机号自动合并。</p>
+        <div class="wa-grid"><div class="field"><label for="waSubject">合作主体</label><select id="waSubject" ${d.subjects.length?'':'disabled'}>${d.subjects.length?d.subjects.map(s=>`<option value="${s.id}">#${s.id} ${esc(s.name)}</option>`).join(''):'<option value="">请先创建合作主体</option>'}</select><div class="wa-hint">用于档案关联和合作经办授权</div></div>
+        <div class="field"><label for="waKw">经办用户</label><div class="wa-inline"><input id="waKw" placeholder="昵称 / 用户ID / 已绑定手机号" onkeydown="if(event.key==='Enter'){event.preventDefault();workAccessUserSearch()}"><button type="button" class="btn ghost" onclick="workAccessUserSearch()">查找用户</button></div><select id="waUser" class="wa-user-select" aria-label="选择查找到的经办用户"><option value="">查找后选择用户</option></select></div><div class="field wa-full" id="waReasonField"><label for="waReason">核对依据 / 操作原因（必填）</label><textarea id="waReason" maxlength="300" placeholder="填写本次关联、授权或停用的核对依据（4–300字）"></textarea></div></div>
+      </section>
+      <div class="wa-tabs" role="tablist" aria-label="授权类型">${[['subjects','主体与档案'],['grants','合作经办'],['staff','门店岗位'],['records','授权记录']].map(([key,label])=>`<button type="button" role="tab" data-tab="${key}" aria-selected="false" onclick="workAccessTab('${key}')">${label}</button>`).join('')}</div>
+      <section class="wa-pane wa-section" data-pane="subjects"><h4>创建主体与关联档案</h4><p>将已核对的合作资料归入同一主体，已售业务和原档案内容不会因此改写。</p>
+        <div class="wa-grid"><div class="field wa-full"><label for="waName">新主体名称</label><div class="wa-inline"><input id="waName" maxlength="80" placeholder="填写核对后的公司或合作主体名称"><button class="btn ghost" onclick="workAccessSave('subjects')">创建主体</button></div></div>
+        <div class="field wa-full"><label for="waResource">关联已有档案</label><select id="waResource">${d.catalog.map(r=>`<option value="${r.kind}:${r.id}">${kinds[r.kind]} #${r.id} · ${esc(r.name)}</option>`).join('')}</select></div></div>
+        <div class="wa-actions"><button class="btn primary" onclick="workAccessSave('resources')">关联至所选主体</button><button class="btn ghost wa-danger" onclick="workAccessSave('resources',true)">解除所选关联</button></div>
+      </section>
+      <section class="wa-pane wa-section" data-pane="grants" hidden><h4>合作只读经办授权</h4><p>经办人可查看所选主体的项目与分润，不获得门店核销或财务付款权限。</p><div class="wa-grid">
+        <div class="field"><label for="waFrom">授权开始时间</label><input id="waFrom" type="datetime-local"><div class="wa-hint">留空立即生效，按业务时区执行</div></div>
+        <div class="field"><label for="waTo">授权结束时间</label><input id="waTo" type="datetime-local"><div class="wa-hint">留空表示长期，撤权立即生效</div></div></div>
+        <div class="wa-actions"><button class="btn primary" onclick="workAccessSave('grants')">保存经办授权</button><button class="btn ghost wa-danger" onclick="workAccessSave('grants',true)">停用经办授权</button></div>
+      </section>
+      <section class="wa-pane wa-section" data-pane="staff" hidden><h4>门店岗位授权</h4><p>为上方所选用户单独配置门店与岗位；该授权独立于合作主体身份。</p><div class="wa-grid">
+        <div class="field"><label for="waStore">授权门店</label><select id="waStore">${d.catalog.filter(r=>r.kind==='merchant').map(r=>`<option value="${r.id}">#${r.id} ${esc(r.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="waRole">门店岗位</label><select id="waRole"><option value="1">核销员</option><option value="2">店长</option><option value="3">老板</option></select></div></div>
+        <div class="wa-actions"><button class="btn primary" onclick="workAccessSave('staff')">保存门店岗位</button><button class="btn ghost wa-danger" onclick="workAccessSave('staff',true)">停用门店岗位</button></div>
+        ${table(['门店','用户','岗位','状态'],d.staff.map(s=>`<tr><td>#${s.merchant_id}</td><td>#${s.user_id} ${esc(s.nickname)}</td><td>${['','核销员','店长','老板'][s.role]}</td><td>${status(s.status)}</td></tr>`))}
+      </section>
+      <section class="wa-pane wa-section wa-tables" data-pane="records" hidden><h4>档案关联</h4>${table(['主体','类型','档案'],d.resources.map(r=>`<tr><td>${esc(names[r.subject_id]||r.subject_id)}</td><td>${kinds[r.kind]}</td><td>#${r.resource_id}</td></tr>`))}
+        <h4>合作经办授权</h4>${table(['主体','用户','有效期','状态'],d.grants.map(g=>`<tr><td>${esc(names[g.subject_id]||g.subject_id)}</td><td>#${g.user_id} ${esc(g.nickname)}</td><td>${esc(g.valid_from)}<br>至 ${esc(g.valid_to||'长期')}</td><td>${status(g.status)}</td></tr>`))}<div class="wa-hint">当前最多显示200个主体、500条经办授权；启用记录仍须在有效期内。</div>
+      </section>
+<div id="waErr" role="alert" class="wa-error"></div>`, '<button class="btn ghost" onclick="closeModal()">关闭</button>')
+    $('#modalRoot .modal').classList.add('access-dialog')
+    if(draft){
+      for(const key of ['Subject','Resource','Kw','From','To','Reason','Store','Role']){const el=$('#wa'+key);if(el&&draft[key])el.value=draft[key]}
+      if(draft.User){const option=new Option(draft.userLabel,draft.User);$('#waUser').appendChild(option);$('#waUser').value=draft.User}
+    }
+    workAccessTab(draft?.tab||'subjects')
+  }catch(e){toast(e.message,true)}
 }
-async function workAccessUserSearch() {
-  try { const d = await api('GET','/admin/user-picker?kw='+encodeURIComponent($('#waKw').value.trim())); $('#waUser').innerHTML=(d.rows || d).map(u=>`<option value="${u.id}">#${u.id} ${esc(u.nickname)}</option>`).join('') || '<option value="">没有可选用户</option>' }
-  catch(e) { $('#waErr').textContent=e.message }
+async function workAccessUserSearch(){
+  const button=document.querySelector('.wa-target .wa-inline button');button.disabled=true
+  try{const kw=$('#waKw').value.trim();if(!kw)throw new Error('请输入昵称、用户ID或已绑定手机号');const d=await api('GET','/admin/user-picker?kw='+encodeURIComponent(kw));$('#waUser').innerHTML=(d.rows||d).map(u=>`<option value="${u.id}">#${u.id} ${esc(u.nickname)}</option>`).join('')||'<option value="">没有找到匹配用户</option>';$('#waErr').textContent=''}catch(e){$('#waErr').textContent=e.message}finally{button.disabled=false}
 }
-async function workAccessSave(action, remove=false) {
-  const body = action === 'subjects' ? {name:$('#waName').value.trim()} : {subjectId:Number($('#waSubject').value),reason:$('#waReason').value.trim()}
-  if(action==='resources') { const [kind,id]=$('#waResource').value.split(':');Object.assign(body,{kind,resourceId:Number(id),remove}) }
-  if(action==='grants') Object.assign(body,{userId:Number($('#waUser').value),status:remove?0:1,validFrom:$('#waFrom').value,validTo:$('#waTo').value})
-  if(action==='staff') Object.assign(body,{userId:Number($('#waUser').value),merchantId:Number($('#waStore').value),role:Number($('#waRole').value),status:remove?0:1})
-  try {await api('POST','/admin/work-access/'+action,body);toast('已记录并生效');workAccessPanel()} catch(e){$('#waErr').textContent=e.message}
+async function workAccessSave(action,remove=false){
+  if(window.__waSaving)return
+  const body=action==='subjects'?{name:$('#waName').value.trim()}:{subjectId:Number($('#waSubject').value),reason:$('#waReason').value.trim()}
+  if(action==='resources'){const[kind,id]=$('#waResource').value.split(':');Object.assign(body,{kind,resourceId:Number(id),remove})}
+  if(action==='grants')Object.assign(body,{userId:Number($('#waUser').value),status:remove?0:1,validFrom:$('#waFrom').value,validTo:$('#waTo').value})
+  if(action==='staff')Object.assign(body,{userId:Number($('#waUser').value),merchantId:Number($('#waStore').value),role:Number($('#waRole').value),status:remove?0:1})
+  if(action!=='subjects'&&body.reason.length<4){$('#waErr').textContent='请填写至少4字核对依据后再保存';$('#waReason').focus();return}
+  if(['grants','staff'].includes(action)&&!body.userId){$('#waErr').textContent='请先查找并选择经办用户';$('#waKw').focus();return}
+  const draft=workAccessDraft();window.__waSaving=true
+  document.querySelectorAll('.wa-actions .btn').forEach(b=>b.disabled=true)
+  try{const r=await api('POST','/admin/work-access/'+action,body);if(action==='subjects')draft.Subject=String(r.id);await workAccessPanel(draft);toast('已保存，授权记录已更新')}catch(e){$('#waErr').textContent=e.message}finally{window.__waSaving=false;document.querySelectorAll('.wa-actions .btn').forEach(b=>b.disabled=false)}
 }
 
 function partnerEditButton(kind, id) {
