@@ -1,6 +1,6 @@
 const api = require('../../../utils/api')
 Page({
-  data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,freedomRightId:0,freedomRows:[],freedomLabel:'不使用自由豆',freedomError:'',pricing:false,
+  data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,freedomRightId:0,freedomRows:[],freedomSelected:null,freedomError:'',pricing:false,
     contactName: '', contactPhone: '', phoneTicket: '', agree: false, buyInsurance: false, gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
@@ -57,10 +57,11 @@ Page({
   },
   async quoteFreedom(s){
     const seq=this.priceSeq=(this.priceSeq||0)+1,rightId=this.data.freedomRightId
-    this.setData({pricing:true,freedomError:'',freedomDiscount:'0.00'})
+    this.setData({pricing:true,freedomError:''})
     try{await api.ensureLogin();const d=await api.request('/c/freedom/quote','POST',{sessionId:s.id,qty:this.data.qty,insurance:this.data.buyInsurance,rightId:rightId||undefined});if(seq!==this.priceSeq)return
-      const rows=d.rows.map(x=>({...x,label:x.name+' · 满'+(x.threshold/100)+'减'+(x.discount/100)+(x.reason?'（'+x.reason+'）':'' )}))
-      this.setData({freedomRows:rows,freedomOptions:[{label:'不使用自由豆'}].concat(rows),freedomDiscount:(d.discount/100).toFixed(2)})
+      const money=v=>(Number(v)/100).toFixed(2).replace(/\.00$/,'')
+      const rows=d.rows.map(x=>({...x,thresholdText:money(x.threshold),discountText:money(x.discount),validTo:String(x.to||'').slice(0,10),label:'满'+money(x.threshold)+'元减'+money(x.discount)+'元 · '+(x.reason||('有效期至'+String(x.to||'').slice(0,10)))}))
+      this.setData({freedomRows:rows,freedomOptions:[{label:'不使用自由豆'}].concat(rows),freedomSelected:rightId?rows.find(x=>Number(x.id)===Number(rightId))||null:null,freedomDiscount:(d.discount/100).toFixed(2)})
       if(rightId)this.setData({'priceSummary.pay':(d.cashPay/100).toFixed(2),'priceSummary.deduct':'0.00','priceSummary.goods':(d.goods/100).toFixed(2),'priceSummary.insurance':(d.insurance/100).toFixed(2)})
     }catch(e){if(seq===this.priceSeq)this.setData({freedomRows:[],freedomError:e.msg||'补贴试算失败，请重试'})}finally{if(seq===this.priceSeq)this.setData({pricing:false})}
   },
@@ -69,7 +70,7 @@ Page({
     const rows=this.data.freedomRows
       const i=Number(e.detail.value),x=i?rows[i-1]:null
       if(x&&!x.eligible)return wx.showToast({title:x.reason||'不适用',icon:'none'})
-      this.setData({freedomRightId:x?x.id:0,freedomLabel:x?x.label:'不使用自由豆',useBean:x?false:this.data.useBean},()=>this.updatePrice())
+      this.setData({freedomRightId:x?x.id:0,freedomSelected:x||null,useBean:x?false:this.data.useBean},()=>this.updatePrice())
   },
   /** 抵扣上限（豆）：与服务端 order.mjs 同一公式 floor(金额分 × 上限比例 ÷ 10)，比例取参数中心实时值 */
   beanCap(goodsFen) {
@@ -101,7 +102,7 @@ Page({
     if (this.data.qty <= 1) return
     this.setData({ qty: this.data.qty - 1 }, () => this.updatePrice())
   },
-  toggleBean(e) { this.setData({ freedomRightId:0,freedomLabel:'不使用自由豆',useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
+  toggleBean(e) { this.setData({ freedomRightId:0,freedomSelected:null,useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
   toggleInsurance(e) { this.setData({ buyInsurance: !!e.detail.value }, () => this.updatePrice()) },
   toggleAgree(e) { this.setData({ agree: e.detail.value.includes('agree') }) },
   goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + (e.currentTarget.dataset.type === 'terms' ? 'agreement' : 'privacy') }) },
