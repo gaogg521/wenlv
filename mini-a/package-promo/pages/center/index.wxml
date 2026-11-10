@@ -5,6 +5,7 @@
   <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
 </view>
 <view class="card" wx:if="{{error}}"><view>{{error}}</view><button bindtap="fetch">重试</button></view>
+<view class="card" wx:if="{{ov && ov.promoter}}"><view class="kv" bindtap="products"><text>可推广产品与素材</text><text>›</text></view><view class="kv" bindtap="commissions"><text>逐笔佣金明细</text><text>›</text></view><view class="kv" bindtap="withdrawals"><text>提现记录与回单</text><text>›</text></view><view class="note">待审/待付款申请占用金额，审批通过不表示已到账。</view></view>
 <view class="chips">
   <view class="chip {{seg === 'earn' ? 'on' : ''}}" bindtap="switchSeg" data-k="earn">推广收益</view>
   <view class="chip {{seg === 'invite' ? 'on' : ''}}" bindtap="switchSeg" data-k="invite">邀请收客</view>
@@ -15,6 +16,7 @@
     <view class="kv"><text>当前档位费率</text><text class="v">{{ov.rateLabel}}</text></view>
     <view class="kv"><text>累计有效成交（90天口径）</text><text class="v">{{ov.validGmvLabel}}</text></view>
     <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
+    <view class="kv"><text>观察期佣金 / 待处理占用</text><text>¥{{ov.observingYuan}} / ¥{{ov.occupiedYuan}}</text></view><view class="kv"><text>收款账户尾号</text><text>{{ov.payoutTail || '尚未登记'}}</text></view><view class="note">收款资料由平台核实后维护，请联系运营办理变更。退款冲正后存在差额时暂停付款。</view>
   </view>
   <view class="btn" wx:if="{{ov && ov.canWithdraw}}" bindtap="withdraw">申请提现</view>
   <view class="note" wx:if="{{ov && ov.promoter}}">{{ov.ruleText}}</view>

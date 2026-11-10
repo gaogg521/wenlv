@@ -335,11 +335,13 @@ export const people = {
     const available = await one(`SELECT COUNT(*) n,COALESCE(SUM(quota-booked),0) seats,MIN(depart_date) next_date FROM tour_session s WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked AND ${bookingOpenSql('s')}`, [p.id,bookingNow()])
     const co = await one('SELECT COUNT(*) n FROM co_creator WHERE product_id=? AND status=1',[p.id])
     const finance = ['super','ops','finance'].includes(a.role)
+    const salesAuth=finance?await one('SELECT COUNT(*) n FROM promoter_product WHERE product_id=? AND status=1 AND valid_from<=? AND valid_to>?',[p.id,bookingNow(),bookingNow()]):null
+    const subsidy=finance?await one("SELECT COUNT(*) n,COALESCE(SUM(IF(f.status='used',f.discount,0)),0) liability,COALESCE(SUM(f.paid_subsidy),0) paid FROM freedom_order f JOIN orders o ON o.order_no=f.order_no WHERE o.product_id=?",[p.id]):null
     const publicProduct = Object.fromEntries(['id','title','channel','city_code','status','price_from','merchant_name'].map(k=>[k,p[k]]))
     return { product: publicProduct, operating: { supplier:source,scenic,merchantId:p.merchant_id,available,coCreators:finance?Number(co.n):null,
       completeness:entities.completeness('product',entities.readValues('product',p)),quality:productQuality(p),
       promoRate:finance?p.promo_rate_bp:null,beanGift:Number(p.bean_gift || 0),updatedAt:p.updated_at,
-      pendingCapabilities:['多提供方组合及逐项履约','人员×产品销售授权','自由豆官方补贴'] }, kpi: { ...kpi, refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, fill_rate: fill.q ? fill.b / fill.q : 0,
+      salesAuth,subsidy,pendingCapabilities:['多提供方组合及逐项履约','套餐补贴与部分退款分摊'] }, kpi: { ...kpi, refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, fill_rate: fill.q ? fill.b / fill.q : 0,
       rating: rating.avg != null ? Number(rating.avg) : null, reviews: N(rating.n), notes }, sessions, dist, daily }
   },
 }

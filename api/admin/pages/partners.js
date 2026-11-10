@@ -11,7 +11,7 @@ async function partners() {
   if (load !== window.__partnerLoad || location.hash !== '#partners') return
   const labels = { city: '城市合伙人', promoter: '推广服务商', cocreator: '共创人' }
   $('#app').innerHTML = `<div class="pstats">${data.counts.map(x => stat(labels[x.kind], PN(x.n), '当前筛选范围', `window.__partnerQ.kind='${x.kind}';window.__partnerQ.page=1;partners()`, '只看' + labels[x.kind])).join('')}</div><div class="card"><div class="card-head"><h2>合伙人中心</h2><span class="muted">共 ${data.total} 个身份登记</span>
-    ${ME.role === 'super' ? '<button class="btn primary sm" onclick="workAccessPanel()">主体与经办授权</button>' : ''}
+    ${ME.role === 'super' ? '<button class="btn primary sm" onclick="workAccessPanel()">主体与经办授权</button>' : ''}${['super','ops','finance'].includes(ME.role)?'<button class="btn ghost sm" onclick="cooperationFeedback()">合作对账反馈</button>':''}
     ${adminCan('entity.promoter.edit') ? '<button class="btn primary sm" onclick="go(\'promoters\')">开通推广资格</button>' : ''}
     ${adminCan('entity.cocreator.create') ? '<button class="btn primary sm" onclick="entityEditor(\'cocreator\',null,{onSaved:()=>partners()})">登记共创人</button>' : ''}</div>
     <div class="td-sub">城市业绩按城市统计，同城多个账号共享经营数据；共创人按产品登记，不按姓名合并。推广及共创全局资金数据仅内部角色可见。</div>

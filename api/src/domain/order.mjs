@@ -48,7 +48,8 @@ export function priceForSession(s) {
 }
 
 /** 下单：条件 UPDATE 锁名额 → 豆抵扣即扣 → 建单(10)。beanHooks 由路由层注入旅豆域。 */
-export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, beanHook }) {
+export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, freedomRightId, beanHook }) {
+  if (freedomRightId && Number(wantedBeans)>0) throw new BizError(1001, '自由豆与旅豆不能在同一订单叠加使用')
   if (withInsurance && process.env.NODE_ENV === 'production') throw new BizError(1001, '保险承保服务尚未接通，暂不可购买保险')
   if (!Number.isInteger(qty) || qty < 1 || qty > 9) throw new BizError(1001, '出行人数应为 1–9 人')
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
@@ -57,13 +58,13 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const goods = priceForSession(s).price * qty
   if (!(goods > 0)) throw new BizError(1001, '商品价格异常，暂不可下单') // A-07 兜底：负价/零价团期落库后不得出负金额订单
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
-  const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
+  const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, p.merchant_id,p.city_code,p.channel, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
   if (!prod || prod.status !== 1 || prod.merchant_status !== 1) throw new BizError(2001, '商品或商户已暂停营业')
   const insFee = withInsurance && prod && Number(prod.insurance_fee) > 0 ? Number(prod.insurance_fee) * qty : 0
   const clampCap = Math.floor((goods * (await cfgNum('bean.deduct_max_pct'))) / 10) // 豆数上限（10 豆=1 元）
   const beans = Math.max(0, Math.min(Math.floor(Number(wantedBeans) || 0), clampCap))
   const dedFen = beans * 10
-  const pay = goods - dedFen + insFee
+  let pay = goods - dedFen + insFee, freedomDiscount=0
   if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
   // 单号 = WL + 业务日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
   // A-34：日期段用业务时区（此前 toISOString 取 UTC 日期，凌晨下单的订单号日期错一天）
@@ -71,6 +72,12 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const orderNo = 'WL' + bizDay().replaceAll('-', '') + suffix
 
   await tx(async (c) => {
+    // 授权、首触和优惠均在建单事务内保存；后续改费率不改已售快照。
+    const { orderSnapshot } = await import('./sales.mjs')
+    const snapshot=await orderSnapshot(c,userId,s.product_id,promoScene)
+    const freedom=await import('./freedom.mjs')
+    const discount=await freedom.reserve(c,userId,freedomRightId,{...prod,product_id:s.product_id,depart_date:s.depart_date,goods},orderNo,insFee)
+    if(discount){pay=discount.pay;freedomDiscount=discount.discount}
     const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [qty, sessionId, qty, bookingNow()])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
@@ -80,8 +87,9 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
     await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES ((SELECT id FROM orders WHERE order_no = ?),0,10,?,?)',
       [orderNo, 'user:' + userId, JSON.stringify('下单占位')])
     if (beans > 0) await bean.deduct(userId, beans, bean.BIZ.DEDUCT, orderNo, c)
+    if(snapshot)await c.q('UPDATE orders SET promo_snapshot=? WHERE order_no=?',[JSON.stringify(snapshot),orderNo])
   })
-  return { orderNo, amountPay: pay, beanDeducted: beans, insuranceFee: insFee,
+  return { orderNo, amountPay: pay, freedomDiscount, beanDeducted: beans, insuranceFee: insFee,
     insuranceNote: insFee > 0 ? prod.insurance_note : null }
 }
 
@@ -115,6 +123,7 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
     if (![10,20].includes(Number(o.status))) throw new BizError(2002, '订单已关闭或不在可支付状态，请人工核对支付')
     if (!paid) await c.q('INSERT INTO payment(order_id,wx_trans_no,amount,status,callback_at,raw_notify) VALUES(?,?,?,1,NOW(3),?)', [o.id,transNo,o.amount_pay,JSON.stringify({mock,orderNo,transNo})])
     if (Number(o.status) === 10) {
+      await (await import('./freedom.mjs')).paid(c,o)
       await c.upd('UPDATE orders SET status=20,version=version+1,paid_at=NOW(3),refund_deadline=NOW(3)+INTERVAL ? DAY WHERE id=?', [days,o.id])
       await c.q('INSERT INTO order_event(order_id,from_st,to_st,actor,detail) VALUES(?,10,20,?,?)', [o.id,'system',JSON.stringify('支付回调 '+transNo)])
     }
@@ -135,6 +144,7 @@ export async function acceptPayment(orderNo, transNo, mock = false) {
 export async function closeUnpaidInTx(c, o, closeReason, eventDetail, actor) {
   const n = await c.upd('UPDATE orders SET status = 90, close_reason = ?, version = version + 1 WHERE id = ? AND status = 10', [closeReason, o.id])
   if (n !== 1) return false // 并发下别人已关，幂等返回
+  await (await import('./freedom.mjs')).release(c,o)
   if (Number(o.bean_deducted) > 0) await bean.reverse(o.user_id, Number(o.bean_deducted), o.order_no, c)
   await c.upd('UPDATE tour_session SET booked = GREATEST(booked - ?, 0) WHERE id = ?', [o.qty, o.session_id])
   await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,10,90,?,?)', [o.id, actor, JSON.stringify(eventDetail)])

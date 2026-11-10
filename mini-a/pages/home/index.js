@@ -11,6 +11,7 @@ Page({
       const scene = decodeURIComponent(q.scene)
       if (/^[pm][0-9a-z-]+$/i.test(scene)) {
         wx.setStorageSync('promoScene', scene)
+        wx.removeStorageSync('promoProductId')
         wx.showToast({ title: '专属邀请已生效', icon: 'none' })
       }
     }

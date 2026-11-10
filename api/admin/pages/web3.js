@@ -1569,7 +1569,7 @@ async function wallets() {
   const d = await api('GET', '/admin/web3/wallets' + (kw ? '?kw=' + encodeURIComponent(kw) : ''))
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>权益账户</h2>
+    <div class="card-head"><h2>权益账户</h2>${['super','ops','finance'].includes(ME.role)?'<button class="btn primary sm" onclick="freedomPanel()">自由豆补贴</button>':''}
       <div class="row" style="margin:0"><input id="wkw" placeholder="昵称 / 用户ID" style="width:180px" value="${esc(kw)}">
       <button class="btn ghost sm" onclick="wallets()">查询</button></div></div>
     <table><thead><tr><th>用户</th><th>积分余额</th><th>等级</th><th>成长值</th><th>勋章</th><th>存证事件</th><th></th></tr></thead><tbody>

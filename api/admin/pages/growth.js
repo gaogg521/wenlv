@@ -30,7 +30,7 @@ async function promoters() {
   const rows = await api('GET', '/admin/promoters')
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务商</h2><span class="muted">一级 CPS · 三档 5% / 8% / 12% 封顶（数据库 CHECK 焊死，无层级字段）</span></div>
-    <div class="row"><button class="btn primary sm" onclick="promoterModal()">＋ 开通推广资格</button>
+    <div class="row"><button class="btn primary sm" onclick="promoterModal()">＋ 开通推广资格</button><button class="btn ghost sm" onclick="salesPanel()">产品销售授权</button>
       <span class="muted">开通后推广员在小程序 A「推广中心」生成专属海报码 · 一级 CPS 无层级</span></div>
     ${rows.length ? `<table><thead><tr><th>用户</th><th>档位</th><th>费率</th><th>90 天有效成交</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
@@ -93,14 +93,13 @@ async function withdrawals() {
   const wdPages = Math.max(1, Math.ceil(data.total / data.pageSize))
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务费提现审批</h2><span class="muted">资金出口 · 财务角色审批 · 打款流水必填留痕</span></div>
-    <div class="cfg-tabs">${[['', '全部'], [0, '待审'], [1, '已打款'], [2, '已驳回']].map(([v, n]) => `<button class="cfg-tab ${String(window.__wdQ.status) === String(v) ? 'on' : ''}" onclick="window.__wdQ.status='${v}';window.__wdQ.page=1;withdrawals()">${n}</button>`).join('')}</div>
+    <div class="cfg-tabs">${[['', '全部'], [0, '待审'], [3, '待付款'], [1, '已登记付款'], [2, '已驳回']].map(([v, n]) => `<button class="cfg-tab ${String(window.__wdQ.status) === String(v) ? 'on' : ''}" onclick="window.__wdQ.status='${v}';window.__wdQ.page=1;withdrawals()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>申请号</th><th>推广员</th><th>金额</th><th>备注</th><th>状态</th><th>审批</th><th>操作</th></tr></thead><tbody>
     ${rows.map((w) => `<tr><td class="num">#${w.id}</td><td>${esc(w.nickname)}${Number(w.user_status) === 0 ? ' <span class="pill s70">已冻结</span>' : ''}<div class="td-sub">ID ${w.promoter_id}</div></td>
       <td class="money num">${fen(w.amount)}</td><td class="td-sub">${esc(w.proposer_note || '')}</td>
-      <td>${['<span class="pill warn">待审</span>', '<span class="pill ok">已打款</span>', '<span class="pill s70">已驳回</span>'][w.status]}</td>
+      <td>${['<span class="pill warn">待审</span>', '<span class="pill ok">已登记付款</span>', '<span class="pill s70">已驳回</span>', '<span class="pill warn">审批通过待付款</span>'][w.status]}</td>
       <td class="td-sub">${esc(w.reviewed_by || '—')}${w.pay_ref ? '<div>' + esc(w.pay_ref) + '</div>' : ''}</td>
-      <td>${w.status === 0 ? `${Number(w.user_status) === 0 ? '<span class="td-sub">账号冻结，暂停打款</span>' : `<button class="btn primary sm" onclick="approveWithdraw(${w.id}, true)">登记实际打款</button>`}
-        <button class="btn danger sm" onclick="approveWithdraw(${w.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
+      <td>${w.status === 0 ? `<button class="btn primary sm" onclick="wdReview(${w.id},true)">审批通过待打款</button>` : ''}${w.status === 3 ? `<button class="btn primary sm" onclick="wdPay(${w.id})">登记实际付款</button>` : ''}${[0,3].includes(w.status)?`<button class="btn danger sm" onclick="wdReview(${w.id},false)">驳回</button>`:''}${w.receipt_url?`<button class="btn ghost sm" onclick="p2Receipt('/admin/withdrawals/${w.id}/receipt')">回单</button>`:''}<div class="td-sub">${esc(w.review_note||'')}</div></td></tr>`).join('')}
     </tbody></table>` : emptyBox(window.__wdQ.status !== '' ? '没有符合条件的提现申请。' : '暂无提现申请（推广员在小程序 A「推广中心」发起）')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${wdPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__wdQ.page--;withdrawals()">上一页</button> <button class="btn ghost sm" ${data.page >= wdPages ? 'disabled' : ''} onclick="window.__wdQ.page++;withdrawals()">下一页</button></div></div>
   </div>`

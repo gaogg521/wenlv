@@ -41,7 +41,10 @@
       "root": "package-promo",
       "pages": [
         "pages/center/index",
-        "pages/work/index"
+        "pages/work/index",
+        "pages/products/index",
+        "pages/records/index",
+        "pages/freedom/index"
       ]
     }
   ],

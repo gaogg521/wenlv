@@ -52,10 +52,12 @@ export async function hit(scene, userId) {
  *  A-15（负责人决策）：① 按首触归因——佣金归该用户第一条归因命中的推广员（界面承诺"首触唯一"）；
  *  ② 推广员本人下单不计佣；③ 基数 = 实付 − 保费，旅豆只减一次（amount_pay 已是抵扣后的实付，此前又减一次豆）。 */
 export async function createCommission(orderNo) {
-  const o = await one('SELECT id, user_id, product_id, promo_scene, amount_pay, insurance_fee, paid_at, rebook_of FROM orders WHERE order_no = ?', [orderNo])
+  const o = await one('SELECT id, user_id, product_id, promo_scene, promo_snapshot, amount_pay, insurance_fee, paid_at, rebook_of FROM orders WHERE order_no = ?', [orderNo])
   if (!o || !o.promo_scene) return false
   if (o.rebook_of) return false // A-01：免费改签单实收 ¥0（成本商户承担），不计佣
-  const a = await one(`SELECT a.promoter_id FROM attribution_hit h JOIN attribution a ON a.scene = h.scene
+  const snapshot=o.promo_snapshot ? (typeof o.promo_snapshot==='string'?JSON.parse(o.promo_snapshot):o.promo_snapshot):null
+  if(snapshot && !snapshot.eligible)return false
+  const a = snapshot ? {promoter_id:snapshot.promoterId} : await one(`SELECT a.promoter_id FROM attribution_hit h JOIN attribution a ON a.scene = h.scene
     WHERE h.user_id = ? ORDER BY h.id ASC LIMIT 1`, [o.user_id]) // 首触唯一
   if (!a) return false
   if (Number(a.promoter_id) === Number(o.user_id)) return false // 自买不计佣
@@ -67,7 +69,7 @@ export async function createCommission(orderNo) {
   const pf = prod ? ((typeof prod.profile === 'string' ? JSON.parse(prod.profile || '{}') : prod.profile) || {}) : {}
   const payDay = o.paid_at ? String(o.paid_at).slice(0, 10) : bizDay()
   const inWindow = (!pf.rate_start || payDay >= pf.rate_start) && (!pf.rate_end || payDay <= pf.rate_end)
-  const rateBp = Math.min(prod && prod.promo_rate_bp != null && inWindow ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
+  const rateBp = snapshot ? Number(snapshot.rateBp) : Math.min(prod && prod.promo_rate_bp != null && inWindow ? Number(prod.promo_rate_bp) : Number(p.rate_bp), 1200)
   const base = Number(o.amount_pay) - Number(o.insurance_fee || 0) // 保费直付保险方，不计佣；旅豆已在实付中扣除，只减一次
   const amount = Math.floor(base * rateBp / 10000)
   try {
@@ -174,8 +176,9 @@ export async function generateSettlement(merchantId, period) {
     if (orders.length) await c.q(`UPDATE orders SET settlement_id = ? WHERE id IN (${orders.map((o) => o.id).join(',')})`, [sid])
     if (fees.length) await c.q(`UPDATE refunds SET settlement_id = ? WHERE id IN (${fees.map((f) => f.id).join(',')}) AND settlement_id IS NULL`, [sid])
     // 共创分润（资金商/商品商）：产品 GMV 占比 × 留存毛利 × share_pct，幂等（uk_settle_co）；只有订单收入时才计
-    if (orders.length && total > 0) await c.q(`INSERT IGNORE INTO co_profit (settlement_id, co_creator_id, product_id, period, base_amount, amount)
-      SELECT ?, cc.id, cc.product_id, ?, ROUND(? * pg.gmv / ?), ROUND(? * pg.gmv / ? * cc.share_pct / 10000)
+    if (orders.length && total > 0) await c.q(`INSERT IGNORE INTO co_profit (settlement_id, co_creator_id, product_id, period, base_amount, amount,share_bp,rule_snapshot)
+      SELECT ?, cc.id, cc.product_id, ?, ROUND(? * pg.gmv / ?), ROUND(? * pg.gmv / ? * cc.share_pct / 10000),cc.share_pct,
+        JSON_OBJECT('version',1,'basis','retained_product_gmv_share','shareBp',cc.share_pct,'contractNo',JSON_UNQUOTE(JSON_EXTRACT(cc.profile,'$.contract_no')))
       FROM co_creator cc
       JOIN (SELECT product_id, SUM(amount_pay - insurance_fee) gmv FROM orders WHERE settlement_id = ? GROUP BY product_id) pg
         ON pg.product_id = cc.product_id

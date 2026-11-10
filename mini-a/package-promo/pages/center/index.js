@@ -19,6 +19,7 @@ Page({
         withdrawableYuan: yuan(ov0.withdrawable),
         earnedYuan: yuan(ov0.earned),
         withdrawnYuan: yuan(ov0.withdrawn),
+        occupiedYuan:yuan(ov0.occupied),observingYuan:yuan(ov0.observing),debtYuan:yuan(ov0.debt),
       }) : ov0
       this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers, error:'' })
     } catch (e) {
@@ -27,6 +28,9 @@ Page({
     }
   },
   switchSeg(e) { this.setData({ seg: e.currentTarget.dataset.k }) },
+  products(){wx.navigateTo({url:'/package-promo/pages/products/index'})},
+  commissions(){wx.navigateTo({url:'/package-promo/pages/records/index?kind=commissions'})},
+  withdrawals(){wx.navigateTo({url:'/package-promo/pages/records/index?kind=withdrawals'})},
   // 推广者把小程序转发给好友 → 好友进入即带归因 scene（首触唯一，成交计佣）
   onShareAppMessage() {
     const s = this.data.scene ? '?scene=' + this.data.scene : ''

@@ -52,6 +52,7 @@
   <view class="card" wx:if="{{priceSummary}}">
     <view class="kv"><text>单价 × 人数</text><text>¥{{priceSummary.unit}} × {{qty}}</text></view>
     <view class="kv"><text>活动费用</text><text>¥{{priceSummary.goods}}</text></view>
+    <picker mode="selector" range="{{freedomOptions}}" range-key="label" bindchange="chooseFreedom" disabled="{{pricing}}"><view class="kv"><text>自由豆补贴</text><text>{{pricing ? '正在试算…' : freedomLabel}} ›</text></view></picker><view wx:if="{{freedomError}}" class="note">{{freedomError}}</view><view class="kv" wx:if="{{freedomRightId}}"><text>官方补贴减免（与旅豆互斥）</text><text>−¥{{freedomDiscount}}</text></view>
     <view class="kv"><text>旅豆抵扣 <text class="muted2">（余额 {{beanBal}}，最多抵 {{priceSummary.capYuan}} 元）</text></text>
       <switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
     <view class="kv" wx:if="{{useBean && priceSummary.deduct !== '0.00'}}"><text>抵扣金额</text><text style="color:var(--green)">−¥{{priceSummary.deduct}}</text></view>

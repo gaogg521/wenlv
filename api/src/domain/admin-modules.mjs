@@ -50,6 +50,23 @@ export const cityDenyHit = (moduleKey) => CITY_DENY_MODULES.includes(moduleKey) 
  * GET 不等于无敏感副作用，POST 不等于一律办理——按业务语义逐条登记，不按动词粗分。
  */
 export const ROUTE_MODULES = [
+  ['GET', '/admin/sales/grants', 'promoters', 'view'],
+  ['POST', '/admin/sales/grants', 'promoters', 'manage'],
+  ['GET', '/admin/sales/feedback', 'partners', 'view'],
+  ['POST', '/admin/sales/feedback/:id', 'partners', 'manage'],
+  ['POST', '/admin/withdrawals/:id/review', 'withdrawals', 'manage'],
+  ['POST', '/admin/withdrawals/:id/pay', 'withdrawals', 'manage'],
+  ['POST', '/admin/withdrawals/receipt-upload', 'withdrawals', 'manage'],
+  ['GET', '/admin/withdrawals/:id/receipt', 'withdrawals', 'view'],
+  ['GET', '/admin/freedom', ['wallets','fund'], 'view'],
+  ['POST', '/admin/freedom/budgets', ['wallets','fund'], 'manage'],
+  ['POST', '/admin/freedom/templates', ['wallets','fund'], 'manage'],
+  ['POST', '/admin/freedom/issue', ['wallets','fund'], 'manage'],
+  ['POST', '/admin/freedom/status', ['wallets','fund'], 'manage'],
+  ['GET', '/admin/freedom/finance', 'fund', 'view'],
+  ['POST', '/admin/freedom/receipt-upload', 'fund', 'manage'],
+  ['POST', '/admin/freedom/pay', 'fund', 'manage'],
+  ['GET', '/admin/freedom/payments/:id/receipt', 'fund', 'view'],
   ['GET', '/admin/work-access', 'partners', 'view'],
   ['POST', '/admin/work-access/:action', 'partners', 'manage'],
   // 风控事件：查看 / 处置

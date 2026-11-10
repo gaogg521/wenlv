@@ -1,0 +1,8 @@
+<view class="hero"><view class="hi">自由豆</view><view class="sub2">官方补贴权益 · 与旅豆分开使用</view></view>
+<view class="note">每单一份，不能与旅豆叠加；不可充值、转让、提现。不同满减规则的额度不能合并抵现。</view>
+<view class="chips"><view wx:for="{{filters}}" wx:key="id" class="chip {{status === item.id ? 'on' : ''}}" bindtap="filter" data-id="{{item.id}}">{{item.name}}</view></view>
+<view class="card" wx:if="{{error}}">{{error}}<button bindtap="retry">重试</button></view><view class="card" wx:if="{{loading}}">加载中…</view>
+<view class="card" wx:for="{{rows}}" wx:key="id"><view class="sec-title">{{item.name}}</view><view style="font-size:40rpx;color:#b76b24">满{{item.thresholdText}}减{{item.discountText}}</view><view class="note">{{item.from}} — {{item.to}}</view><view>{{item.scopeText}}</view><view class="note">官方发放 · 批次 {{item.batchId}} · {{item.reason}}</view><button wx:if="{{item.orderNo}}" bindtap="order" data-no="{{item.orderNo}}">查看使用订单</button></view>
+<view class="card" wx:if="{{!rows.length && !loading && !error}}">暂无此类自由豆权益</view>
+
+<view class="chips"><button wx:if="{{page>1}}" bindtap="prev">上一页</button><text>第{{page}}页 · 共{{total}}份</text><button wx:if="{{hasNext}}" bindtap="next">下一页</button></view>

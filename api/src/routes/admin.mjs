@@ -403,7 +403,7 @@ const admin = {
     const sc = a.scopeCity
     const oc = sc ? ' AND o.city_code = ' + Number(sc) : ''
     const zero = { c: 0 }
-    const pendingWithdrawals = sc ? zero : await one("SELECT COUNT(*) c FROM promoter_withdraw WHERE status = 0")
+    const pendingWithdrawals = sc ? zero : await one("SELECT COUNT(*) c FROM promoter_withdraw WHERE status IN (0,3)")
     const pendingConflicts = sc ? zero : await one("SELECT COUNT(*) c FROM verify_offline_conflict WHERE status = 0")
     const pendingNotes = sc ? zero : await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
     const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant m WHERE m.status = 0" + (sc ? ' AND m.city_code = ' + Number(sc) : ''))
@@ -477,6 +477,7 @@ const admin = {
       : await one('SELECT * FROM orders WHERE order_no = ?', [key])
     if (!o) throw new BizError(1004, '订单不存在')
     if (a.scopeCity && String(o.city_code || '') !== String(a.scopeCity)) throw new BizError(1003, '仅可办理本城订单')
+    if(await one('SELECT order_no FROM freedom_order WHERE order_no=?',[o.order_no]))throw new BizError(2002,'自由豆补贴订单暂不支持改期调价，请按原退改规则退款后重新预订')
     if (![20, 30].includes(Number(o.status))) throw new BizError(2002, '仅「已支付 / 已确认」订单可改期；已核销、退款中或已完成的订单请走对应流程')
     if (await one('SELECT id FROM order_reschedule WHERE order_id = ? AND status IN (0, 1)', [o.id])) throw new BizError(2002, '该订单已有在途改期申请，请先处理')
     const to = await one('SELECT s.*, p.title product_title FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [Number(toSessionId)])
@@ -570,6 +571,7 @@ const admin = {
         if (claim.affectedRows !== 1) { result = { status: Number(r.status), idempotent: Number(r.status) === 3 }; if (result.idempotent) return; throw new BizError(2002, '仅「待执行」申请可执行') }
         const o = await c.one('SELECT * FROM orders WHERE id = ? FOR UPDATE', [r.order_id])
         if (!o || ![20, 30].includes(Number(o.status))) throw new BizError(2002, '订单状态已变化（已核销/退款中/关闭），不能改期，请驳回或登记失败')
+        if(await c.one('SELECT order_no FROM freedom_order WHERE order_no=?',[o.order_no]))throw new BizError(2002,'自由豆补贴订单暂不支持改期调价，请先按原规则退款')
         if (Number(o.session_id) !== Number(r.from_session_id)) throw new BizError(2002, '订单团期已变化，请重新申请改期')
         const to = await c.one('SELECT * FROM tour_session WHERE id = ? FOR UPDATE', [r.to_session_id])
         if (!to || Number(to.status) !== 1) throw new BizError(2001, '目标团期已不可报名，执行失败')

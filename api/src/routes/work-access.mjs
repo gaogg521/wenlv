@@ -81,7 +81,7 @@ export const workAccess = {
     if (!subject) throw new BizError(1003, '合作主体未授权或授权已失效')
     const resources = []
     for (const [kind, table] of Object.entries(sources)) resources.push(...(await q(`SELECT r.resource_id id,t.name FROM subject_resource r JOIN ${table} t ON t.id=r.resource_id WHERE r.subject_id=? AND r.kind=? AND t.status=1`, [sid, kind])).map(r => ({ ...r, kind })))
-    return { subject, resources, note: '当前提供合作身份与关联信息，项目资金明细在后续合作中心批次补齐。' }
+    return { subject, resources, note: '项目和分润按当前主体授权查询；投资额登记不代表应返本金，登记付款不代表银行到账。' }
   },
   'GET /m/auth/stores': async req => {
     const u = await activeUser(req, 'm')

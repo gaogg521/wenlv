@@ -79,7 +79,7 @@ async function promoterLedger(id,tab,pg) {
   if (!partner) throw new BizError(1004,'推广服务商不存在')
   const c=await one(`SELECT COALESCE(SUM(IF(status=0,amount,0)),0) observing,COALESCE(SUM(IF(status IN (1,2),amount,0)),0) earned,
     COALESCE(SUM(IF(status IN (3,4),amount,0)),0) reversed FROM commission WHERE promoter_id=?`,[id])
-  const w=await one('SELECT COALESCE(SUM(IF(status=1,amount,0)),0) paid,COALESCE(SUM(IF(status=0,amount,0)),0) pending FROM promoter_withdraw WHERE promoter_id=?',[id])
+  const w=await one('SELECT COALESCE(SUM(IF(status=1,amount,0)),0) paid,COALESCE(SUM(IF(status IN (0,3),amount,0)),0) pending FROM promoter_withdraw WHERE promoter_id=?',[id])
   const summary={...c,...w,balance:num(c.earned)-num(w.paid),after_pending:num(c.earned)-num(w.paid)-num(w.pending)}
   const table=tab==='commission'?'commission':'promoter_withdraw'
   const total=num((await one(`SELECT COUNT(*) n FROM ${table} WHERE promoter_id=?`,[id])).n)

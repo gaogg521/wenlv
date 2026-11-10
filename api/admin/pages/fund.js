@@ -6,7 +6,7 @@ async function fund() {
   const yuan = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>资金待办全景</h2><span class="muted">只读聚合 · 每条线保留各自账本与办理入口，点「去办理」下钻源业务</span></div>
+    <div class="card-head"><h2>资金待办全景</h2>${['super','finance','ops'].includes(ME.role)?'<button class="btn ghost sm" onclick="freedomPanel()">自由豆规则与发放</button>':''}${['super','finance'].includes(ME.role)?'<button class="btn primary sm" onclick="freedomFinance()">自由豆补贴对账</button>':''}<span class="muted">只读聚合 · 每条线保留各自账本与办理入口，点「去办理」下钻源业务</span></div>
     <p class="td-sub">⚠ ${esc(d.metricNote)}</p>
     <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
     ${d.lines.map((l) => `<div class="kpi go" ${dxKey} title="去办理：${esc(l.label)}" onclick="go('${l.goto}')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">💰</div>

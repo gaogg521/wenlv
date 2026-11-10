@@ -1,6 +1,6 @@
 const api = require('../../../utils/api')
 Page({
-  data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,
+  data: { p: null, sessions: [], sel: 0, qty: 1, useBean: true, beanBal: 0, loading: true, fallback: false,freedomRightId:0,freedomRows:[],freedomLabel:'不使用自由豆',freedomError:'',pricing:false,
     contactName: '', contactPhone: '', phoneTicket: '', agree: false, buyInsurance: false, gallery: [], gIdx: 0, rich: { intro: '', highlights: [], includes: [] }, rv: { avg: 0, count: 0, list: [] } },
   onLoad(q) {
     this.pid = q.id
@@ -53,6 +53,23 @@ Page({
     this.setData({ priceSummary: { unit: (unit / 100).toFixed(2), goods: (goods / 100).toFixed(2), capYuan: (this.beanCap(goods) / 10).toFixed(2),
       insurance: (ins / 100).toFixed(2), showInsRow: ins > 0,
       deduct: (beans / 10).toFixed(2), pay: ((goods - beans * 10 + ins) / 100).toFixed(2) } })
+    this.quoteFreedom(s)
+  },
+  async quoteFreedom(s){
+    const seq=this.priceSeq=(this.priceSeq||0)+1,rightId=this.data.freedomRightId
+    this.setData({pricing:true,freedomError:'',freedomDiscount:'0.00'})
+    try{await api.ensureLogin();const d=await api.request('/c/freedom/quote','POST',{sessionId:s.id,qty:this.data.qty,insurance:this.data.buyInsurance,rightId:rightId||undefined});if(seq!==this.priceSeq)return
+      const rows=d.rows.map(x=>({...x,label:x.name+' · 满'+(x.threshold/100)+'减'+(x.discount/100)+(x.reason?'（'+x.reason+'）':'' )}))
+      this.setData({freedomRows:rows,freedomOptions:[{label:'不使用自由豆'}].concat(rows),freedomDiscount:(d.discount/100).toFixed(2)})
+      if(rightId)this.setData({'priceSummary.pay':(d.cashPay/100).toFixed(2),'priceSummary.deduct':'0.00','priceSummary.goods':(d.goods/100).toFixed(2),'priceSummary.insurance':(d.insurance/100).toFixed(2)})
+    }catch(e){if(seq===this.priceSeq)this.setData({freedomRows:[],freedomError:e.msg||'补贴试算失败，请重试'})}finally{if(seq===this.priceSeq)this.setData({pricing:false})}
+  },
+  chooseFreedom(e){
+    if(this.data.pricing)return
+    const rows=this.data.freedomRows
+      const i=Number(e.detail.value),x=i?rows[i-1]:null
+      if(x&&!x.eligible)return wx.showToast({title:x.reason||'不适用',icon:'none'})
+      this.setData({freedomRightId:x?x.id:0,freedomLabel:x?x.label:'不使用自由豆',useBean:x?false:this.data.useBean},()=>this.updatePrice())
   },
   /** 抵扣上限（豆）：与服务端 order.mjs 同一公式 floor(金额分 × 上限比例 ÷ 10)，比例取参数中心实时值 */
   beanCap(goodsFen) {
@@ -84,7 +101,7 @@ Page({
     if (this.data.qty <= 1) return
     this.setData({ qty: this.data.qty - 1 }, () => this.updatePrice())
   },
-  toggleBean(e) { this.setData({ useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
+  toggleBean(e) { this.setData({ freedomRightId:0,freedomLabel:'不使用自由豆',useBean: e && e.detail && typeof e.detail.value === 'boolean' ? e.detail.value : !this.data.useBean }, () => this.updatePrice()) },
   toggleInsurance(e) { this.setData({ buyInsurance: !!e.detail.value }, () => this.updatePrice()) },
   toggleAgree(e) { this.setData({ agree: e.detail.value.includes('agree') }) },
   goDoc(e) { wx.navigateTo({ url: '/package-content/pages/doc/index?type=' + (e.currentTarget.dataset.type === 'terms' ? 'agreement' : 'privacy') }) },
@@ -108,6 +125,7 @@ Page({
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.submitting) return
+    if(this.data.freedomRightId&&(this.data.pricing||this.data.freedomError))return wx.showToast({title:this.data.freedomError||'请等待补贴试算',icon:'none'})
     if (!this.data.agree) return wx.showToast({ title: '请先阅读并同意服务条款与隐私政策', icon: 'none' })
     if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
     if (!String(this.data.contactName || '').trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
@@ -122,8 +140,9 @@ Page({
       const unit = s.priceNow || s.price_adult
       const want = this.data.useBean ? Math.min(beanBal, this.beanCap(unit * this.data.qty)) : 0
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
+        freedomRightId:this.data.freedomRightId||undefined,
         insurance: this.data.buyInsurance,
-        promoScene: wx.getStorageSync('promoScene') || undefined,
+        promoScene: (!Number(wx.getStorageSync('promoProductId'))||Number(wx.getStorageSync('promoProductId'))===Number(this.pid))?(wx.getStorageSync('promoScene')||undefined):undefined,
         contactName: this.data.contactName,
         phoneTicket: this.data.phoneTicket || undefined,
         contactPhone: this.data.phoneTicket ? undefined : this.data.contactPhone })
