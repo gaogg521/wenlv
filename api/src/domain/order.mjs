@@ -121,6 +121,11 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
       insuranceFen: insFee, cashPayFen: pay,
     }
     await c.q('UPDATE orders SET price_snapshot=? WHERE order_no=?', [JSON.stringify(priceSnapshot), orderNo])
+    // B01 成本快照：按下单时点生效的供给项配置留痕；商品未维护成本保持 NULL（不可计算，绝不默认 0）
+    const { orderCostSnapshot } = await import('./supply.mjs')
+    const cost = await orderCostSnapshot(s.product_id, qty, bizDay(), c)
+    await c.q('UPDATE orders SET cost_snapshot=?, cost_total_fen=? WHERE order_no=?',
+      [cost ? JSON.stringify(cost) : null, cost ? cost.totalFen : null, orderNo])
     return { orderNo, amountPay: pay, freedomDiscount: freedomFace, beanDeducted: beans, insuranceFee: insFee,
       insuranceNote: insFee > 0 ? prod.insurance_note : null,
       pricing: { priceType: pricing.type, effectiveUnitFen: pricing.unitFen, goodsFen: goods, originalGoodsFen: pricing.originalFen * qty } }
