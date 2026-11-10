@@ -4,7 +4,9 @@ import { requireUser } from '../auth.mjs'
 import { requireAdmin, audit } from './_shared.mjs'
 import { id, json, paging } from '../domain/sales.mjs'
 import * as f from '../domain/freedom.mjs'
-import { priceForSession } from '../domain/order.mjs'
+import { priceSession } from '../domain/discount.mjs'
+import * as bean from '../domain/bean.mjs'
+import { cfgNum } from '../config.mjs'
 import { bookingOpen, bookingNow } from '../domain/booking-window.mjs'
 import { uploadReceipt,readReceipt,validReceipt } from '../domain/private-receipt.mjs'
 import { findBanned } from '../domain/wording.mjs'
@@ -102,9 +104,21 @@ export const freedomRoutes={
    if(!Number.isInteger(qty)||qty<1||qty>9)throw new BizError(1001,'人数无效')
    const s=await one('SELECT s.*,p.city_code,p.channel,p.merchant_id,p.insurance_fee,p.status product_status FROM tour_session s JOIN tour_product p ON p.id=s.product_id WHERE s.id=?',[sid])
    if(!s||Number(s.status)!==1||Number(s.product_status)!==1||!bookingOpen(s.profile))throw new BizError(1001,'团期不可售')
-   const goods=priceForSession(s).price*qty,ins=req.body.insurance&&!(process.env.NODE_ENV==='production')?Number(s.insurance_fee)*qty:0,rows=await f.rights(u.uid,{...s,goods})
+   // D01：有效商品价格＝早鸟/商品折扣统一试算；自由豆门槛按有效商品金额判断（保费不凑门槛、不参与优惠）
+   const pricing=await priceSession(s,{product_id:s.product_id,city_code:s.city_code,channel:s.channel,depart_date:s.depart_date})
+   const goods=pricing.unitFen*qty,ins=req.body.insurance&&!(process.env.NODE_ENV==='production')?Number(s.insurance_fee)*qty:0,rows=await f.rights(u.uid,{...s,goods})
    const chosen=req.body.rightId?rows.find(x=>Number(x.id)===Number(req.body.rightId)):null
    if(req.body.rightId&&(!chosen||!chosen.eligible))throw new BizError(1001,chosen?.reason||'所选权益不可用')
-   return {rows,goods,discount:chosen?.discount||0,insurance:ins,cashPay:goods-(chosen?.discount||0)+ins,beanDeduct:0,note:'自由豆与旅豆同单互斥，最终价格以建单为准'}
+   const freedomC=chosen?.discount||0
+   // 旅豆同单可用（账本独立）：抵扣上限锚定最终实付 B ≤ r×X（X＝G−C−B），受余额与用户选择限制
+   const bal=await bean.balance(u.uid),maxPct=await cfgNum('bean.deduct_max_pct')
+   const capBeans=bean.anchorCapBeans(goods,freedomC,maxPct)
+   const wanted=Math.max(0,Math.min(Number(req.body.beanDeduct??bal)||0,bal,capBeans))
+   const beanDedFen=wanted*10,cashPay=goods-freedomC-beanDedFen+ins
+   return {rows,goods,originalGoods:pricing.originalFen*qty,priceType:pricing.type,
+     discountRule:pricing.rule?{id:pricing.rule.id,name:pricing.rule.name,zhe:pricing.rule.zhe,discountBp:pricing.rule.discountBp,stack:pricing.rule.stack}:null,
+     discount:freedomC,insurance:ins,beanBalance:bal,beanCapBeans:capBeans,beanDeduct:beanDedFen,beanDeductCount:wanted,
+     cashPay,rebateBaseFen:goods-freedomC-beanDedFen,
+     note:'自由豆与旅豆可同单使用、分别记账；旅豆抵扣上限按最终实际支付金额计算，最终价格以建单为准'}
  },
 }

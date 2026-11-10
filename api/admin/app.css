@@ -79,7 +79,7 @@ tbody tr[onclick]:hover, tbody tr.click-row:hover { background: #f7fafc; } /* �
 tbody tr:last-child td { border-bottom: none; }
 .td-main { font-weight: 600; } .td-sub { font-size: 12px; color: var(--sub); }
 .num { font-variant-numeric: tabular-nums; }
-.money { color: var(--brand); font-weight: 700; }
+.money { color: var(--brand); font-weight: 700; white-space: nowrap; } /* 金额不孤立断行（如 ¥299.00 被拆成两行） */
 .td-actions { white-space: nowrap; display: flex; gap: 4px; }
 
 /* ===== 状态药丸 ===== */

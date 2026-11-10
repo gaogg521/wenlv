@@ -22,8 +22,9 @@ import { contentGovernance } from './routes/content-governance.mjs'
 import { workAccess } from './routes/work-access.mjs'
 import { salesRoutes } from './routes/sales.mjs'
 import { freedomRoutes } from './routes/freedom.mjs'
+import { promoAdminRoutes } from './routes/promo-admin.mjs'
 
-export const routes = { ...workAccess, ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes }
+export const routes = { ...workAccess, ...c, ...m, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')

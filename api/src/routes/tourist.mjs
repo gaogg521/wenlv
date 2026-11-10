@@ -37,6 +37,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
+import { annotateSessions, activeRules, scopeMatch, unitPrice } from '../domain/discount.mjs'
 import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 // ---------- /c 游客端 ----------
@@ -118,7 +119,33 @@ const c = {
       [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
     const tagCache = {}
     for (const r of rows) if (!(r.merchant_lv in tagCache)) tagCache[r.merchant_lv] = await merchantLevel.listTagFor(r.merchant_lv)
-    return rows.map(({ tags_json, merchant_lv, ...r }) => ({ ...r, merchantTag: tagCache[merchant_lv] || null, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: (Object.fromEntries(entities.DICT.city))[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from) }))
+    // D01：列表同源显示原价与折扣后价——对在售团期批量注价，取最低有效单价（作用域按产品城市/渠道判定）
+    const ids = rows.map(r => Number(r.id))
+    const sessRows = ids.length ? await q(`SELECT s.product_id, s.depart_date, s.price_adult, s.early_price, s.early_days FROM tour_session s WHERE s.product_id IN (?) AND s.status = 1 AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')}`, [ids, bookingNow()]) : []
+    const priceByProd = {}
+    if (sessRows.length) {
+      const srcById = Object.fromEntries(rows.map(r => [Number(r.id), r]))
+      const rules = await activeRules()
+      const today = String(bookingNow()).slice(0, 10)
+      for (const s of sessRows) {
+        const base = srcById[Number(s.product_id)]
+        const ctx = { product_id: s.product_id, city_code: base.city_code, channel: base.channel, depart_date: s.depart_date }
+        let best = null
+        for (const rule of rules) {
+          if (!scopeMatch(rule, ctx)) continue
+          const pr = unitPrice(s, rule, today)
+          if (!best || pr.unitFen < best.unitFen) best = pr
+        }
+        const unit = best ? best.unitFen : order.priceForSession(s).price
+        const pid = Number(s.product_id)
+        if (priceByProd[pid] == null || unit < priceByProd[pid]) priceByProd[pid] = unit
+      }
+    }
+    return rows.map(({ tags_json, merchant_lv, ...r }) => {
+      const now = priceByProd[Number(r.id)]
+      return { ...r, merchantTag: tagCache[merchant_lv] || null, tags: ((typeof tags_json === 'string' ? JSON.parse(tags_json) : tags_json) || []).slice(0, 3), loc: (Object.fromEntries(entities.DICT.city))[r.city_code] || r.city_code, beanGift: Number(r.bean_gift), price: Number(r.price_from), priceLabel: fen2yuan(r.price_from),
+        priceNow: now != null ? now : Number(r.price_from), priceNowLabel: fen2yuan(now != null ? now : r.price_from), hasPromo: !!(now != null && now < Number(r.price_from)) }
+    })
   },
 
   'GET /c/tours/:id': async (req) => {
@@ -139,18 +166,26 @@ const c = {
     const pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
     const pub = Object.fromEntries(PUB_COLS.map((k) => [k, p[k]]))
     pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
+    // D01：早鸟/商品折扣统一注价——priceNow 为最终有效单价（同源建单试算），命中折扣时附 promo 信息
+    const annotated = await annotateSessions(sessions, { product_id: p.id, city_code: p.city_code, channel: p.channel })
+    const sessPub = sessions.map(({ profile, ...s }, i) => {
+      const ep = order.priceForSession(s)
+      const hit = annotated[i]
+      const unit = hit?.price ? hit.price.unitFen : ep.price
+      const rule = hit?.rule
+      return { ...s, info: entities.publicProfile('session', { ...s, profile }), priceLabel: fen2yuan(s.price_adult), priceNow: unit, priceNowLabel: fen2yuan(unit),
+        isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
+        promo: rule ? { id: Number(rule.id), name: rule.name, zhe: Number(rule.discount_bp) / 1000, stack: Number(rule.stack_early) === 1,
+          type: hit.price.type, originalFen: hit.price.originalFen, zheLabel: (Number(rule.discount_bp) / 1000).toFixed(2).replace(/\.?0+$/, '') } : null,
+        groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
+    })
     return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
       insuranceAvailable: process.env.NODE_ENV !== 'production', insuranceMode: process.env.NODE_ENV === 'production' ? 'unavailable' : 'demo',
       merchantCard: entities.publicProfile('merchant', merchantRow, img),
       merchantHonor: await honorOf(p.merchant_id, req),
       scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
       relatedFaqs,
-      sessions: sessions.map(({ profile, ...s }) => {
-      const ep = order.priceForSession(s)
-      return { ...s, info: entities.publicProfile('session', { ...s, profile }), priceLabel: fen2yuan(s.price_adult), priceNow: ep.price, priceNowLabel: fen2yuan(ep.price),
-        isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
-        groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
-    }),
+      sessions: sessPub,
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
       bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
@@ -238,7 +273,7 @@ const c = {
     }
     const r = await order.place({
       userId: u.uid, sessionId, qty, wantedBeans: beanDeduct, promoScene, withInsurance: !!req.body.insurance,
-      freedomRightId:req.body.freedomRightId,
+      freedomRightId:req.body.freedomRightId, expectedGoodsFen: req.body.expectedGoodsFen != null ? Number(req.body.expectedGoodsFen) : null,
       beanHook: { deduct: (uid, beans, orderNo) => bean.deduct(uid, beans, bean.BIZ.DEDUCT, orderNo) },
     })
     await tx(async (cc) => {
@@ -256,6 +291,7 @@ const c = {
       description: '向往的自由·主题游',
     })
     return { orderNo: r.orderNo, amountPay: r.amountPay, amountPayLabel: fen2yuan(r.amountPay), beanDeducted: r.beanDeducted,
+      freedomDiscount: r.freedomDiscount || 0, goodsFen: r.pricing?.goodsFen ?? null, priceType: r.pricing?.priceType ?? null,
       insuranceFee: r.insuranceFee || 0, insuranceNote: r.insuranceNote || null, payParams: pay }
   },
 

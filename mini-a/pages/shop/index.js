@@ -8,7 +8,8 @@ Page({
   onLoad() {
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
-      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); return { ...t, price: t.price || t.price_from, cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
+      // D01：商城同样使用列表同源注价（priceNow 已含早鸟/折扣，无优惠时等于原价）
+      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); const price = t.priceNow != null ? Number(t.priceNow) : Number(t.price || t.price_from); return { ...t, price, priceText: (price / 100).toFixed(2).replace(/\.?0+$/, ''), cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {

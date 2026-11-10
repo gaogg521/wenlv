@@ -17,14 +17,21 @@ Page({
   fetch() {
     this.setData({ loading: true, error: '' })
     api.request('/c/tours?cat=' + this.data.active + '&kw=' + encodeURIComponent(this.data.kw || '') + (this.city ? '&city=' + this.city : '')).then(list => {
-      const tours = (list || []).map(t => { const cover = api.coverFor(t); return { ...t, cover, sampleCover: api.isReferencePhoto(cover) } })
+      // D01：列表同源价格——priceNow 为折扣/早鸟后最低有效单价；priceText/showPromo 预计算（wxml 只做取值）
+      const tours = (list || []).map(t => {
+        const cover = api.coverFor(t)
+        const nowFen = t.priceNow != null ? Number(t.priceNow) : Number(t.price || t.price_from)
+        return { ...t, cover, sampleCover: api.isReferencePhoto(cover),
+          priceText: (nowFen / 100).toFixed(2).replace(/\.?0+$/, ''),
+          priceOriginalText: t.hasPromo ? (Number(t.price_from) / 100).toFixed(2).replace(/\.?0+$/, '') : '' }
+      })
       this.setData({ tours, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {
         const cat = this.data.active
         const src = (cat && cat !== 'all') ? api.FALLBACK.tours.filter(t => t.cat === cat) : api.FALLBACK.tours
-        const tours = src.map(t => ({ ...t, cover: api.coverFor(t) }))
+        const tours = src.map(t => ({ ...t, cover: api.coverFor(t), priceText: (Number(t.price || t.price_from) / 100).toFixed(2).replace(/\.?0+$/, '') }))
         this.setData({ tours, loading: false, fallback: true, demo: true, error: '' })
         wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' })
       } else {
