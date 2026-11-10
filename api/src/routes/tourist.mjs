@@ -114,7 +114,7 @@ const c = {
     const like = '%' + kw + '%'
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
         JSON_EXTRACT(p.profile, '$.tags') tags_json, m.level merchant_lv
-      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
+      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 AND p.channel = 'main' AND (JSON_EXTRACT(p.profile,'$.visible_channels') IS NULL OR JSON_CONTAINS(p.profile,'"main"','$.visible_channels')) ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
       ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
       ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
       [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
@@ -152,6 +152,10 @@ const c = {
   'GET /c/tours/:id': async (req) => {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
     if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
+    if (p.channel !== 'main') throw new BizError(1004, '商品不存在或已下架') // B11
+    // B11：visible_channels 限定时，未含游客端渠道的商品不可见
+    const _pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
+    if (Array.isArray(_pf.visible_channels) && _pf.visible_channels.length && !_pf.visible_channels.includes('main')) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
       price_adult, early_price, early_days, status, profile
       FROM tour_session s WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 AND ${bookingOpenSql('s')} ORDER BY depart_date`, [p.id, bookingNow()])
@@ -188,8 +192,8 @@ const c = {
       relatedFaqs,
       sessions: sessPub,
       // B02：套餐组成项公开信息（名称/类型/数量/提供方名称；不含成本、分摊等经营字段）
-      packageItems: (await q(`SELECT pi.name, pi.kind, pi.qty_per_unit, m.name merchant_name FROM package_item pi JOIN merchant m ON m.id = pi.merchant_id
-        WHERE pi.product_id = ? AND pi.status = 1 ORDER BY pi.sort, pi.id`, [p.id])).map(i => ({ name: i.name, kind: Number(i.kind), qtyPerUnit: Number(i.qty_per_unit), merchantName: i.merchant_name })),
+      packageItems: (await q(`SELECT pi.name, pi.kind, pi.qty_per_unit, pi.benefit_desc, pi.benefit_rules, m.name merchant_name FROM package_item pi JOIN merchant m ON m.id = pi.merchant_id
+        WHERE pi.product_id = ? AND pi.status = 1 ORDER BY pi.sort, pi.id`, [p.id])).map(i => ({ name: i.name, kind: Number(i.kind), qtyPerUnit: Number(i.qty_per_unit), merchantName: i.merchant_name, benefitDesc: i.benefit_desc || null, benefitRules: i.benefit_rules || null })),
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
       bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
@@ -326,7 +330,7 @@ const c = {
     }
     const passes = await q('SELECT id, name, status, order_item_id FROM travel_pass WHERE order_id = ?', [o.id])
     // B02/B04：订单项（游客可见：名称/类型/数量/现金分摊/履约状态；成本与供给来源不下发）
-    const orderItems = await q(`SELECT oi.id, oi.name, oi.kind, oi.qty, oi.cash_fen, oi.status, oi.pass_total, oi.pass_done, m.name merchant_name
+    const orderItems = await q(`SELECT oi.id, oi.name, oi.kind, oi.qty, oi.cash_fen, oi.status, oi.pass_total, oi.pass_done, oi.benefit_desc, oi.benefit_rules, m.name merchant_name
       FROM order_item oi JOIN merchant m ON m.id = oi.merchant_id WHERE oi.order_id = ? ORDER BY oi.id`, [o.id])
     const itemStatusText = { 0: '待履约', 1: '已完成', 2: '已退款', 3: '赠送' }
     // A-27：时间线下发面向用户的文案——内部事件键（REFUND_APPLY）、actor（user:57）、交易号、内部备注不下发
@@ -358,7 +362,7 @@ const c = {
     // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
     return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact,
-      orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
+      orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), benefit: (i.benefit_desc ? i.benefit_desc : '') + (i.benefit_rules ? '；' + i.benefit_rules : ''), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
   },
 
   'POST /c/orders/:no/pay': async (req) => {

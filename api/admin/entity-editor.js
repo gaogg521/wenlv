@@ -35,6 +35,7 @@
       case 'lines': return `<textarea id="${id}" rows="4" placeholder="每行一条">${E((v || []).join('\n'))}</textarea>`
       case 'image': return imageCtl(id, v, f)
       case 'gallery': return galleryCtl(id, v || [], f)
+      case 'video': return videoCtl(id, v, f)
       case 'rich': return richCtl(id, v || '')
       case 'repeat': return repeatCtl(id, v || [], f)
       default: return `<input id="${id}" value="${E(v)}">`
@@ -65,6 +66,23 @@
   function imageCtl(id, url, f) {
     return `<div class="ee-img" id="${id}" data-url="${E(url)}">${url ? `<img src="${E(url)}"><button type="button" class="ee-x" onclick="eeImgClear('${id}')">×</button>` : '<span>＋ 上传图片</span>'}
       <input type="file" accept="image/png,image/jpeg,image/webp" onchange="eeUpload(this,'${id}','single')"></div>`
+  }
+  function videoCtl(id, url, f) {
+    return `<div class="ee-img" id="${id}" data-url="${E(url || '')}">${url ? `<video src="${E(url)}" controls style="max-width:100%;border-radius:8px"></video><button type="button" class="ee-x" onclick="eeVideoClear('${id}')">×</button>` : '<span>＋ 上传视频（MP4 ≤30MB）</span>'}
+      <input type="file" accept="video/mp4" onchange="eeVideoUpload(this,'${id}')"></div>`
+  }
+  window.eeVideoClear = (id) => { const b = document.getElementById(id); b.dataset.url = ''; b.querySelector('video')?.remove(); b.querySelector('.ee-x')?.remove(); b.insertAdjacentHTML('afterbegin', '<span>＋ 上传视频（MP4 ≤30MB）</span>'); eeDirty() }
+  window.eeVideoUpload = async (input, id) => {
+    const file = (input.files || [])[0]; input.value = ''
+    if (!file) return
+    if (file.size > 30 * 1024 * 1024) return toast('视频超过 30MB', true)
+    const box = document.getElementById(id)
+    try {
+      const url = await uploadFile(file)
+      box.dataset.url = url
+      box.querySelector('span')?.remove(); box.querySelector('video')?.remove(); box.querySelector('.ee-x')?.remove()
+      box.insertAdjacentHTML('afterbegin', `<video src="${E(url)}" controls style="max-width:100%;border-radius:8px"></video><button type="button" class="ee-x" onclick="eeVideoClear('${id}')">×</button>`)
+    } catch (e) { toast(e.message || '视频上传失败', true) }
   }
   window.eeImgClear = (id) => { const b = document.getElementById(id); b.dataset.url = ''; b.querySelector('img')?.remove(); b.querySelector('.ee-x')?.remove(); b.insertAdjacentHTML('afterbegin', '<span>＋ 上传图片</span>'); eeDirty() }
   function galleryCtl(id, arr, f) {

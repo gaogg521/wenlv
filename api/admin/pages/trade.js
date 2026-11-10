@@ -387,7 +387,10 @@ window.packageItemEditor = async (pid, id) => {
     <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
     <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" value="${r.qty_per_unit || 1}"></div>
     <div class="field"><label>成本来源供给项（选填，B01）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
-    <div class="field"><label>操作依据 *（4–300 字）</label><input id="piReason" maxlength="300"></div>
+        <div class="field"><label>权益说明（游客可见，≤500字，选填）</label><textarea id="piBenefit" maxlength="500" placeholder="如：含专业讲解 90 分钟 · 每单 1 次">${esc(r.benefit_desc || '')}</textarea>
+    </textarea></div>
+    <div class="field"><label>使用规则（游客可见，≤300字，选填）</label><input id="piRules" maxlength="300" placeholder="如：出发前 24 小时可预约，当日有效" value="${esc(r.benefit_rules || '')}"></div>
+<div class="field"><label>操作依据 *（4–300 字）</label><input id="piReason" maxlength="300"></div>
     <div id="piErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="packageItemSave(${pid}, ${id || 0})">保存套餐项</button>`)
 }
@@ -396,7 +399,7 @@ window.packageItemSave = async (pid, id) => {
     await api('POST', `/admin/products/${pid}/package-items`, {
       id: id || undefined, name: document.getElementById('piName').value.trim(), kind: Number(document.getElementById('piKind').value),
       merchantId: Number(document.getElementById('piMerchant').value), unitPriceFen: Math.round(Number(document.getElementById('piPrice').value) * 100),
-      qtyPerUnit: Number(document.getElementById('piQty').value), supplyItemId: document.getElementById('piSupply').value || null,
+      qtyPerUnit: Number(document.getElementById('piQty').value), benefitDesc: document.getElementById('piBenefit').value.trim(), benefitRules: document.getElementById('piRules').value.trim(), supplyItemId: document.getElementById('piSupply').value || null,
       reason: document.getElementById('piReason').value.trim(),
     })
     closeModal(); toast('套餐项已保存'); packageItemsDrawer(pid)

@@ -125,6 +125,28 @@ export async function reverse(userId, amount, bizRef, connection) {
  * 订单完成返豆（定时任务与后台联调「完成」共用）。
  * 账号冻结时不发，订单记为"待补发"（V39 bean_rebate_deferred），解冻后由 releaseDeferredRebates 补发：照常累计、不丢失。
  */
+/** B14 产品专属完成奖励：产品 profile.reward_extra_beans>0 时在订单完成后额外发放。
+ *  沿用既有规则：旅豆预算双闸（grant）+ 账本 biz_ref 幂等（PXTRA-单号 只发一次）；冻结账号随 rebate 一起记待补发。
+ *  返回发放数量（0=无配置/已发/冻结/无预算）。 */
+export async function productExtraReward(o) {
+  const prod = await one('SELECT profile FROM tour_product WHERE id = ?', [o.product_id])
+  const pf = prod ? ((typeof prod.profile === 'string' ? JSON.parse(prod.profile || '{}') : prod.profile) || {}) : {}
+  const extra = Math.floor(Number(pf.reward_extra_beans) || 0)
+  if (!(extra > 0)) return 0
+  const bizRef = 'PXTRA-' + o.order_no
+  const done = await one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+    WHERE a.user_id = ? AND l.biz_type = ? AND l.biz_ref = ? LIMIT 1`, [o.user_id, BIZ.TASK, bizRef])
+  if (done) return 0
+  if (await isUserFrozen(o.user_id)) {
+    await q('UPDATE orders SET bean_rebate_deferred = 1 WHERE order_no = ?', [o.order_no])
+    return 0
+  }
+  const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
+  if (!budget) return 0
+  await grant(Number(o.user_id), extra, BIZ.TASK, bizRef, budget.id)
+  return extra
+}
+
 export async function rebateOrder(o) {
   // D01：返豆按最终实际支付的"适用商品金额"计算（总实付 − 保费/代收款），不用原价或券前金额；
   // 保费直付保险方，与佣金基数（promo.createCommission）同一口径。

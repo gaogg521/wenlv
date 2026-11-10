@@ -2,7 +2,8 @@
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <block wx:elif="{{p}}">
   <!-- 图集：有实拍图用图集，无图用主题插画 -->
-  <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
+  <<view wx:if="{{promoVideo}}" class="card fade-up" style="padding:0;overflow:hidden"><video src="{{promoVideo}}" controls object-fit="contain" style="width:100%;height:420rpx;background:#000" poster=""></video><view class="muted2" style="padding:12rpx 24rpx;font-size:22rpx">线路宣传视频</view></view>
+swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
     <swiper-item wx:for="{{gallery}}" wx:key="index">
       <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
     </swiper-item>
@@ -108,7 +109,7 @@
   <block wx:if="{{pkgItems.length}}">
     <view class="sec-title">套餐包含</view>
     <view class="card">
-      <view class="hl-item" wx:for="{{pkgItems}}" wx:key="name"><text class="hl-dot ok">›</text>{{item.name}} ×{{item.qty}}（{{item.kindText}} · {{item.merchantName}}）</view>
+      <view class="hl-item" wx:for="{{pkgItems}}" wx:key="name"><text class="hl-dot ok">›</text><text>{{item.name}} ×{{item.qty}}（{{item.kindText}} · {{item.merchantName}}）{{item.benefitDesc ? " · " + item.benefitDesc : ""}}{{item.benefitRules ? "；" + item.benefitRules : ""}}</text></view>
       <view class="muted2" style="margin-top:8rpx;font-size:22rpx">分项履约：凭证项由各提供方门店核销；未核销项目可按项申请退款。</view>
     </view>
   </block>

@@ -21,7 +21,7 @@ Page({
       d.hasInsurance = Number(d.insurance_fee) > 0 && d.insuranceAvailable !== false
       d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
       // B02：套餐组成项（预订页展示包含内容；空数组=非套餐）
-      d.pkgItems = (d.packageItems || []).map((i) => ({ name: i.name, qtyText: '×' + i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName }))
+      d.pkgItems = (d.packageItems || []).map((i) => ({ name: i.name, qtyText: '×' + i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefit: (i.benefitDesc ? i.benefitDesc : '') + (i.benefitRules ? '；' + i.benefitRules : '') }))
       this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !(d.sessions && d.sessions.length),
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv }, () => this.updatePrice())

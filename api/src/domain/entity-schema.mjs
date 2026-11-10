@@ -20,6 +20,7 @@ export const DICT = {
   supplierCat: [['ticket', '门票'], ['hotel', '住宿'], ['transport', '交通'], ['ground', '地接'], ['catering', '餐饮'], ['other', '其他']],
   settleMode: [['monthly', '月结'], ['per_order', '单结'], ['prepaid', '预付']],
   productCat: [['script', '剧本闯关'], ['yoga', '瑜伽之旅'], ['sister', '姐姐系列'], ['single', '单身社交'], ['sport', '体育竞技'], ['family', '亲子主题'], ['red', '红色文旅'], ['shop', '商城 SKU']],
+  channels: [['main', '游客端'], ['mini_b', '商户端'], ['pc', 'PC 工作台']],
   weekday: [['1', '周一'], ['2', '周二'], ['3', '周三'], ['4', '周四'], ['5', '周五'], ['6', '周六'], ['7', '周日']],
 }
 const yesNo = [['1', '是'], ['0', '否']]
@@ -42,6 +43,9 @@ const S = {
         { k: 'days_desc', label: '行程天数', type: 'text', store: 'col', max: 20, ph: '如：1天 / 2天1夜' },
         { k: 'price_from', label: '起售价', type: 'money', store: 'col', required: true, min: 1, unit: '元', help: '列表展示的"起"价；实际以团期价格为准' },
         { k: 'bean_gift', label: '完成赠送旅豆', type: 'int', store: 'col', min: 0, max: 100000, unit: '豆' },
+        { k: 'reward_extra_beans', label: '专属完成奖励旅豆', type: 'int', store: { json: 'profile', key: 'reward_extra_beans' }, min: 0, max: 10000, unit: '豆', help: '该产品订单完成时额外赠送（B14）；沿用旅豆预算双闸+账本幂等' },
+        { k: 'reward_note', label: '专属奖励说明', type: 'text', store: { json: 'profile', key: 'reward_note' }, max: 60, span: 2, help: '游客端展示，如：完成行程加赠 200 豆' },
+        { k: 'visible_channels', label: '可见渠道', type: 'multi', store: { json: 'profile', key: 'visible_channels' }, options: DICT.channels, help: '留空=全部渠道可见（B11）' },
         { k: 'tags', label: '标签', type: 'tags', max: 8, help: '回车添加，如：小团 / 含午餐 / 摄影跟拍' },
         { k: 'suitable', label: '适合人群', type: 'multi', options: [['family', '亲子'], ['couple', '情侣'], ['friends', '朋友结伴'], ['solo', '独自出行'], ['senior', '银发长辈'], ['team', '公司团建']] },
         { k: 'age_range', label: '年龄要求', type: 'text', max: 30, ph: '如：6 岁以上，70 岁以下需家属陪同' },
@@ -49,6 +53,7 @@ const S = {
       ] },
       { title: '图文介绍', fields: [
         { k: 'images', label: '图集', type: 'gallery', store: 'col', max: 9, span: 2, help: '第一张为封面；建议 4:3，2MB 以内' },
+        { k: 'video', label: '宣传视频', type: 'video', store: { json: 'rich_desc', key: 'video' }, span: 2, help: 'MP4 ≤30MB；游客详情页顶部播放（B09）' },
         { k: 'highlights', label: '玩法亮点', type: 'lines', store: { json: 'rich_desc', key: 'highlights' }, max: 8, span: 2, help: '每行一条，详情页以要点展示' },
         { k: 'intro', label: '行程介绍', type: 'rich', store: { json: 'rich_desc', key: 'intro' }, span: 2, required: true },
       ] },

@@ -163,7 +163,7 @@ async function userProfile(id) {
     ${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}
     <div><h2>${esc(u.nickname || '未命名')} ${frozen ? '<span class="pill s70">已冻结</span>' : ''}${u.risk_flag ? ' <span class="pill warn">风险标记</span>' : ''}</h2>
       <div class="td-sub">ID ${u.id} · ${LEVEL_CN[u.member_level] || 'Lv' + u.member_level} · 成长值 ${PN(u.growth_value)} · 注册于 ${dt(u.created_at)}</div></div>
-    <div class="pprofile-act">${adminCan('user.manage') ? `
+<div class="pprofile-act">${adminCan('user.manage') ? `
       <button class="btn ${frozen ? 'primary' : 'danger'} sm" onclick="userSetStatus(${u.id}, ${frozen ? 1 : 0})">${frozen ? '解除冻结' : '冻结账号'}</button>
       <button class="btn ghost sm" onclick="userSetRisk(${u.id}, ${u.risk_flag ? 0 : 1})">${u.risk_flag ? '取消风险标记' : '标记风险'}</button>` : '<span class="muted">账号状态与风险管理需运营或风控权限</span>'}</div>
   </div>
@@ -272,7 +272,7 @@ async function productProfile(id) {
   reviewDrawer(`产品经营总览 · ${esc(x.title)}`, `
   <div class="pprofile-head"><i>${esc(String(x.title).slice(0, 1))}</i><div><h2>${esc(x.title)} ${PN(x.status) === 1 ? '<span class="pill ok">在架</span>' : '<span class="pill off">下架</span>'}</h2>
     <div class="td-sub">${esc(CITY_CN[x.city_code] || x.city_code || '')} · ${esc(x.merchant_name || '')} · 起价 ${fen(x.price_from)}</div></div>
-    <div class="pprofile-act">${adminCan('entity.product.edit')?`<button class="btn ghost sm" onclick="entityEditor('product', ${x.id})">编辑资料</button>`:''}<button class="btn ghost sm" onclick="closeModal();sessionsDrawer(${x.id})">团期与名额</button></div></div>
+    <div class="pprofile-act">${adminCan('entity.product.edit')?`<button class="btn ghost sm" onclick="entityEditor('product', ${x.id})">编辑资料</button>`:''}<button class="btn ghost sm" onclick="mobilePreview(${x.id})">移动预览</button><button class="btn ghost sm" onclick="closeModal();sessionsDrawer(${x.id})">团期与名额</button></div></div>
   ${op ? `<div class="rv-box"><h3>经营配置 · 基础版</h3>${kv('资料完整度',op.completeness+'%（非业务正确性评分）')}${kv('类型',esc(op.quality.category))}${kv('供给资源',esc(op.supplier?.name || '未关联')+' / '+esc(op.scenic?.name || '未关联'))}${kv('可售团期 / 余位',op.available.n+' 期 / '+op.available.seats+' 位')}${kv('下个可售日期',esc(op.available.next_date || '暂无'))}${kv('完成赠豆',op.beanGift+' 豆')}${op.coCreators!=null?kv('生效共创合同',op.coCreators+' 份')+kv('产品统一费率',op.promoRate!=null?Number(op.promoRate)/100+'%':'未设置，按推广档位'):''}${op.salesAuth?kv('当前有效销售授权',op.salesAuth.n+' 人'):''}${op.subsidy?kv('自由豆有效补贴责任 / 已登记付款',fen(op.subsidy.liability)+' / '+fen(op.subsidy.paid)):''}<h4>资料核对建议</h4>${op.quality.issues.length?op.quality.issues.map(s=>`<p>${esc(s)}</p>`).join(''):'<p>当前基础核对项无提示，仍需人工核实真实内容。</p>'}<p class="td-sub">待后续批次：${op.pendingCapabilities.map(esc).join('、')}。下方团期仅最近12条，余位为全量可售团期汇总。</p></div>`:''}
   ${costBlock}
   <div class="pstats">${stat('成交额', fen(k.gmv), `${PN(k.orders)} 单 · ${PN(k.buyers)} 位用户`)}${stat('出行人数', PN(k.travelers), `旅豆抵扣 ${PN(k.beans_used)}`)}
@@ -373,4 +373,32 @@ window.eqApproveSubmit = async (id, pass) => {
 }
 window.eqWithdraw = async (id) => {
   try { await api('POST', '/admin/entitlements/' + id + '/withdraw'); toast('已撤回'); entitlements() } catch (e) { toast(e.message, true) }
+}
+
+
+// B09 受控移动预览：后台内渲染游客详情（公开数据，手机框视口；不对外发布、不落 H5）
+window.mobilePreview = async (pid) => {
+  let d
+  try { d = (await (await fetch('/c/tours/' + pid)).json()).data; if (!d) throw new Error('商品不可预览') } catch (e) { return toast(e.message, true) } // /c 端拒绝后台令牌，预览走匿名公开口径
+  const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
+  const video = rich.video || ''
+  const gal = (d.images || []).map((u) => '/uploads/' + String(u).replace(/^.*\/uploads\//, ''))
+  const galHtml = gal.map((u) => '<img src="' + esc(u) + '" style="width:130px;height:98px;object-fit:cover">').join('')
+  const pkgHtml = (d.packageItems || []).length ? '<div class="td-sub" style="margin-top:6px"><b>套餐包含：</b>' + d.packageItems.map((x) => esc(x.name + ' ×' + x.qtyPerUnit)).join('、') + '</div>' : ''
+  const sessHtml = (d.sessions || []).slice(0, 3).map((x) => '<div class="td-sub" style="margin-top:4px">' + esc(String(x.depart_date).slice(0, 10)) + ' · 余 ' + x.left_seats + ' · ¥' + (Number(x.priceNow) / 100).toFixed(2) + '</div>').join('')
+  const videoHtml = video ? '<video src="' + esc(video) + '" controls style="width:100%;height:210px;background:#000"></video>' : ''
+  drawer('移动预览 · ' + esc(d.title), `
+    <p class="td-sub">仅管理后台内预览（公开口径数据），非对外页面；真实小程序以体验版/正式版为准。</p>
+    <div style="max-width:390px;margin:0 auto;border:2px solid var(--line);border-radius:28px;overflow:hidden;background:#fff">
+      <div style="background:#1a1a1a;color:#fff;font-size:12px;padding:8px 14px">${esc(String(d.title || '').slice(0, 18))} · 预览</div>
+      ${videoHtml}
+      ${gal.length ? '<div style="display:flex;overflow-x:auto">' + galHtml + '</div>' : ''}
+      <div style="padding:12px 14px">
+        <div style="font-weight:700;font-size:16px">${esc(d.title)}</div>
+        <div class="td-sub">${esc(d.subtitle || '')}</div>
+        <div class="money num" style="font-size:18px">${fen(Number(d.price_from))}<span class="td-sub"> 起</span></div>
+        ${pkgHtml}
+        ${sessHtml}
+      </div>
+    </div>`, '')
 }
