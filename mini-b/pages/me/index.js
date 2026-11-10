@@ -1,6 +1,14 @@
 const api = require('../../utils/api')
 const app = getApp()
 Page({
+  async chooseStore() {
+    try {
+      const stores = await api.request('/m/auth/stores')
+      if (!stores.length) return wx.showToast({title:'没有有效门店授权',icon:'none'})
+      const choice = await new Promise(resolve => wx.showActionSheet({itemList:stores.map(s=>s.name+' · '+['','核销员','店长','老板'][s.role]),success:r=>resolve(r.tapIndex),fail:()=>resolve(null)}))
+      if(choice !== null) await api.switchStore(stores[choice].id)
+    } catch(e) { wx.showToast({title:e.msg || '切换失败',icon:'none'}) }
+  },
   data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
     this.setData({ demoAvailable: api.canDemoLogin() })

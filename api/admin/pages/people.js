@@ -252,11 +252,12 @@ async function merchantProfile(id) {
 async function productProfile(id) {
   let p
   try { p = await api('GET', `/admin/products/${id}/overview`) } catch (e) { return toast(e.message, true) }
-  const x = p.product, k = p.kpi
-  reviewDrawer(`商品数据 · ${esc(x.title)}`, `
+  const x = p.product, k = p.kpi, op = p.operating
+  reviewDrawer(`产品经营总览 · ${esc(x.title)}`, `
   <div class="pprofile-head"><i>${esc(String(x.title).slice(0, 1))}</i><div><h2>${esc(x.title)} ${PN(x.status) === 1 ? '<span class="pill ok">在架</span>' : '<span class="pill off">下架</span>'}</h2>
     <div class="td-sub">${esc(CITY_CN[x.city_code] || x.city_code || '')} · ${esc(x.merchant_name || '')} · 起价 ${fen(x.price_from)}</div></div>
-    <div class="pprofile-act"><button class="btn ghost sm" onclick="entityEditor('product', ${x.id})">编辑资料</button></div></div>
+    <div class="pprofile-act">${adminCan('entity.product.edit')?`<button class="btn ghost sm" onclick="entityEditor('product', ${x.id})">编辑资料</button>`:''}<button class="btn ghost sm" onclick="closeModal();sessionsDrawer(${x.id})">团期与名额</button></div></div>
+  ${op ? `<div class="rv-box"><h3>经营配置 · 基础版</h3>${kv('资料完整度',op.completeness+'%（非业务正确性评分）')}${kv('类型',esc(op.quality.category))}${kv('供给资源',esc(op.supplier?.name || '未关联')+' / '+esc(op.scenic?.name || '未关联'))}${kv('可售团期 / 余位',op.available.n+' 期 / '+op.available.seats+' 位')}${kv('下个可售日期',esc(op.available.next_date || '暂无'))}${kv('完成赠豆',op.beanGift+' 豆')}${op.coCreators!=null?kv('生效共创合同',op.coCreators+' 份')+kv('产品统一费率',op.promoRate!=null?Number(op.promoRate)/100+'%':'未设置，按推广档位'):''}<h4>资料核对建议</h4>${op.quality.issues.length?op.quality.issues.map(s=>`<p>${esc(s)}</p>`).join(''):'<p>当前基础核对项无提示，仍需人工核实真实内容。</p>'}<p class="td-sub">待后续批次：${op.pendingCapabilities.map(esc).join('、')}。下方团期仅最近12条，余位为全量可售团期汇总。</p></div>`:''}
   <div class="pstats">${stat('成交额', fen(k.gmv), `${PN(k.orders)} 单 · ${PN(k.buyers)} 位用户`)}${stat('出行人数', PN(k.travelers), `旅豆抵扣 ${PN(k.beans_used)}`)}
     ${stat('团期满座率', pct(k.fill_rate), `退款率 ${pct(k.refund_rate)}`)}${stat('评分', k.rating != null ? k.rating.toFixed(1) + ' ★' : '—', `${k.reviews} 条评价 · ${k.notes} 篇游记`)}</div>
   <div class="card" style="margin:0 0 12px"><div class="card-head"><h2>近 14 日订单</h2></div>${dayBars(p.daily, { key: 'n', fmt: (v) => v + ' 单', label: '订单数' })}</div>

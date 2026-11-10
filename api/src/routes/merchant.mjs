@@ -46,14 +46,20 @@ const m = {
     const { code, merchantId } = req.body
     const ses = await code2Session(code || 'mock-m-default', 'b')
     if (!ses.openid) throw new BizError(1002, '微信登录失败，请重试')
-    let u = await one('SELECT * FROM user_account WHERE mini_b_openid = ?', [ses.openid])
+    const identityRows = await q('SELECT * FROM user_account WHERE mini_b_openid = ? OR (unionid IS NOT NULL AND unionid = ?) LIMIT 2', [ses.openid, ses.unionid || null])
+    if (identityRows.length > 1) throw new BizError(1003, '微信身份关联冲突，请联系平台核对')
+    let u = identityRows[0] || null
     if (!u) {
-      await q('INSERT INTO user_account (unionid, mini_b_openid, nickname) VALUES (?,?,?) ON DUPLICATE KEY UPDATE mini_b_openid = VALUES(mini_b_openid)',
+      await q('INSERT INTO user_account (unionid, mini_b_openid, nickname) VALUES (?,?,?)',
         [ses.unionid || null, ses.openid, '商户员工'])
       u = await one('SELECT * FROM user_account WHERE mini_b_openid = ?', [ses.openid])
     }
     if (!ses.openid) throw new BizError(1002, '微信登录失败，请重试')
     if (Number(u.status) === 0) throw new BizError(1003, '账号已被停用，请联系平台')
+    if (!u.mini_b_openid) {
+      // Only the provider-verified unionid may connect the two AppIDs; never trust a client UID/mobile.
+      await q('UPDATE user_account SET mini_b_openid=? WHERE id=? AND mini_b_openid IS NULL', [ses.openid, u.id])
+    } else if (u.mini_b_openid !== ses.openid) throw new BizError(1003, '微信身份关联冲突，请联系平台核对')
     const staff = await one(`SELECT s.merchant_id, s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
       WHERE s.user_id = ? AND s.status = 1 AND m.status = 1 AND (? IS NULL OR s.merchant_id = ?) ORDER BY s.id LIMIT 1`, [u.id, merchantId || null, merchantId || null])
     if (!staff) {

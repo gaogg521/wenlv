@@ -8,6 +8,9 @@ import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
 import { partnerPerformance } from './partner-performance.mjs'
 import * as bean from '../domain/bean.mjs'
+import * as entities from '../domain/entity-schema.mjs'
+import { productQuality } from '../domain/product-quality.mjs'
+import { bookingNow, bookingOpenSql } from '../domain/booking-window.mjs'
 
 const N = (v) => Number(v || 0)
 const maskName = (s) => (s ? String(s).slice(0, 1) + '*'.repeat(Math.max(1, String(s).length - 1)) : '')
@@ -312,7 +315,8 @@ export const people = {
   // ---------------- 商品 / 线路数据 ----------------
   'GET /admin/products/:id/overview': async (req) => {
     const a = await requireAdmin(req)
-    const p = await one('SELECT p.id, p.title, p.channel, p.city_code, p.status, p.price_from, m.name merchant_name FROM tour_product p LEFT JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?', [req.params.id])
+    if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    const p = await one('SELECT p.*, m.name merchant_name FROM tour_product p LEFT JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(p.city_code)) throw new BizError(1003, '仅可查看本城商品数据')
     const kpi = await one(`SELECT COUNT(*) orders, COALESCE(SUM(CASE WHEN status IN ${PAID} THEN qty END), 0) travelers,
@@ -326,7 +330,16 @@ export const people = {
     const daily = await q(`SELECT DATE_FORMAT(created_at, '%Y-%m-%d') d, COUNT(*) n, COALESCE(SUM(amount_pay), 0) gmv FROM orders
       WHERE product_id = ? AND status IN ${PAID} AND created_at >= CURDATE() - INTERVAL 13 DAY GROUP BY d ORDER BY d`, [p.id])
     const notes = N((await one('SELECT COUNT(*) n FROM content_note WHERE related_product_id = ? AND status = 2', [p.id])).n)
-    return { product: p, kpi: { ...kpi, refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, fill_rate: fill.q ? fill.b / fill.q : 0,
+    const source = p.supplier_id ? await one('SELECT id,name FROM supplier WHERE id=?', [p.supplier_id]) : null
+    const scenic = p.scenic_id ? await one('SELECT id,name FROM scenic_spot WHERE id=?', [p.scenic_id]) : null
+    const available = await one(`SELECT COUNT(*) n,COALESCE(SUM(quota-booked),0) seats,MIN(depart_date) next_date FROM tour_session s WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked AND ${bookingOpenSql('s')}`, [p.id,bookingNow()])
+    const co = await one('SELECT COUNT(*) n FROM co_creator WHERE product_id=? AND status=1',[p.id])
+    const finance = ['super','ops','finance'].includes(a.role)
+    const publicProduct = Object.fromEntries(['id','title','channel','city_code','status','price_from','merchant_name'].map(k=>[k,p[k]]))
+    return { product: publicProduct, operating: { supplier:source,scenic,merchantId:p.merchant_id,available,coCreators:finance?Number(co.n):null,
+      completeness:entities.completeness('product',entities.readValues('product',p)),quality:productQuality(p),
+      promoRate:finance?p.promo_rate_bp:null,beanGift:Number(p.bean_gift || 0),updatedAt:p.updated_at,
+      pendingCapabilities:['多提供方组合及逐项履约','人员×产品销售授权','自由豆官方补贴'] }, kpi: { ...kpi, refund_rate: N(kpi.orders) ? N(kpi.refunded) / N(kpi.orders) : 0, fill_rate: fill.q ? fill.b / fill.q : 0,
       rating: rating.avg != null ? Number(rating.avg) : null, reviews: N(rating.n), notes }, sessions, dist, daily }
   },
 }

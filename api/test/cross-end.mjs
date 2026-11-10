@@ -24,9 +24,11 @@ const A = ok(await call('POST', '/admin/login', { username: 'admin', password: p
 const CITY = ok(await call('POST', '/admin/login', { username: 'city310118', password: process.env.CITY_PARTNER_PASSWORD || 'city123' })).token
 
 // ---------- 取一个可买的团期（余量足够），建本轮的游客 / 商户员工 ----------
-const sess = await one(`SELECT s.id, s.product_id, s.price_adult, p.merchant_id, p.city_code, p.title FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+const sess = await one(`SELECT s.id, s.product_id, s.price_adult, s.depart_date, p.merchant_id, p.city_code, p.title FROM tour_session s JOIN tour_product p ON p.id = s.product_id
   WHERE p.status = 1 AND s.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 5 AND s.price_adult > 0 ORDER BY s.id LIMIT 1`)
 assert.ok(sess, '隔离库需先 seed:scenario，库里应有可买团期')
+// 核销日期窗要求出发日当天；不能依赖上一个脚本碰巧把所选团期改成今天。
+await q('UPDATE tour_session SET depart_date=CURDATE() WHERE id=?',[sess.id])
 await q('UPDATE tour_session SET quota = GREATEST(quota, booked + 30) WHERE id = ?', [sess.id]) // 本测试会连续下很多单：给足余量，重复运行也不会因名额不足误报
 const login = async (code) => {
   const r = ok(await call('POST', '/c/auth/login', { code }))
@@ -102,7 +104,7 @@ await t('核销：A 出示动态码 → B 扫码成功；A 状态 40，B 记录 
   const before = await views()
   const pid = ok(await call('GET', '/c/orders/' + o1.orderNo, null, C)).passes[0].id
   code = ok(await call('GET', `/c/pass/${pid}/code`, null, C))
-  const r = ok(await call('POST', '/m/verify/scan', { payload: code.qr }, B)); assert.equal(r.ok, true)
+  const r = ok(await call('POST', '/m/verify/scan', { payload: code.qr }, B)); assert.equal(r.ok, true, r.reason)
   assert.equal(ok(await call('GET', '/c/orders/' + o1.orderNo, null, C)).status, 40)
   assert.equal(Number(ok(await call('GET', '/admin/orders/' + o1.orderNo, null, A)).status), 40)
   assert.ok(ok(await call('GET', '/m/verify/records', null, B)).some((x) => x.order_no === o1.orderNo && Number(x.result) === 1))
@@ -840,6 +842,7 @@ for (const id of created.banners) await q('DELETE FROM banner WHERE id = ?', [id
 for (const id of created.faqs) await q('DELETE FROM faq WHERE id = ?', [id]).catch(() => {})
 for (const id of created.badges) { await q('DELETE FROM user_badge WHERE badge_id = ?', [id]).catch(() => {}); await q('DELETE FROM badge WHERE id = ?', [id]).catch(() => {}) }
 for (const id of created.notes) await q('DELETE FROM content_note WHERE id = ?', [id]).catch(() => {})
+await q('UPDATE tour_session SET depart_date=? WHERE id=?',[sess.depart_date,sess.id])
 console.log(`\n${pass} 项通过${process.exitCode ? '，有失败' : ''}`)
 process.exit(process.exitCode || 0)
 

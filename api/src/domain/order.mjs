@@ -2,6 +2,7 @@
 import { q, one, tx, count, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
+import { bookingOpen, bookingNow, bookingOpenSql } from './booking-window.mjs'
 import * as bean from './bean.mjs'
 import { attest } from './attest.mjs'
 
@@ -52,6 +53,7 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   if (!Number.isInteger(qty) || qty < 1 || qty > 9) throw new BizError(1001, '出行人数应为 1–9 人')
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
+  if (!bookingOpen(s.profile)) throw new BizError(2001, '该团期报名已截止')
   const goods = priceForSession(s).price * qty
   if (!(goods > 0)) throw new BizError(1001, '商品价格异常，暂不可下单') // A-07 兜底：负价/零价团期落库后不得出负金额订单
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
@@ -69,7 +71,7 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   const orderNo = 'WL' + bizDay().replaceAll('-', '') + suffix
 
   await tx(async (c) => {
-    const n = await c.upd('UPDATE tour_session SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota', [qty, sessionId, qty])
+    const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [qty, sessionId, qty, bookingNow()])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
         amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee)

@@ -6,6 +6,7 @@ import * as refund from './refund.mjs'
 import * as wxapi from './wxapi.mjs'
 import { attest } from './attest.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
+import { bookingOpen, bookingOpenSql, bookingNow } from './booking-window.mjs'
 
 /** 到期未成团的团期 → 取消团期 + 关闭待支付单 + 全额退款已支付单 + 订阅通知。jobs 与测试共用。 */
 export async function cancelDueSessions() {
@@ -69,6 +70,7 @@ export async function rebook({ userId, orderNo, sessionId }) {
   const s = await one(`SELECT s.*, p.channel FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?`, [sessionId])
   const oldS = await one('SELECT channel FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [old.session_id])
   if (!s || Number(s.status) !== 1) throw new BizError(2001, '目标团期不可报名')
+  if (!bookingOpen(s.profile)) throw new BizError(2001, '目标团期报名已截止')
   if (oldS && s.channel !== oldS.channel) throw new BizError(1001, '仅可改签同频道团期')
   if (Number(s.price_adult) * Number(old.qty) !== Number(old.amount_goods)) throw new BizError(1001, '仅可免费改签同价团期')
   if (String(s.depart_date).slice(0, 10) < bizDay())
@@ -84,7 +86,7 @@ export async function rebook({ userId, orderNo, sessionId }) {
     const rebooked = await c.one('SELECT order_no FROM orders WHERE rebook_of = ?', [orderNo])
     if (rebooked) throw new BizError(1001, '该订单已改签过（' + rebooked.order_no + '）')
     const days = await cfgNum('order.observe_days')
-    const n = await c.upd('UPDATE tour_session SET booked = booked + ? WHERE id = ? AND booked + ? <= quota', [old.qty, sessionId, old.qty])
+    const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [old.qty, sessionId, old.qty, bookingNow()])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
         amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, paid_at, refund_deadline, rebook_of)

@@ -129,7 +129,7 @@ async function products() {
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
-      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">数据</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
+      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
           ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
