@@ -31,7 +31,7 @@ Page({
           id: s.id, date: s.depart_date + ' ' + weekday(s.depart_date),
           price: s.priceNowLabel || s.priceLabel,
           priceOriginal: isPromo ? (Number(s.promo.originalFen) / 100).toFixed(2) : '',
-          promoTag: isPromo ? zheLabel + '折 · 按原价' + Math.round(Number(s.promo.zhe) * 100) + '%付款' : '',
+          promoTag: isPromo ? zheLabel + '折 · 按原价' + (Math.round(Number(s.promo.zhe) * 100) / 10) + '%付款' : '',
           seats: left <= 0 ? '已满' : (left <= 5 ? '仅剩 ' + left + ' 席' : '余 ' + left + ' 席'),
           state: s.isEarly ? '早鸟价 · 提前 ' + s.daysToDepart + ' 天' : (isPromo ? s.promo.name : (g.minGo > 1 ? (g.reached ? '已成团' : '已报 ' + g.booked + '/' + g.minGo + ' 人成团') : '可预订')),
         }

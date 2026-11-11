@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { one, q, tx, BizError } from '../db.mjs'
-import { requireAdmin, requireModule, scopeFilter } from './_shared.mjs'
+import { requireAdmin, requireModule, scopeFilter, subjectScope } from './_shared.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
 import { calculate, example } from '../domain/scenic-calculator.mjs'
 
 const base = '/admin/scenics/:id/calculator'
-const roles = ['super', 'ops', 'finance', 'city_partner']
+const roles = ['super', 'ops', 'finance', 'city_partner', 'merchant_partner', 'scenic_partner'] // V82：商户/景区主体方按绑定主体隔离
 const validId = value => {
   const id = Number(value)
   if (!Number.isSafeInteger(id) || id < 1) throw new BizError(1001, '编号无效')
@@ -33,6 +33,14 @@ async function access(req) {
   const scope = scopeFilter(actor)
   const scenic = await one('SELECT id,name,city_code FROM scenic_spot WHERE id=?' + scope.sql, [validId(req.params.id), ...scope.params])
   if (!scenic) throw new BizError(1004, '景区不存在或不在授权范围')
+  // V82 主体方主体映射：景区主体方只能算自己的景区；商户主体方只能带自己的商户（未带则强制为本店）
+  const sub = subjectScope(actor)
+  if (actor.role === 'scenic_partner') {
+    if (!sub.scenicId || Number(sub.scenicId) !== Number(scenic.id)) throw new BizError(1004, '景区不存在或不在授权范围')
+  } else if (actor.role === 'merchant_partner') {
+    if (!sub.merchantId) throw new BizError(1004, '商户不存在或不在授权范围')
+    if (merchant && Number(merchant.id) !== Number(sub.merchantId)) throw new BizError(1004, '该商户未关联此景区')
+  }
   if (merchant && (merchant.city_code !== scenic.city_code || !await one('SELECT id FROM tour_product WHERE scenic_id=? AND merchant_id=? LIMIT 1', [scenic.id, merchant.id]))) {
     throw new BizError(1004, '该商户未关联此景区')
   }

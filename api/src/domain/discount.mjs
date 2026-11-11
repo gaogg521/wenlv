@@ -29,6 +29,23 @@ export function scopeMatch(rule, ctx) {
   return true
 }
 
+/** B11 渠道可见口径（唯一权威实现，修复6）：product.profile.visible_channels
+ *  缺失 / null / 空数组 = 不限制（所有渠道可见）；非空数组 = 仅列出的渠道可见。
+ *  列表、详情、试算、建单、首页全部复用本判定与 visibleChannelSql，杜绝跨入口口径漂移。 */
+export function channelAllowed(profile, channel = 'main') {
+  let pf = profile
+  if (typeof pf === 'string') { try { pf = JSON.parse(pf || '{}') } catch { pf = {} } }
+  pf = pf || {}
+  const v = pf.visible_channels
+  if (!Array.isArray(v) || !v.length) return true // 缺失/空数组=全部
+  return v.map(String).includes(String(channel))
+}
+
+/** 与 channelAllowed 同口径的 SQL 片段（别名 p 指向 tour_product；channel 为字符串字面量）。
+ *  JSON_LENGTH(COALESCE(..., '[]'))=0 覆盖「字段缺失」与「空数组」两种不限渠道形态。 */
+export const visibleChannelSql = (channel) =>
+  `(JSON_EXTRACT(p.profile,'$.visible_channels') IS NULL OR JSON_LENGTH(JSON_EXTRACT(p.profile,'$.visible_channels')) = 0 OR JSON_CONTAINS(p.profile,'"${String(channel)}"','$.visible_channels'))`
+
 /** 单价计算（纯函数，D01 契约 §首版计算与叠加契约）：
  *  - 折扣候选价 = 真实团期原价 × 付款比例，单位价四舍五入到分再乘数量（place 里乘 qty）。
  *  - 默认不叠加：取有效早鸟价与原价折扣价中较低者；价格相同优先早鸟。

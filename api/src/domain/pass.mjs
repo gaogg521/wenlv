@@ -143,6 +143,9 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode, offli
     await c.upd('UPDATE travel_pass SET status = 2 WHERE id = ?', [passId])
     if (pass.order_item_id != null) {
       await c.upd('UPDATE order_item SET pass_done = pass_done + 1 WHERE id = ? AND pass_done < pass_total', [pass.order_item_id])
+      // B03 补：按人凭证项全部凭证核销 → 项履约完成。此前只加 pass_done 不推进 status，
+      // 项永远显示"待履约"、并阻塞"全部项完成才触发整单核销完成"的判定（朱家角闭环验证发现）。
+      await c.q('UPDATE order_item SET status = 1 WHERE id = ? AND pass_total > 0 AND pass_done >= pass_total AND status = 0', [pass.order_item_id])
     }
     await c.q('INSERT INTO verification_log (pass_id, merchant_id, staff_id, method, result, city_code) VALUES (?,?,?,1,1,?)',
       [passId, merchantId, staffId, cityCode])

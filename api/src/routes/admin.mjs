@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
-import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
+import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, subjectScope, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 
 // config_history 的 JSON 列被驱动读成了 JS 值（数组 / 对象 / 数字 / 字符串），写回 rule_config 必须序列化成 JSON 文本；
 // 直接 String() 会把数组变成 "[object Object]"（此前审批、回滚任何 JSON 数组类参数都会报错）
@@ -142,6 +142,15 @@ async function orderFiltersOf(req, a) {
   const addCond = (sql, ...args) => { conds.push({ sql, args }) }
   const sc = scopeFilter(a, 'o.city_code')
   if (sc.sql) addCond(sc.sql.replace(' AND ', ''), ...sc.params)
+  // V82 主体方行级隔离：商户主体方只看本店订单；景区主体方只看其景区商品订单
+  const sub = subjectScope(a)
+  if (a.role === 'merchant_partner') {
+    if (!sub.merchantId) addCond('1 = 0')
+    else addCond('o.merchant_id = ?', sub.merchantId)
+  } else if (a.role === 'scenic_partner') {
+    if (!sub.scenicId) addCond('1 = 0')
+    else addCond('o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)', sub.scenicId)
+  }
   const filters = {}
   const cityCode = String(req.query.cityCode || '').trim()
   if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
@@ -227,7 +236,7 @@ const admin = {
         target: ch === 'sms' ? String(u.mobile || '').replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : (ch === 'email' ? String(u.email || '').replace(/^(.).*(@.*)$/, '$1***$2') : null) }
     }
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
-    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
+    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null, subjectType: u.subject_type || null, subjectId: u.subject_id != null ? Number(u.subject_id) : null }, 12 * 3600),
       user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
   },
 
@@ -273,7 +282,7 @@ const admin = {
     else ok = await mfa.verifyCode(p.ch === 'sms' ? u.mobile : u.email, p.ch, code)
     if (!ok) throw new BizError(1002, '验证码不正确或已过期')
     await q('UPDATE admin_user SET last_login_at = NOW(3) WHERE id = ?', [u.id])
-    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null }, 12 * 3600),
+    return { token: jwtSign({ uid: u.id, ver: Number(u.token_epoch), end: 'admin', role: u.role, name: u.display_name || u.username, scopeCity: u.scope_city || null, subjectType: u.subject_type || null, subjectId: u.subject_id != null ? Number(u.subject_id) : null }, 12 * 3600),
       user: { uid: u.id, username: u.username, role: u.role, displayName: u.display_name, scopeCity: u.scope_city || null, mustChangePassword: Number(u.must_change_pwd) === 1 } }
   },
 
@@ -454,6 +463,10 @@ const admin = {
     const sc = scopeFilter(a, 'o.city_code')
     const where = []
     if (sc.sql) where.push(sc.sql.replace(' AND ', ''))
+    // V82 主体方行级隔离：商户主体方只看本店订单；景区主体方只看本景区商品订单（Number() 收敛防注入）
+    const subO = subjectScope(a)
+    if (a.role === 'merchant_partner') where.push(subO.merchantId ? 'o.merchant_id = ' + Number(subO.merchantId) : '1 = 0')
+    else if (a.role === 'scenic_partner') where.push(subO.scenicId ? 'o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ' + Number(subO.scenicId) + ')' : '1 = 0')
     if (status) where.push('o.status = ' + Number(status))
     if (kw) where.push('o.order_no LIKE ' + JSON.stringify('%' + kw + '%'))
     return (await q(`SELECT o.*, p.title, u.nickname FROM orders o
@@ -660,6 +673,12 @@ const admin = {
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id WHERE o.order_no = ?`, [req.params.no])
     if (!o) throw new BizError(2003, '订单不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(o.city_code)) throw new BizError(1003, '仅可查看本城订单')
+    const subO = subjectScope(a)
+    if (a.role === 'merchant_partner' && (!subO.merchantId || Number(subO.merchantId) !== Number(o.merchant_id))) throw new BizError(1003, '仅可查看本店订单')
+    if (a.role === 'scenic_partner') {
+      const inScenic = subO.scenicId && (await one('SELECT id FROM tour_product WHERE id = ? AND scenic_id = ?', [o.product_id, subO.scenicId]))
+      if (!inScenic) throw new BizError(1003, '仅可查看本景区商品订单')
+    }
     const tickets = await q('SELECT id, ticket_no, category, status, assignee, created_at FROM aftersales_ticket WHERE order_no = ? ORDER BY id DESC LIMIT 10', [o.order_no]).catch(() => [])
     const events = await q('SELECT from_st, to_st, actor, detail, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id])
     const passes = await q('SELECT id, name, status FROM travel_pass WHERE order_id = ?', [o.id])
@@ -723,12 +742,22 @@ const admin = {
     const a = await requireAdmin(req)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 'p.city_code')
+    // V82 主体方行级隔离：商户主体方只看本店商品；景区主体方只看本景区商品（内部角色不过滤）
+    const sub = subjectScope(a)
+    let subSql = '', subParams = []
+    if (a.role === 'merchant_partner') {
+      if (!sub.merchantId) return []
+      subSql = ' AND p.merchant_id = ?'; subParams = [sub.merchantId]
+    } else if (a.role === 'scenic_partner') {
+      if (!sub.scenicId) return []
+      subSql = ' AND p.scenic_id = ?'; subParams = [sub.scenicId]
+    }
     return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
       FROM tour_product p
       LEFT JOIN merchant m ON m.id = p.merchant_id
       LEFT JOIN supplier sup ON sup.id = p.supplier_id
       LEFT JOIN scenic_spot sc ON sc.id = p.scenic_id
-      WHERE 1=1 ${sc.sql} ORDER BY p.id DESC`, sc.params)
+      WHERE 1=1 ${sc.sql}${subSql} ORDER BY p.id DESC`, [...sc.params, ...subParams])
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
@@ -1104,7 +1133,49 @@ const admin = {
     const a = await requireAdmin(req)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 'm.city_code')
-    return await q(`SELECT s.*, m.name merchant_name FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
+    // V82 主体方行级隔离：商户主体方只看本店结算；景区主体方只看其景区关联商户的结算
+    const sub = subjectScope(a)
+    let subSql = '', subParams = []
+    if (a.role === 'merchant_partner') {
+      if (!sub.merchantId) return []
+      subSql = ' AND s.merchant_id = ?'; subParams = [sub.merchantId]
+    } else if (a.role === 'scenic_partner') {
+      if (!sub.scenicId) return []
+      subSql = ' AND EXISTS (SELECT 1 FROM tour_product p9 WHERE p9.merchant_id = s.merchant_id AND p9.scenic_id = ?)'; subParams = [sub.scenicId]
+    }
+    // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
+    const rows = await q(`SELECT s.*, m.name merchant_name,
+        (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1) AS adjust_pending,
+        (SELECT COALESCE(SUM(x.cost_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 2) AS cost_adjust
+      FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql}${subSql} ORDER BY s.id DESC`, [...sc.params, ...subParams])
+    for (const r of rows) {
+      r.payable_after_adjust = Number(r.amt_fulfill || 0) + Number(r.fee_merchant || 0) + Number(r.adjust_pending || 0)
+    }
+    return rows
+  },
+  // 修复4：已出账/已付款订单的确认成本更正（finance 专用）——只改利润复算口径并留调整记录，不动商户应付五口径
+  'POST /admin/settlements/cost-adjust': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance'])
+    const orderNo = String(req.body.orderNo || '').trim()
+    const reason = String(req.body.reason || '').trim()
+    if (!orderNo || !reason) throw new BizError(1001, '请填写订单号与更正原因')
+    if (req.body.costConfirmedFen == null || !Number.isFinite(Number(req.body.costConfirmedFen))) throw new BizError(1001, '请填写更正后的确认成本（分）')
+    const r = await promo.adjustConfirmedCost({ orderNo, costConfirmedFen: Number(req.body.costConfirmedFen), reason, operator: a.name })
+    return { ...r, message: r.changed ? '确认成本已更正并登记调整记录' : '确认成本未变化' }
+  },
+  // 修复4：某结算单/商户的调整明细（对账溯源）
+  'GET /admin/settlements/:id/adjustments': async (req) => {
+    const a = await requireAdmin(req, ['super', 'finance'])
+    const s = await one('SELECT merchant_id FROM settlement WHERE id = ?', [req.params.id])
+    const subA = subjectScope(a)
+    if (a.role === 'merchant_partner' && (!subA.merchantId || Number(subA.merchantId) !== Number(s.merchant_id))) throw new BizError(1003, '仅可查看本店结算调整')
+    if (a.role === 'scenic_partner') {
+      const inScenic = subA.scenicId && (await one('SELECT id FROM tour_product WHERE merchant_id = ? AND scenic_id = ? LIMIT 1', [s.merchant_id, subA.scenicId]))
+      if (!inScenic) throw new BizError(1003, '仅可查看本景区关联商户的结算调整')
+    }
+    if (!s) throw new BizError(1004, '结算单不存在')
+    return await q(`SELECT a.*, o.order_no FROM settlement_adjustment a LEFT JOIN orders o ON o.id = a.order_id
+      WHERE a.merchant_id = ? ORDER BY a.id DESC LIMIT 200`, [s.merchant_id])
   },
   'POST /admin/settlements/generate': async (req) => {
     await requireAdmin(req, actionRoles('settle.pay'))
@@ -1112,7 +1183,11 @@ const admin = {
     if (!/^[\w-]{4,12}$/.test(period)) throw new BizError(1001, '结算周期格式不正确（如 2026-W45）')
     const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
       UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
-      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL
+      UNION SELECT DISTINCT oi.merchant_id FROM order_item oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.status = 50 AND o.rebook_of IS NULL AND oi.settle_line_id IS NULL AND oi.merchant_id <> o.merchant_id
+      UNION SELECT DISTINCT merchant_id FROM settlement_adjustment
+      WHERE type = 1 AND amount_fen IS NOT NULL AND applied_settlement_id IS NULL`) // 修复4：退改手续费、跨店提供方与待冲抵调整也要出账
     const before = new Set((await q('SELECT id FROM settlement WHERE period = ? OR period LIKE ?', [period, period + '-%'])).map((r) => Number(r.id)))
     const ids = []
     for (const mm of merchants) ids.push(await promo.generateSettlement(Number(mm.mid), period))
@@ -1493,10 +1568,11 @@ const admin = {
     const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
     if (budget && Number(o.amount_pay) > 0) await bean.rebateOrder({ ...o, order_no: orderNo }) // 冻结账号记为待补发，解冻后补发
     await bean.productExtraReward({ ...o, order_no: orderNo }) // B14 产品专属完成奖励（幂等）
-    // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费）累计，与 jobs.completeOrder 同口径
-    const goodsCash = Number(o.amount_pay) - Number(o.insurance_fee || 0)
+    // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费 − 已结算按项退款）累计，与 jobs.completeOrder 同口径（修复3）
+    const goodsCash = await bean.goodsCashBase(o)
     if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // 成长值与等级不依赖旅豆预算
     await promo.createCommission(orderNo)
+  try { await (await import('../domain/contribution.mjs')).recordQ({ ...(await order.byNo(orderNo)), order_no: orderNo }) } catch (e) { console.error('[complete:contribution]', orderNo, e.message) } // 闭环步骤4 贡献确认 Q
     await badgeDomain.evaluateSafe(Number(o.user_id))
     await badgeDomain.evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号

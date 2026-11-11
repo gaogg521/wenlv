@@ -5,7 +5,7 @@ import { bizDay } from '../infra/bizdate.mjs'
 import { bookingOpen, bookingNow, bookingOpenSql } from './booking-window.mjs'
 import * as bean from './bean.mjs'
 import { attest } from './attest.mjs'
-import { earlyInfo, priceSession } from './discount.mjs'
+import { earlyInfo, priceSession, channelAllowed } from './discount.mjs'
 import { json } from './sales.mjs'
 
 export const ST = { WAIT_PAY: 10, PAID: 20, CONFIRMED: 30, VERIFIED: 40, COMPLETED: 50, REFUNDING: 60, REFUNDED: 70, CLOSED: 90 }
@@ -56,8 +56,10 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
   if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
   if (!bookingOpen(s.profile)) throw new BizError(2001, '该团期报名已截止')
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
-  const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, p.merchant_id,p.city_code,p.channel, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
+  const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, p.merchant_id,p.city_code,p.channel,p.profile, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
   if (!prod || prod.status !== 1 || prod.merchant_status !== 1) throw new BizError(2001, '商品或商户已暂停营业')
+  // B11 修复6：建单复用与列表/详情/试算同一渠道口径（此前建单未校验 visible_channels，可绕过列表直链下单）
+  if (!channelAllowed(prod.profile, 'main')) throw new BizError(1004, '商品不存在或已下架')
   const insFee = withInsurance && prod && Number(prod.insurance_fee) > 0 ? Number(prod.insurance_fee) * qty : 0
   // 单号 = WL + 业务日期 + 毫秒时间戳后8位 + 2位随机（快速下单不碰撞；生产可换发号器）
   // A-34：日期段用业务时区（此前 toISOString 取 UTC 日期，凌晨下单的订单号日期错一天）

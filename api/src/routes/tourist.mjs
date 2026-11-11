@@ -14,6 +14,7 @@ import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
 import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
+import { visibleChannelSql, channelAllowed } from '../domain/discount.mjs'
 
 // 游客订单详情可见的订单字段（小程序订单页实际用到的 + 本人订单的基本事实）
 const ORDER_PUBLIC = ['id', 'order_no', 'channel', 'product_id', 'session_id', 'city_code', 'qty', 'amount_goods', 'amount_bean_ded', 'bean_deducted',
@@ -102,9 +103,10 @@ const c = {
     // A-39：groups 过滤下架商品（此前只过滤团期，下架商品仍在列）
     groups: await q(`SELECT s.id session_id, p.id product_id, p.title, p.days_desc, s.depart_date, s.quota - s.booked AS left_seats
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')} ORDER BY s.depart_date LIMIT 6`, [bookingNow()]),
+      WHERE s.status = 1 AND p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')} ORDER BY s.depart_date LIMIT 6`, [bookingNow()]),
+    // 修复6：首页 hot 与列表/详情同一渠道口径（此前无渠道过滤，渠道限定商品从首页仍可进入）
     hot: await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc
-      FROM tour_product p WHERE p.status = 1 ORDER BY p.id LIMIT 10`),
+      FROM tour_product p WHERE p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} ORDER BY p.id LIMIT 10`),
   }),
 
   'GET /c/tours': async (req) => {
@@ -114,7 +116,7 @@ const c = {
     const like = '%' + kw + '%'
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
         JSON_EXTRACT(p.profile, '$.tags') tags_json, m.level merchant_lv
-      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 AND p.channel = 'main' AND (JSON_EXTRACT(p.profile,'$.visible_channels') IS NULL OR JSON_CONTAINS(p.profile,'"main"','$.visible_channels')) ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
+      FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
       ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
       ${city ? 'AND p.city_code = ?' : ''} ORDER BY p.id`,
       [...(cat !== 'all' ? [cat] : []), ...(kw ? [like, like, like, like] : []), ...(city ? [city] : [])])
@@ -153,9 +155,8 @@ const c = {
     const p = await one(`SELECT p.*, m.name merchant_name FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?`, [req.params.id])
     if (!p || p.status !== 1) throw new BizError(1004, '商品不存在或已下架')
     if (p.channel !== 'main') throw new BizError(1004, '商品不存在或已下架') // B11
-    // B11：visible_channels 限定时，未含游客端渠道的商品不可见
-    const _pf = (typeof p.profile === 'string' ? JSON.parse(p.profile || '{}') : p.profile) || {}
-    if (Array.isArray(_pf.visible_channels) && _pf.visible_channels.length && !_pf.visible_channels.includes('main')) throw new BizError(1004, '商品不存在或已下架')
+    // B11：visible_channels 限定时，未含游客端渠道的商品不可见（修复6：与列表/试算/建单共用 channelAllowed，空数组=不限）
+    if (!channelAllowed(p.profile, 'main')) throw new BizError(1004, '商品不存在或已下架')
     const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
       price_adult, early_price, early_days, status, profile
       FROM tour_session s WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 AND ${bookingOpenSql('s')} ORDER BY depart_date`, [p.id, bookingNow()])

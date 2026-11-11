@@ -3,6 +3,7 @@ import { q, one, tx, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import { attest as attestCore } from './attest.mjs'
 import { isUserFrozen } from './promo.mjs'
+import { settledPartialFen } from './package.mjs'
 import * as member from './member.mjs'
 
 export const BIZ = { REBATE: 1, TASK: 2, CONTENT: 3, DEDUCT: 4, REFUND_REVERSE: 5, EXPIRE: 6, RISK: 7, LEGACY_OPENING: 8 }
@@ -127,14 +128,17 @@ export async function reverse(userId, amount, bizRef, connection) {
  */
 /** B14 产品专属完成奖励：产品 profile.reward_extra_beans>0 时在订单完成后额外发放。
  *  沿用既有规则：旅豆预算双闸（grant）+ 账本 biz_ref 幂等（PXTRA-单号 只发一次）；冻结账号随 rebate 一起记待补发。
- *  返回发放数量（0=无配置/已发/冻结/无预算）。 */
-export async function productExtraReward(o) {
-  const prod = await one('SELECT profile FROM tour_product WHERE id = ?', [o.product_id])
+ *  发放依据：按"发放动作执行时点"的产品当前 profile 读取（冻结解冻补发与正常发放同口径；
+ *  活动配置变动只影响尚未发放的订单，已发放账本幂等不重发）。
+ *  conn 传事务连接时读账也在同一事务（解冻补发复用）；返回发放数量（0=无配置/已发/冻结/无预算）。 */
+export async function productExtraReward(o, conn = null) {
+  const rd = conn || { one: (s, p) => one(s, p), q: (s, p) => q(s, p) }
+  const prod = await rd.one('SELECT profile FROM tour_product WHERE id = ?', [o.product_id])
   const pf = prod ? ((typeof prod.profile === 'string' ? JSON.parse(prod.profile || '{}') : prod.profile) || {}) : {}
   const extra = Math.floor(Number(pf.reward_extra_beans) || 0)
   if (!(extra > 0)) return 0
   const bizRef = 'PXTRA-' + o.order_no
-  const done = await one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
+  const done = await rd.one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
     WHERE a.user_id = ? AND l.biz_type = ? AND l.biz_ref = ? LIMIT 1`, [o.user_id, BIZ.TASK, bizRef])
   if (done) return 0
   if (await isUserFrozen(o.user_id)) {
@@ -143,14 +147,23 @@ export async function productExtraReward(o) {
   }
   const budget = await one('SELECT id FROM bean_budget WHERE status = 1 ORDER BY id DESC LIMIT 1')
   if (!budget) return 0
-  await grant(Number(o.user_id), extra, BIZ.TASK, bizRef, budget.id)
+  await grant(Number(o.user_id), extra, BIZ.TASK, bizRef, budget.id, conn)
   return extra
 }
 
+/** 修复3（Codex退回#3）：适用商品现金基数＝总实付 − 保费 − 已结算按项退款。
+ *  返豆（rebateOrder）、冻结补发（releaseDeferredRebates）、成长值（jobs/admin 完成路径）、
+ *  佣金基数（promo.createCommission）共用本函数，部分退款后按剩余商品实收发放，不再读退款前实付。
+ *  o 需含 id/amount_pay/insurance_fee；c 可传事务连接（补发路径与订单行同事务）。 */
+export async function goodsCashBase(o, c = { one: (sql, p) => one(sql, p) }) {
+  const base = Number(o.amount_pay) - Number(o.insurance_fee || 0) - await settledPartialFen(o.id, c)
+  return Math.max(0, base)
+}
+
 export async function rebateOrder(o) {
-  // D01：返豆按最终实际支付的"适用商品金额"计算（总实付 − 保费/代收款），不用原价或券前金额；
+  // D01：返豆按最终实际支付的"适用商品金额"计算（总实付 − 保费/代收款 − 已结算按项退款），不用原价或券前金额；
   // 保费直付保险方，与佣金基数（promo.createCommission）同一口径。
-  const goodsCash = Number(o.amount_pay) - Number(o.insurance_fee || 0)
+  const goodsCash = await goodsCashBase(o)
   if (!(goodsCash > 0)) return 0
   if (await isUserFrozen(o.user_id)) {
     await q('UPDATE orders SET bean_rebate_deferred = 1 WHERE order_no = ?', [o.order_no])
@@ -164,9 +177,13 @@ export async function rebateOrder(o) {
 }
 
 /**
- * 解冻后补发冻结期间的订单返豆。按补发时的返豆比例计算（冻结时没有快照）。
- * 幂等：逐单加锁，账本里已有该单返豆就只清标记；已不是完成态（如退款）的单只清标记、不发。
- * 没有可用预算或预算/总量触顶时保留标记，下次解冻或人工处理。返回补发的订单数。
+ * 解冻后补发冻结期间的订单返豆 + 产品专属完成奖励（修复5，Codex退回#5）。
+ * 此前两者共用 bean_rebate_deferred 标记，但解冻流程只补普通返豆就清标记——产品专属奖励被永久丢弃；
+ * 现两者都在补发范围内，各自按账本 biz_ref 幂等（REBATE-单号 / PXTRA-单号），有无普通返豆都正确补专属奖励。
+ * 金额口径：与 rebateOrder 同一基数（总实付 − 保费 − 已结算按项退款，修复3），按补发时点比例计算。
+ * 专属奖励发放依据：补发时点产品当前 profile（与正常发放路径"执行时点读取"一致）。
+ * 幂等：逐单加锁，账本已有的部分只清标记；已不是完成态（如退款）的单只清标记、不发。
+ * 无预算/触顶时事务回滚保留标记，下次解冻或人工处理。返回补发的订单数。
  */
 export async function releaseDeferredRebates(userId) {
   if (await isUserFrozen(userId)) return 0
@@ -175,13 +192,23 @@ export async function releaseDeferredRebates(userId) {
   let n = 0
   for (const { order_no: orderNo } of await q('SELECT order_no FROM orders WHERE user_id = ? AND bean_rebate_deferred = 1 ORDER BY id', [userId])) {
     await tx(async (c) => {
-      const o = await c.one('SELECT order_no, status, amount_pay, insurance_fee, bean_rebate_deferred FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
+      const o = await c.one('SELECT id, order_no, user_id, product_id, status, amount_pay, insurance_fee, bean_rebate_deferred FROM orders WHERE order_no = ? FOR UPDATE', [orderNo])
       if (!o || !Number(o.bean_rebate_deferred)) return
+      // 补发期间再冻结：整单跳过，标记保留待下一轮（不清标记、不半补）
+      if (await isUserFrozen(userId)) return
       const done = await c.one(`SELECT 1 FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id
         WHERE a.user_id = ? AND l.biz_type = ? AND l.direction = 1 AND l.biz_ref = ? LIMIT 1`, [userId, BIZ.REBATE, orderNo])
-      // 与 rebateOrder 同口径：按适用商品金额（总实付 − 保费）补发
-      const rebate = await rebateOf(Number(o.amount_pay) - Number(o.insurance_fee || 0), await member.rebateBonusBp(userId))
-      if (!done && Number(o.status) === 50 && rebate > 0) { await grant(Number(userId), rebate, BIZ.REBATE, orderNo, budget.id, c); n++ }
+      // 与 rebateOrder 同口径：按适用商品金额（总实付 − 保费 − 已结算按项退款）补发
+      const rebate = await rebateOf(await goodsCashBase(o, c), await member.rebateBonusBp(userId))
+      let granted = false
+      // 非完成态（如已退款 70）：只清标记、不发（与普通返豆同一口径）
+      if (Number(o.status) === 50) {
+        if (!done && rebate > 0) { await grant(Number(userId), rebate, BIZ.REBATE, orderNo, budget.id, c); granted = true }
+        // 修复5：产品专属完成奖励随解冻一并补发（有无普通返豆两种情况都要补到）
+        const extra = await productExtraReward({ ...o, order_no: orderNo }, c)
+        if (extra > 0) granted = true
+      }
+      if (granted) n++
       await c.upd('UPDATE orders SET bean_rebate_deferred = 0 WHERE order_no = ?', [orderNo])
     })
   }

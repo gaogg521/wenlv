@@ -23,10 +23,12 @@ export async function completeOrder(orderNo) {
   await bean.rebateOrder({ ...o, order_no: orderNo })
   await bean.productExtraReward({ ...o, order_no: orderNo }) // B14 产品专属完成奖励（幂等）
   const amt = Number(o.amount_pay)
-  // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费）累计，与返豆/佣金同一口径
-  const goodsCash = amt - Number(o.insurance_fee || 0)
+  // D01：成长值按最终实际支付的适用商品金额（总实付 − 保费 − 已结算按项退款）累计，与返豆/佣金同一口径（修复3）
+  const goodsCash = await bean.goodsCashBase(o)
   if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // A-01：实收 ¥0 的免费改签单不加成长值
   await promo.createCommission(orderNo)
+  // 朱家角示范闭环·步骤4 贡献确认：Q 成交维度落库（归因有效单，幂等，不触发资金；S/R 无已确认规则不赋值）
+  try { const oNow = await order.byNo(orderNo); await (await import('./domain/contribution.mjs')).recordQ({ ...oNow, order_no: orderNo }) } catch (e) { console.error('[job:contribution]', orderNo, e.message) }
   // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
   await pass.attest('order', orderNo, {
     orderNo, amountPay: amt, status: 50, merchantId: Number(o.merchant_id),
@@ -68,9 +70,14 @@ async function tickSettlement() {
   if (new Date().getDay() !== 1) return // 周一
   const { settlementPeriod } = await import('./infra/bizdate.mjs')
   const period = settlementPeriod() // ISO 周，如 2026-W45（周一出账即上一周）
+  // 修复4：枚举含跨店提供方（订单项归属他店主单）与有未冲抵调整的商户——补充单也要出
   const merchants = await q(`SELECT DISTINCT merchant_id mid FROM orders WHERE status = 50 AND settlement_id IS NULL
       UNION SELECT DISTINCT o.merchant_id FROM refunds r JOIN orders o ON o.id = r.order_id
-      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL`) // 只有退改手续费、没有完成订单的商户也要出账
+      WHERE r.status = 2 AND r.fee_amount > 0 AND r.settlement_id IS NULL
+      UNION SELECT DISTINCT oi.merchant_id FROM order_item oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.status = 50 AND o.rebook_of IS NULL AND oi.settle_line_id IS NULL AND oi.merchant_id <> o.merchant_id
+      UNION SELECT DISTINCT merchant_id FROM settlement_adjustment
+      WHERE type = 1 AND amount_fen IS NOT NULL AND applied_settlement_id IS NULL`) // 只有退改手续费/跨店项/调整、没有完成订单的商户也要出账
   for (const m of merchants) await promo.generateSettlement(Number(m.mid), period)
   console.log('[job:settlement]', merchants.length, 'merchants', period)
 }

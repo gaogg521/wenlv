@@ -57,7 +57,7 @@ Page({
     const zheLabel = promo ? String(promo.zheLabel || promo.zhe || '') : ''
     this.setData({ priceSummary: { unit: (unit / 100).toFixed(2), goods: (goods / 100).toFixed(2),
       originalUnit: promo ? (Number(promo.originalFen) / 100).toFixed(2) : '', showPromo: !!(promo && unit < Number(promo.originalFen)),
-      zheLabel, promoText: promo && unit < Number(promo.originalFen) ? zheLabel + '折 · 按原价' + Math.round(Number(promo.zhe) * 100) + '%付款' : '',
+      zheLabel, promoText: promo && unit < Number(promo.originalFen) ? zheLabel + '折 · 按原价' + Math.round(Number(promo.zhe) * 10 * 10) / 10 + '%付款' : '',
       capYuan: (this.beanCap(goods, 0) / 10).toFixed(2),
       insurance: (ins / 100).toFixed(2), showInsRow: ins > 0,
       deduct: (beans / 10).toFixed(2), pay: ((goods - beans * 10 + ins) / 100).toFixed(2) } })
@@ -73,8 +73,10 @@ Page({
       if(seq!==this.priceSeq)return
       const money=v=>(Number(v)/100).toFixed(2).replace(/\.00$/,'')
       const rows=d.rows.map(x=>({...x,thresholdText:money(x.threshold),discountText:money(x.discount),validTo:String(x.to||'').slice(0,10),label:'满'+money(x.threshold)+'元减'+money(x.discount)+'元 · '+(x.reason||('有效期至'+String(x.to||'').slice(0,10)))}))
-      const quoted={goods:(d.goods/100).toFixed(2),deduct:(d.beanDeduct/10).toFixed(2),pay:(d.cashPay/100).toFixed(2),insurance:(d.insurance/100).toFixed(2),
-        capYuan:(d.beanCapBeans/10).toFixed(2),discount:(d.discount/100).toFixed(2)}
+      // 修复1（Codex退回#1）：beanDeduct/beanCap 为分（服务端口径），按分换元展示；提交数用服务端回包的 beanDeductCount 整豆，
+      // 不再从展示金额反推（此前除以10导致抵扣十倍显示、提交数量按错误金额计算）
+      const quoted={goods:(d.goods/100).toFixed(2),deduct:(d.beanDeduct/100).toFixed(2),pay:(d.cashPay/100).toFixed(2),insurance:(d.insurance/100).toFixed(2),
+        capYuan:(d.beanCapBeans/10).toFixed(2),discount:(d.discount/100).toFixed(2),beanDeductCount:Math.max(0,Math.round(Number(d.beanDeductCount)||0))}
       this.setData({freedomRows:rows,freedomOptions:[{label:'不使用自由豆'}].concat(rows),freedomSelected:rightId?rows.find(x=>Number(x.id)===Number(rightId))||null:null,freedomDiscount:quoted.discount,
         quoted,'priceSummary.goods':quoted.goods,'priceSummary.deduct':quoted.deduct,'priceSummary.pay':quoted.pay,'priceSummary.insurance':quoted.insurance,'priceSummary.capYuan':quoted.capYuan})
     }catch(e){if(seq===this.priceSeq)this.setData({freedomRows:[],freedomError:e.msg||'补贴试算失败，请重试'})}finally{if(seq===this.priceSeq)this.setData({pricing:false})}
@@ -101,7 +103,7 @@ Page({
     const parts = [s.depart_date + ' · 余' + s.left_seats]
     const extra = []
     if (s.isEarly) extra.push('🐦 早鸟价 ¥' + (s.priceNow / 100) + '（提前 ' + s.daysToDepart + ' 天报名）')
-    if (s.promo && Number(s.priceNow) < Number(s.promo.originalFen)) extra.push('折扣 ' + (s.promo.zheLabel || s.promo.zhe) + ' 折 · 按原价 ' + Math.round(Number(s.promo.zhe) * 100) + '% 付款')
+    if (s.promo && Number(s.priceNow) < Number(s.promo.originalFen)) extra.push('折扣 ' + (s.promo.zheLabel || s.promo.zhe) + ' 折 · 按原价 ' + (Math.round(Number(s.promo.zhe) * 100) / 10) + '% 付款')
     if (s.groupProgress) extra.push(s.groupProgress.reached ? '已成团' : '需 ' + s.groupProgress.minGo + ' 人成团 · 已报 ' + s.groupProgress.booked)
     const info = s.info && Object.keys(s.info).length ? s.info : null
     return { label: parts[0], extra: extra.join(' · '), info }
@@ -157,8 +159,11 @@ Page({
       await api.ensureLogin()
       await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: this.data.legalVersions?.privacy })
       await api.request('/c/consent', 'POST', { scene: 'terms', granted: true, version: this.data.legalVersions?.terms })
-      // 旅豆抵扣：优先用服务端试算的实抵豆数（已按余额+实付锚定上限收敛）；无试算结果时本地估算
-      const want = this.data.quoted ? Math.round(Number(this.data.quoted.deduct) * 10) : (this.data.useBean ? Math.min(this.data.beanBal || 0, this.beanCap(Number(s.priceNow || s.price_adult) * this.data.qty, 0)) : 0)
+      // 旅豆抵扣：优先用服务端试算回包的整豆数 beanDeductCount（已按余额+实付锚定上限收敛）；
+      // 无试算结果时本地估算。修复1：不再从展示金额（元）反推豆数。
+      const want = this.data.quoted && this.data.quoted.beanDeductCount != null
+        ? this.data.quoted.beanDeductCount
+        : (this.data.useBean ? Math.min(this.data.beanBal || 0, this.beanCap(Number(s.priceNow || s.price_adult) * this.data.qty, 0)) : 0)
       const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
         freedomRightId:this.data.freedomRightId||undefined,
         expectedGoodsFen: this.data.quoted ? Math.round(Number(this.data.quoted.goods) * 100) : Math.round(Number(s.priceNow || s.price_adult) * this.data.qty),
