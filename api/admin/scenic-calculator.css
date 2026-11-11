@@ -1,0 +1,9 @@
+.scenic-calc-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap:12px; margin:12px 0 }
+.scenic-calc-fields label { display:grid; gap:4px; min-width:0 }
+.scenic-calc-fields input { width:100%; box-sizing:border-box }
+.scenic-calc-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px }
+.scenic-calc section { margin-top:18px; padding-top:12px; border-top:1px solid var(--line) }
+.scenic-calc li { margin:5px 0; overflow-wrap:anywhere }
+.scenic-calc summary { cursor:pointer; overflow-wrap:anywhere }
+.scenic-calc-table { overflow-x:auto }
+.scenic-calc-source { padding:10px 0; border-bottom:1px solid var(--line) }
