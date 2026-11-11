@@ -21,7 +21,7 @@ async function scenics() {
       <td class="td-sub">${esc(s.profit_terms || '—')}</td>
       <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${escJs(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
-      <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super','ops','finance','city_partner'].includes(ME.role) ? `<button class="btn ghost sm" onclick="scenicCalculator(${Number(s.id)}).catch(e=>toast(e.message,true))">按景区算账</button>` : ''}${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+      <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
   </div>`
 }
@@ -31,7 +31,7 @@ async function scenicProfile(id) {
   try { data = await api('GET', `/admin/scenics/${id}/overview`) } catch (e) { return toast(e.message, true) }
   const k = data.kpi
   reviewDrawer(`景点数据 · ${esc(data.scenic.name)}`, `
-    <div class="rv-box">${kv('城市', esc(CITY_CN[data.scenic.city_code] || data.scenic.city_code))}${kv('统计口径', '按当前关联线路汇总；销量为已支付未退款人数，核销按成功凭证去重，评分按已发布评价加权。')}</div>
+    <div class="rv-box"><div class="scenic-calc-context">${scenicCalcHelpButton('scenic', id)}</div>${kv('城市', esc(CITY_CN[data.scenic.city_code] || data.scenic.city_code))}${kv('统计口径', '按当前关联线路汇总；销量为已支付未退款人数，核销按成功凭证去重，评分按已发布评价加权。')}</div>
     <div class="pstats">${stat('销量', k.sold + ' 人次', `${data.products.length} 条关联线路`)}${stat('有效 GMV', fen(k.gmv))}${stat('核销人次', k.verified, '成功核销凭证去重（含历史到访）')}${stat('评分', k.rating == null ? '—' : k.rating.toFixed(1) + ' ★', `${k.reviews} 条已发布评价`)}</div>
     <div class="rv-box"><div class="rv-h">近 14 日销量（按下单日）</div>${dayBars(data.daily, { label: '销量', fmt: v => v + ' 人次' })}</div>
     <div class="rv-box"><div class="rv-h">关联线路业绩</div>${data.products.length ? `<table><thead><tr><th>线路</th><th>状态</th><th>销量</th><th>GMV</th><th>核销人次</th><th>评分 / 评价</th></tr></thead><tbody>${data.products.map(p => `<tr><td>${esc(p.title)}</td><td>${Number(p.status) === 1 ? '在架' : '下架'}</td><td>${PN(p.sold)}</td><td>${fen(p.gmv)}</td><td>${PN(p.verified)}</td><td>${p.rating == null ? '—' : Number(p.rating).toFixed(1)} / ${PN(p.reviews)} 条</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无关联线路')}</div>`, '')

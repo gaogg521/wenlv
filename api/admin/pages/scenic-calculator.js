@@ -1,20 +1,77 @@
-async function scenicCalculator(id) {
+function scenicCalcHelpButton(context, id) {
+  if (!['super', 'ops', 'finance', 'city_partner'].includes(ME.role) || !ADMIN_CAPABILITIES.modules?.includes('scenics')) return ''
+  return `<button type="button" class="btn ghost sm scenic-calc-help" data-context="${esc(context)}" data-target="${esc(id)}" onclick="openScenicCalcHelp(this)"><span aria-hidden="true">❓</span> 经营测算</button>`
+}
+
+async function openScenicCalcHelp(trigger) {
+  const { context, target } = trigger.dataset
+  const dialog = document.createElement('dialog')
+  dialog.className = 'scenic-calc-dialog'
+  dialog.setAttribute('aria-labelledby', 'scenicCalcTitle')
+  dialog.innerHTML = `<div class="scenic-calc-dialog-head">
+    <h3 id="scenicCalcTitle">经营测算说明</h3><button class="btn ghost sm" type="button" data-close>关闭</button></div>
+    <div class="scenic-calc-dialog-body">
+      <p>适合用来比较客单价、单量和成本变化，也可按业务源单复盘。</p>
+      <p><strong>月经营贡献结余</strong>＝订单量 × 客单价 ×（综合变现率 − 变动成本率 − 权益成本率）− 固定成本。</p>
+      <p><strong>最少打平单量</strong>＝固定成本 ÷ 未取整的正向单笔贡献，向上取整。</p>
+      <p>情景测算采用输入的假设。实际经营汇总按所选主体、景区和统计期间取数。</p>
+      <label data-scenic-field hidden>景区 <select data-scenic aria-label="景区"></select></label>
+      <p role="status" data-help-status></p>
+      <button type="button" class="btn primary" data-start>打开经营测算</button>
+    </div>`
+  document.body.append(dialog)
+  dialog.addEventListener('close', () => { dialog.remove(); if (trigger.isConnected) trigger.focus() }, { once: true })
+  dialog.querySelector('[data-close]').onclick = () => dialog.close()
+  dialog.showModal()
+  const start = dialog.querySelector('[data-start]')
+  const status = dialog.querySelector('[data-help-status]')
+  const select = dialog.querySelector('[data-scenic]')
+  const merchant = context === 'merchant' ? Number(target) : null
+  start.onclick = async () => {
+    start.disabled = true
+    status.textContent = '正在打开测算…'
+    try { await scenicCalculator(context === 'scenic' ? target : select.value, dialog, merchant) }
+    catch (e) { if (dialog.open) { start.disabled = false; status.textContent = e.message } }
+  }
+  if (context !== 'scenic') {
+    start.disabled = true
+    status.textContent = '正在读取关联景区…'
+    dialog.querySelector('[data-scenic-field]').hidden = false
+    try {
+      const query = merchant ? { merchantId: merchant } : { city: target }
+      const rows = await api('GET', '/admin/scenic-calculator/options?' + new URLSearchParams(query))
+      for (const row of rows) select.add(new Option(row.name, row.id))
+      start.disabled = !rows.length
+      status.textContent = rows.length ? '' : '当前经营范围暂无关联景区。'
+    } catch (e) { status.textContent = e.message }
+  }
+}
+
+async function scenicCalculator(id, dialog, merchantId) {
   const root = '/admin/scenics/' + Number(id) + '/calculator'
-  const data = await api('GET', root)
+  const endpoint = (suffix = '') => root + suffix + (merchantId ? '?merchantId=' + merchantId : '')
+  const data = await api('GET', endpoint())
+  if (!dialog.open) return
   const fields = [
     ['orders', '月订单量（单）', 1], ['priceFen', '客单价（元）', 100],
     ['revenueBp', '综合变现率（%）', 100], ['variableBp', '变动成本率（%）', 100],
     ['equityBp', '权益成本率（%）', 100], ['fixedFen', '月固定成本（元）', 100],
   ]
-  const holder = $('#app')
-  holder.innerHTML = `
-    <div class="card scenic-calc">
-      <div class="card-head"><h2>按景区算账 · ${esc(data.scenic.name)}</h2><button class="btn ghost sm" data-back>返回景区资源</button></div>
-      <p class="muted">情景按月估算。实际经营按已支付日期和当前关联商品归集整笔订单，退款统计截至计算时点。</p>
+  dialog.classList.add('scenic-calc-dialog-wide')
+  dialog.innerHTML = `<div class="scenic-calc-dialog-head">
+      <h3 id="scenicCalcTitle">经营测算 · ${esc(data.scenic.name)}</h3><button type="button" class="btn ghost sm" data-back>关闭测算</button>
+    </div>
+    <div class="scenic-calc scenic-calc-dialog-body">
+      ${data.merchant ? '<p>商户范围 · ' + esc(data.merchant.name) + '</p>' : ''}
+      <p class="muted">实际经营按支付日期和当前关联商品归集订单，退款统计截至计算时点。下方测算假设按月填写。</p>
       <form data-form>
+        <h4>实际数据范围</h4>
         <div class="scenic-calc-fields">
           <label>实际统计起日<input type="date" name="from" required value="${esc(data.today.slice(0, 7))}-01"></label>
           <label>实际统计止日<input type="date" name="to" required value="${esc(data.today)}"></label>
+        </div>
+        <h4>测算假设</h4>
+        <div class="scenic-calc-fields">
           ${fields.map(([key, label, scale]) => `<label>${label}<input required name="${key}" type="number" min="0" step="${1 / scale}" value="${data.example[key] / scale}"></label>`).join('')}
         </div>
         <div class="scenic-calc-actions">
@@ -27,7 +84,7 @@ async function scenicCalculator(id) {
       </form>
       <p role="status" data-status></p><div data-output></div>
     </div>`
-  const container = holder.querySelector('.scenic-calc')
+  const container = dialog.querySelector('.scenic-calc')
   const form = container.querySelector('[data-form]')
   const status = container.querySelector('[data-status]')
   const history = container.querySelector('[data-history]')
@@ -52,8 +109,8 @@ async function scenicCalculator(id) {
       const inputs = Object.fromEntries(fields.map(([key, , scale]) => [key, Math.round(form.elements[key].valueAsNumber * scale)]))
       const body = { from: form.elements.from.value, to: form.elements.to.value, inputs, fingerprint }
       const result = action === 'history'
-        ? await api('GET', root + '/reviews/' + Number(history.value))
-        : await api('POST', root + (action === 'save' ? '/reviews' : ''), body)
+        ? await api('GET', endpoint('/reviews/' + Number(history.value)))
+        : await api('POST', endpoint(action === 'save' ? '/reviews' : ''), body)
       if (action === 'save') addReview(result.reviewId, result.at)
       history.value = result.reviewId || ''
       latest = result.actual
@@ -66,7 +123,7 @@ async function scenicCalculator(id) {
         ' · 公式版本 ' + result.scenario.formulaVersion + ' · ' + new Date(result.at).toLocaleString('zh-CN')
       container.querySelector('[data-output]').innerHTML = scenicCalcResult(result)
       container.querySelectorAll('[data-order-detail]').forEach(button => {
-        button.onclick = () => orderDrawer(button.dataset.orderDetail).catch(e => toast(e.message, true))
+        button.onclick = () => { dialog.close(); orderDrawer(button.dataset.orderDetail).catch(e => toast(e.message, true)) }
       })
     } catch (err) {
       fingerprint = null
@@ -75,7 +132,8 @@ async function scenicCalculator(id) {
       delete container.dataset.busy
     }
   }
-  container.querySelector('[data-back]').onclick = () => scenics()
+  dialog.querySelector('[data-back]').onclick = () => dialog.close()
+  dialog.querySelector('[data-back]').focus()
   container.querySelector('[data-save]').onclick = () => load('save')
   container.querySelector('[data-reset]').onclick = () => { setInputs(data.example); load('live') }
   importButton.onclick = () => {
@@ -129,7 +187,7 @@ function scenicCalcResult({ scenario: s, actual: a, sources, from, to }) {
     </section>
     <section>
       <h3>实际经营与业务源单</h3>
-      <p>${esc(from)} 至 ${esc(to)} · 已支付 ${orderCount(a.orders)} · 同景区复购 ${orderCount(a.repeatOrders)}</p>
+      <p>${esc(from)} 至 ${esc(to)} · 已支付 ${orderCount(a.orders)} · ${a.scope === 'merchant' ? '同景区本商户' : '同景区'}复购 ${orderCount(a.repeatOrders)}</p>
       <p>商品净实收＝商品现金 ${cash(a.goodsFen)} − 成功商品退款 ${cash(a.refundFen)}＝<strong>${cash(a.netFen)}</strong>。整单退款中如含代收且未拆分，商品退款及净实收标为待核实。</p>
       ${a.costsVisible ? '<p>本期订单确认成本 ' + cash(a.confirmedCostFen) + '。存在未确认成本时暂不汇总。</p>' : ''}
       <p class="muted">按关联商品查看订单，结算单可能包含其他订单。应付与到账按结算单处理。</p>

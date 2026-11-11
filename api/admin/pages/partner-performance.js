@@ -36,7 +36,7 @@ async function partnerReconcile(kind,id) {
     cards=stat('累计分润',fen(s.profit))+stat('待登记打款',fen(s.pending))+stat('已登记打款',fen(s.paid),'无银行回单字段')
     note='按来源结算单及商品收入占比复算分润基数。历史合同费率未快照，不用当前比例判定历史分润额对错；已打款仅为状态登记，仍缺银行回单证据。'
   }
-  reviewDrawer(`结算对账 · ${esc(d.kind==='city'?(CITY_CN[d.name]||d.name):d.name)}`,`<div class="pstats">${cards}</div><p class="td-sub">${esc(note)}</p>${tabs}${partnerLedgerRows(d)}
+  reviewDrawer(`结算对账 · ${esc(d.kind==='city'?(CITY_CN[d.name]||d.name):d.name)}`,`${d.kind==='city' ? '<div class="scenic-calc-context">' + scenicCalcHelpButton('city', Q.id) + '</div>' : ''}<div class="pstats">${cards}</div><p class="td-sub">${esc(note)}</p>${tabs}${partnerLedgerRows(d)}
     <div class="pagination"><span>第 ${d.page} 页 · 共 ${d.total} 条</span><div><button class="btn ghost sm" ${d.page<=1?'disabled':''} onclick="window.__partnerLedgerQ.page--;partnerReconcile()">上一页</button><button class="btn ghost sm" ${d.page*d.size>=d.total?'disabled':''} onclick="window.__partnerLedgerQ.page++;partnerReconcile()">下一页</button></div></div>`,'')
 }
 

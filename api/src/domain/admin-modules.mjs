@@ -211,6 +211,7 @@ export const ROUTE_MODULES = [
   ['PUT', '/admin/merchants/:id', 'merchants', 'manage'],
   ['GET', '/admin/scenics', 'scenics', 'view'],
   ['GET', '/admin/scenics/:id/overview', 'scenics', 'view'],
+  ['GET', '/admin/scenic-calculator/options', 'scenics', 'view'],
   ['GET', '/admin/scenics/:id/calculator', 'scenics', 'view'],
   ['POST', '/admin/scenics/:id/calculator', 'scenics', 'view'],
   ['POST', '/admin/scenics/:id/calculator/reviews', 'scenics', 'view'],
