@@ -246,7 +246,8 @@ async function merchantProfile(id) {
     <div class="rv-box"><div class="rv-h">结算</div>${kv('待商户确认', fen(s.to_confirm))}${kv('待打款', fen(s.to_pay))}${kv('已打款', fen(s.paid))}${PN(s.disputed) ? kv('异议中', PN(s.disputed) + ' 张') : ''}
       ${p.settlements.map((x) => kv(esc(x.period), `${fen(PN(x.amt_fulfill) + PN(x.fee_merchant))} · ${['待确认', '待复核', '待打款', '已打款', '异议'][x.status] || ''}`)).join('')}</div>
     <div class="rv-box"><div class="rv-h">后台操作记录</div>${p.ops.length ? p.ops.map((o) => kv(dt(o.created_at), `${esc(o.actor)} · ${esc(o.action)}`)).join('') : '<div class="td-sub">无</div>'}</div>
-  </div></div>`, '')
+  </div></div>${operatingScenarioPanel(true)}`, '')
+  void mountOperatingScenario($('#modalRoot'))
 }
 
 /* ============ 商品 / 线路数据 ============ */

@@ -34,7 +34,8 @@ async function scenicProfile(id) {
     <div class="rv-box"><div class="scenic-calc-context">${scenicCalcHelpButton('scenic', id)}</div>${kv('城市', esc(CITY_CN[data.scenic.city_code] || data.scenic.city_code))}${kv('统计口径', '按当前关联线路汇总；销量为已支付未退款人数，核销按成功凭证去重，评分按已发布评价加权。')}</div>
     <div class="pstats">${stat('销量', k.sold + ' 人次', `${data.products.length} 条关联线路`)}${stat('有效 GMV', fen(k.gmv))}${stat('核销人次', k.verified, '成功核销凭证去重（含历史到访）')}${stat('评分', k.rating == null ? '—' : k.rating.toFixed(1) + ' ★', `${k.reviews} 条已发布评价`)}</div>
     <div class="rv-box"><div class="rv-h">近 14 日销量（按下单日）</div>${dayBars(data.daily, { label: '销量', fmt: v => v + ' 人次' })}</div>
-    <div class="rv-box"><div class="rv-h">关联线路业绩</div>${data.products.length ? `<table><thead><tr><th>线路</th><th>状态</th><th>销量</th><th>GMV</th><th>核销人次</th><th>评分 / 评价</th></tr></thead><tbody>${data.products.map(p => `<tr><td>${esc(p.title)}</td><td>${Number(p.status) === 1 ? '在架' : '下架'}</td><td>${PN(p.sold)}</td><td>${fen(p.gmv)}</td><td>${PN(p.verified)}</td><td>${p.rating == null ? '—' : Number(p.rating).toFixed(1)} / ${PN(p.reviews)} 条</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无关联线路')}</div>`, '')
+    <div class="rv-box"><div class="rv-h">关联线路业绩</div>${data.products.length ? `<table><thead><tr><th>线路</th><th>状态</th><th>销量</th><th>GMV</th><th>核销人次</th><th>评分 / 评价</th></tr></thead><tbody>${data.products.map(p => `<tr><td>${esc(p.title)}</td><td>${Number(p.status) === 1 ? '在架' : '下架'}</td><td>${PN(p.sold)}</td><td>${fen(p.gmv)}</td><td>${PN(p.verified)}</td><td>${p.rating == null ? '—' : Number(p.rating).toFixed(1)} / ${PN(p.reviews)} 条</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无关联线路')}</div>${operatingScenarioPanel(true)}`, '')
+  void mountOperatingScenario($('#modalRoot'))
 }
 async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
 async function suppliers() {
