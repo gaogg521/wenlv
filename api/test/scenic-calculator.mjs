@@ -86,7 +86,38 @@ try {
   assert.equal(refunded.actual.netFen, 27800)
   assert.equal(refunded.sources.find(x => x.orderNo === repeat.orderNo).refundFen, repeat.amountPay)
   assert.equal((await call('GET', root + '/reviews/' + saved.reviewId, null, admin)).actual.netFen, 27800)
-  console.log('景区来源单据、结算、复购、退款重算、快照与角色隔离通过')
+  // 用已有隔离退款单模拟同一景区第二家商户，验证整景区与商户视角分开。
+  const peer = await one(`SELECT o.order_no,o.merchant_id,o.product_id,o.city_code order_city,m.city_code merchant_city,p.city_code product_city,p.scenic_id
+    FROM orders o JOIN merchant m ON m.id=o.merchant_id JOIN tour_product p ON p.id=o.product_id
+    WHERE o.product_id<>? AND o.status=70 ORDER BY o.id LIMIT 1`, [first.product_id])
+  const own = await one('SELECT merchant_id FROM orders WHERE order_no=?', [first.order_no])
+  assert.ok(peer && Number(peer.merchant_id) !== Number(own.merchant_id))
+  try {
+    await q("UPDATE merchant SET city_code='310118' WHERE id=?", [peer.merchant_id])
+    await q("UPDATE tour_product SET scenic_id=?,city_code='310118' WHERE id=?", [scenicId, peer.product_id])
+    await q("UPDATE orders SET city_code='310118' WHERE order_no=?", [peer.order_no])
+    const cityOptions = '/admin/scenic-calculator/options?city=310118'
+    assert.ok((await call('GET', cityOptions, null, sameCity)).some(row => Number(row.id) === Number(scenicId)))
+    assert.notEqual((await raw('GET', cityOptions, null, otherCity)).code, 0)
+    const merchantQuery = '?merchantId=' + own.merchant_id
+    const options = await call('GET', '/admin/scenic-calculator/options' + merchantQuery, null, admin)
+    assert.ok(options.some(row => Number(row.id) === Number(scenicId)))
+    const scoped = await call('POST', root + merchantQuery, params, admin)
+    assert.equal(Number(scoped.merchant.id), Number(own.merchant_id))
+    assert.equal(scoped.actual.orders, 2)
+    assert.ok(!scoped.sources.some(row => row.orderNo === peer.order_no))
+    const scenicWide = await call('POST', root, params, admin)
+    assert.ok(scenicWide.sources.some(row => row.orderNo === peer.order_no))
+    const scopedReview = await call('POST', root + '/reviews' + merchantQuery, { ...params, fingerprint: scoped.fingerprint }, admin)
+    assert.equal((await call('GET', root + '/reviews/' + scopedReview.reviewId + merchantQuery, null, admin)).reviewId, scopedReview.reviewId)
+    assert.notEqual((await raw('GET', root + '/reviews/' + scopedReview.reviewId, null, admin)).code, 0)
+    assert.notEqual((await raw('GET', root + '/reviews/' + saved.reviewId + merchantQuery, null, admin)).code, 0)
+  } finally {
+    await q('UPDATE orders SET city_code=? WHERE order_no=?', [peer.order_city, peer.order_no])
+    await q('UPDATE tour_product SET scenic_id=?,city_code=? WHERE id=?', [peer.scenic_id, peer.product_city, peer.product_id])
+    await q('UPDATE merchant SET city_code=? WHERE id=?', [peer.merchant_city, peer.merchant_id])
+  }
+  console.log('景区来源单据、结算、复购、退款重算、跨城与同景区跨商户隔离通过')
 } finally {
   await closeDb()
 }
