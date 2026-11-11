@@ -8,8 +8,29 @@ import crypto from 'node:crypto'
 
 // 可分配角色（sre/dev 是历史遗留系统角色，不在授权矩阵开放新建）
 // QA-04：sre/dev 是历史遗留系统角色但参与模块矩阵（role-modules 可编辑）——允许创建以便撤权验证与运维分配
-export const ACCOUNT_ROLES = ['super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev']
-const ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号' }
+// V82：merchant_partner/scenic_partner 商户/景区主体方（必须绑定 subjectId，行级隔离见 _shared.subjectScope）
+export const ACCOUNT_ROLES = ['super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'sre', 'dev', 'merchant_partner', 'scenic_partner']
+const ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号', merchant_partner: '商户主体方', scenic_partner: '景区主体方' }
+
+/** V82 主体绑定校验：商户/景区主体方必须绑定存在且状态正常的对应主体；其余角色忽略 subjectId */
+async function resolveSubject(role, subjectId) {
+  const sid = Number(subjectId) || 0
+  if (role === 'merchant_partner') {
+    if (!sid) throw new BizError(1001, '商户主体方必须绑定商户ID')
+    const m = await one('SELECT id, name, status FROM merchant WHERE id = ?', [sid])
+    if (!m) throw new BizError(1004, '绑定的商户不存在')
+    if (Number(m.status) !== 1) throw new BizError(1001, '绑定的商户已停用，请先恢复商户')
+    return { type: 'merchant', id: sid, name: m.name }
+  }
+  if (role === 'scenic_partner') {
+    if (!sid) throw new BizError(1001, '景区主体方必须绑定景区ID')
+    const s = await one('SELECT id, name, status FROM scenic_spot WHERE id = ?', [sid])
+    if (!s) throw new BizError(1004, '绑定的景区不存在')
+    if (Number(s.status) !== 1) throw new BizError(1001, '绑定的景区已暂缓/清退，请先恢复合作')
+    return { type: 'scenic', id: sid, name: s.name }
+  }
+  return null
+}
 
 const activeSuperCount = async () => Number((await one("SELECT COUNT(*) n FROM admin_user WHERE role = 'super' AND status = 1")).n)
 
@@ -24,15 +45,15 @@ const adminAccounts = {
   'GET /admin/accounts': async (req) => {
     await requireAdmin(req, ['super'])
     // 不下发 password_hash / mfa_secret（红线：密钥哈希不出接口）
-    return await q(`SELECT id, username, display_name, role, scope_city, status, note, mfa_enabled, mfa_channel, mfa_exempt, mfa_force,
+    return await q(`SELECT id, username, display_name, role, scope_city, subject_type, subject_id, status, note, mfa_enabled, mfa_channel, mfa_exempt, mfa_force,
         mobile, email, last_login_at, token_epoch, must_change_pwd, created_at
-      FROM admin_user ORDER BY FIELD(role, 'super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly'), id`)
+      FROM admin_user ORDER BY FIELD(role, 'super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'merchant_partner', 'scenic_partner'), id`)
   },
 
-  // 创建账号：登录名唯一；城市合伙人必填城市；初始密码 ≥8 位；创建即写入审计（不含密码）
+  // 创建账号：登录名唯一；城市合伙人必填城市；商户/景区主体方必填绑定主体；初始密码 ≥8 位；创建即写入审计（不含密码）
   'POST /admin/accounts': async (req) => {
     const a = await requireAdmin(req, ['super'])
-    const { username, displayName, role, scopeCity, password, note } = req.body || {}
+    const { username, displayName, role, scopeCity, subjectId, password, note } = req.body || {}
     const name = String(username || '').trim()
     if (!/^[\w-]{3,32}$/.test(name)) throw new BizError(1001, '登录名需 3–32 位字母、数字、下划线或 -')
     if (!ACCOUNT_ROLES.includes(role)) throw new BizError(1001, '角色无效')
@@ -40,12 +61,13 @@ const adminAccounts = {
     if (!display || display.length > 64) throw new BizError(1001, '请填写 1–64 字显示名')
     const city = role === 'city_partner' ? String(scopeCity || '').trim() : null
     if (role === 'city_partner' && !/^\d{4,8}$/.test(city || '')) throw new BizError(1001, '城市合伙人必须绑定城市编码')
+    const subject = await resolveSubject(role, subjectId)
     if (String(password || '').length < 8 || String(password).length > 64) throw new BizError(1001, '初始密码需 8–64 位')
     if (await one('SELECT id FROM admin_user WHERE username = ?', [name])) throw new BizError(1001, '登录名已存在')
     const id = await tx(async (c) => {
-      const rid = await c.ins('INSERT INTO admin_user (username, display_name, password_hash, role, scope_city, status, note, token_epoch) VALUES (?,?,?,?,?,1,?,1)',
-        [name, display, hashPassword(String(password)), role, city, String(note || '').trim() || null])
-      await audit(c, 'admin:' + a.name, 'account', 'create', 'admin-' + rid, null, { username: name, role, scopeCity: city || null, note: String(note || '').trim() || null })
+      const rid = await c.ins('INSERT INTO admin_user (username, display_name, password_hash, role, scope_city, subject_type, subject_id, status, note, token_epoch) VALUES (?,?,?,?,?,?,?,1,?,1)',
+        [name, display, hashPassword(String(password)), role, city, subject ? subject.type : null, subject ? subject.id : null, String(note || '').trim() || null])
+      await audit(c, 'admin:' + a.name, 'account', 'create', 'admin-' + rid, null, { username: name, role, scopeCity: city || null, subject: subject ? subject.type + ':' + subject.id : null, note: String(note || '').trim() || null })
       return rid
     })
     return { id }
@@ -75,14 +97,16 @@ const adminAccounts = {
     if (!ACCOUNT_ROLES.includes(role)) throw new BizError(1001, '角色无效')
     const city = role === 'city_partner' ? String(scopeCity || '').trim() : null
     if (role === 'city_partner' && !/^\d{4,8}$/.test(city || '')) throw new BizError(1001, '城市合伙人必须绑定城市编码')
+    const subject = await resolveSubject(role, req.body.subjectId)
     const u = await one('SELECT id, username, role, scope_city, status FROM admin_user WHERE id = ?', [req.params.id])
     if (!u) throw new BizError(1004, '账号不存在')
     if (Number(u.id) === Number(a.uid)) throw new BizError(1001, '不能修改自己的角色/城市：请由另一位超级管理员操作')
     if (u.role === 'super' && u.role !== role && (await activeSuperCount()) <= 1) throw new BizError(1001, '不能降级最后一个有效超级管理员')
     await tx(async (c) => {
-      await c.q('UPDATE admin_user SET role = ?, scope_city = ?, token_epoch = token_epoch + 1 WHERE id = ?', [role, city, u.id])
+      await c.q('UPDATE admin_user SET role = ?, scope_city = ?, subject_type = ?, subject_id = ?, token_epoch = token_epoch + 1 WHERE id = ?',
+        [role, city, subject ? subject.type : null, subject ? subject.id : null, u.id])
       await audit(c, 'admin:' + a.name, 'account', 'change-role', 'admin-' + u.id,
-        { role: u.role, scopeCity: u.scope_city }, { role, scopeCity: city || null, reason: why, sessionsRevoked: true })
+        { role: u.role, scopeCity: u.scope_city }, { role, scopeCity: city || null, subject: subject ? subject.type + ':' + subject.id : null, reason: why, sessionsRevoked: true })
     })
     return { updated: true, role, scopeCity: city || null, sessionsRevoked: true }
   },

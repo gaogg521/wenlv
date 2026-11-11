@@ -340,19 +340,28 @@ const m = {
   },
 
   'GET /m/settlements': async (req) => {    const u = requireUser(req)
-    return await q('SELECT * FROM settlement WHERE merchant_id = ? ORDER BY id DESC LIMIT 12', [u.merchantId])
+    // 修复4：附调整合计（负数=应付减少）——已出账/已付款后的按项退款调整对商户可见可对账
+    return await q(`SELECT s.*,
+        (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1) AS adjust_pending
+      FROM settlement s WHERE s.merchant_id = ? ORDER BY s.id DESC LIMIT 12`, [u.merchantId])
   },
   'GET /m/settlements/:id': async (req) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
     const s = await one('SELECT * FROM settlement WHERE id = ? AND merchant_id = ?', [req.params.id, u.merchantId])
     if (!s) throw new BizError(1004, '结算单不存在')
-    // 明细：本单包含的订单（settlement_id 挂钩，对账逐单可查）；免费改签单不进结算，历史单如混入也带出标记
+    // 明细：本单包含的订单——主单挂钩（settlement_id）+ 修复4结算行挂钩（跨店提供方按订单项归属）；
+    // 免费改签单不进结算，历史单如混入也带出标记
     const items = (await q(`SELECT o.order_no, o.amount_pay, o.completed_at, p.title, (o.rebook_of IS NOT NULL) AS rebook FROM orders o
       JOIN tour_product p ON p.id = o.product_id
-      WHERE o.settlement_id = ? AND o.merchant_id = ? ORDER BY o.id DESC`, [req.params.id, u.merchantId]))
+      WHERE o.merchant_id = ? AND (o.settlement_id = ? OR EXISTS (SELECT 1 FROM settlement_line sl WHERE sl.settlement_id = ? AND sl.order_id = o.id AND sl.merchant_id = ?))
+      ORDER BY o.id DESC`, [u.merchantId, req.params.id, req.params.id, u.merchantId]))
       .map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
-    return { ...s, items }
+    // 修复4：本单的调整明细（已出账/已付款后的退款冲减）
+    const adjustments = await q(`SELECT a.type, a.amount_fen, a.cost_fen, a.refund_no, a.reason, a.operator, a.applied_settlement_id, a.created_at, o.order_no
+      FROM settlement_adjustment a LEFT JOIN orders o ON o.id = a.order_id
+      WHERE a.settlement_id = ? ORDER BY a.id DESC LIMIT 50`, [req.params.id])
+    return { ...s, items, adjustments }
   },
 
   // 商户确认结算（0 待确认 → 1 商户已确认；财务侧复核后走 2/3）

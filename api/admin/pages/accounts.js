@@ -2,7 +2,7 @@
 // 停用 / 改角色 / 改城市 / 重置密码都会使该账号已登录会话立即失效。
 // 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
 
-const ACCOUNT_ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号' }
+const ACCOUNT_ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号', merchant_partner: '商户主体方', scenic_partner: '景区主体方' }
 const CITY_DICT_ACCOUNTS = [[310118, '上海·青浦'], [310000, '上海'], [320508, '苏州·姑苏'], [330500, '湖州'], [330523, '湖州·安吉']]
 const cityLabelAccounts = (code) => { const hit = CITY_DICT_ACCOUNTS.find(([c]) => String(c) === String(code)); return hit ? hit[1] : (code || '—') }
 
@@ -202,9 +202,10 @@ window.accountCreateModal = () => {
   modal('新建后台账号', `
     <div class="field"><label>登录名 *（3–32 位字母数字_-，唯一）</label><input id="acUser" maxlength="32"></div>
     <div class="field"><label>显示名 *（列表与审计里显示的名字）</label><input id="acDisplay" maxlength="64"></div>
-    <div class="field"><label>角色 *</label><select id="acRole" onchange="document.getElementById('acCityRow').style.display=this.value==='city_partner'?'block':'none'">
+    <div class="field"><label>角色 *</label><select id="acRole" onchange="document.getElementById('acCityRow').style.display=this.value==='city_partner'?'block':'none';document.getElementById('acSubjectRow').style.display=(this.value==='merchant_partner'||this.value==='scenic_partner')?'block':'none'">
       ${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
     <div class="field" id="acCityRow" style="display:none"><label>城市范围 *（城市合伙人必填）</label><select id="acCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}">${esc(n)}（${c}）</option>`).join('')}</select></div>
+    <div class="field" id="acSubjectRow" style="display:none"><label>绑定主体ID *（商户/景区主体方必填：商户管理或景区资源里的编号）</label><input id="acSubject" type="number" min="1" placeholder="如 12"></div>
     <div class="field"><label>初始密码 *（8–64 位，只显示一次）</label><div class="row"><input id="acPwd" style="flex:1"><button class="btn ghost sm" onclick="document.getElementById('acPwd').value=genTmpPwd()">随机生成</button></div></div>
     <div class="field"><label>备注 / 所属责任人</label><input id="acNote" maxlength="200"></div>
     <div id="acErr" class="td-sub" style="color:var(--red)"></div>`,
@@ -215,7 +216,7 @@ const genTmpPwd = () => { const cs = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUV
 window.accountCreateSubmit = async () => {
   try {
     await api('POST', '/admin/accounts', { username: $('#acUser').value.trim(), displayName: $('#acDisplay').value.trim(), role: $('#acRole').value,
-      scopeCity: $('#acCity')?.value, password: $('#acPwd').value, note: $('#acNote').value.trim() })
+      scopeCity: $('#acCity')?.value, subjectId: $('#acSubject')?.value, password: $('#acPwd').value, note: $('#acNote').value.trim() })
     closeModal(); toast('账号已创建；初始密码请在交付后勿再展示'); accounts()
   } catch (e) { $('#acErr').textContent = e.message }
 }
@@ -237,13 +238,14 @@ window.accountRoleModal = (id, username, role, city) => {
     <p class="td-sub">变更影响：该账号已登录的全部会话<b>立即失效</b>，需重新登录；城市账号的可见数据范围随之变化。变更原因进入审计。</p>
     <div class="field"><label>角色 *</label><select id="acRRole">${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}" ${k === role ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
     <div class="field"><label>城市范围（城市合伙人必填，其他角色清空）</label><select id="acRCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}" ${String(c) === String(city) ? 'selected' : ''}>${esc(n)}（${c}）</option>`).join('')}</select></div>
+    <div class="field"><label>绑定主体ID（商户/景区主体方必填，其他角色清空）</label><input id="acRSubject" type="number" min="1"></div>
     <div class="field"><label>变更原因 *（4–200 字，进入审计）</label><input id="acRReason" maxlength="200"></div>
     <div id="acRErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountRoleSubmit(${id})">确认变更</button>`)
 }
 window.accountRoleSubmit = async (id) => {
   try {
-    const r = await api('POST', '/admin/accounts/' + id + '/role', { role: $('#acRRole').value, scopeCity: $('#acRCity').value, reason: $('#acRReason').value.trim() })
+    const r = await api('POST', '/admin/accounts/' + id + '/role', { role: $('#acRRole').value, scopeCity: $('#acRCity').value, subjectId: $('#acRSubject')?.value, reason: $('#acRReason').value.trim() })
     closeModal(); toast('角色/城市已变更' + (r.sessionsRevoked ? '；该账号旧会话已全部失效' : '')); accounts()
   } catch (e) { $('#acRErr').textContent = e.message }
 }

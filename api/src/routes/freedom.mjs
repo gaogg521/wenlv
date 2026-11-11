@@ -4,7 +4,7 @@ import { requireUser } from '../auth.mjs'
 import { requireAdmin, audit } from './_shared.mjs'
 import { id, json, paging } from '../domain/sales.mjs'
 import * as f from '../domain/freedom.mjs'
-import { priceSession } from '../domain/discount.mjs'
+import { priceSession, channelAllowed } from '../domain/discount.mjs'
 import * as bean from '../domain/bean.mjs'
 import { cfgNum } from '../config.mjs'
 import { bookingOpen, bookingNow } from '../domain/booking-window.mjs'
@@ -102,8 +102,10 @@ export const freedomRoutes={
  'POST /c/freedom/quote':async req=>{
    const u=requireUser(req),qty=Number(req.body.qty||1),sid=id(req.body.sessionId)
    if(!Number.isInteger(qty)||qty<1||qty>9)throw new BizError(1001,'人数无效')
-   const s=await one('SELECT s.*,p.city_code,p.channel,p.merchant_id,p.insurance_fee,p.status product_status FROM tour_session s JOIN tour_product p ON p.id=s.product_id WHERE s.id=?',[sid])
+   const s=await one('SELECT s.*,p.city_code,p.channel,p.profile product_profile,p.merchant_id,p.insurance_fee,p.status product_status FROM tour_session s JOIN tour_product p ON p.id=s.product_id WHERE s.id=?',[sid])
    if(!s||Number(s.status)!==1||Number(s.product_status)!==1||!bookingOpen(s.profile))throw new BizError(1001,'团期不可售')
+   // B11 修复6：试算与列表/详情/建单同一渠道口径——渠道限定商品在未开放渠道不可试算
+   if(!channelAllowed(s.product_profile,'main'))throw new BizError(1004,'商品不存在或已下架')
    // D01：有效商品价格＝早鸟/商品折扣统一试算；自由豆门槛按有效商品金额判断（保费不凑门槛、不参与优惠）
    const pricing=await priceSession(s,{product_id:s.product_id,city_code:s.city_code,channel:s.channel,depart_date:s.depart_date})
    const goods=pricing.unitFen*qty,ins=req.body.insurance&&!(process.env.NODE_ENV==='production')?Number(s.insurance_fee)*qty:0,rows=await f.rights(u.uid,{...s,goods})

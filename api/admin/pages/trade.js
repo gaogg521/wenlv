@@ -534,9 +534,21 @@ async function settlements() {
         <span>商户分成 ${s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—'} · <b>${fen(s.fee_merchant)}</b></span><span>平台 <b>${fen(s.fee_platform)}</b></span></div>` : ''}
       ${s.cost_total != null ? `<div class="payable-line" style="color:var(--ink2)">确认成本 <b>${fen(s.cost_total)}</b><span class="muted"> · 部分退款冲减 ${fen(s.partial_deduct || 0)} · 毛利（收入−成本） ${fen(Number(s.total_amount) - Number(s.cost_total))}</span></div>` : ``}
       ${s.split_snapshot ? (() => { const sp = typeof s.split_snapshot === 'string' ? JSON.parse(s.split_snapshot) : s.split_snapshot; return `<p class="muted" style="margin:6px 0 0">本单比例快照：履约 ${sp.fulfill / 100}% · 服务费 ${sp.service / 100}% · 权益 ${sp.beanbudget / 100}%（参数中心 settlement.split_*）</p>` })() : ''}
-      <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}</span></div>
+      ${Number(s.adjust_pending) ? `<div class="payable-line" style="color:var(--warn,#b45309)">已出账后调整 <b>${fen(s.adjust_pending)}</b>（按项退款冲减，见调整明细）<span class="muted"> · 未冲抵部分由下一张补充单并入</span></div>` : ''}
+      ${Number(s.cost_adjust) ? `<div class="payable-line" style="color:var(--ink2)">确认成本调整 <b>${fen(s.cost_adjust)}</b><span class="muted">（只影响利润复算，不改商户应付）</span></div>` : ''}
+      <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}${Number(s.adjust_pending) ? ' + 已出账后调整 ' + fen(s.adjust_pending) : ''}</span></div>
+      ${adminCan('settle.pay') ? `<p class="muted" style="margin:6px 0 0"><a href="javascript:void(0)" onclick="settleAdjustments(${s.id})" style="color:var(--ink2)">查看调整明细</a></p>` : ''}
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
   </div>`
+}
+// 修复4：已出账/已付款结算单的调整明细（按项退款冲减 / 确认成本更正），逐条可溯源
+async function settleAdjustments(id) {
+  try {
+    const rows = await api('GET', `/admin/settlements/${id}/adjustments`)
+    modal('结算调整明细（结算单 #' + id + '）', rows.length ? `<table><thead><tr><th>类型</th><th>金额（分）</th><th>关联单号</th><th>原因</th><th>操作人</th><th>冲抵去向</th><th>时间</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>${Number(r.type) === 1 ? '按项退款冲减' : '确认成本更正'}</td><td class="num">${r.amount_fen != null ? r.amount_fen : ''}${r.cost_fen != null ? '成本' + r.cost_fen : ''}</td><td>${esc(r.order_no || r.refund_no || '')}</td><td>${esc(r.reason || '')}</td><td>${esc(r.operator || '')}</td><td>${r.applied_settlement_id ? '#' + r.applied_settlement_id : '未冲抵'}</td><td>${esc(String(r.created_at || '').slice(0, 19))}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="muted">该商户暂无结算调整记录</p>', '<button class="btn primary" onclick="closeModal()">知道了</button>')
+  } catch (e) { toast(e.message, true) }
 }
 async function genSettlements() {
   try {

@@ -180,7 +180,7 @@ async function boot() {
     return
   }
   // P-10：九个角色全部有中文名（顶栏），未知角色显示原码兜底
-  const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控', readonly: '只读观察', sre: '运维', dev: '开发', city_partner: '城市合伙人' }[ME?.role] || ME?.role || ''
+  const roleCn = { super: '超级管理员', finance: '财务', ops: '运营', review: '审核', risk: '风控', readonly: '只读观察', sre: '运维', dev: '开发', city_partner: '城市合伙人', merchant_partner: '商户主体方', scenic_partner: '景区主体方' }[ME?.role] || ME?.role || ''
   const nameCn = ME?.displayName || ME?.username || ''
   $('#who').textContent = nameCn === roleCn ? roleCn : `${nameCn} · ${roleCn}`
   // C-04：菜单由接口驱动——allModules 是唯一模块清单（分组/中文名/图标），modules 是本人有效集合；

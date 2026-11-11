@@ -42,6 +42,9 @@ export const ROLE_DEFAULT_MODULES = {
   readonly: ['dash', 'orders', 'products', 'merchants', 'scenics', 'settlements', 'contentdash', 'partners', 'partnerperf'],
   sre: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest'],
   dev: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest', 'features', 'terms'],
+  // 商户/景区主体方（V82 独立 PC 身份）：只看本主体授权范围；不给 dash（平台聚合）与资金/参数等平台模块
+  merchant_partner: ['orders', 'settlements', 'products', 'merchants', 'partnerperf'],
+  scenic_partner: ['orders', 'scenics', 'settlements', 'products'],
 }
 
 /** 有效模块集合：super 全部；已知角色取默认；未知角色空（默认拒绝） */
@@ -58,6 +61,6 @@ export function effectiveModules(role) {
  * risk→风控事件；sre/dev→运维控制台。未知角色 null（前端回落）。
  */
 export const ROLE_HOME = {
-  super: 'dash', ops: 'dash', readonly: 'dash', city_partner: 'dash',
+  super: 'dash', ops: 'dash', readonly: 'dash', merchant_partner: 'orders', scenic_partner: 'orders', city_partner: 'dash',
   finance: 'fund', review: 'reviewqueue', risk: 'risk', sre: 'system', dev: 'system',
 }

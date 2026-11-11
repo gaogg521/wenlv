@@ -136,18 +136,24 @@ export async function refundableItems(orderId) {
 
 /**
  * B04 部分退款：仅未核销项；实退 = Σ现金分摊 − 政策手续费；旅豆/券不冲回（全退才走既有冲回）。
- * 退款写入 refunds（复用现有展示/聚合）+ partial_refund（项级明细）；MOCK 通道即时置已退款。
+ * 退款写入 refunds（复用现有展示/聚合）+ partial_refund（项级明细+项净额 item_nets 供跨店提供方归属）；
+ * MOCK 通道即时置已退款。
+ * 修复2（Codex退回#2）：处理中拦截只看 refunds.status=0——首笔已成功（status=2）不再阻塞
+ * 第二个独立待履约项的退款；同项重复提交仍被"仅待履约项可退"拒绝，核销隔离保留。
+ * 修复4：允许已支付/已确认/已完成（含已出账结算）订单按项退款——已出账单不改动，
+ * 退款成功后按提供方写 settlement_adjustment（见 promo.recordRefundAdjustment）。
  */
 export async function partialRefund({ orderNo, itemIds, reason, operator = 'user', applyPolicy = false }) {
   if (!Array.isArray(itemIds) || !itemIds.length) throw new BizError(1001, '请选择要退的订单项')
   const o = await one('SELECT * FROM orders WHERE order_no = ?', [orderNo])
   if (!o) throw new BizError(2003, '订单不存在')
-  if (!['20', '30'].includes(String(Number(o.status)))) throw new BizError(2002, '仅已支付/已确认订单可按项部分退款')
+  if (!['20', '30', '50'].includes(String(Number(o.status)))) throw new BizError(2002, '仅已支付/已确认/已完成订单可按项部分退款')
   const policyCfg = await cfg('order.refund_policy')
   return tx(async c => {
     const locked = await c.one('SELECT * FROM orders WHERE id = ? FOR UPDATE', [o.id])
-    if (!['20', '30'].includes(String(Number(locked.status)))) throw new BizError(2002, '订单状态已变化，请刷新重试')
-    const dup = await c.one('SELECT refund_no FROM refunds WHERE order_id = ? AND status IN (0, 2) AND refund_no LIKE ? LIMIT 1', [locked.id, 'PR%'])
+    if (!['20', '30', '50'].includes(String(Number(locked.status)))) throw new BizError(2002, '订单状态已变化，请刷新重试')
+    // 修复2：只有"处理中"（status=0）的按项退款单阻塞重复提交；已成功的按项退款不阻塞不同剩余项分别退款
+    const dup = await c.one('SELECT refund_no FROM refunds WHERE order_id = ? AND status = 0 AND refund_no LIKE ? LIMIT 1', [locked.id, 'PR%'])
     if (dup) throw new BizError(2002, '已有部分退款在处理中（' + dup.refund_no + '），请勿重复提交')
     const items = await c.q(`SELECT * FROM order_item WHERE order_id = ? AND id IN (?) FOR UPDATE`, [locked.id, itemIds.map(Number)])
     if (items.length !== new Set(itemIds.map(Number)).size) throw new BizError(1001, '所选订单项不存在或不属于本单')
@@ -158,6 +164,9 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
       if (Number(it.cash_fen) <= 0) throw new BizError(1001, '该项无现金分摊可退：' + it.name)
       cashFen += Number(it.cash_fen)
     }
+    // 修复2：累计不超实收——Σ已结算部分退款 + 本笔手续费后实退 ≤ 实收现金（实付−保费）
+    const settledBefore = await settledPartialFen(locked.id, c)
+    const cashCeiling = Math.max(0, Number(locked.amount_pay) - Number(locked.insurance_fee || 0))
     let feeFen = 0, feeRate = null
     if (applyPolicy) {
       const s = await c.one('SELECT depart_date FROM tour_session WHERE id = ?', [locked.session_id])
@@ -167,12 +176,24 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
     }
     const payFen = cashFen - feeFen
     if (payFen <= 0) throw new BizError(1001, '手续费后无可退金额')
+    if (settledBefore + payFen > cashCeiling) throw new BizError(2002, '累计退款将超过实收现金，请核对订单')
+    // 手续费按项现金占比分摊、尾差归最后一个正额项（与三路分摊同一约定）；项净额落 partial_refund.item_nets 供提供方归属复算
+    const posIdx = items.map((it, i) => (Number(it.cash_fen) > 0 ? i : -1)).filter(i => i >= 0)
+    const lastPos = posIdx[posIdx.length - 1]
+    let feeLeft = feeFen
+    const itemNets = items.map((it, i) => {
+      const cash = Number(it.cash_fen)
+      if (i === lastPos) return cash - feeLeft // 尾差归最后正额项
+      const share = feeFen > 0 ? Math.floor(feeFen * cash / cashFen) : 0
+      feeLeft -= share
+      return cash - share
+    })
     const refundNo = 'PR' + Date.now()
     await c.q(`INSERT INTO refunds (order_id, refund_no, amount, fee_amount, fee_rate, reason, status, operator, close_reason)
       VALUES (?,?,?,?,?,?,?,?,?)`, [locked.id, refundNo, payFen, feeFen, feeRate, '部分退款·' + reason, 0, operator, null])
-    await c.q(`INSERT INTO partial_refund (order_id, refund_no, item_ids, cash_fen, fee_fen, fee_rate, reason, operator, status)
-      VALUES (?,?,?,?,?,?,?,?,0)`,
-      [locked.id, refundNo, JSON.stringify(itemIds.map(Number)), payFen, feeFen, feeRate, reason, operator])
+    await c.q(`INSERT INTO partial_refund (order_id, refund_no, item_ids, item_nets, cash_fen, fee_fen, fee_rate, reason, operator, status)
+      VALUES (?,?,?,?,?,?,?,?,?,0)`,
+      [locked.id, refundNo, JSON.stringify(itemIds.map(Number)), JSON.stringify(itemNets), payFen, feeFen, feeRate, reason, operator])
     await c.q('UPDATE order_item SET status = 2 WHERE id IN (?) AND status = 0', [itemIds.map(Number)])
     // 被退项的按人凭证同步冲正（未核销前提已校验）；核销记录保留审计
     await c.q('UPDATE travel_pass SET status = 4 WHERE order_item_id IN (?) AND status = 1', [itemIds.map(Number)])
@@ -186,13 +207,15 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
     if (wxr.status === 'SUCCESS') {
       await q('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
       await q('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
+      // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
+      try { await (await import('./promo.mjs')).recordRefundAdjustment(o.id, r.refundNo) } catch (e) { console.error('[partial-refund:adjust]', o.id, e.message) }
     }
     return { ...r, refunded: wxr.status === 'SUCCESS', wxRefund: wxr.status }
   })
 }
 
 /** 已结算部分退款合计（订单级资金对账与全退金额扣减用） */
-export async function settledPartialFen(orderId, c = { q }) {
+export async function settledPartialFen(orderId, c = { one: (sql, p) => one(sql, p) }) {
   const r = await c.one("SELECT COALESCE(SUM(cash_fen),0) s FROM partial_refund WHERE order_id = ? AND status = 2", [orderId])
   return Number(r.s)
 }
