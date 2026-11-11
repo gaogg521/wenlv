@@ -21,7 +21,7 @@ async function scenics() {
       <td class="td-sub">${esc(s.profit_terms || '—')}</td>
       <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('scenic',${s.id},'${escJs(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
-      <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+      <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super','ops','finance','city_partner'].includes(ME.role) ? `<button class="btn ghost sm" onclick="scenicCalculator(${Number(s.id)}).catch(e=>toast(e.message,true))">按景区算账</button>` : ''}${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
   </div>`
 }
