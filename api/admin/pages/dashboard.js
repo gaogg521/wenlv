@@ -333,7 +333,9 @@ async function dash() {
       <div class="dx-row r-main">${dxTrendCard(k, c)}${dxTopCard(k, ins, c)}</div>
       <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${dxMiniCard(wxd, c)}</div>
       ${dxOrdersCard(orders.slice(0, 8))}
+      ${operatingScenarioPanel()}
     </div>`
+    void mountOperatingScenario(app)
   } catch (e) {
     if (seq !== window.__dashSeq) return
     console.error('dash error:', e.message)
