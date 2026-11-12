@@ -29,7 +29,8 @@ export async function completeOrder(orderNo) {
   if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // A-01：实收 ¥0 的免费改签单不加成长值
   await promo.createCommission(orderNo)
   // 朱家角示范闭环·步骤4 贡献确认：Q 成交维度落库（归因有效单，幂等，不触发资金；S/R 无已确认规则不赋值）
-  try { const oNow = await order.byNo(orderNo); const cD = await import('./domain/contribution.mjs'); await cD.recordQ({ ...oNow, order_no: orderNo }); await cD.recordR({ ...oNow, order_no: orderNo }) } catch (e) { console.error('[job:contribution]', orderNo, e.message) }
+  try { const oNow = await order.byNo(orderNo); await (await import('./domain/contribution.mjs')).recordQ({ ...oNow, order_no: orderNo }) } catch (e) { console.error('[job:contribution]', orderNo, e.message) }
+  // 朱家角示范闭环·步骤4 贡献确认：Q 成交维度落库（归因有效单，幂等，不触发资金；S/R 无已确认规则不赋值）
   // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
   await pass.attest('order', orderNo, {
     orderNo, amountPay: amt, status: 50, merchantId: Number(o.merchant_id),

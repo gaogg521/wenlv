@@ -1603,7 +1603,7 @@ const admin = {
     const goodsCash = await bean.goodsCashBase(o)
     if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // 成长值与等级不依赖旅豆预算
     await promo.createCommission(orderNo)
-  try { const cD = await import('../domain/contribution.mjs'); const oNow = await order.byNo(orderNo); await cD.recordQ({ ...oNow, order_no: orderNo }); await cD.recordR({ ...oNow, order_no: orderNo }) } catch (e) { console.error('[complete:contribution]', orderNo, e.message) } // 闭环步骤4 贡献确认 Q/R
+    try { await (await import('../domain/contribution.mjs')).recordQ({ ...(await order.byNo(orderNo)), order_no: orderNo }) } catch (e) { console.error('[complete:contribution]', orderNo, e.message) } // 闭环步骤4 贡献确认 Q
     await badgeDomain.evaluateSafe(Number(o.user_id))
     await badgeDomain.evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号

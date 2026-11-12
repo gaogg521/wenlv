@@ -648,8 +648,7 @@ await t('会员等级：达到门槛自动升级 → 我的页 / 旅豆页 / 数
   const o1 = await finishOrder(u.token); const amt1 = Number(o1.amountPay)
   assert.equal(await rebateOf(u.user.id, o1.orderNo), Math.round(amt1 / 10 * (rate + lvs[0].rebateBonusBp / 10000)), '升级前按 Lv1 返豆')
   const me = ok(await call('GET', '/c/me', null, u.token))
-  const csG1 = Math.round(Number((await one('SELECT COALESCE(SUM(cs),0) s FROM contribution_record WHERE user_id = ?', [u.user.id])).s) * Number(await cfgNum('member.cs_multiplier')))
-  assert.equal(me.memberLevel, 2); assert.equal(me.level.name, lvs[1].name); assert.equal(me.level.growth, lvs[1].min - 1000 + amt1 + csG1, '成长值=起点+订单实付+贡献分成长（CS→成长值已接通）')
+  assert.equal(me.memberLevel, 2); assert.equal(me.level.name, lvs[1].name); assert.equal(me.level.growth, lvs[1].min - 1000 + amt1)
   const idn = ok(await call('GET', '/c/identity', null, u.token))
   assert.equal(idn.profile.levelName, lvs[1].name, '数字身份页的等级名 = 我的页'); assert.equal(idn.profile.memberLevel, 2)
   assert.deepEqual(ok(await call('GET', '/c/member', null, u.token)).levels.map((l) => l.name), lvs.map((l) => l.name), '旅豆页的等级表 = 后台等级配置')
@@ -660,11 +659,8 @@ await t('会员等级：达到门槛自动升级 → 我的页 / 旅豆页 / 数
   const r2 = await rebateOf(u.user.id, o2.orderNo)
   assert.equal(r2, Math.round(amt2 / 10 * (rate + lvs[1].rebateBonusBp / 10000)), '升级后按 Lv2 加成返豆')
   assert.ok(r2 > Math.round(amt2 / 10 * rate), 'Lv2 返豆应高于基础返豆')
-  // 成长日志 = 订单实付（biz_type=1）+ 贡献分成长（biz_type=2，CS→成长值已接通且与分录一致）
-  const csG = Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id = ? AND biz_type = 2', [u.user.id])).s)
-  const csSum = Number((await one('SELECT COALESCE(SUM(cs),0) s FROM contribution_record WHERE user_id = ?', [u.user.id])).s)
-  assert.equal(csG, Math.round(csSum * Number(await cfgNum('member.cs_multiplier'))), '贡献分成长 = Σcs×cs_multiplier')
-  assert.equal(Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id = ? AND biz_type = 1', [u.user.id])).s), amt1 + amt2, '成长日志(订单) = 订单实付')
+  // 成长日志 = 订单实付
+  assert.equal(Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id = ?', [u.user.id])).s), amt1 + amt2)
   // 配置错误在提案阶段就被拒绝（不用等审批）
   assert.notEqual((await call('POST', '/admin/config/proposal', { key: 'member.levels', newValue: JSON.stringify([{ lv: 1, name: '探索者', min: 5 }, { lv: 2, name: '旅行家', min: 10 }]), reason: 'x' }, A)).code, 0, '门槛首项不为 0 应被拒')
   assert.notEqual((await call('POST', '/admin/config/proposal', { key: 'member.levels', newValue: JSON.stringify(lvs.map((l, i) => (i === 1 ? { ...l, perks: ['链上权益'] } : l))), reason: 'x' }, A)).code, 0, '含禁用词应被拒')
