@@ -144,4 +144,3 @@ try {
   if (prior) await q("UPDATE rule_config SET v=? WHERE k='contribution.effective_at'",[JSON.stringify(prior.v)])
   await closeDb()
 }
-
