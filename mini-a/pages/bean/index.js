@@ -16,6 +16,14 @@ Page({
       if (api.demoAllowed()) { this.fillMember(api.FALLBACK.member); this.setData({ demo: true }) }
       else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
     })
+    api.request('/c/member/contribution').then(result => {
+      const labels = { 1: '成交贡献', 2: '内容采纳', 3: '景区复购' }
+      const states = { pending: '待发', limited: '受月上限限制', credited: '已发', revoked: '已冲回' }
+      this.setData({ contribution: result.rows.filter(r => r.growth_state !== 'legacy').slice(0, 8).map(r => ({
+        id: r.id, label: labels[r.kind], state: states[r.growth_state], score: Number(r.cs).toFixed(2),
+        growth: (Number(r.growth_active) / 100).toFixed(2), reason: r.growth_state === 'revoked' ? r.reason : '',
+      })) })
+    }).catch(() => this.setData({ contribution: [] }))
     api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: (ledger || []).slice(0, 20) }))
       .catch((e) => {
         if (api.demoAllowed()) this.setData({ ledger: api.FALLBACK.ledger, demo: true })

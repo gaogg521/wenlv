@@ -463,6 +463,10 @@ const c = {
 
   // 会员等级：当前等级 / 距下一级进度 / 全部等级与权益（来自参数中心，三个页面共用）
   'GET /c/member': async (req) => withLevelArt(await member.progress(requireUser(req).uid), req),
+  'GET /c/member/contribution': async req => {
+    const u = requireUser(req)
+    return (await import('../domain/contribution.mjs')).summary(u.uid)
+  },
 
   // 头像昵称填写能力（官方组件）：昵称过机审；头像走 base64 上传
   'POST /c/me/profile': async (req) => {

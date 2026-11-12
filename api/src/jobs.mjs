@@ -17,6 +17,7 @@ export async function completeOrder(orderNo) {
   if (!o || o.status !== 40) return false
   await order.fire(orderNo, 'OBSERVE_END', 'system', async (c) => {
     await c.upd('UPDATE orders SET completed_at = NOW(3) WHERE order_no = ?', [orderNo])
+    await (await import('./domain/contribution-growth.mjs')).enqueueContribution(c, 'order', o.id)
     return '观察期结束·返豆+计佣'
   })
   // 返豆：账号冻结时不发，记为待补发，解冻后补发（实收 0 的免费改签单天然不返）
@@ -228,6 +229,7 @@ async function main() {
       await tickExpireVouchers()
       await tickAttest()
       await tickRiskNotify()
+      await (await import('./domain/contribution-growth.mjs')).tickContributionGrowth()
       // 心跳：运维控制台据此判断任务进程存活
       await q(`INSERT INTO sys_job (name, last_run_at, last_status, run_count) VALUES ('main-loop', NOW(3), 'ok', 1)
                ON DUPLICATE KEY UPDATE last_run_at = NOW(3), last_status = 'ok', run_count = run_count + 1`, [])

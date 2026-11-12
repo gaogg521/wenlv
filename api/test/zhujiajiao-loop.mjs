@@ -155,7 +155,7 @@ try {
     assert.equal((await contribution.recordQ(oFirst)).recorded, false, '重复确认幂等不重记')
     assert.equal(Number((await one('SELECT COUNT(*) n FROM contribution_record WHERE kind=1 AND biz_ref=?', [noShow])).n), 0, '无归因二销单不记贡献')
     const sum = await contribution.summary(uidA)
-    assert.ok(sum.pending.s.includes('待确认') && sum.pending.r.includes('待确认'), 'S/R 状态=待确认（无已确认计分规则，不赋值）')
+    assert.ok(!sum.enabled && sum.pending.s === '待启用' && sum.pending.r === '待启用', '未配置生效时间时保持旧 Q 口径')
     excluded.push(noFirst)
   })
 

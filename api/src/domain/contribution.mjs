@@ -1,10 +1,4 @@
-// 贡献分（CS）确认域（朱家角示范闭环 · 步骤4 贡献确认）。
-// 口径（按[业务落地](docs/按景区算账与示范闭环-业务落地-20261111.md)约束"避免直接赋值或触发资金"）：
-//   Q=成交维度：唯一已确认计分依据——订单完成 + 归因有效（promo_snapshot.eligible 且归因命中），
-//     score=适用商品现金（元），cs=score×w_q（权重走参数中心 contribution.weights，可配置）。
-//     落库幂等（uk_kind_ref），不触发任何资金动作；退款关单不记（完成时点已保证）。
-//   S=内容质量、R=留存：尚无已确认计分规则——本域不赋值、不落库，状态显示"待确认"。
-//     方案与算例见 docs/朱家角示范闭环-贡献确认规则方案-20261111.md。
+// 贡献确认与本人汇总。启用前的 Q 仅作历史记录。
 import { q, one } from '../db.mjs'
 import { cfg } from '../config.mjs'
 import { settledPartialFen } from './package.mjs'
@@ -20,6 +14,12 @@ export async function weights() {
  *  幂等：uk(kind=1, biz_ref=order_no) 重复完成/重复回调只记一次。返回 {recorded, score, cs}。 */
 export async function recordQ(o) {
   if (!o || Number(o.status) !== 50 || o.rebook_of) return { recorded: false }
+  const queued = await one("SELECT source_id FROM contribution_job WHERE source='order' AND source_id=?", [o.id])
+  if (queued) {
+    const processed = await (await import('./contribution-growth.mjs')).processContribution('order', o.id)
+    const award = await one('SELECT score,cs FROM contribution_record WHERE kind=1 AND biz_ref=?', [o.order_no])
+    return { recorded: Boolean(processed && award), ...(award || {}) }
+  }
   // 归因有效：建单快照 eligible（自购不计佣的快照 eligible=false 同样不计贡献）
   const snap = o.promo_snapshot ? (typeof o.promo_snapshot === 'string' ? JSON.parse(o.promo_snapshot) : o.promo_snapshot) : null
   if (!o.promo_scene || !snap || !snap.eligible) return { recorded: false }
@@ -38,12 +38,16 @@ export async function recordQ(o) {
 export async function summary(userId, pg = {}) {
   const limit = Math.min(Math.max(Number(pg.pageSize) || 20, 1), 100)
   const offset = (Math.max(Number(pg.page) || 1, 1) - 1) * limit
-  const rows = await q('SELECT kind, biz_ref, score, cs, cheated, verified_at, created_at FROM contribution_record WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?', [userId, limit, offset])
+  const rows = await q(`SELECT id,kind,biz_ref,score,cs,cheated,verified_at,created_at,growth_state,growth_active,reason,
+    JSON_EXTRACT(rule_snapshot,'$.version') rule_version FROM contribution_record WHERE user_id=? ORDER BY id DESC LIMIT ? OFFSET ?`, [userId, limit, offset])
   const total = Number((await one('SELECT COUNT(*) n FROM contribution_record WHERE user_id = ?', [userId])).n)
   const csSum = Number((await one('SELECT COALESCE(SUM(cs),0) s FROM contribution_record WHERE user_id = ? AND cheated = 0', [userId])).s)
   const w = await weights()
+  const at = await cfg('contribution.effective_at')
+  const enabled = Boolean(at && Date.now() >= Date.parse(at.replace(' ', 'T') + '+08:00'))
   return {
-    rows, total, csConfirmed: csSum, weights: w,
-    pending: { s: '待确认（内容质量尚无已确认计分规则）', r: '待确认（留存尚无已确认计分规则）' },
+    enabled, rows, total, csConfirmed: csSum, weights: w,
+    pending: enabled ? { s: '采纳后计分', r: '同景区合格复购后计分' } : { s: '待启用', r: '待启用' },
+    growthUnit: '100 库内单位 = 1 成长点',
   }
 }
