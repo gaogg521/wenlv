@@ -88,6 +88,7 @@ async function complete(o, refundNo, reason, status) {
     if ([20,30].includes(Number(previous?.from_st))) await cc.upd('UPDATE tour_session SET booked=GREATEST(0,booked-?) WHERE id=?', [o.qty,o.session_id])
     await cc.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [refundNo])
     await cc.upd('UPDATE payment SET status = 4 WHERE order_id = ?', [o.id])
+    await (await import('./contribution-growth.mjs')).recheckOrderContribution(cc, o.id)
     await attest('refund', refundNo, {
       refundNo, orderNo, amount: Number(rf ? rf.amount : o.amount_pay), feeAmount: Number(rf ? rf.fee_amount : 0),
       feeRate: rf && rf.fee_rate != null ? Number(rf.fee_rate) : null, status: 2, reason: reason || null,

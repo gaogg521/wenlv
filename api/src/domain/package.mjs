@@ -205,7 +205,7 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
       ? await wxpay.refund({ orderNo, refundNo: r.refundNo, amountFen: r.cashFen, totalFen: Number(o.amount_pay), reason: '部分退款' }).catch(e => ({ status: 'ERROR', message: e.message }))
       : { status: 'SUCCESS' }
     if (wxr.status === 'SUCCESS') {
-      await confirmPartialRefund(o.id, r.refundNo)
+      await confirmPartialRefund(o.id, r.refundNo) // 幂等收口：状态+V84 贡献重算+结算调整
       return { ...r, refunded: true, wxRefund: 'SUCCESS' }
     }
     return { ...r, refunded: false, processing: wxr.status === 'PROCESSING', wxRefund: wxr.status }
@@ -217,8 +217,12 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
 export async function confirmPartialRefund(orderId, refundNo) {
   const already = await one('SELECT status FROM refunds WHERE refund_no = ?', [refundNo])
   if (!already || Number(already.status) === 2) return { confirmed: false }
-  await q('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
-  await q('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
+  await tx(async c => {
+    await c.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
+    await c.upd('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
+    // V84：异步成功终态复用 recheckOrderContribution——按净实收重算贡献与成长冲正，与退款同事务
+    await (await import('./contribution-growth.mjs')).recheckOrderContribution(c, orderId)
+  })
   // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
   try { await (await import('./promo.mjs')).recordRefundAdjustment(orderId, refundNo) } catch (e) { console.error('[partial-refund:adjust]', orderId, e.message) }
   return { confirmed: true }

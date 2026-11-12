@@ -100,8 +100,8 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
     const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [qty, sessionId, qty, bookingNow()])
     if (n !== 1) throw new BizError(2001, '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
-        amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee)
-        SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,?,? FROM tour_product p WHERE p.id = ?`,
+        amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee, contribution_scenic_id)
+        SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,?,?,COALESCE(p.scenic_id,0) FROM tour_product p WHERE p.id = ?`,
       [orderNo, userId, s.product_id, sessionId, qty, goods, beanDedFen, beans, pay, promoScene || null, insFee, s.product_id])
     await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES ((SELECT id FROM orders WHERE order_no = ?),0,10,?,?)',
       [orderNo, 'user:' + userId, JSON.stringify('下单占位')])

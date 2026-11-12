@@ -196,6 +196,12 @@ async function userProfile(id) {
       ${p.promoter ? `<div class="rv-box"><div class="rv-h">推广服务商</div>${kv('档位 / 费率', `${p.promoter.tier} 档 · ${PN(p.promoter.rate_bp) / 100}%`)}${kv('近 90 日有效 GMV', fen(p.promoter.valid_gmv_90d))}
         ${kv('累计佣金', `${PN(p.promoter.commission?.n)} 笔 · ${fen(p.promoter.commission?.amt)}`)}${kv('状态', PN(p.promoter.status) === 1 ? '正常' : '冻结')}</div>` : ''}
       ${p.staff.length ? `<div class="rv-box"><div class="rv-h">商户身份</div>${p.staff.map((s) => kv(`<button class="order-link" onclick="merchantProfile(${s.id})">${esc(s.name)}</button>`, (STAFF_ROLE[s.role] || '员工') + (PN(s.status) ? '' : '（已停用）'))).join('')}</div>` : ''}
+      ${p.contribution?.rows?.length ? `<div class="rv-box"><div class="rv-h">贡献成长</div>${p.contribution.rows.map(r =>
+        kv(esc((['','成交','内容采纳','景区复购'][Number(r.kind)] || '贡献') + ' · ' + r.biz_ref),
+          esc((({ legacy:'历史',pending:'待发',credited:'已发',limited:'限额',revoked:'已冲回' })[r.growth_state] || '待核实') +
+          ' · ' + (Number(r.growth_active) / 100).toFixed(2) + ' 成长点' + (r.reason ? ' · ' + r.reason : '')) +
+          (ME.role === 'super' && !Number(r.cheated) && !['legacy','revoked'].includes(r.growth_state) ?
+            ` <button class="btn ghost sm" onclick="revokeContribution(${Number(u.id)},${Number(r.id)})">确认无效</button>` : ''))).join('')}</div>` : ''}
       <div class="rv-box"><div class="rv-h">成长记录</div>${p.growth.length ? p.growth.map((g) => kv(dt(g.created_at), `${PN(g.delta) > 0 ? '+' : ''}${PN(g.delta)} → ${PN(g.after_val)}`)).join('') : '<div class="td-sub">暂无</div>'}</div>
       <div class="rv-box"><div class="rv-h">后台操作记录</div>${p.ops.length ? p.ops.map((o) => kv(dt(o.created_at), `${esc(o.actor)} · ${esc(o.action)}`)).join('') : '<div class="td-sub">无</div>'}</div>
     </div>
@@ -403,4 +409,17 @@ window.mobilePreview = async (pid) => {
         ${sessHtml}
       </div>
     </div>`, '')
+}
+async function revokeContribution(userId, recordId) {
+  modal('确认贡献无效', '<label>向用户展示的冲正原因<input id="csRevokeReason" maxlength="120" placeholder="至少填写 4 个字"></label>',
+    `<button class="btn ghost" onclick="userProfile(${userId})">返回</button><button class="btn primary" onclick="submitContributionRevoke(${userId},${recordId})">提交冲正</button>`)
+}
+async function submitContributionRevoke(userId, recordId) {
+  const reason = $('#csRevokeReason').value.trim()
+  if (reason.length < 4) return toast('请填写冲正原因', true)
+  try {
+    await api('POST', '/admin/users/' + userId + '/contribution/' + recordId + '/revoke', { reason })
+    toast('已提交冲正，处理后更新成长记录')
+    await userProfile(userId)
+  } catch (error) { toast(error.message, true) }
 }

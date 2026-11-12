@@ -2,6 +2,7 @@
 // 设计见仓库根目录《后台管理体系设计-20261102.md》：每类主体 = 列表（搜索、分群、统计）+ 360 画像（注册信息、关系、行为数据、治理操作、操作留痕）。
 // 隐私：手机号、证件号、实名只下发脱敏值；城市合伙人只能看本城商户。
 import * as member from '../domain/member.mjs'
+import { findBanned } from '../domain/wording.mjs'
 import * as merchantLevel from '../domain/merchant-level.mjs'
 import { q, one, tx, BizError } from '../db.mjs'
 import { requireAdmin, subjectScope, scopeFilter, audit, apiImg } from './_shared.mjs'
@@ -222,11 +223,33 @@ export const people = {
       consents: consents.map((x) => ({ scene: x.scene, granted: Number(x.granted) === 1, grantedAt: x.granted_at, revokedAt: x.revoked_at })),
       trade: { ...trade, refund_amount: N(refundAmt.amt), refund_fee: N(refundAmt.fee), aov: N(trade.paid) ? Math.round(N(trade.gmv) / N(trade.paid)) : 0 },
       orders, favCities, beans: { balance: N(acct?.balance), lifetime: N(acct?.lifetime), ledger },
+      contribution: await (await import('../domain/contribution.mjs')).summary(id, { pageSize: 8 }),
       content: { notes, recentNotes, tasks, badges }, promoter: promoter ? { ...promoter, commission } : null, staff, growth, ops,
     }
   },
   // 冻结 / 解冻：冻结后小程序端所有接口拒绝（含已登录的会话），原因必填并记审计。
   // T12：传 caseId 时把冻结/解冻写入案件时间线（处置动作引用案件）；解冻不等于结案（案件关闭仍走复核）。
+  'POST /admin/users/:id/contribution/:recordId/revoke': async req => {
+    const a = await requireAdmin(req, ['super', 'risk'])
+    const reason = String(req.body.reason || '').trim()
+    if (reason.length < 4 || reason.length > 120 || findBanned(reason)) throw new BizError(1001, '请填写 4–120 字的有效冲正理由')
+    const cs = await import('../domain/contribution-growth.mjs')
+    return tx(async c => {
+      // 先锁任务，再标记贡献，与队列的锁顺序一致。
+      const rec = await c.one('SELECT id,kind,source_id,cheated FROM contribution_record WHERE id=? AND user_id=?', [req.params.recordId, req.params.id])
+      if (!rec || !rec.source_id) throw new BizError(1004, '未找到可处理的贡献分录')
+      const source = Number(rec.kind) === 2 ? 'entry' : 'order'
+      const job = await c.one('SELECT source_id FROM contribution_job WHERE source=? AND source_id=? FOR UPDATE', [source, rec.source_id])
+      if (!job) throw new BizError(1004, '贡献任务不存在')
+      const changed = await c.upd('UPDATE contribution_record SET cheated=1,reason=? WHERE id=? AND cheated=0', [reason, rec.id])
+      if (changed) {
+        if (source === 'order') await cs.recheckOrderContribution(c, rec.source_id)
+        else await c.upd("UPDATE contribution_job SET run_after=NOW(3) WHERE source='entry' AND source_id=?", [rec.source_id])
+        await audit(c, 'admin:' + a.name, 'user', 'contribution-revoke', 'user-' + req.params.id, null, { recordId: rec.id, reason })
+      }
+      return { queued: Boolean(changed) }
+    })
+  },
   'POST /admin/users/:id/status': async (req) => {
     const a = await requireAdmin(req, 'user.manage')
     const st = Number(req.body.status)

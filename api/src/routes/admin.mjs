@@ -1057,6 +1057,8 @@ const admin = {
       for (const k of keys) sum += k === key ? nv : Number(await cfg(k))
       if (sum > 1) throw new BizError(1001, `履约 + 服务费 + 权益预算合计 ${(sum * 100).toFixed(1)}% 超过 100%，留存毛利将为负`)
     }
+    try { (await import('../domain/contribution-growth.mjs')).validateContributionConfig(key, newValue) }
+    catch (e) { throw new BizError(1001, e.message) }
     if (key === 'member.levels') {
       try { member.parseLevels(newValue) } catch (e) { throw new BizError(1001, e.message) }
     }
@@ -1494,11 +1496,13 @@ const admin = {
       const auto = note ? taskReview.autoChecks(reqs, taskReview.noteView(note), e.submitted_at) : []
       const cash = Number(t.cash_reward) || 0
       if (passed) {
-        const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
-        if (!budget) throw new BizError(5002, '缺少可用奖励预算，投稿保持审核中')
-        // 红线 12：冻结账号暂停发放旅豆奖励；投稿保持审核中，解冻后再审核
-        if (Number(t.reward_beans) > 0 && await promo.isUserFrozen(e.user_id)) throw new BizError(6001, '该用户账号已冻结，暂停发放旅豆奖励。投稿保持审核中，请解冻后再审核')
-        await bean.grant(Number(e.user_id), Number(t.reward_beans), bean.BIZ.TASK, t.task_no + '-E' + e.id, budget.id, cc)
+        const reward = Number(t.reward_beans)
+        if (reward > 0) {
+          const budget = await cc.one('SELECT id FROM bean_budget WHERE status=1 ORDER BY id DESC LIMIT 1')
+          if (!budget) throw new BizError(5002, '缺少可用奖励预算，投稿保持审核中')
+          if (await promo.isUserFrozen(e.user_id)) throw new BizError(6001, '该用户账号已冻结，暂停发放旅豆奖励。投稿保持审核中，请解冻后再审核')
+          await bean.grant(Number(e.user_id), reward, bean.BIZ.TASK, t.task_no + '-E' + e.id, budget.id, cc)
+        }
         // 奖励按通过时的任务设置快照；有现金加奖的进入"待打款"，由财务登记打款流水
         await cc.upd('UPDATE content_task_entry SET status=3, finished_at=NOW(3), reward_beans=?, cash_reward=?, cash_status=? WHERE id=?',
           [Number(t.reward_beans), cash, cash > 0 ? 1 : 0, e.id])
@@ -1511,6 +1515,7 @@ const admin = {
           JSON.stringify({ auto, rules: reqs.review_rules.map((r, i) => ({ rule: r, ok: confirmed[i] === true })) }), 'admin:' + a.name])
       await audit(cc, 'admin:' + a.name, 'content-task', passed ? 'approve' : 'reject', 'entry-' + e.id, { status: 2 },
         { task: t.id, status: passed ? 3 : 1, reward: passed ? Number(t.reward_beans) : 0, cash: passed ? cash : 0, reason: reason || null })
+      if (passed) await (await import('../domain/contribution-growth.mjs')).enqueueContribution(cc, 'entry', e.id)
       // V-06：判定事务内释放认领（原语句在 return 之后不可达、且误用外层变量 c）——通过/驳回都要释放，
       // 否则作者重投后残留旧认领占坑
       await cc.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
@@ -1586,6 +1591,8 @@ const admin = {
     if (!o || o.status !== 40) throw new BizError(2002, '订单不在已核销状态')
     await order.fire(orderNo, 'OBSERVE_END', 'system', async (c) => {
       await c.upd('UPDATE orders SET completed_at = NOW(3), refund_deadline = NOW(3) WHERE order_no = ?', [orderNo])
+      const source = await c.one('SELECT id FROM orders WHERE order_no=?', [orderNo])
+      await (await import('../domain/contribution-growth.mjs')).enqueueContribution(c, 'order', source.id)
       return '观察期结束·触发返豆与佣金'
     })
     // 返豆 + 佣金 + 成长值 + 存证（同一动作位，生产在 beanWorker）
