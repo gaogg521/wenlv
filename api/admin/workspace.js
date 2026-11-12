@@ -3,6 +3,7 @@
 (() => {
   const app = document.getElementById('app')
   const descriptions = {
+  partnerdash: '本主体授权范围内的经营摘要（订单/退款/结算应付与已付），口径与各源账一致。',
     reviewqueue: '四类审核待办统一聚合与认领协调；判定走各队列原接口，超 48h 标红。', fund: '四条资金线待办全景：待办金额、异常标记与下钻；登记已付≠外部到账。', cases: '风险案件闭环：研判→处理→补材料/协查→复核→关闭，处置引用冻结/解冻。', entitlements: '人工权益调整：申请→他人复核→账本执行，无直接改余额接口。', tickets: '售后工单队列：发起、认领、转派、等待、办结、关闭与重开，时间线不可改写。', taskcash: '核对已通过投稿的现金奖励，线下实际支付后登记真实打款流水。',
     contentcases: '处理旅行笔记举报，复核作者下架申诉并反馈结果。',
     partnerperf: '按合伙人角色查看累计业绩排行，核对计佣、提现及来源结算明细。',
@@ -30,7 +31,7 @@
     terms: '后台术语与小程序合规用语的对照表。',
     users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
   }
-  const renderers = { taskcash: taskCash, contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, accounts, tickets, entitlements, cases, fund, reviewqueue, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { partnerdash: partnerDashPage, taskcash: taskCash, contentcases: contentCases, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, accounts, tickets, entitlements, cases, fund, reviewqueue, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage

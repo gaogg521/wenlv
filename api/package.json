@@ -24,7 +24,8 @@
     "seed:scenario": "node test/scenario-populate.mjs",
     "test:fix34": "node test/fix34-rework.mjs",
     "test:loop": "node test/zhujiajiao-loop.mjs",
-    "test:partner": "node test/partner-identity.mjs"
+    "test:partner": "node test/partner-identity.mjs",
+    "test:cs": "node test/contribution-sr.mjs"
   },
   "dependencies": {
     "mysql2": "^3.11.0"

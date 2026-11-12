@@ -325,7 +325,7 @@ async function promoDiscountList() {
       if (J(r.dates).length) scope.push('团期 ' + J(r.dates).join('、'))
       return `<tr>
       <td class="td-main">${esc(r.name)}<div class="td-sub">v${r.version} · ${esc(r.operator || '')}</div></td>
-      <td class="money num">${esc(zhe)}折<div class="td-sub">按原价 ${Math.round(Number(r.discount_bp) / 100)}% 付款</div></td>
+      <td class="money num">${esc(zhe)}折<div class="td-sub">按原价 ${Number(r.discount_bp) / 100}% 付款</div></td>
       <td class="td-sub">${esc(String(r.from_time).slice(0, 16))}<br>— ${esc(String(r.to_time).slice(0, 16))}</td>
       <td class="td-sub">${scope.length ? scope.join('<br>') : '全部产品/城市/渠道/团期'}</td>
       <td>${Number(r.stack_early) === 1 ? '<span class="pill warn">与早鸟叠加</span><div class="td-sub">先早鸟价再乘折扣</div>' : '<span class="pill off">不叠加</span><div class="td-sub">早鸟与折扣取较低价</div>'}</td>
@@ -444,7 +444,7 @@ window.promoDiscountEditor = async (id) => {
     <div class="field"><label>操作依据 *（4–300 字，进入审计）</label><textarea id="pdReason" maxlength="300" placeholder="如：开季促销活动审批单号 XX"></textarea></div>
     <div id="pdErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="promoDiscountSave(${id || 0})">保存规则</button>`)
-  const hint = () => { const z = Number(document.getElementById('pdZhe').value); document.getElementById('pdZheHint').textContent = Number.isFinite(z) && z > 0 && z <= 10 ? '按原价 ' + Math.round(z * 100) + '% 付款' : '' }
+  const hint = () => { const z = Number(document.getElementById('pdZhe').value); document.getElementById('pdZheHint').textContent = Number.isFinite(z) && z > 0 && z <= 10 ? '按原价 ' + (Math.round(z * 100) / 10) + '% 付款' : '' }
   document.getElementById('pdZhe').addEventListener('input', hint); hint()
 }
 window.promoDiscountSave = async (id) => {
@@ -517,7 +517,10 @@ async function settlements() {
       ${adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>'}</div>
     <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
       退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
-    ${rows.length ? rows.map((s) => {
+    ${rows.length && rows[0].scenic_net_fen != null ? `<table><thead><tr><th>周期</th><th>商户</th><th>状态</th><th>本景区行净额</th><th>本景区口径履约应付</th><th>待冲抵调整</th></tr></thead><tbody>
+      ${rows.map((s) => `<tr><td>${esc(s.period)}</td><td>${esc(s.merchant_name)}</td><td>${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status] || s.status}</td><td class="num">${fen(s.scenic_net_fen)}</td><td class="num">${fen(s.scenic_payable_fen)}</td><td class="num">${fen(s.adjust_pending || 0)}</td></tr>`).join('')}</tbody></table>
+      <p class="muted">景区口径：仅统计本景区商品订单的结算行净额与按该单比例快照的履约应付；整单五口径、内部成本与他店份额不在此页展示。</p>`
+     : `${rows.length ? rows.map((s) => {
       const parts = [Number(s.amt_fulfill), Number(s.amt_service), Number(s.amt_promoter), Number(s.amt_beanbudget), Number(s.amt_retained)]
       const total = Number(s.total_amount) || 1 // 只有手续费、无订单的结算单 total=0，按 1 防除零
       return `<div style="padding:14px 0;border-bottom:1px solid #f1f4f8">
@@ -538,7 +541,7 @@ async function settlements() {
       ${Number(s.cost_adjust) ? `<div class="payable-line" style="color:var(--ink2)">确认成本调整 <b>${fen(s.cost_adjust)}</b><span class="muted">（只影响利润复算，不改商户应付）</span></div>` : ''}
       <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}${Number(s.adjust_pending) ? ' + 已出账后调整 ' + fen(s.adjust_pending) : ''}</span></div>
       ${adminCan('settle.pay') ? `<p class="muted" style="margin:6px 0 0"><a href="javascript:void(0)" onclick="settleAdjustments(${s.id})" style="color:var(--ink2)">查看调整明细</a></p>` : ''}
-    </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}
+    </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')})}`}
   </div>`
 }
 // 修复4：已出账/已付款结算单的调整明细（按项退款冲减 / 确认成本更正），逐条可溯源

@@ -154,8 +154,12 @@ try {
     const oFirst = await one('SELECT * FROM orders WHERE order_no=?', [noFirst])
     assert.equal((await contribution.recordQ(oFirst)).recorded, false, '重复确认幂等不重记')
     assert.equal(Number((await one('SELECT COUNT(*) n FROM contribution_record WHERE kind=1 AND biz_ref=?', [noShow])).n), 0, '无归因二销单不记贡献')
+    const recR1 = await one('SELECT score, cs FROM contribution_record WHERE kind=3 AND biz_ref=?', [noFirst])
+    assert.ok(recR1 && Number(recR1.score) === 1, 'R 留存：首单（无更早完成单）记 1 分')
+    const g2 = await one('SELECT delta FROM user_growth_log WHERE user_id=? AND biz_type=2 AND biz_ref=?', [uidA, noFirst])
+    assert.ok(g2 && Number(g2.delta) === Math.round(Number(rec.cs) * 10), 'CS→成长值接通：cs×cs_multiplier 进成长值（biz_type=2）')
     const sum = await contribution.summary(uidA)
-    assert.ok(sum.pending.s.includes('待确认') && sum.pending.r.includes('待确认'), 'S/R 状态=待确认（无已确认计分规则，不赋值）')
+    assert.ok(sum.basis && sum.basis.r.includes('复购'), 'S/R 规则已确认（按已交方案实施）')
     excluded.push(noFirst)
   })
 
@@ -220,6 +224,8 @@ try {
     assert.ok(rec2 && Number(rec2.score) === 92.68, '复购 Q 贡献按剩余实收 92.68 元记录')
     const rebate2 = Number((await one("SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id=l.account_id WHERE a.user_id=? AND l.biz_type=1 AND l.biz_ref=?", [uidA, noRebuy])).s)
     assert.equal(rebate2, rebateOf(9268), '复购返豆=剩余实收10%=93（修复3口径）')
+    const recR2 = await one('SELECT score FROM contribution_record WHERE kind=3 AND biz_ref=?', [noRebuy])
+    assert.ok(recR2 && Number(recR2.score) === 3, 'R 留存：窗口内有更早完成单 → 复购记 contribution.r_rebuy=3 分')
     excluded.push(noRebuy)
   })
 
