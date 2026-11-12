@@ -1,0 +1,22 @@
+CREATE TABLE scenic_followup (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  review_id BIGINT UNSIGNED NOT NULL,
+  scenic_id BIGINT UNSIGNED NOT NULL,
+  applicant_id BIGINT UNSIGNED NOT NULL,
+  applicant_role VARCHAR(24) NOT NULL,
+  kind ENUM('renewal','purchase','budget') NOT NULL,
+  status ENUM('submitted','approved','rejected','recorded') NOT NULL DEFAULT 'submitted',
+  amount_fen BIGINT UNSIGNED NULL,
+  purpose VARCHAR(500) NOT NULL,
+  decision_note VARCHAR(500) NULL,
+  decided_by BIGINT UNSIGNED NULL,
+  decided_at DATETIME(3) NULL,
+  record_ref VARCHAR(128) NULL,
+  record_note VARCHAR(500) NULL,
+  recorded_by BIGINT UNSIGNED NULL,
+  recorded_at DATETIME(3) NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_followup_review_kind (review_id,kind),
+  KEY idx_followup_scenic (scenic_id,id),
+  CONSTRAINT fk_followup_review FOREIGN KEY (review_id) REFERENCES scenic_review(id)
+) ENGINE=InnoDB;

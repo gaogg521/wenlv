@@ -11,6 +11,7 @@ import { adminAccounts } from './routes/admin-accounts.mjs'
 import { adminTickets } from './routes/admin-tickets.mjs'
 import { adminUserOps } from './routes/admin-userops.mjs'
 import { adminRiskCases } from './routes/admin-riskcases.mjs'
+import { scenicFollowupRoutes } from './routes/scenic-followup.mjs'
 import { scenicCalculatorRoutes } from './routes/scenic-calculator.mjs'
 import { fundWorkbenchAgg } from './routes/admin-ops.mjs'
 import { adminReviewQueue } from './routes/admin-reviewqueue.mjs'
@@ -27,7 +28,7 @@ import { promoAdminRoutes } from './routes/promo-admin.mjs'
 import { supplyAdminRoutes } from './routes/supply-admin.mjs'
 import { pkgAdminRoutes } from './routes/pkg-admin.mjs'
 
-export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes }
+export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes, ...scenicFollowupRoutes }
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
     if (process.env.NODE_ENV === 'production') throw new BizError(1003, '生产环境禁用联调操作')
