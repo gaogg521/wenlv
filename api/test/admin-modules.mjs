@@ -46,8 +46,8 @@ void stamp
 
 try {
   await test('模块清单：50 个模块、分组与图标齐全、key 无重复', async () => {
-    assert.equal(MODULES.length, 50, '模块总数 50（与历史 NAV 一致）')
-    assert.equal(new Set(MODULE_KEYS).size, 50, 'key 无重复')
+    assert.equal(MODULES.length, 51, '模块总数 51（V82 新增 partnerdash 主体方看板）')
+    assert.equal(new Set(MODULE_KEYS).size, 51, 'key 无重复')
     for (const m of MODULES) { assert.ok(m.key && m.name && m.group && m.icon, '模块字段齐全：' + m.key) }
   })
 
@@ -56,7 +56,7 @@ try {
       const d = ok(await call(tok(role), 'GET', '/admin/capabilities'))
       assert.ok(setEq(d.modules, BASELINE[role]), role + ' 集合与基线不一致：' + JSON.stringify({ api: d.modules.sort(), baseline: [...BASELINE[role]].sort() }))
       assert.ok(setEq(d.modules, ROLE_DEFAULT_MODULES[role]), role + ' 与 modules.mjs 不一致')
-      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 50, role + ' 不再全菜单（D-01）')
+      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 51, role + ' 不再全菜单（D-01）')
     }
   })
 
@@ -72,8 +72,8 @@ try {
 
   await test('super 全集；未知角色默认拒绝（空集合）', async () => {
     const d = ok(await call(tok('super'), 'GET', '/admin/capabilities'))
-    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 50')
-    assert.equal(d.allModules.length, 50, 'allModules 唯一清单随接口下发')
+    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 51')
+    assert.equal(d.allModules.length, 51, 'allModules 唯一清单随接口下发')
     const ghost = ok(await call(tok('mystery_role'), 'GET', '/admin/capabilities'))
     assert.deepEqual(ghost.modules, [], '未知角色默认拒绝')
     assert.equal(effectiveModules(undefined).length, 0, '代码侧未知角色同样为空')

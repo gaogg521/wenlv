@@ -148,6 +148,8 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/user-picker', 'users', 'view'],
   ['GET', '/admin/fund-workbench', 'fund', 'view'],
   ['GET', '/admin/settlements', 'settlements', 'view'],
+  // V82 主体方经营看板（商户/景区主体方默认首页）
+  ['GET', '/admin/partner-dash', 'partnerdash', 'view'],
   ['POST', '/admin/settlements/generate', 'settlements', 'manage'],
   ['POST', '/admin/settlements/:id/dispute', 'settlements', 'manage'],
   ['POST', '/admin/settlements/:id/confirm', 'settlements', 'manage'],

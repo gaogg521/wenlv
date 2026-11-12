@@ -30,6 +30,7 @@ export async function completeOrder(orderNo) {
   await promo.createCommission(orderNo)
   // 朱家角示范闭环·步骤4 贡献确认：Q 成交维度落库（归因有效单，幂等，不触发资金；S/R 无已确认规则不赋值）
   try { const oNow = await order.byNo(orderNo); await (await import('./domain/contribution.mjs')).recordQ({ ...oNow, order_no: orderNo }) } catch (e) { console.error('[job:contribution]', orderNo, e.message) }
+  // 朱家角示范闭环·步骤4 贡献确认：Q 成交维度落库（归因有效单，幂等，不触发资金；S/R 无已确认规则不赋值）
   // 订单完成锚定：version=50（主状态），canonical 白名单字段，不含联系人/手机号
   await pass.attest('order', orderNo, {
     orderNo, amountPay: amt, status: 50, merchantId: Number(o.merchant_id),
@@ -94,6 +95,25 @@ export async function tickRefundRefresh() {
   return rows.length
 }
 
+/** Codex复验修复3：分项退款补偿——处理中（refunds.status=0 且 partial_refund.status=0）的按项退款
+ *  逐笔查回执：SUCCESS → confirmPartialRefund（状态+结算调整，幂等可重试）；CLOSED → failPartialRefund
+ *  （转人工+恢复订单项/凭证+风险事件）；PROCESSING/查询异常 → 下一轮重试。分项退款不改订单主状态（无 60 可扫）。 */
+export async function tickPartialRefundRefresh() {
+  const rows = await q(`SELECT pr.order_id, pr.refund_no FROM partial_refund pr JOIN refunds r ON r.refund_no = pr.refund_no
+    WHERE pr.status = 0 AND r.status = 0 ORDER BY pr.id LIMIT 50`)
+  if (!rows.length) return 0
+  const wxpay = await import('./domain/wxpay.mjs')
+  const pkg = await import('./domain/package.mjs')
+  for (const r of rows) {
+    try {
+      const result = await wxpay.queryRefund(r.refund_no)
+      if (result.status === 'SUCCESS') await pkg.confirmPartialRefund(Number(r.order_id), r.refund_no)
+      else if (result.status === 'CLOSED') await pkg.failPartialRefund(r.refund_no, '微信退款回执关闭（CLOSED）')
+      // PROCESSING / ABNORMAL：保持处理中，下一轮重试
+    } catch (e) { console.error('[job:partial-refund]', r.refund_no, e.message) }
+  }
+  return rows.length
+}
 /** A-11 过期未核销：核销窗口（出发日 + pass.verify_end_days 天）已过仍未核销的订单 → 全额退款 + 凭证作废 + 通知游客。
  *  此前这类单永久停在 30：游客不能自助退（退改梯度不含已出发）、商户结算不了、提前核销还能进观察期。 */
 export async function tickExpireVouchers() {
@@ -226,6 +246,7 @@ async function main() {
       await tickGroupCancel()
       await tickExpire()
       await tickRefundRefresh()
+      await tickPartialRefundRefresh()
       await tickExpireVouchers()
       await tickAttest()
       await tickRiskNotify()

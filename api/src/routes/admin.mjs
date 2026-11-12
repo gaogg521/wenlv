@@ -760,11 +760,14 @@ const admin = {
       WHERE 1=1 ${sc.sql}${subSql} ORDER BY p.id DESC`, [...sc.params, ...subParams])
   },
   'POST /admin/products': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    const subP = subjectScope(a)
     const { title, cat, cityCode, channelId, merchantId, priceFrom, beanGift, daysDesc, subtitle, status,
       intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
     if (!String(title || '').trim() || !Number.isInteger(Number(priceFrom)) || Number(priceFrom) <= 0) throw new BizError(1001, '请填写线路标题与有效价格')
-    if (!(await one('SELECT id FROM merchant WHERE id=? AND status=1', [merchantId]))) throw new BizError(1001, '请选择已审核的履约商户')
+    const effMerchantId = a.role === 'merchant_partner' ? Number(subP.merchantId) : Number(merchantId) // V82：主体方强制本店
+    if (a.role === 'merchant_partner' && !subP.merchantId) throw new BizError(1003, '商户主体方未绑定主体') // V82：merchantId 一律强制为绑定主体（effMerchantId），表单传值不生效
+    if (!(await one('SELECT id FROM merchant WHERE id=? AND status=1', [effMerchantId]))) throw new BizError(1001, '请选择已审核的履约商户')
     if (supplierId && !(await one('SELECT id FROM supplier WHERE id=?', [supplierId]))) throw new BizError(1001, '关联供应商不存在')
     if (scenicId && !(await one('SELECT id FROM scenic_spot WHERE id=?', [scenicId]))) throw new BizError(1001, '关联景区不存在')
     const arr = (v) => Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[·、,，;；\n]/).map((s) => s.trim()).filter(Boolean) : [])
@@ -773,7 +776,7 @@ const admin = {
       const pid = await c.ins(`INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, supplier_id, scenic_id, status, rich_desc, meeting_point, safety_note)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [channelId || 'main', cityCode || '310118', cat || 'script', title, subtitle || null, daysDesc || null,
-          Number(priceFrom) || 0, Number(beanGift) || 0, Number(merchantId), supplierId || null, scenicId || null, Number(status ?? 0), JSON.stringify(rich),
+          Number(priceFrom) || 0, Number(beanGift) || 0, effMerchantId, supplierId || null, scenicId || null, Number(status ?? 0), JSON.stringify(rich),
           meetingPoint || null, safetyNote || null])
       await audit(c, 'admin:' + a.name, 'product', 'create', 'product-' + pid, null, { title })
       return pid
@@ -783,9 +786,10 @@ const admin = {
 
   // 编辑商品内容（P0 宣传力：行程/费用包含/亮点/集合点/安全告知）
   'PUT /admin/products/:id': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops'])
-    const p = await one('SELECT rich_desc, price_from, status, title, bean_gift, supplier_id, scenic_id, updated_version FROM tour_product WHERE id = ?', [req.params.id])
+    const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    const p = await one('SELECT rich_desc, price_from, status, title, bean_gift, supplier_id, scenic_id, updated_version, merchant_id FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
+    if (a.role === 'merchant_partner') { const subE = subjectScope(a); if (!subE.merchantId || Number(subE.merchantId) !== Number(p.merchant_id)) throw new BizError(1003, '仅可编辑本店商品') } // V82
     // R-01：乐观锁——前端带上打开编辑器时的版本号，期间被人改过就拒绝（2002），刷新后基于最新版本再改
     if (req.body.expectedVersion != null && Number(req.body.expectedVersion) !== Number(p.updated_version)) {
       throw new BizError(2002, '该商品刚被他人修改（当前版本 v' + p.updated_version + '），请刷新后基于最新内容再编辑')
@@ -911,7 +915,8 @@ const admin = {
   },
 
   'POST /admin/products/:id/status': async (req) => {
-    const a = await requireAdmin(req, 'product.status')
+    const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    if (a.role === 'merchant_partner') { const subS = subjectScope(a); const own = subS.merchantId && (await one('SELECT id FROM tour_product WHERE id = ? AND merchant_id = ?', [req.params.id, subS.merchantId])); if (!own) throw new BizError(1003, '仅可操作本店商品') } // V82
     if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
     if (Number(req.body.status) === 1) {
       const p = await one('SELECT * FROM tour_product WHERE id=?', [req.params.id])
@@ -939,8 +944,9 @@ const admin = {
     return { title: p.title, priceFrom: Number(p.price_from), sessions }
   },
   'POST /admin/sessions': async (req) => {
-    await requireAdmin(req, ['super', 'ops'])
+    const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
     const { productId, departDate, quota, minGo, priceAdult, earlyPrice, earlyDays } = req.body
+    if (a.role === 'merchant_partner') { const subSes = subjectScope(a); const own = subSes.merchantId && (await one('SELECT id FROM tour_product WHERE id = ? AND merchant_id = ?', [productId, subSes.merchantId])); if (!own) throw new BizError(1003, '仅可为本店商品排团期') } // V82
     if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate || '') || !Number.isInteger(Number(quota)) || Number(quota) < 1 || !Number.isInteger(Number(priceAdult)) || Number(priceAdult) < 1) throw new BizError(1001, '请填写有效日期、正整数名额和价格')
     if (Number.isNaN(Date.parse(departDate)) || departDate < new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })) throw new BizError(1001, '出发日期不可早于今天')
     if (earlyPrice && (Number(earlyPrice) >= Number(priceAdult))) throw new BizError(1001, '早鸟价须低于成人价')
@@ -1143,11 +1149,26 @@ const admin = {
       subSql = ' AND s.merchant_id = ?'; subParams = [sub.merchantId]
     } else if (a.role === 'scenic_partner') {
       if (!sub.scenicId) return []
-      subSql = ' AND EXISTS (SELECT 1 FROM tour_product p9 WHERE p9.merchant_id = s.merchant_id AND p9.scenic_id = ?)'; subParams = [sub.scenicId]
+      // V82（Codex复验）：景区主体方不拿整张结算单——按本景区行与字段口径投影：
+      // 只给本景区订单的结算行净额/按本景区口径的履约应付与调整，内部成本、五口径与他店份额不外露
+      const sid = Number(sub.scenicId)
+      const rows = await q(`SELECT s.id, s.period, s.status, s.order_count, m.name merchant_name,
+          (SELECT COALESCE(SUM(sl.net_fen),0) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id
+            WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_net_fen,
+          (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1) AS adjust_pending
+        FROM settlement s JOIN merchant m ON m.id = s.merchant_id
+        WHERE EXISTS (SELECT 1 FROM tour_product p9 WHERE p9.merchant_id = s.merchant_id AND p9.scenic_id = ?)
+        ORDER BY s.id DESC`, [sid, sid])
+      for (const r of rows) {
+        const snap = await one('SELECT split_snapshot FROM settlement WHERE id = ?', [r.id])
+        const sp = typeof snap.split_snapshot === 'string' ? JSON.parse(snap.split_snapshot || '{}') : (snap.split_snapshot || {})
+        r.scenic_payable_fen = Math.round(Number(r.scenic_net_fen) * Number(sp.fulfill != null ? sp.fulfill : 5800) / 10000)
+      }
+      return rows
     }
     // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
     const rows = await q(`SELECT s.*, m.name merchant_name,
-        (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1) AS adjust_pending,
+        (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1 AND x.applied_settlement_id IS NULL) AS adjust_pending,
         (SELECT COALESCE(SUM(x.cost_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 2) AS cost_adjust
       FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql}${subSql} ORDER BY s.id DESC`, [...sc.params, ...subParams])
     for (const r of rows) {
@@ -1463,7 +1484,7 @@ const admin = {
     if (reason.length > 300) throw new BizError(1001, '原因最多 300 字')
     const bad = findBanned(reason)
     if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
-    return tx(async (cc) => {
+    const r = await tx(async (cc) => {
       const e = await cc.one('SELECT * FROM content_task_entry WHERE id = ? FOR UPDATE', [req.params.id])
       if (!e || Number(e.status) !== 2) throw new BizError(2002, '仅审核中的投稿可处理')
       const t = await cc.one('SELECT * FROM content_task WHERE id = ?', [e.task_id])
@@ -1498,8 +1519,11 @@ const admin = {
       // V-06：判定事务内释放认领（原语句在 return 之后不可达、且误用外层变量 c）——通过/驳回都要释放，
       // 否则作者重投后残留旧认领占坑
       await cc.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
-      return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash } : { rejected: true, backTo: '创作中' }
+      return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash, userId: Number(e.user_id), entryId: Number(e.id) } : { rejected: true, backTo: '创作中' }
     })
+    // 闭环步骤4 贡献确认 S：事务提交后再计分（幂等；旅豆奖励仍走既有 grant，不重复触发资金）
+    if (r && r.finished) { try { await (await import('../domain/contribution.mjs')).recordS(r.userId, r.entryId) } catch (err) { console.error('[task:contribution]', r.entryId, err.message) } }
+    return r
   },
   // 现金加奖：待打款列表 / 登记打款（财务；流水号唯一，防重复登记）
   'GET /admin/task-cash': async (req) => {
@@ -1579,7 +1603,7 @@ const admin = {
     const goodsCash = await bean.goodsCashBase(o)
     if (goodsCash > 0) await member.addGrowth(o.user_id, goodsCash, orderNo) // 成长值与等级不依赖旅豆预算
     await promo.createCommission(orderNo)
-  try { await (await import('../domain/contribution.mjs')).recordQ({ ...(await order.byNo(orderNo)), order_no: orderNo }) } catch (e) { console.error('[complete:contribution]', orderNo, e.message) } // 闭环步骤4 贡献确认 Q
+    try { await (await import('../domain/contribution.mjs')).recordQ({ ...(await order.byNo(orderNo)), order_no: orderNo }) } catch (e) { console.error('[complete:contribution]', orderNo, e.message) } // 闭环步骤4 贡献确认 Q
     await badgeDomain.evaluateSafe(Number(o.user_id))
     await badgeDomain.evaluateMerchantSafe(Number(o.merchant_id)) // 商户等级与商户徽章
     // 订单完成锚定（version=50 主状态）。canonical 只放白名单字段，不含联系人/手机号

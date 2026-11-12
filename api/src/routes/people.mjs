@@ -5,7 +5,7 @@ import * as member from '../domain/member.mjs'
 import { findBanned } from '../domain/wording.mjs'
 import * as merchantLevel from '../domain/merchant-level.mjs'
 import { q, one, tx, BizError } from '../db.mjs'
-import { requireAdmin, scopeFilter, audit, apiImg } from './_shared.mjs'
+import { requireAdmin, subjectScope, scopeFilter, audit, apiImg } from './_shared.mjs'
 import { maskMobile, maskApplyMobile, whereMobile } from '../infra/mobile.mjs'
 import { partnerPerformance } from './partner-performance.mjs'
 import * as bean from '../domain/bean.mjs'
@@ -67,11 +67,16 @@ export const people = {
     return { stats, daily, trade, products, notes, total, page, size, scopeCity: a.scopeCity || null }
   },
   'GET /admin/scenics/:id/overview': async (req) => {
-    const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner', 'readonly'])
+    const a = await requireAdmin(req, ['super', 'ops', 'finance', 'city_partner', 'readonly', 'scenic_partner'])
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 's.city_code')
     const scenic = await one(`SELECT s.id, s.name, s.city_code, s.scenic_level, s.status FROM scenic_spot s WHERE s.id = ?${sc.sql}`, [req.params.id, ...sc.params])
     if (!scenic) throw new BizError(1004, '景区不存在或不在权限范围')
+    // V82 主体方：景区主体方只能看绑定景区（同城不同主体不可见）
+    if (a.role === 'scenic_partner') {
+      const sub = subjectScope(a)
+      if (!sub.scenicId || Number(sub.scenicId) !== Number(scenic.id)) throw new BizError(1004, '景区不存在或不在权限范围')
+    }
     const ps = scopeFilter(a, 'p.city_code'), os = scopeFilter(a, 'o.city_code'), vs = scopeFilter(a, 'v.city_code')
     // 每个指标分别聚合，避免订单、凭证、评价相互 JOIN 后产生乘积。
     const products = await q(`SELECT p.id, p.title, p.city_code, p.status,
@@ -296,6 +301,13 @@ export const people = {
     if (!m) throw new BizError(1004, '商户不存在')
     const sc = scopeFilter(a, 'city_code')
     if (sc.params.length && String(m.city_code) !== String(sc.params[0])) throw new BizError(1003, '只能查看本城商户')
+    // V82 主体方：商户主体方只看本店；景区主体方只看本景区关联商户（他方主体不可见）
+    const subM = subjectScope(a)
+    if (a.role === 'merchant_partner' && (!subM.merchantId || Number(subM.merchantId) !== Number(m.id))) throw new BizError(1003, '只能查看本店经营')
+    if (a.role === 'scenic_partner') {
+      const bound = subM.scenicId && (await one('SELECT id FROM tour_product WHERE merchant_id = ? AND scenic_id = ? LIMIT 1', [m.id, subM.scenicId]))
+      if (!bound) throw new BizError(1003, '只能查看本景区关联商户经营')
+    }
     const id = m.id
     const applicant = m.applicant_user_id ? await one('SELECT id, nickname FROM user_account WHERE id = ?', [m.applicant_user_id]) : null
     const staff = await q(`SELECT s.user_id, u.nickname, s.role, s.status FROM merchant_staff s JOIN user_account u ON u.id = s.user_id
@@ -342,6 +354,10 @@ export const people = {
     const p = await one('SELECT p.*, m.name merchant_name FROM tour_product p LEFT JOIN merchant m ON m.id = p.merchant_id WHERE p.id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(p.city_code)) throw new BizError(1003, '仅可查看本城商品数据')
+    // V82 主体方：商户主体方只看本店商品；景区主体方只看本景区商品（内部成本/他方合同字段本就按角色隐藏）
+    const subP = subjectScope(a)
+    if (a.role === 'merchant_partner' && (!subP.merchantId || Number(subP.merchantId) !== Number(p.merchant_id))) throw new BizError(1003, '仅可查看本店商品数据')
+    if (a.role === 'scenic_partner' && (!subP.scenicId || Number(subP.scenicId) !== Number(p.scenic_id))) throw new BizError(1003, '仅可查看本景区商品数据')
     const kpi = await one(`SELECT COUNT(*) orders, COALESCE(SUM(CASE WHEN status IN ${PAID} THEN qty END), 0) travelers,
         COALESCE(SUM(CASE WHEN status IN ${PAID} THEN amount_pay END), 0) gmv, SUM(status = 70) refunded, COUNT(DISTINCT user_id) buyers,
         COALESCE(SUM(bean_deducted), 0) beans_used

@@ -43,6 +43,9 @@ const complete = async (orderNo) => {
   await q("UPDATE orders SET status=40 WHERE order_no=?", [orderNo])
   const jobs = await import('../src/jobs.mjs')
   assert.equal(await jobs.completeOrder(orderNo), true)
+  // V84：贡献走事务队列（服务端 60s 循环排空）——测试内同步排空保证确定性
+  const cg = await import('../src/domain/contribution-growth.mjs')
+  await cg.tickContributionGrowth()
 }
 const rebateOf = fen => Math.round(fen / 10 * 0.1) // 本库唯一生效预算 + 默认返豆率 10%
 

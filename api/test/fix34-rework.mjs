@@ -168,7 +168,54 @@ try {
     const nets = Array.isArray(prRow.item_nets) ? prRow.item_nets : JSON.parse(prRow.item_nets || '[]')
     assert.equal(nets.reduce((a, b) => a + Number(b), 0), pr.cashFen, 'Σ项净额=实退（恒等）')
     assert.equal(nets.length, 2, '项净额逐项落表（提供方归属复算依据）')
-    await q('UPDATE orders SET rebook_of=? WHERE order_no=?', ['F3-EXCLUDE-' + stamp, r.orderNo])
+    await q('UPDATE orders SET rebook_of=? WHERE order_no=?', ['F3-EX-' + stamp + '-a', r.orderNo])
+  })
+
+  await check('修复3补·分项退款异步收口：处理中→确认（状态/基数/幂等一致）、CLOSED→转人工恢复项与凭证', async () => {
+    const pkg = await import('../src/domain/package.mjs')
+    const mk = async (payRef) => {
+      const r = await order.place({ userId: uidA, sessionId: sid, qty: 1, wantedBeans: 0 })
+      await order.acceptPayment(r.orderNo, payRef, true)
+      return { orderNo: r.orderNo, oid: Number((await one('SELECT id FROM orders WHERE order_no=?', [r.orderNo])).id) }
+    }
+    const mkPending = async (oid, refundNo) => { // 模拟通道处理中：退款单/分项单 status 0、项置已退
+      const its = await q('SELECT id, cash_fen FROM order_item WHERE order_id=? ORDER BY id', [oid])
+      const nets = its.map(x => Number(x.cash_fen))
+      await q('INSERT INTO refunds (order_id, refund_no, amount, fee_amount, reason, status, operator) VALUES (?,?,?,0,?,0,?)',
+        [oid, refundNo, nets.reduce((a, b) => a + b, 0), '异步收口算例', 'st-qa'])
+      await q('INSERT INTO partial_refund (order_id, refund_no, item_ids, item_nets, cash_fen, fee_fen, reason, operator, status) VALUES (?,?,?,?,?,0,?,?,0)',
+        [oid, refundNo, JSON.stringify(its.map(x => Number(x.id))), JSON.stringify(nets), nets.reduce((a, b) => a + b, 0), '异步收口算例', 'st-qa'])
+      await q(`UPDATE order_item SET status = 2 WHERE id IN (${its.map(x => Number(x.id)).join(',')})`, [])
+      return its.map(x => Number(x.id))
+    }
+    // 情形一：处理中 → 回执 SUCCESS → 确认（状态 2；项未结算故无调整登记；基数扣减一致）
+    const ok1 = await mk('F3ASYNC1-' + stamp)
+    const rn1 = 'PRX1' + stamp
+    await mkPending(ok1.oid, rn1)
+    const c1 = await pkg.confirmPartialRefund(ok1.oid, rn1)
+    assert.equal(c1.confirmed, true, '确认成功')
+    assert.equal(Number((await one('SELECT status FROM refunds WHERE refund_no=?', [rn1])).status), 2, '退款单置 2')
+    assert.equal(Number((await one('SELECT status FROM partial_refund WHERE refund_no=?', [rn1])).status), 2, '分项单置 2')
+    const dup1 = await pkg.confirmPartialRefund(ok1.oid, rn1)
+    assert.equal(dup1.confirmed, false, '重复确认幂等不重复登记')
+    assert.equal(Number((await one('SELECT COUNT(*) n FROM settlement_adjustment WHERE refund_no=?', [rn1])).n), 0, '项未结算 → 无调整登记（无来源不加调整）')
+    await complete(ok1.orderNo)
+    const rebA = Number((await one("SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id=l.account_id WHERE a.user_id=? AND l.biz_type=1 AND l.biz_ref=?", [uidA, ok1.orderNo])).s)
+    assert.equal(rebA, 0, '确认后净收基数=0 → 完成不返豆（退款单/净收/项状态一致）')
+    excluded.push(ok1.orderNo)
+    // 情形二：处理中 → 回执 CLOSED → 转人工：项恢复待履约、凭证恢复有效、风险事件留痕
+    const ok2 = await mk('F3ASYNC2-' + stamp)
+    const rn2 = 'PRX2' + stamp
+    const its2 = await mkPending(ok2.oid, rn2)
+    const pass2 = await one('SELECT id, status FROM travel_pass WHERE order_id=?', [ok2.oid])
+    await q('UPDATE travel_pass SET status=4 WHERE id=?', [pass2.id]) // 提交时已冲正的凭证
+    const f1 = await pkg.failPartialRefund(rn2, '微信退款回执关闭（CLOSED）')
+    assert.equal(f1.failed, true, '失败转人工')
+    assert.equal(Number((await one('SELECT status FROM refunds WHERE refund_no=?', [rn2])).status), 3, '退款单置 3')
+    assert.ok(await one('SELECT id FROM order_item WHERE id=? AND status=0', [its2[0]]), '订单项恢复待履约（可重新履约/再退）')
+    assert.ok(await one('SELECT id FROM travel_pass WHERE id=? AND status=1', [pass2.id]), '凭证恢复有效')
+    assert.ok(await one("SELECT id FROM risk_event WHERE detail LIKE ?", ['%' + rn2 + '%']), '风险事件留痕')
+    await q('UPDATE orders SET rebook_of=? WHERE order_no=?', ['F3-EX-' + stamp + '-b', ok2.orderNo])
   })
 
   // ===== 修复3：退款后完成——返豆/成长值/佣金按剩余商品实收 =====
@@ -178,7 +225,7 @@ try {
     assert.equal(Number(o.status), 50)
     const reb = Number((await one("SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id=l.account_id WHERE a.user_id=? AND l.biz_type=1 AND l.biz_ref=?", [uidB, noW2])).s)
     assert.equal(reb, 0, '剩余实收0不返豆（修复前会错返199豆）')
-    const gro = Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id=? AND biz_ref=?', [uidB, noW2])).s)
+    const gro = Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id=? AND biz_type=1 AND biz_ref=?', [uidB, noW2])).s)
     assert.equal(gro, 0, '成长值不加（修复前会错加19900）')
     const cm = await one('SELECT base_amount FROM commission WHERE order_id=?', [ordW2])
     assert.equal(Number(cm.base_amount), 0, '佣金基数=剩余实收0（修复前 19900）')
@@ -196,7 +243,7 @@ try {
       await complete(r.orderNo)
       const oid2 = Number((await one('SELECT id FROM orders WHERE order_no=?', [r.orderNo])).id)
       const reb = Number((await one("SELECT COALESCE(SUM(l.amount),0) s FROM bean_ledger l JOIN bean_account a ON a.id=l.account_id WHERE a.user_id=? AND l.biz_type=1 AND l.biz_ref=?", [uid, r.orderNo])).s)
-      const gro = Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id=? AND biz_ref=?', [uid, r.orderNo])).s)
+      const gro = Number((await one('SELECT COALESCE(SUM(delta),0) s FROM user_growth_log WHERE user_id=? AND biz_type=1 AND biz_ref=?', [uid, r.orderNo])).s)
       const cm = await one('SELECT base_amount FROM commission WHERE order_id=?', [oid2])
       return { no: r.orderNo, reb, gro, base: Number(cm.base_amount) }
     }
@@ -326,7 +373,9 @@ try {
     supA = await promo.generateSettlement(midA, settlementPeriod(new Date()))
     assert.ok(Number(supA) > 0 && Number(supA) !== Number(settleA), '补充单生成（同周期补充编号）')
     const ss = await one('SELECT * FROM settlement WHERE id=?', [supA])
-    assert.equal(Number(ss.total_amount), 12000 + expAdj, `补充单 total=新单A项12000+调整(${expAdj})，同一笔不重复分账`)
+    assert.equal(Number(ss.total_amount), 12000, `补充单 total=新单A项净额12000（调整不进五口径基数）`)
+    assert.equal(Number(ss.amt_fulfill), 0, `同额冲零：履约应付=round(12000×58%)−6960=0（Codex复验条件，不二次乘比例）`)
+    assert.equal(Number(ss.amt_fulfill) + Number(ss.amt_service) + Number(ss.amt_promoter) + Number(ss.amt_beanbudget) + Number(ss.amt_retained), Number(ss.total_amount), '补充单五口径恒等（调整进履约列、留存兜底）')
     const adj2 = await one('SELECT applied_settlement_id FROM settlement_adjustment WHERE order_id=? AND refund_no=?', [ordW8, pr.refundNo])
     assert.equal(Number(adj2.applied_settlement_id), Number(supA), '调整标记冲抵去向')
     const lines = await q('SELECT * FROM settlement_line WHERE settlement_id=?', [supA])
@@ -344,14 +393,15 @@ try {
     const adj = await one('SELECT amount_fen, settlement_id FROM settlement_adjustment WHERE order_id=? AND refund_no=?', [ordW8, pr.refundNo])
     assert.ok(adj && Number(adj.amount_fen) < 0, '已付款结算单的退款调整同样登记')
     assert.equal(Number(adj.settlement_id), Number(settleB), '调整挂在已付款结算单上')
-    // B店补充单：W9 的 B店项（7900，未结算）+ 已付款后调整 → total=7900−4582=3318
+    // B店补充单：W9 的 B店项（7900，未结算）+ 已付款后调整 → 履约应付同额冲零
     supB = await promo.generateSettlement(midB, settlementPeriod(new Date()))
     assert.ok(Number(supB) > 0 && Number(supB) !== Number(settleB), 'B店补充单生成')
-    const ssb = await one('SELECT total_amount FROM settlement WHERE id=?', [supB])
+    const ssb = await one('SELECT total_amount, amt_fulfill FROM settlement WHERE id=?', [supB])
     const snapB = await one('SELECT split_snapshot s FROM settlement WHERE id=?', [settleB])
     const spB = typeof snapB.s === 'string' ? JSON.parse(snapB.s) : snapB.s
     const expAdjB = -Math.round(7900 * Number(spB.fulfill) / 10000)
-    assert.equal(Number(ssb.total_amount), 7900 + expAdjB, `已付款后调整随补充单冲抵：7900${expAdjB}=${Number(ssb.total_amount)}`)
+    assert.equal(Number(ssb.total_amount), 7900, '已付款后：补充单 total=W9的B店项7900（调整不进基数）')
+    assert.equal(Number(ssb.amt_fulfill), 0, '已付款后同额冲零：履约应付=round(7900×58%)−4582=0')
     const adjNow = await one('SELECT applied_settlement_id FROM settlement_adjustment WHERE order_id=? AND refund_no=?', [ordW8, pr.refundNo])
     assert.equal(Number(adjNow.applied_settlement_id), Number(supB), '调整冲抵去向=补充单')
   })
@@ -388,9 +438,9 @@ try {
     const rows = ok(await call('GET', '/admin/settlements', null, admin))
     const sa = rows.find(r => Number(r.id) === Number(settleA))
     const sb = rows.find(r => Number(r.id) === Number(settleB))
-    assert.ok(sa && Number(sa.adjust_pending) < 0, 'A店结算单展示已出账后调整（负）')
+    assert.ok(sa && Number(sa.adjust_pending) === 0, 'A店调整已随补充单冲抵（applied 不再挂起，金额进补充单履约列）')
     assert.ok('payable_after_adjust' in sa, '调整后应付字段在')
-    assert.ok(sb && Number(sb.adjust_pending) < 0, 'B店（已付款后退款）调整可见')
+    assert.ok(sb && Number(sb.adjust_pending) === 0, 'B店（已付款后）调整已冲抵；明细仍可溯源（调整明细接口）')
     const md = ok(await call('GET', `/m/settlements/${settleA}`, null, mToken(uidM, midA)))
     assert.ok(md.adjustments && md.adjustments.length >= 1, '商户端可见调整明细')
     assert.ok(md.items.length >= 1, '结算单明细含订单（跨店按结算行联合查询）')

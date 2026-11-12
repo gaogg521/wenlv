@@ -199,22 +199,54 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
     await c.q('UPDATE travel_pass SET status = 4 WHERE order_item_id IN (?) AND status = 1', [itemIds.map(Number)])
     return { refundNo, cashFen: payFen, feeFen, feeRate }
   }).then(async r => {
-    // 事务外走微信退款（MOCK 直接成功），成功后回写状态；失败留 0 由人工处理（与全退一致）
+    // 事务外走微信退款（MOCK 直接成功）；PROCESSING/ERROR 留状态 0 由补偿任务按回执收口（Codex复验修复3）
     const wxpay = await import('./wxpay.mjs')
     const wxr = r.cashFen > 0 && wxpay.isLive()
       ? await wxpay.refund({ orderNo, refundNo: r.refundNo, amountFen: r.cashFen, totalFen: Number(o.amount_pay), reason: '部分退款' }).catch(e => ({ status: 'ERROR', message: e.message }))
       : { status: 'SUCCESS' }
     if (wxr.status === 'SUCCESS') {
-      await tx(async c => {
-        await c.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
-        await c.upd('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
-        await (await import('./contribution-growth.mjs')).recheckOrderContribution(c, o.id)
-      })
-      // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
-      try { await (await import('./promo.mjs')).recordRefundAdjustment(o.id, r.refundNo) } catch (e) { console.error('[partial-refund:adjust]', o.id, e.message) }
+      await confirmPartialRefund(o.id, r.refundNo) // 幂等收口：状态+V84 贡献重算+结算调整
+      return { ...r, refunded: true, wxRefund: 'SUCCESS' }
     }
-    return { ...r, refunded: wxr.status === 'SUCCESS', wxRefund: wxr.status }
+    return { ...r, refunded: false, processing: wxr.status === 'PROCESSING', wxRefund: wxr.status }
   })
+}
+
+/** 分项退款成功确认（提交时即时成功与补偿任务共用，幂等可重试）：
+ *  退款单/分项单置 2 → 被退项已进结算的按提供方登记结算调整（uk_refund_merchant 幂等）。 */
+export async function confirmPartialRefund(orderId, refundNo) {
+  const already = await one('SELECT status FROM refunds WHERE refund_no = ?', [refundNo])
+  if (!already || Number(already.status) === 2) return { confirmed: false }
+  await tx(async c => {
+    await c.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
+    await c.upd('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ? AND status = 0', [refundNo])
+    // V84：异步成功终态复用 recheckOrderContribution——按净实收重算贡献与成长冲正，与退款同事务
+    await (await import('./contribution-growth.mjs')).recheckOrderContribution(c, orderId)
+  })
+  // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
+  try { await (await import('./promo.mjs')).recordRefundAdjustment(orderId, refundNo) } catch (e) { console.error('[partial-refund:adjust]', orderId, e.message) }
+  return { confirmed: true }
+}
+
+/** 分项退款失败转人工（回执 CLOSED / 长期异常）：
+ *  退款单置 3、分项单置 3；订单项恢复待履约、按人凭证恢复有效（可重新履约或再次发起退款）；
+ *  写风险事件与订单事件留痕。 */
+export async function failPartialRefund(refundNo, reason = '微信退款回执关闭') {
+  const pr = await one('SELECT order_id FROM partial_refund WHERE refund_no = ? AND status = 0', [refundNo])
+  if (!pr) return { failed: false }
+  await q('UPDATE refunds SET status = 3 WHERE refund_no = ? AND status = 0', [refundNo])
+  await q('UPDATE partial_refund SET status = 3 WHERE refund_no = ? AND status = 0', [refundNo])
+  const rawIds = (await one('SELECT item_ids FROM partial_refund WHERE refund_no = ?', [refundNo])).item_ids
+  const ids = (Array.isArray(rawIds) ? rawIds : JSON.parse(rawIds || '[]')).map(Number) // mysql2 对 JSON 列自动解析
+  if (ids.length) {
+    await q(`UPDATE order_item SET status = 0 WHERE id IN (${ids.join(',')}) AND status = 2`, [])
+    await q(`UPDATE travel_pass SET status = 1 WHERE order_item_id IN (${ids.join(',')}) AND status = 4`, [])
+  }
+  await q(`INSERT INTO risk_event (kind, severity, detail) VALUES ('refund_failed', 2, ?)`,
+    [JSON.stringify(`分项退款失败（${reason}）：退款单 ${refundNo}，订单项已恢复待履约，需人工处理`)])
+  await q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES (?,?,?,?,?)',
+    [pr.order_id, 0, 0, 'system', JSON.stringify({ ev: 'PARTIAL_REFUND_FAIL', refundNo, reason })])
+  return { failed: true }
 }
 
 /** 已结算部分退款合计（订单级资金对账与全退金额扣减用） */

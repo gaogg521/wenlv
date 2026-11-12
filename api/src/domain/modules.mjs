@@ -7,7 +7,7 @@
 // - readonly/sre/dev 原来因缺省放行泄露全部 50 个菜单（缺陷），改为显式默认集合（D-01 决策，见进度台账）；
 // - 未知角色默认拒绝（空集合）。
 export const MODULE_GROUPS = [
-  ['经营总览', [['dash', '经营概览', 'dash']]],
+  ['经营总览', [['partnerdash', '主体方经营', 'dash'], ['dash', '经营概览', 'dash']]],
   ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
@@ -43,8 +43,8 @@ export const ROLE_DEFAULT_MODULES = {
   sre: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest'],
   dev: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest', 'features', 'terms'],
   // 商户/景区主体方（V82 独立 PC 身份）：只看本主体授权范围；不给 dash（平台聚合）与资金/参数等平台模块
-  merchant_partner: ['orders', 'settlements', 'products', 'merchants', 'partnerperf'],
-  scenic_partner: ['orders', 'scenics', 'settlements', 'products'],
+  merchant_partner: ['partnerdash', 'orders', 'settlements', 'products', 'merchants', 'partnerperf'],
+  scenic_partner: ['partnerdash', 'orders', 'scenics', 'settlements', 'products'],
 }
 
 /** 有效模块集合：super 全部；已知角色取默认；未知角色空（默认拒绝） */
@@ -61,6 +61,6 @@ export function effectiveModules(role) {
  * risk→风控事件；sre/dev→运维控制台。未知角色 null（前端回落）。
  */
 export const ROLE_HOME = {
-  super: 'dash', ops: 'dash', readonly: 'dash', merchant_partner: 'orders', scenic_partner: 'orders', city_partner: 'dash',
+  super: 'dash', ops: 'dash', readonly: 'dash', merchant_partner: 'partnerdash', scenic_partner: 'partnerdash', city_partner: 'dash',
   finance: 'fund', review: 'reviewqueue', risk: 'risk', sre: 'system', dev: 'system',
 }

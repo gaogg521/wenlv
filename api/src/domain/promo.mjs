@@ -227,17 +227,19 @@ export async function generateSettlement(merchantId, period) {
   }
   let total = 0, promo = 0, costTotal = 0, partialDeduct = 0
   for (const ln of lines) { total += ln.net; costTotal += ln.costFen; partialDeduct += ln.refund; if (!ln.cross) promo += Number(ln.o.promo_amt) }
-  // 未冲抵调整并入（amount_fen 为负=应付减少）
-  const adjTotal = pendingAdj.reduce((a, x) => a + Number(x.amount_fen), 0)
-  total += adjTotal
-  // 净额+调整相抵为负：本轮跳过（结算行/调整保持未冲抵状态，下轮再算），绝不把结算单出成负数。
-  // total=0 仍出账：保留"只有手续费也能出账"既有行为（手续费不计入 total，走 fee 列与商户分成）。
-  if (total < 0) return existing ? Number(existing.id) : -1
+  // Codex复验（20261112·阻塞付款）：调整是"商户应付级"冲抵（=被退项净额×快照履约占比），只抵一次——
+  // 不并入五口径基数再乘履约占比（否则二次乘比例多付）。纯调整、无订单/手续费时本轮跳过（调整保持未冲抵，待下期有正额再抵）。
+  if (!lines.length && !fees.length) return existing ? Number(existing.id) : -1
   // 五口径比例来自参数中心（settlement.split_*），生成时快照进 split_snapshot
   const split = await splitBp()
-  const fulfill = Math.round(total * split.fulfill / 10000)
+  const fulfillRaw = Math.round(total * split.fulfill / 10000)
   const service = Math.round(total * split.service / 10000)
   const beanBudget = Math.round(total * split.beanbudget / 10000)
+  // 未冲抵调整（amount_fen 为负）在履约应付上一对一冲抵；超出部分结转新调整行留待下期，绝不把应付出成负数
+  const adjTotal = pendingAdj.reduce((a, x) => a + Number(x.amount_fen), 0)
+  const appliedAdj = Math.max(adjTotal, -fulfillRaw)
+  const carryOver = adjTotal - appliedAdj // ≤0：调整超过本单履约应付的结转余额
+  const fulfill = fulfillRaw + appliedAdj
   const retained = total - fulfill - service - beanBudget - promo
   // 分成比例：商户资料单独约定优先，否则取参数中心；生成时快照进结算单，事后改参数不影响已出账单
   const shareBp = await feeShareBp(c, merchantId)
@@ -256,8 +258,13 @@ export async function generateSettlement(merchantId, period) {
       VALUES (?,?,?,?,?,?,?,2)`, [sid, ln.o.id, merchantId, ln.cross, ln.cash, ln.refund, ln.net])
     if (ln.my.length) await c.q(`UPDATE order_item SET settle_line_id = ? WHERE id IN (${ln.my.map(it => Number(it.id)).join(',')}) AND settle_line_id IS NULL`, [lineId])
   }
-  // 修复4：本轮并入的调整标记冲抵去向（对账可溯）
+  // 修复4：本轮并入的调整标记冲抵去向（对账可溯）；超出履约应付的结转余额落新调整行（挂本单，未冲抵）
   if (pendingAdj.length) await c.q(`UPDATE settlement_adjustment SET applied_settlement_id = ? WHERE id IN (${pendingAdj.map(x => Number(x.id)).join(',')})`, [sid])
+  if (carryOver < 0) {
+    await c.q(`INSERT INTO settlement_adjustment (settlement_id, order_id, merchant_id, type, amount_fen, refund_no, reason, operator)
+      VALUES (?,?,?,1,?,NULL,?,?)`, [sid, pendingAdj.length ? Number(pendingAdj[0].order_id) : null, merchantId, carryOver,
+      '已出账后调整超出本单履约应付的结转余额（' + pendingAdj.length + ' 笔并入，本期抵 ' + (-appliedAdj) + ' 分）', 'system:carry-over'])
+  }
   // B04：确认成本回填（订单进入结算=确认时点；未维护成本保持 NULL 不强填）
   const ownIds = ownOrders.map((o) => Number(o.id))
   if (ownIds.length) await c.q(`UPDATE orders SET cost_confirmed_fen = cost_total_fen WHERE id IN (${ownIds.join(',')}) AND cost_confirmed_fen IS NULL`)
@@ -287,7 +294,7 @@ export async function generateSettlement(merchantId, period) {
       orderCount, totalAmount: total, amtFulfill: fulfill, amtService: service,
       amtPromoter: promo, amtBeanbudget: beanBudget, amtRetained: retained, status: 0,
       feeCount: fees.length, feeTotal, feeMerchant, feePlatform, feeShareBp: fees.length ? shareBp : null,
-      pendingAdjustFen: -adjTotal, providerLines: lines.length,
+      adjustAppliedFen: -appliedAdj, adjustCarryOverFen: carryOver, providerLines: lines.length,
     }, c, 0)
     return sid
   })

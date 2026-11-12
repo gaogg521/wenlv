@@ -96,8 +96,47 @@ void orders
     assert.ok(settles.some(s => Number(s.id) === Number(settleA)), '本景区关联商户（A店）结算可见')
     assert.ok(!settles.some(s => Number(s.id) === Number(settleB)), '无景区关联商户（B店）结算不可见')
     assert.equal((await call('GET', `/admin/settlements/${settleB}/adjustments`, null, tokS)).code, 1003, '非关联商户结算调整拒绝')
+    // V82（Codex复验）：景区主体方只拿本景区口径投影（无整单五口径/内部成本字段），同城他主体不可见
+    const proj = settles.find(x => Number(x.id) === Number(settleA))
+    assert.ok(proj && 'scenic_net_fen' in proj && 'scenic_payable_fen' in proj, '景区口径投影字段在（net/履约应付）')
+    assert.ok(!('cost_total' in proj) && !('amt_retained' in proj), '内部成本与五口径字段不下发景区主体方')
+    assert.ok(Number(proj.scenic_net_fen) === 10000, '本景区结算行净额=10000（他店/他景区订单不计入）')
+    // people 三详情路由的主体校验
+    assert.equal((await call('GET', `/admin/merchants/${midA}/overview`, null, tokM)).code, 0, '商户主体方看本店全景')
+    assert.equal((await call('GET', `/admin/merchants/${midB}/overview`, null, tokM)).code, 1003, '商户主体方看他店全景拒绝')
+    assert.equal((await call('GET', `/admin/products/${pA}/overview`, null, tokM)).code, 0, '商户主体方看本店商品详情')
+    const prodB = await one('SELECT id FROM tour_product WHERE merchant_id=? LIMIT 1', [midB])
+    assert.equal((await call('GET', `/admin/products/${prodB.id}/overview`, null, tokM)).code, 1003, '他店商品详情拒绝')
+    assert.equal((await call('GET', `/admin/scenics/${scenicId}/overview`, null, tokS)).code, 0, '景区主体方看本景区详情')
+    const scenicX = (await q('INSERT INTO scenic_spot(city_code,name,scenic_level,coop_mode,status) VALUES(?,?,?,?,1)', ['310118', 'PI同城他景区', '3A', '', 1])).insertId
+    assert.equal((await call('GET', `/admin/scenics/${scenicX}/overview`, null, tokS)).code, 1004, '同城他景区详情拒绝（主体隔离）')
     const prods = ok(await call('GET', '/admin/products', null, tokS))
     assert.ok(prods.every(p => Number(p.scenic_id) === Number(scenicId)), '商品列表只含本景区商品')
+  })
+
+  // ===== 主体方看板 + 商户商品自维护（V82 补充项） =====
+  await check('主体方看板·本主体聚合：商户看板只含本店订单/退款/结算应付；景区看板只含本景区；越权角色 1003', async () => {
+    const dm = ok(await call('GET', '/admin/partner-dash', null, tokM))
+    assert.equal(dm.kind, 'merchant')
+    assert.equal(Number(dm.subject.id), Number(midA), '商户看板绑定本店')
+    assert.ok(dm.recent.orders >= 1 && dm.settlement.count >= 1, '本店订单/结算聚合非空（B店数据不在内）')
+    assert.ok('pendingItems' in dm && 'products' in dm, '商户看板含待履约/商品卡')
+    const ds = ok(await call('GET', '/admin/partner-dash', null, tokS))
+    assert.equal(ds.kind, 'scenic')
+    assert.equal(Number(ds.subject.id), Number(scenicId), '景区看板绑定本景区')
+    assert.ok(ds.recent.orders >= 1, '本景区订单聚合非空')
+    assert.ok('boundMerchants' in ds && 'reviews' in ds, '景区看板含关联商户/复盘卡')
+    assert.equal((await call('GET', '/admin/partner-dash', null, admin)).code, 1003, '内部角色不开放主体看板（各用各的概览）')
+  })
+  await check('商户主体方·本店商品自维护：建品强制本店、他店编辑/上下架/排团期拒绝、本店可用', async () => {
+    const foreign = ok(await call('POST', '/admin/products', { title: 'PI他店品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, tokM))
+    assert.equal(Number((await one('SELECT merchant_id FROM tour_product WHERE id=?', [foreign.id])).merchant_id), Number(midA), '建品 merchant_id 强制为绑定主体（传他店也落本店）')
+    assert.equal((await call('POST', '/admin/sessions', { productId: foreign.id, departDate: bizDay(1), quota: 10, priceAdult: 100 }, tokM)).code, 0, '本店商品排团期可用')
+    const otherProd = ok(await call('POST', '/admin/products', { title: 'PI他店真品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, admin))
+    assert.equal((await call('PUT', '/admin/products/' + otherProd.id, { title: '越权改' }, tokM)).code, 1003, '他店商品编辑拒绝')
+    assert.equal((await call('POST', `/admin/products/${otherProd.id}/status`, { status: 1 }, tokM)).code, 1003, '他店商品上下架拒绝')
+    assert.equal((await call('POST', '/admin/sessions', { productId: otherProd.id, departDate: bizDay(1), quota: 10, priceAdult: 100 }, tokM)).code, 1003, '他店商品排团期拒绝')
+    assert.equal((await call('PUT', '/admin/products/' + foreign.id, { title: '本店改名' }, tokM)).code, 0, '本店商品编辑可用')
   })
 
   // ===== 改绑主体：epoch+1 旧会话失效，改绑即生效 =====
