@@ -27,6 +27,7 @@ async function remove(c,n,a,reason) {
   const actor='admin:'+a.name
   const id=await c.ins('INSERT INTO content_moderation(note_id,city_code,reason,snapshot,actor) VALUES (?,?,?,?,?)',[n.id,n.city_code||null,reason,JSON.stringify({title:n.title,body:n.body}),actor])
   await c.upd('UPDATE content_note SET status=4,moderation_id=? WHERE id=?',[id,n.id])
+  await (await import('../domain/contribution-growth.mjs')).recheckNoteContribution(c, n.id)
   await c.q('UPDATE content_report SET status=2,moderation_id=?,resolution=?,actor=?,resolved_at=NOW(3) WHERE note_id=? AND status=0',[id,reason,actor,n.id])
   // S-01：一次下架会批量完成该笔记的全部待处理举报——对应认领必须一并释放（只限本笔记、本次完成的
   // 举报，r.status=2 是本事务刚完成的集合），直接下架与举报判定下架共用此释放，不再各自散落

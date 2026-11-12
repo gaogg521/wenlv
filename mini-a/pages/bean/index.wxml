@@ -25,7 +25,7 @@
 
 <view class="card fade-up" wx:if="{{beanIntro}}"><rich-text class="rich-p" nodes="{{beanIntro}}"></rich-text></view>
 
-<view class="sec-title" wx:if="{{levels.length}}">会员等级 <text class="more">成长值随真实消费累积</text></view>
+<view class="sec-title" wx:if="{{levels.length}}">会员等级 <text class="more">成长值来自消费与有效贡献</text></view>
 <view class="card fade-up bn-level" wx:if="{{levels.length}}">
   <view class="bn-lv-top">
     <image class="bn-crest" src="{{levelArt}}" mode="aspectFit" />
@@ -57,3 +57,15 @@
   </view>
 </view>
 <view class="note">{{bean ? bean.rule : '加载中…'}}</view>
+
+<view class="card fade-up" wx:if="{{contribution.length}}">
+  <view class="sec-title">贡献成长记录</view>
+  <view class="muted2">成交、采纳和合格复购按规则计分。等级总成长值取整数展示，贡献明细保留小数。</view>
+  <view class="bn-lv-row" wx:for="{{contribution}}" wx:key="id">
+    <view class="bn-lv-txt">
+      <view>{{item.label}} · {{item.state}}</view>
+      <view class="muted2">贡献分 {{item.score}} · 成长点 {{item.growth}}</view>
+      <view class="muted2" wx:if="{{item.reason}}">{{item.reason}}</view>
+    </view>
+  </view>
+</view>

@@ -205,8 +205,11 @@ export async function partialRefund({ orderNo, itemIds, reason, operator = 'user
       ? await wxpay.refund({ orderNo, refundNo: r.refundNo, amountFen: r.cashFen, totalFen: Number(o.amount_pay), reason: '部分退款' }).catch(e => ({ status: 'ERROR', message: e.message }))
       : { status: 'SUCCESS' }
     if (wxr.status === 'SUCCESS') {
-      await q('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
-      await q('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
+      await tx(async c => {
+        await c.upd('UPDATE refunds SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
+        await c.upd('UPDATE partial_refund SET status = 2, settled_at = NOW(3) WHERE refund_no = ?', [r.refundNo])
+        await (await import('./contribution-growth.mjs')).recheckOrderContribution(c, o.id)
+      })
       // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
       try { await (await import('./promo.mjs')).recordRefundAdjustment(o.id, r.refundNo) } catch (e) { console.error('[partial-refund:adjust]', o.id, e.message) }
     }

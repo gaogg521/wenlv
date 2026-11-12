@@ -141,6 +141,7 @@ export const ROUTE_MODULES = [
   ['POST', '/admin/users/:id/tags', 'users', 'manage'],
   ['DELETE', '/admin/users/:id/tags/:tagId', 'users', 'manage'],
   ['POST', '/admin/users/:id/ops-notes', 'users', 'manage'],
+  ['POST', '/admin/users/:id/contribution/:recordId/revoke', 'users', 'manage'],
   ['POST', '/admin/users/:id/status', 'users', 'manage'],
   ['POST', '/admin/users/:id/risk', 'users', 'manage'],
   ['POST', '/admin/users/bulk-tags', 'users', 'manage'],
