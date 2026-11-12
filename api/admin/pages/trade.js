@@ -541,7 +541,7 @@ async function settlements() {
       ${Number(s.cost_adjust) ? `<div class="payable-line" style="color:var(--ink2)">确认成本调整 <b>${fen(s.cost_adjust)}</b><span class="muted">（只影响利润复算，不改商户应付）</span></div>` : ''}
       <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}${Number(s.adjust_pending) ? ' + 已出账后调整 ' + fen(s.adjust_pending) : ''}</span></div>
       ${adminCan('settle.pay') ? `<p class="muted" style="margin:6px 0 0"><a href="javascript:void(0)" onclick="settleAdjustments(${s.id})" style="color:var(--ink2)">查看调整明细</a></p>` : ''}
-    </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')})}`}
+    </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}`}
   </div>`
 }
 // 修复4：已出账/已付款结算单的调整明细（按项退款冲减 / 确认成本更正），逐条可溯源

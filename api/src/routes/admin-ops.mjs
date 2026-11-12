@@ -28,7 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
-import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
+import { fen2yuan, apiImg, toCsv, requireAdmin, scopeFilter, subjectScope, SUP_CATS, CREATOR_TAGS, audit, capabilityContext, publicBase, notifyMerchantStaff, handlePayNotify } from './_shared.mjs'
 import { actionRoles } from '../domain/admin-capabilities.mjs'
 
 // 以 co_profit_pay 有效流水（status=1）为唯一事实源，重算分润单的已付额与结清状态。
@@ -294,6 +294,12 @@ const adminEdit = {
   'GET /admin/scenics': async (req) => {
     const a = await requireAdmin(req)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    // V82（Codex复验 R2）：景区主体方只看绑定景区；同城不同主体不可见
+    const subS = subjectScope(a)
+    if (a.role === 'scenic_partner') {
+      if (!subS.scenicId) return []
+      return await q('SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id) product_count FROM scenic_spot s WHERE s.id = ? ORDER BY s.id DESC', [subS.scenicId])
+    }
     const sc = scopeFilter(a, 's.city_code'), ps = scopeFilter(a, 'p.city_code')
     return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id${ps.sql}) product_count
       FROM scenic_spot s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, [...ps.params, ...sc.params])

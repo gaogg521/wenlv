@@ -1,7 +1,8 @@
 // 主体方经营看板（V82）：商户/景区主体方登录 PC 的默认首页。
 // 只读聚合，口径与各源账一致（订单实付/退款已结算/结算应付含调整）；不含平台内部成本与其他主体数据。
 window.partnerDashPage = async function () {
-  const load = ++window.__partnerDashLoad
+  window.__partnerDashLoad = (window.__partnerDashLoad || 0) + 1
+  const load = window.__partnerDashLoad
   let d
   try { d = await api('GET', '/admin/partner-dash') } catch (e) {
     if (load === window.__partnerDashLoad && location.hash.replace('#', '').split('?')[0] === 'partnerdash') {
