@@ -196,7 +196,7 @@ async function userProfile(id) {
       ${p.promoter ? `<div class="rv-box"><div class="rv-h">推广服务商</div>${kv('档位 / 费率', `${p.promoter.tier} 档 · ${PN(p.promoter.rate_bp) / 100}%`)}${kv('近 90 日有效 GMV', fen(p.promoter.valid_gmv_90d))}
         ${kv('累计佣金', `${PN(p.promoter.commission?.n)} 笔 · ${fen(p.promoter.commission?.amt)}`)}${kv('状态', PN(p.promoter.status) === 1 ? '正常' : '冻结')}</div>` : ''}
       ${p.staff.length ? `<div class="rv-box"><div class="rv-h">商户身份</div>${p.staff.map((s) => kv(`<button class="order-link" onclick="merchantProfile(${s.id})">${esc(s.name)}</button>`, (STAFF_ROLE[s.role] || '员工') + (PN(s.status) ? '' : '（已停用）'))).join('')}</div>` : ''}
-      ${p.contribution?.rows?.length ? `<div class="rv-box"><div class="rv-h">贡献成长</div>${p.contribution.rows.map(r =>
+      ${p.contribution?.rows?.length ? `<div class="rv-box"><div class="rv-h">贡献成长</div><div class="td-sub">换算口径：1 成长点 = 100 成长值（下表成长点 = 该笔已入账贡献折算的成长值 ÷ 100，与「成长记录」整数成长值同源）</div>${p.contribution.rows.map(r =>
         kv(esc((['','成交','内容采纳','景区复购'][Number(r.kind)] || '贡献') + ' · ' + r.biz_ref),
           esc((({ legacy:'历史',pending:'待发',credited:'已发',limited:'限额',revoked:'已冲回' })[r.growth_state] || '待核实') +
           ' · ' + (Number(r.growth_active) / 100).toFixed(2) + ' 成长点' + (r.reason ? ' · ' + r.reason : '')) +
