@@ -56,27 +56,48 @@ function readNoteBody(value) {
 
 async function saveNote(req, editing) {
   const user = noteAuthor(req)
-  const { title, body, images, relatedProductId, video, revision } = req.body
+  const { title, body, images, relatedProductId, video, revision, blocks: submittedBlocks } = req.body
   const id = editing ? Number(req.params.id) : null
   if (editing) {
     const current = await one('SELECT status,revision FROM content_note WHERE id=? AND user_id=?', [id,user.uid])
     if (!current) throw new BizError(1004, '作品不存在')
     if (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision)) throw new BizError(2002, '作品状态已变化，请重新打开')
   }
-  if (!body) throw new BizError(1001, '内容不能为空')
+  let blocks
+  if (submittedBlocks !== undefined) {
+    if (!Array.isArray(submittedBlocks) || !submittedBlocks.length || submittedBlocks.length > 40) {
+      throw new BizError(1001, '文章需包含 1 至 40 个内容块')
+    }
+    blocks = submittedBlocks.map(block => {
+      if (block?.type === 'text') {
+        if (typeof block.html !== 'string' || block.html.length > 10000) throw new BizError(1001,'单段正文过长，请拆分段落')
+        const html = sanitizeRich(block.html, 10000).replace(/<\/?(?:img|video|audio|source|picture|track)\b[^>]*>/gi,'')
+        if (plainText(html)) return {type:'text',html}
+      }
+      if (['image','video'].includes(block?.type) && typeof block.url === 'string') return {type:block.type,url:block.url}
+      throw new BizError(1001,'内容块格式无效')
+    })
+  }
+  const articleText = blocks ? blocks.filter(x=>x.type==='text').map(x=>x.html).join('<br>') : body
+  if (blocks && articleText.length > 200000) throw new BizError(1001,'文章正文过长')
+  const videos = blocks?.filter(x=>x.type==='video')
+  const articleImages = blocks ? blocks.filter(x=>x.type==='image').map(x=>x.url) : images
+  if (videos?.length > 1 || (blocks && articleImages.length > 9)) throw new BizError(1001,'最多 9 张图片和 1 段视频')
+  const articleVideo = blocks ? videos[0]?.url : video
+  if (!articleText) throw new BizError(1001, '内容不能为空')
   if (title != null && String(title).trim().length > 30) throw new BizError(1001, '标题最多 30 字，请精简后发布')
-  const rich = sanitizeRich(String(body))
+  const rich = sanitizeRich(String(articleText))
   const inlineImages = [...rich.matchAll(/<img[^>]+src="([^"]+)"/gi)].map(m => m[1])
   const text = rich.replace(/<\/?(?:img|video|audio|source|picture|track)\b[^>]*>/gi, '')
   if (!text.replace(/<[^>]*>|&nbsp;|\s/g,'').length) throw new BizError(1001, '内容不能为空')
-  const videoUrl = video ? String(video) : null
+  const videoUrl = articleVideo ? String(articleVideo) : null
   if (videoUrl) {
     const file = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.]mp4$')
     if (!file.test(videoUrl) || !fs.existsSync(path.join(noteUploadDir, path.basename(videoUrl)))) throw new BizError(1001, '请选择本人上传的视频')
   }
   const account = await one('SELECT mini_a_openid FROM user_account WHERE id=?', [user.uid])
   const sec = await wxsec.msgSecCheck((title || '') + ' ' + text, account?.mini_a_openid)
-  const imgUrls = [...new Set([...(Array.isArray(images) ? images : []), ...inlineImages].map(String))].slice(0,9)
+  const imgUrls = [...new Set([...(Array.isArray(articleImages) ? articleImages : []), ...inlineImages].map(String))].slice(0,9)
   if (imgUrls.some(x => !/^\/uploads\/[a-z0-9_.-]+$/i.test(x))) throw new BizError(1001, '请选择站内上传的图片')
   const imgSec = []
   let status = editing || videoUrl || !sec.pass ? 1 : 2
@@ -85,7 +106,7 @@ async function saveNote(req, editing) {
     imgSec.push({ url, traceId: check.traceId, mock: check.mock })
     if (!check.mock && sec.pass) status = 0
   }
-  const payload = JSON.stringify({ text, images: imgUrls, video: videoUrl, manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
+  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
   const saved = await tx(async c => {
     const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,status]
     let noteId = id
@@ -827,7 +848,7 @@ const cNotes = {
       LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? AND n.user_id=? AND n.status IN (2,3)`,[req.params.id,u.uid])
     if (!n) throw new BizError(1004, '作品不存在或暂不可编辑')
     const body = readNoteBody(n.body)
-    return {title:n.title,text:body.text || '',images:body.images || [],video:body.video || null,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
+    return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
   },
   // 笔记详情独立页（P2）：仅已发布可见
   'GET /c/notes/:id': async (req) => {
@@ -841,7 +862,7 @@ const cNotes = {
     let body = n.body
     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
     const liked = await one('SELECT note_id FROM content_note_likes WHERE note_id = ? AND user_id = ?', [n.id, user.uid])
-    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [], video: body?.video ? apiImg(body.video, req) : null }
+    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [], video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
   },
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {

@@ -16,27 +16,24 @@
     <view class="rt-btn" catchtouchend="rtCmd" data-tag="ul">列表</view>
     <view class="rt-btn" catchtouchend="rtCmd" data-tag="quote">引用</view>
     <view class="rt-btn" catchtouchend="rtCmd" data-tag="br">换行</view>
+    <button size="mini" bindtap="pickImage" disabled="{{busy || uploading}}">图片</button>
+    <button size="mini" bindtap="pickVideo" disabled="{{busy || uploading}}">视频</button>
+    <button size="mini" bindtap="onlineMedia" disabled="{{busy || uploading}}">媒体链接</button>
+    <button size="mini" bindtap="copyArticle" disabled="{{busy || uploading}}">复制全文</button>
+    <button size="mini" bindtap="pasteArticle" disabled="{{busy || uploading}}">粘贴</button>
     <view style="margin-left:auto;font-size:22rpx;color:var(--sub);align-self:center">{{bodyText.length}} 字</view>
   </view>
   <editor id="bodyEditor" class="body-editor" placeholder="写下这次旅行最值得记住的瞬间…" bindready="onEditorReady" bindinput="onEditorInput" bindstatuschange="onEditorStatus" style="min-height:320rpx;border:1rpx solid var(--line);padding:24rpx;box-sizing:border-box;font-size:28rpx;line-height:1.8"></editor>
 
-  <view style="margin-top:16rpx">
-    <view class="rt-btn" bindtap="togglePreview">{{showPreview ? '收起预览' : '预览效果'}}</view>
-  </view>
-  <rich-text wx:if="{{showPreview && bodyHtml}}" nodes="{{bodyHtml}}" style="margin-top:12rpx;padding:16rpx;background:#fafbfc;border-radius:12rpx;font-size:28rpx;line-height:1.7"></rich-text>
-
-  <view style="margin:16rpx 0">
-    <view class="sub2" style="margin-bottom:12rpx">配图（最多 9 张）</view>
-    <view style="display:flex;flex-wrap:wrap;gap:12rpx">
-      <image wx:for="{{imageUrls}}" wx:key="*this" src="{{item}}" mode="aspectFill" style="width:140rpx;height:140rpx;border-radius:12rpx" data-i="{{index}}" bindtap="removeImage" />
-      <view wx:if="{{images.length < 9}}" bindtap="pickImage" style="width:140rpx;height:140rpx;border-radius:12rpx;border:2rpx dashed var(--line,#ddd);display:flex;align-items:center;justify-content:center;font-size:48rpx;color:#bbb">＋</view>
-    </view>
-  </view>
-  <view class="ugc-media">
-    <video wx:if="{{videoSrc}}" src="{{videoSrc}}" controls style="width:100%"></video>
-    <button class="btn ghost" bindtap="pickVideo" disabled="{{uploading || busy}}">{{video ? '更换视频' : '添加视频'}}</button>
-    <button wx:if="{{video}}" class="btn ghost" bindtap="removeVideo" disabled="{{uploading || busy}}">移除视频</button>
-    <view class="sub2">MP4，最长 30 秒，8 MB 以内。视频由审核员审核。</view>
+  <view class="sub2">视频在编辑时显示为标记，预览时可播放。</view>
+  <button class="btn ghost" bindtap="togglePreview" disabled="{{uploading || busy}}">{{showPreview ? '收起预览' : '预览文章'}}</button>
+  <view wx:if="{{showPreview}}" class="ugc-preview">
+    <view class="tour-title">{{title || '旅行笔记'}}</view>
+    <block wx:for="{{blockViews}}" wx:key="index">
+      <rich-text wx:if="{{item.type === 'text'}}" nodes="{{item.html}}" />
+      <image wx:elif="{{item.type === 'image'}}" class="ugc-block-image" src="{{item.src}}" mode="widthFix" />
+      <video wx:else class="ugc-block-video" src="{{item.src}}" controls />
+    </block>
   </view>
   <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0" bindtap="pickProduct">
     <text>关联线路</text><text class="v">{{relatedName || '选填，内容看板按线路归集'}} ›</text>
