@@ -85,7 +85,7 @@ await t('页面不展示指纹原文、批次根、业务单号、金额：wxml 
   const wxml = read('mini-b/pages/proof/index.wxml')
   const refs = [...wxml.matchAll(/\{\{([^}]+)\}\}/g)].map((m) => m[1])
   const used = new Set(refs.flatMap((r) => r.match(/\b(?:item|records|code|err|input|loading|tried)\b(?:\.\w+)?/g) || []))
-  const allowed = new Set(['item.result', 'item.resultText', 'item.resultNote', 'item.kind', 'item.title', 'item.date', 'item.stateText', 'item.batchText', 'code', 'err', 'input', 'loading', 'tried', 'records'])
+  const allowed = new Set(['item.result', 'item.resultText', 'item.resultNote', 'item.kind', 'item.title', 'item.date', 'item.stateText', 'item.batchText', 'item.stateLine', 'item.mark', 'code', 'err', 'input', 'loading', 'tried', 'records'])
   for (const u of used) assert.ok(allowed.has(u) || u === 'records.length' || u.startsWith('records'), '页面引用了白名单之外的字段：' + u)
   assert.ok(!/payloadHash|merkleRoot|bizRef|leafPath|amount|proofValid/.test(wxml), 'wxml 里不该出现指纹 / 根 / 单号 / 金额字段')
 })

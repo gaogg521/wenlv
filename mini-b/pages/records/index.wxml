@@ -1,8 +1,8 @@
 <merchant-nav id="merchant-navigation" title="核销记录" />
-<view class="page-heading"><view class="page-eyebrow">SERVICE RECORDS</view><view class="page-title">每一次接待，都有记录</view><view class="page-caption">成功核销与异常拦截均可追溯</view></view>
+<view class="page-heading"><view class="page-eyebrow">核销台账</view><view class="page-title">每一次接待，都有记录</view><view class="page-caption">成功核销与异常拦截均可追溯</view></view>
 <view class="filter-panel"><view class="filter-bottom" style="margin-top:0"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view>{{periodNames[periodIndex]}}　⌄</view></picker><picker wx:if="{{periodIndex === 4}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker></view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
-<view class="card" wx:for="{{list}}" wx:key="id"><view class="record-top"><text class="status-label {{item.result === 1 ? 'positive' : ''}}">{{item.result === 1 ? '核销成功' : '异常拦截'}}</text><text>{{item.created_at}}</text></view><view class="record-title">{{item.pass_name || '到店凭证'}}</view><view class="record-code">{{item.order_no || '凭证 #' + item.pass_id}}</view></view>
+<view class="card" wx:for="{{list}}" wx:key="id"><view class="record-top"><text class="status-label {{item.result === 1 ? 'positive' : ''}}">{{item.result === 1 ? '核销成功' : '异常拦截'}}</text><text>{{item.created_at}}</text></view><view class="record-title">{{item.pass_name || '到店凭证'}}</view><view class="record-code">{{item.codeText}}</view></view>
 <view wx:if="{{hasMore}}" class="record-more" bindtap="loadMore">{{loading ? '正在加载…' : '继续查看历史记录　⌄'}}</view>
 <view wx:if="{{loaded && !list.length && !error}}" class="empty"><view class="empty-mark">↺</view>所选期间暂无核销记录</view>
 <view class="note">仅展示权限范围内的本店记录</view>

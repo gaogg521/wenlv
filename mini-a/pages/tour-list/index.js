@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 Page({
-  data: { site: siteData.DEFAULT, cats: api.FALLBACK.cats, active: 'all', tours: [], loading: true, icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], kw: '' },
+  data: { site: siteData.DEFAULT, cats: api.FALLBACK.cats, active: 'all', tours: [], loading: true, icons: ['◈', '⌕', '☼', '✧', '◌'], kw: '' },
   onShow() { const filter = wx.getStorageSync('tourFilter'); if (filter) { wx.removeStorageSync('tourFilter'); this.city = filter.city || ''; this.setData({ active: filter.cat || 'all', cityName: ({310118:'上海 · 青浦',320508:'苏州 · 姑苏',330523:'湖州 · 安吉'})[this.city] || this.city }); this.fetch() } },
   clearCity() { this.city = ''; this.setData({ cityName: '' }); this.fetch() },
   onReady() { siteData.get().then((site) => this.setData({ site })) },
@@ -11,7 +11,7 @@ Page({
     this.setData({ active: k })
     this.fetch()
   },
-  onKw(e) { this.setData({ kw: e.detail.value }) },
+  onKw(e) { this.setData({ kw: e.detail.value, emptyText: e.detail.value ? '没找到「' + e.detail.value + '」相关线路' : '该分类暂无线路' }) },
   doSearch() { this.fetch() },
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
   fetch() {

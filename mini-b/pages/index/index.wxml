@@ -1,7 +1,7 @@
 <merchant-nav id="merchant-navigation" home="{{true}}" />
 <view class="workbench">
   <view class="shop-heading">
-    <view class="shop-date">{{dateLabel}}<text>WANDERLUST BUSINESS</text></view>
+    <view class="shop-date">{{dateLabel}}<text>向往的自由 · 商户端</text></view>
     <view class="shop-name">{{merchant ? merchant.name : '经营美好，从这里开始'}}</view>
     <view class="shop-meta"><text>{{greet}}，{{merchant ? roleLabel : '欢迎来到商户端'}}</text><text wx:if="{{merchant}}" class="role-tag">本店工作空间</text></view>
     <view class="workbench-period" wx:if="{{merchant}}"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view>{{periodNames[periodIndex]}}经营　⌄</view></picker><picker wx:if="{{periodIndex === 3}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker><text wx:else>可切换查看历史</text></view>
@@ -35,12 +35,12 @@
       <button class="service-record" bindtap="goRecords"><view class="service-icon">↺</view><view>核销记录</view><text>每一次接待都有记录</text><view class="service-arrow">↗</view></button>
       <button wx:if="{{role < 2}}" bindtap="goHonor"><view class="service-icon">◇</view><view>门店荣誉</view><text>查看成长与权益</text></button>
     </view>
-    <view class="attention" wx:if="{{wb}}" bindtap="goVerify"><view class="attention-dot"></view><view><view>{{wb.pendingVerify ? '今天的接待，从这张凭证开始' : '接待准备就绪'}}</view><text>{{wb.pendingVerify ? wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码' : '有游客到店时，可从上方进入扫码核销'}}</text></view><text>›</text></view>
+    <view class="attention" wx:if="{{wb}}" bindtap="goVerify"><view class="attention-dot"></view><view><view>{{wb.pendingVerify ? '今天的接待，从这张凭证开始' : '接待准备就绪'}}</view><text>{{wbHint}}</text></view><text>›</text></view>
     <view class="trend-panel" wx:if="{{stats && role >= 2}}">
       <view class="section-heading"><text>所选期间订单</text><text class="week-total">{{weekTotal}} <text>单</text></text></view>
       <scroll-view scroll-x><view class="trend-chart" style="width:{{chartWidth}}rpx"><view wx:for="{{bars}}" wx:key="d" class="trend-day"><view class="trend-column"><view style="height:{{item.hp}}%"></view></view><text>{{item.dLabel}}</text></view></view></scroll-view>
     </view>
-    <view class="announcement" wx:if="{{notice}}"><view class="announcement-kicker">商户资讯 · PLATFORM NEWS</view><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '阅读全文 ↗'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
+    <view class="announcement" wx:if="{{notice}}"><view class="announcement-kicker">商户资讯</view><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '阅读全文 ↗'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
     <view class="review-panel" wx:if="{{stats && stats.latestReview}}"><view class="section-heading"><text>游客的声音</text><text class="review-rating">{{stats.latestReview.rating}} ★</text></view><view class="review-copy">{{stats.latestReview.content}}</view><text class="review-author">{{stats.latestReview.nickname}}</text></view>
   </block>
   <view class="growth-links" wx:if="{{merchant}}"><view bindtap="goHonor"><text>◇　等级与勋章</text><text>查看成长　↗</text></view><view bindtap="goCredentials"><text>✓　可信凭证</text><text>查看记录　↗</text></view></view>

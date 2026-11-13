@@ -1,5 +1,5 @@
 <view class="hero">
-  <view class="sub2">推广服务商{{ov && ov.promoter ? ' · 当前档位费率 ' + ov.rateLabel : ''}}</view>
+  <view class="sub2">{{roleText}}</view>
   <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{ov.withdrawableYuan}}</view>
   <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>
   <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
@@ -25,7 +25,7 @@
 <block wx:if="{{seg === 'invite'}}">
   <view class="card" style="text-align:center">
     <view class="sub2" style="color:var(--sub)">我的专属推广码（海报/小程序码携带）</view>
-    <view style="font-size:56rpx;font-weight:800;color:#2f6f9f;margin:20rpx 0">{{scene || '—'}}</view>
+    <view style="font-size:56rpx;font-weight:600;color:#2f6f9f;margin:20rpx 0">{{scene || '—'}}</view>
     <image wx:if="{{qrcode}}" src="{{qrcode}}" style="width:320rpx;height:320rpx" mode="aspectFit" />
     <view class="btn ghost" style="margin:20rpx 0 0" bindtap="makeQrcode">{{qrcode ? '刷新小程序码' : '生成专属小程序码'}}</view>
     <view class="btn ghost" style="margin:16rpx 0 0" bindtap="copy" wx:if="{{scene}}">复制推广码</view>
@@ -36,7 +36,7 @@
   <view class="card" wx:if="{{customers.length}}">
     <view class="kv" wx:for="{{customers}}" wx:key="index">
       <text>{{item.when}} · {{item.orderNo ? (item.statusText || '已下单') : '仅到访'}}</text>
-      <text class="v">{{item.amount ? '¥' + (item.amount / 100) : '—'}}</text>
+      <text class="v">{{item.amountText}}</text>
     </view>
   </view>
   <view wx:else class="empty">还没有客户记录</view>

@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="库存与价格" tab="{{true}}" />
-<view class="page-heading"><view class="page-eyebrow">AVAILABILITY</view><view class="page-title">把每一席，安排妥当</view><view class="page-caption">按商品管理团期、名额与价格</view></view>
+<view class="page-heading"><view class="page-eyebrow">团期与名额</view><view class="page-title">把每一席，安排妥当</view><view class="page-caption">按商品管理团期、名额与价格</view></view>
 <view class="filter-panel">
   <view class="search-field"><text>⌕</text><input value="{{kw}}" bindinput="onSearch" placeholder="搜索商品名称或出发日期" /></view>
   <view class="filter-bottom"><picker range="{{rangeNames}}" value="{{rangeIndex}}" bindchange="filterRange"><view class="range-picker">{{rangeNames[rangeIndex]}}　⌄</view></picker><text class="text-action" bindtap="resetFilters">重置筛选</text></view>
@@ -16,7 +16,7 @@
   <block wx:if="{{g.expanded}}">
     <view class="session-item" wx:for="{{g.sessions}}" wx:key="id" wx:for-item="s">
       <view class="session-main"><view><view class="session-date">{{s.date}}</view><view class="group-sub">剩余 {{s.left}} / {{s.quota}} 席</view></view><view class="session-price">¥{{s.priceLabel}}<view class="status-label {{s.canSell ? 'positive' : ''}}">{{s.statusLabel}}</view></view></view>
-      <view class="session-bottom"><text class="group-sub">{{s.early_price ? '早鸟 ¥' + s.earlyLabel + ' · 提前' + s.early_days + '天' : '常规团期价格'}}</text><button wx:if="{{role >= 2}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
+      <view class="session-bottom"><text class="group-sub">{{s.priceNote}}</text><button wx:if="{{role >= 2}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
     </view>
     <view wx:if="{{g.hasMore}}" class="group-footer" bindtap="moreSessions"><text>本组共 {{g.count}} 个团期</text><text>再显示 6 个　⌄</text></view>
   </block>

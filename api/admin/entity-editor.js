@@ -146,7 +146,7 @@
       ${B('foreColor', '#c64e28', '<span style="color:#c64e28">A</span>', '强调色')}${B('hiliteColor', '#fff1c2', '<span style="background:#fff1c2">高亮</span>', '高亮')}<i></i>
       ${B('insertUnorderedList', '', '• 列表', '无序列表')}${B('insertOrderedList', '', '1. 列表', '有序列表')}${B('formatBlock', 'BLOCKQUOTE', '❝ 引用', '引用')}<i></i>
       ${B('justifyLeft', '', '⇤', '左对齐')}${B('justifyCenter', '', '⇔', '居中')}<i></i>
-      ${B('link', '', '🔗 链接', '插入链接')}<label class="ee-rt-img" title="插入图片">🖼 图片<input type="file" accept="image/png,image/jpeg,image/webp" onchange="eeRtImg(this,'${id}')"></label>${B('insertHorizontalRule', '', '— 分割线', '分割线')}${B('removeFormat', '', '清除格式', '清除格式')}
+      ${B('link', '', '链接', '插入链接')}<label class="ee-rt-img" title="插入图片">图片<input type="file" accept="image/png,image/jpeg,image/webp" onchange="eeRtImg(this,'${id}')"></label>${B('insertHorizontalRule', '', '— 分割线', '分割线')}${B('removeFormat', '', '清除格式', '清除格式')}
     </div><div id="${id}" class="ee-rt-body" contenteditable="true" oninput="eeRtCount(this)">${html}</div><div class="ee-rt-foot"><span>0</span> 字</div></div>`
   }
   window.eeRt = (e, cmd, val) => {

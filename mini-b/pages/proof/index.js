@@ -13,11 +13,15 @@ function view(r) {
   } else if (r.proofValid === true) {
     result = 'ok'; resultText = '校验一致'; resultNote = '这条记录自封存后没有被改动'
   }
+  const stateText = STATE[Number(r.status)] || '记录处理中'
+  const batchText = r.batchSeq != null ? '第 ' + r.batchSeq + ' 批' : ''
   return {
     kind: r.kind, title: r.title, date: r.date,
-    stateText: STATE[Number(r.status)] || '记录处理中',
-    batchText: r.batchSeq != null ? '第 ' + r.batchSeq + ' 批' : '',
+    stateText, batchText,
+    // WXML 红线：拼接在 JS 预组合（stateLine = 状态 · 批次）
+    stateLine: stateText + (batchText ? ' · ' + batchText : ''),
     result, resultText, resultNote,
+    mark: result === 'ok' ? '✓' : (result === 'bad' ? '!' : '·'),
   }
 }
 

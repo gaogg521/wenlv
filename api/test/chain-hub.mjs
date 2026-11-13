@@ -9,7 +9,7 @@ import { q, one } from '../src/db.mjs'
 import { warmSecrets, delSecret } from '../src/infra/secrets.mjs'
 import { sign as gwSign } from '../src/infra/chain/gateway.mjs'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 const call = async (m, p, b, t, h = {}) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}), ...h }, body: b == null ? undefined : (typeof b === 'string' ? b : JSON.stringify(b)) })).json()
 let pass = 0
 const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', name) } catch (e) { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 } }

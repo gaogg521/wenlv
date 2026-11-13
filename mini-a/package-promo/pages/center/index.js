@@ -20,8 +20,10 @@ Page({
         earnedYuan: yuan(ov0.earned),
         withdrawnYuan: yuan(ov0.withdrawn),
         occupiedYuan:yuan(ov0.occupied),observingYuan:yuan(ov0.observing),debtYuan:yuan(ov0.debt),
+        roleLine: '推广服务商 · 当前档位费率 ' + Number(ov0.rateBp || 0) / 100 + '%',
       }) : ov0
-      this.setData({ ov, scene: sc.promoter ? sc.scene : null, customers, error:'' })
+      const custs = customers.map((c) => ({ ...c, amountText: c.amount ? '¥' + (Number(c.amount) / 100).toFixed(2).replace(/\.?0+$/, '') : '—' }))
+      this.setData({ ov, roleText: ov && ov.promoter ? ov.roleLine : '推广服务商', scene: sc.promoter ? sc.scene : null, customers: custs, error:'' })
     } catch (e) {
       this.setData({ ov: null, scene: null, customers: [],error:e.msg || '加载失败，请重试' })
       wx.showToast({ title: e.msg || '加载失败，请重试', icon: 'none' })

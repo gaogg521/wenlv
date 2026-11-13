@@ -4,7 +4,7 @@
   <view class="home-title">{{site.hero_title}}<text>{{site.hero_title_em}}</text></view>
   <view class="home-caption">{{site.hero_caption}}</view>
   <view class="home-search" bindtap="goTours">⌕ {{site.search_ph}} <text>探索 →</text></view>
-  <view class="home-destination" bindtap="goDestinations">{{homeCity && homeCity.name ? '当前城市：' + homeCity.name : site.destination_line}}<text>{{homeCity && homeCity.name ? '切换 ↗' : '发现目的地 ↗'}}</text></view>
+  <view class="home-destination" bindtap="goDestinations">{{cityLine}}<text>{{cityAction}}</text></view>
 </view>
 <view class="theme-grid">
 <view wx:for="{{themeEntries}}" wx:key="cat" class="theme-tile tg{{index}}" data-cat="{{item.cat}}" bindtap="goTours">
@@ -29,7 +29,7 @@
   <view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
 </view>
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
-<view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
+<view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">◌</view>暂无在架线路</view>
 <view wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
     <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>
@@ -41,7 +41,7 @@
         <text class="tag">{{item.loc || item.city_code || '上海'}}</text>
         <text class="tag blue">{{item.days || item.days_desc || '1天'}}</text>
       </view>
-      <view class="tour-price"><text class="rmb">¥</text>{{(item.price || item.price_from) / 100}} <text class="u">完成得 {{item.beanGift || item.bean_gift}} 旅豆</text></view>
+      <view class="tour-price"><text class="rmb">¥</text>{{item.priceText}} <text class="u">完成得 {{item.beanGift || item.bean_gift}} 旅豆</text></view>
     </view>
   </view>
 </view>

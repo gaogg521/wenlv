@@ -19,8 +19,8 @@
 .scenic-calc-dialog-body h4 { margin:10px 0 4px }
 .scenic-calc-dialog-body select { max-width:100% }
 .operating-demo { margin-top:18px; min-width:0 }
-.operating-demo h2 { font-size:18px; margin:0 }
-.operating-demo h3 { font-size:15px; margin:18px 0 8px }
+.operating-demo h2 { font-size:16px; margin:0 }
+.operating-demo h3 { font-size:14px; margin:18px 0 8px }
 .operating-demo-tag { display:inline-block; color:#74512d; background:#f5eadb; border-radius:6px; padding:2px 7px; font-size:12px; vertical-align:middle; margin-inline-start:5px }
 .operating-demo-fold > summary, .operating-demo-note > summary { cursor:pointer; font-weight:600 }
 .operating-demo-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; align-items:start }
@@ -31,7 +31,7 @@
 .operating-demo-results { background:#faf7f1; border:1px solid #e9ded1; border-radius:12px; padding:10px 14px; margin:0 }
 .operating-demo-results > div, .operating-demo-split > div { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:7px 0; border-bottom:1px solid #eee3d8 }
 .operating-demo-results dd,.operating-demo-split dd { margin:0; font-weight:600; text-align:right }
-.operating-demo-results strong { font-size:18px }
+.operating-demo-results strong { font-size:16px }
 .operating-demo-paths { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap:8px }
 .operating-demo-paths > div { border:1px solid #e9ded1; border-radius:8px; padding:8px }
 .operating-demo-paths small { display:block }

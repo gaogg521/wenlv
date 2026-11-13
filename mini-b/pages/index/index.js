@@ -13,7 +13,7 @@ Page({
     const query = periodQuery(this.data.periodIndex,this.data.customDate)
     this.setData({periodLabel:this.data.periodIndex === 3 ? this.data.customDate : this.data.periodNames[this.data.periodIndex]})
     api.request('/m/site').then((s) => { if (requestId===this._requestId) this.setData({ notice: s.notice || '' }) }).catch(() => {})
-    api.request('/m/workbench?'+query).then((wb) => { if (requestId===this._requestId) this.setData({ wb, err: '', loading: false }) }).catch((e) => { if (requestId===this._requestId) this.setData({ wb: null, err: e.msg || '数据暂不可用，请重试', loading: false }) })
+    api.request('/m/workbench?'+query).then((wb) => { if (requestId===this._requestId) this.setData({ wb, wbHint: wb && wb.pendingVerify ? (wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码') : '有游客到店时，可从上方进入扫码核销', err: '', loading: false }) }).catch((e) => { if (requestId===this._requestId) this.setData({ wb: null, err: e.msg || '数据暂不可用，请重试', loading: false }) })
     api.request('/m/stats?'+query).then((st) => {
       if (requestId!==this._requestId) return
       const max = Math.max(...st.week.map((w) => w.orders), 1)

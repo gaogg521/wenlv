@@ -1,15 +1,15 @@
 .pf-search{display:flex;gap:14rpx;margin:20rpx 28rpx}
-.pf-input{flex:1;height:84rpx;padding:0 24rpx;background:#fffdf8;border:1rpx solid #e8dfd1;border-radius:18rpx;font-size:29rpx;letter-spacing:2rpx;color:#3c4836}
+.pf-input{flex:1;height:84rpx;padding:0 24rpx;background:#fffdf8;border:1rpx solid #e8dfd1;border-radius:18rpx;font-size:32rpx;letter-spacing:2rpx;color:#3c4836}
 .pf-btn{width:168rpx;height:84rpx;line-height:84rpx;padding:0;margin:0;border-radius:18rpx;background:#60754d;color:#fff;font-size:28rpx}
-.pf-err{margin:0 28rpx 16rpx;padding:20rpx 24rpx;background:#fbefe9;border:1rpx solid #efd2c4;border-radius:18rpx;color:#9a4a2b;font-size:25rpx;line-height:1.6}
+.pf-err{margin:0 28rpx 16rpx;padding:20rpx 24rpx;background:#fbefe9;border:1rpx solid #efd2c4;border-radius:18rpx;color:#9a4a2b;font-size:26rpx;line-height:1.6}
 .pf-card{margin:20rpx 28rpx;padding:26rpx;background:#fffdf8;border:1rpx solid #e8dfd1;border-radius:24rpx}
 .pf-result{display:flex;gap:20rpx;align-items:center;padding:22rpx;border-radius:18rpx;margin-bottom:10rpx;background:#eef1e6}
 .pf-result.bad{background:#fbefe9}.pf-result.wait{background:#f3efe2}
-.pf-mark{width:60rpx;height:60rpx;line-height:60rpx;text-align:center;border-radius:50%;background:#60754d;color:#fff;font-size:32rpx;font-weight:700}
+.pf-mark{width:60rpx;height:60rpx;line-height:60rpx;text-align:center;border-radius:50%;background:#60754d;color:#fff;font-size:32rpx;font-weight:600}
 .pf-result.bad .pf-mark{background:#c4552d}.pf-result.wait .pf-mark{background:#a09376}
-.pf-result-t{font-size:30rpx;font-weight:700;color:#3c4836}
-.pf-result text{font-size:23rpx;color:#7d8872;line-height:1.6}
-.pf-row{display:flex;justify-content:space-between;gap:20rpx;padding:20rpx 0;border-bottom:1rpx dashed #eee7db;font-size:27rpx;color:#3c4836}
+.pf-result-t{font-size:32rpx;font-weight:600;color:#3c4836}
+.pf-result text{font-size:24rpx;color:#7d8872;line-height:1.6}
+.pf-row{display:flex;justify-content:space-between;gap:20rpx;padding:20rpx 0;border-bottom:1rpx dashed #eee7db;font-size:28rpx;color:#3c4836}
 .pf-row:last-child{border-bottom:none}
 .pf-row text{color:#8a919c;flex:none}
 .pf-row view{text-align:right;word-break:break-all}

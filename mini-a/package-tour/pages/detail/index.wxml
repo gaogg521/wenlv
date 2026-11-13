@@ -8,7 +8,7 @@
       <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
     </swiper-item>
   </swiper>
-  <view class="g-count">{{illustrated ? '场景参考图' : gIdx + 1 + '/' + gallery.length}}</view>
+  <view class="g-count">{{galleryCountText}}</view>
 
   <!-- 标题区：先回答"这是什么、多久、在哪、多少钱" -->
   <view class="book-bar dt-head">
@@ -39,7 +39,7 @@
       <view style="text-align:right">
         <view style="display:flex;align-items:baseline;gap:8rpx;justify-content:flex-end">
           <text wx:if="{{item.priceOriginal}}" class="muted2" style="text-decoration:line-through;font-size:22rpx">¥{{item.priceOriginal}}</text>
-          <view class="tour-price" style="font-size:30rpx">¥{{item.price}}</view>
+          <view class="tour-price" style="font-size:32rpx">¥{{item.price}}</view>
         </view>
         <view wx:if="{{item.promoTag}}" class="muted2" style="color:#1a9c6b">{{item.promoTag}}</view>
         <view class="muted2">{{item.seats}}</view>
@@ -78,7 +78,7 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
-  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
+  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">{{p.meeting_point}}</view>
     <view wx:if="{{extra.meetingGeo}}" class="btn ghost sm-btn" bindtap="navMeeting">导航到集合点</view></view>
 
   <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
@@ -87,15 +87,15 @@
     <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{scenic.name}} <text class="tag" wx:if="{{scenic.scenic_level}}">{{scenic.scenic_level}}</text></view>
-      <view class="muted2" wx:if="{{scenic.open_hours}}">🕘 {{scenic.open_hours}}</view>
-      <view class="muted2" wx:if="{{scenic.address}}">📍 {{scenic.address}}</view>
+      <view class="muted2" wx:if="{{scenic.open_hours}}">营业时间 {{scenic.open_hours}}</view>
+      <view class="muted2" wx:if="{{scenic.address}}">{{scenic.address}}</view>
     </view><text class="pl-link">›</text>
   </view>
   <view class="card place-card" wx:if="{{merchant}}" bindtap="goPlace" data-kind="merchant" data-id="{{p.merchant_id}}">
     <image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
-      <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
+      <view class="muted2" wx:if="{{merchant.hoursText}}">营业时间 {{merchant.hoursText}}</view>
       <view class="mh-row" wx:if="{{merchant.honor}}">
         <image class="mh-crest" src="{{merchant.honor.art}}" mode="aspectFit" />
         <text class="mh-lv">{{merchant.honor.name}}</text>
@@ -109,7 +109,7 @@
   <block wx:if="{{pkgItems.length}}">
     <view class="sec-title">套餐包含</view>
     <view class="card">
-      <view class="hl-item" wx:for="{{pkgItems}}" wx:key="name"><text class="hl-dot ok">›</text><text>{{item.name}} ×{{item.qty}}（{{item.kindText}} · {{item.merchantName}}）{{item.benefitDesc ? " · " + item.benefitDesc : ""}}{{item.benefitRules ? "；" + item.benefitRules : ""}}</text></view>
+      <view class="hl-item" wx:for="{{pkgItems}}" wx:key="name"><text class="hl-dot ok">›</text><text>{{item.name}} ×{{item.qty}}（{{item.kindText}} · {{item.merchantName}}）{{item.benefitTail}}</text></view>
       <view class="muted2" style="margin-top:8rpx;font-size:22rpx">分项履约：凭证项由各提供方门店核销；未核销项目可按项申请退款。</view>
     </view>
   </block>
@@ -127,7 +127,7 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
-  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
+  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">安全提示：{{p.safety_note}}</view></view>
 
   <view class="sec-title" wx:if="{{faqs.length}}">关于这条线路的常见问题</view>
   <view class="card" wx:if="{{faqs.length}}">
@@ -141,14 +141,14 @@
   <view class="card" wx:if="{{rv.list.length}}">
     <view class="rv-item" wx:for="{{rv.list}}" wx:key="index">
       <view style="display:flex;justify-content:space-between;align-items:center">
-        <text style="font-weight:600;font-size:25rpx">{{item.nickname}}</text>
+        <text style="font-weight:600;font-size:26rpx">{{item.nickname}}</text>
         <text class="star-sm">{{item.rating}} ★</text>
       </view>
-      <view style="font-size:25rpx;color:var(--ink2);margin-top:8rpx">{{item.content}}</view>
+      <view style="font-size:26rpx;color:var(--ink2);margin-top:8rpx">{{item.content}}</view>
       <view class="muted2" style="margin-top:6rpx">{{item.created_at}}</view>
     </view>
   </view>
-  <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后可以写第一条</view>
+  <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">◌</view>还没有评价 · 核销完成后可以写第一条</view>
   <view class="note" wx:if="{{!merchant}}">履约商户：{{p.merchant_name || '—'}}</view>
   <view style="height:150rpx"></view>
 

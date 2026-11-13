@@ -30,6 +30,8 @@ const ctx = {
 }
 ctx.esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))   // 与 core.js 的 esc 同一语义
 ctx.escJs = (v) => String(v ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))   // 与 core.js 的 escJs 同一语义（A-05）
+ctx.parseDate = (s) => new Date(String(s ?? '').replace(' ', 'T').replace(/\./g, '-'))   // 与 core.js 的 parseDate 同一语义（Safari 日期解析）
+ctx.ICONS = new Proxy({}, { get: () => '<svg viewBox="0 0 24 24"></svg>' })   // core.js 图标集：沙箱里只关心占位存在
 ctx.toast = (m, err) => toasts.push({ m, err: !!err })
 ctx.$ = (sel) => (sel === '#app' ? app : mkEl())
 ctx.api = (m, url) => { calls.push(url); const v = apiData[url.split('?')[0]]; return Promise.resolve(typeof v === 'function' ? v(url) : (v ?? {})) }

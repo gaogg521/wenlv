@@ -30,7 +30,8 @@ Page({
     if (this.data.detail[id]) return this.setData({ ['detail.' + id]: null })
     try {
       const s = await api.request('/m/settlements/' + id)
-      this.setData({ ['detail.' + id]: s.items || [] })
+      const items = (s.items || []).map(it => ({ ...it, amountText: (Number(it.amount_pay) / 100).toFixed(2) }))
+      this.setData({ ['detail.' + id]: items })
     } catch (err) { wx.showToast({ title: err.msg || '加载失败', icon: 'none' }) }
   },
   onShow() { this.fetch() },
@@ -39,7 +40,21 @@ Page({
     api.request('/m/settlements').then((l) => { const list=l.map(s => ({ ...s, ...splitInfo(s), totalLabel:(Number(s.total_amount)/100).toFixed(2), periodTitle: periodTitle(s.period), statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status],
       // 应结 = 履约结算 + 退改手续费分成（分成比例生成时快照，见后台参数中心/商户资料）
       payableLabel: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0)) / 100).toFixed(2),
-      feeShareText: s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—' }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
+      feeShareText: s.fee_share_bp != null ? (Number(s.fee_share_bp) / 100) + '%' : '—',
+      // WXML 红线：算术插值（除法/百分比）全部在 JS 预计算，防 NaN 与静默炸分包
+      totalText: (Number(s.total_amount) / 100).toFixed(2),
+      pctFulfill: Number(s.total_amount) > 0 ? (Number(s.amt_fulfill) / Number(s.total_amount) * 100).toFixed(2) : 0,
+      pctService: Number(s.total_amount) > 0 ? (Number(s.amt_service) / Number(s.total_amount) * 100).toFixed(2) : 0,
+      pctPromoter: Number(s.total_amount) > 0 ? (Number(s.amt_promoter) / Number(s.total_amount) * 100).toFixed(2) : 0,
+      pctBean: Number(s.total_amount) > 0 ? (Number(s.amt_beanbudget) / Number(s.total_amount) * 100).toFixed(2) : 0,
+      pctRetained: Number(s.total_amount) > 0 ? (Number(s.amt_retained) / Number(s.total_amount) * 100).toFixed(2) : 0,
+      fulfillText: (Number(s.amt_fulfill) / 100).toFixed(2),
+      serviceText: (Number(s.amt_service) / 100).toFixed(2),
+      promoterText: (Number(s.amt_promoter) / 100).toFixed(2),
+      beanText: (Number(s.amt_beanbudget) / 100).toFixed(2),
+      retainedText: (Number(s.amt_retained) / 100).toFixed(2),
+      feeTotalText: (Number(s.fee_total) / 100).toFixed(2),
+      feeMerchantText: (Number(s.fee_merchant) / 100).toFixed(2) }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
   },
   dispute(e) {
     const id = e.currentTarget.dataset.id

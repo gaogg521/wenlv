@@ -28,7 +28,7 @@
 
   <view class="sec-title" wx:if="{{d.tickets.length}}">门票</view>
   <view class="card" wx:if="{{d.tickets.length}}">
-    <view class="kv" wx:for="{{d.tickets}}" wx:key="index"><view><view>{{item.name}}</view><view class="muted2" wx:if="{{item.note}}">{{item.note}}</view></view><text class="tour-price" style="font-size:30rpx" wx:if="{{item.price}}">¥{{item.price}}</text></view>
+    <view class="kv" wx:for="{{d.tickets}}" wx:key="index"><view><view>{{item.name}}</view><view class="muted2" wx:if="{{item.note}}">{{item.note}}</view></view><text class="tour-price" style="font-size:32rpx" wx:if="{{item.price}}">¥{{item.price}}</text></view>
   </view>
 
   <view class="card mh-card" wx:if="{{d.honor}}">

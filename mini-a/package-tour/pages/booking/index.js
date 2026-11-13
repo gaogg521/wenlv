@@ -9,7 +9,7 @@ Page({
       wx.setStorageSync('promoScene', decodeURIComponent(q.scene))
     }
     api.getTourDetail(q.id).then((d) => {
-      const withFallbackSessions = d.sessions || []
+      const withFallbackSessions = (d.sessions || []).map((s) => ({ ...s, seatsText: s.left_seats > 0 ? '余' + s.left_seats : '已满' }))
       const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
       const images = api.productImages(d)
       const gallery = images.length ? images.map(api.img) : [api.coverFor(d)]
@@ -102,10 +102,11 @@ Page({
     if (!s) return { label: '', extra: '', info: null }
     const parts = [s.depart_date + ' · 余' + s.left_seats]
     const extra = []
-    if (s.isEarly) extra.push('🐦 早鸟价 ¥' + (s.priceNow / 100) + '（提前 ' + s.daysToDepart + ' 天报名）')
+    if (s.isEarly) extra.push('早鸟价 ¥' + (s.priceNow / 100) + '（提前 ' + s.daysToDepart + ' 天报名）')
     if (s.promo && Number(s.priceNow) < Number(s.promo.originalFen)) extra.push('折扣 ' + (s.promo.zheLabel || s.promo.zhe) + ' 折 · 按原价 ' + (Math.round(Number(s.promo.zhe) * 100) / 10) + '% 付款')
     if (s.groupProgress) extra.push(s.groupProgress.reached ? '已成团' : '需 ' + s.groupProgress.minGo + ' 人成团 · 已报 ' + s.groupProgress.booked)
     const info = s.info && Object.keys(s.info).length ? s.info : null
+    if (info && info.gather_time) info.gatherText = info.gather_time + (info.end_time ? '，预计 ' + info.end_time + ' 结束' : '')
     return { label: parts[0], extra: extra.join(' · '), info }
   },
 

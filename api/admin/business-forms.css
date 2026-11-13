@@ -30,7 +30,7 @@
 .wa-error:not(:empty){padding:12px 16px;border:1px solid #f0cfc2;border-radius:9px;color:#aa4938;background:#fff4ee;line-height:1.7;margin-bottom:16px}
 .modal.business-dialog{width:740px;max-width:calc(100vw - 48px);max-height:90vh}.business-dialog .field .row{margin:0;display:flex;flex-wrap:nowrap}.business-dialog .field .row input{flex:1;width:0}.business-dialog .field .row .btn{flex:none;white-space:nowrap}
 .business-dialog input[type=file]{padding:10px;background:#faf9f5}.business-dialog .p2-form-grid p{margin:0;line-height:1.8}
-.business-page>h3{font-size:15px;margin:28px 0 14px;padding-top:20px;border-top:1px solid var(--line)}
+.business-page>h3{font-size:14px;margin:28px 0 14px;padding-top:20px;border-top:1px solid var(--line)}
 .business-page>table{margin-top:16px}.business-page>.row{margin:18px 0;gap:10px}.business-page .card-head{align-items:center;gap:16px}
 @media(max-width:700px){
  .modal.access-dialog,.modal.business-dialog{max-width:calc(100vw - 20px);max-height:94vh}

@@ -39,6 +39,7 @@ const ctx = {
 // core.js 里的公共工具（esc/toast/api/$）在真实页面是全局的，这里按同样语义注入
 ctx.esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 ctx.escJs = (v) => String(v ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))   // 与 core.js 的 escJs 同一语义（A-05）
+ctx.parseDate = (s) => new Date(String(s ?? '').replace(' ', 'T').replace(/\./g, '-'))   // 与 core.js 的 parseDate 同一语义（Safari 日期解析）
 ctx.toast = noop
 ctx.$ = () => fakeEl()
 ctx.api = () => Promise.resolve({})

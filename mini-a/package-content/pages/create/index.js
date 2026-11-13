@@ -32,7 +32,9 @@ Page({
     try {
       const t = await api.request('/c/tasks')
       const TASK_ST = { 0: '待领取', 1: '创作中', 2: '审核中', 3: '已通过' }
-      t.mine = (t.mine || []).map((m) => ({ ...m, statusText: TASK_ST[m.status] || '待领取' }))
+      const metaText = (x) => [x.platforms && x.platforms.length ? x.platforms.join('/') : '', x.deadline ? '截止 ' + x.deadline : '', x.slotsLeft !== null && x.slotsLeft !== undefined ? '剩 ' + x.slotsLeft + ' 个名额' : ''].filter(Boolean).join(' · ')
+      t.open = (t.open || []).map((x) => ({ ...x, metaText: metaText(x) }))
+      t.mine = (t.mine || []).map((m) => ({ ...m, statusText: TASK_ST[m.status] || '待领取', metaText: metaText(m) }))
       this.setData({ tasks: t })
     } catch (e) {}
   },

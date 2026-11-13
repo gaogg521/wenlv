@@ -5,7 +5,7 @@ assertIsolatedDb('test/business-rules.mjs')
 import assert from 'node:assert/strict'
 import { q, one } from '../src/db.mjs'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b ? JSON.stringify(b) : undefined })).json()
 const ok = (r) => { assert.equal(r.code, 0, r.msg + ' ' + JSON.stringify(r.data || '')); return r.data }
 let pass = 0

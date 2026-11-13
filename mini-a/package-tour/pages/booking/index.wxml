@@ -2,22 +2,22 @@
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <block wx:elif="{{p}}">
   <view class="card bk-head">
-    <view class="dt-title" style="font-size:30rpx">{{p.title}}</view>
+    <view class="dt-title" style="font-size:32rpx">{{p.title}}</view>
     <view class="muted2">{{p.days_desc || '1天'}} · 履约商户 {{p.merchant_name || '—'}}</view>
   </view>
 
   <view class="sec-title">1 · 选择出发日期</view>
   <view class="chips">
     <view class="chip {{sel === index ? 'on' : ''}} {{item.left_seats <= 0 ? 'full' : ''}}" wx:for="{{sessions}}" wx:key="id"
-          bindtap="pick" data-i="{{index}}">{{item.depart_date}} · {{item.left_seats > 0 ? '余' + item.left_seats : '已满'}}</view>
+          bindtap="pick" data-i="{{index}}">{{item.depart_date}} · {{item.seatsText}}</view>
     <view wx:if="{{!sessions.length}}" class="muted2" style="margin-left:8rpx">近期暂无团期</view>
   </view>
   <view class="muted2" wx:if="{{selView.extra}}" style="margin:8rpx 32rpx 0;font-size:22rpx;color:#1a9c6b">{{selView.extra}}</view>
   <view class="card sess-info" wx:if="{{selView.info}}">
-    <view class="kv" wx:if="{{selView.info.gather_time}}"><text>集合时间</text><text class="v">{{selView.info.gather_time}}{{selView.info.end_time ? '，预计 ' + selView.info.end_time + ' 结束' : ''}}</text></view>
+    <view class="kv" wx:if="{{selView.info.gather_time}}"><text>集合时间</text><text class="v">{{selView.info.gatherText}}</text></view>
     <view class="kv" wx:if="{{selView.info.vehicle}}"><text>交通安排</text><text class="v">{{selView.info.vehicle}}</text></view>
     <view class="kv" wx:if="{{selView.info.sign_deadline}}"><text>报名截止</text><text class="v">{{selView.info.sign_deadline}}</text></view>
-    <view class="muted2" wx:if="{{selView.info.note}}">⚠️ {{selView.info.note}}</view>
+    <view class="muted2" wx:if="{{selView.info.note}}">{{selView.info.note}}</view>
   </view>
 
   <view class="sec-title">2 · 出行人数与联系人</view>
@@ -47,7 +47,7 @@
   <view class="card" wx:if="{{p.hasInsurance}}">
     <view class="kv">
       <view style="flex:1;min-width:0">
-        <view><text style="font-weight:700">出行意外险</text><text class="muted2"> ¥{{p.insuranceFeeYuan}}/人</text></view>
+        <view><text style="font-weight:600">出行意外险</text><text class="muted2"> ¥{{p.insuranceFeeYuan}}/人</text></view>
         <view class="muted2" style="font-size:22rpx;margin-top:6rpx">{{p.insurance_note || '保险费用联调展示，未开通真实承保服务'}}</view>
         <view class="muted2" wx:if="{{p.insuranceMode === 'demo'}}">联调演示 · 支付不代表真实投保</view>
       </view>
@@ -67,8 +67,8 @@
       </view></view>
     <view class="kv"><text>活动费用</text><text>¥{{priceSummary.goods}}</text></view>
     <view class="bk-benefit">
-      <view class="bk-benefit-top"><view class="bk-fee-title">自由豆补贴</view><picker mode="selector" range="{{freedomOptions}}" range-key="label" bindchange="chooseFreedom" disabled="{{pricing}}"><view class="bk-benefit-picker">{{pricing ? '试算中' : freedomRightId ? '更换' : '选择补贴'}}<text class="bk-benefit-arrow">›</text></view></picker></view>
-      <view wx:if="{{freedomRightId && freedomSelected}}" class="bk-benefit-detail"><view class="bk-benefit-copy"><view class="bk-benefit-rule"><text>满{{freedomSelected.thresholdText}}元</text><text>减{{freedomSelected.discountText}}元</text></view><view class="bk-fee-hint">有效期至 {{freedomSelected.validTo}}</view></view><view class="bk-benefit-amount">{{pricing ? '—' : '−¥' + freedomDiscount}}</view></view>
+      <view class="bk-benefit-top"><view class="bk-fee-title">自由豆补贴</view><picker mode="selector" range="{{freedomOptions}}" range-key="label" bindchange="chooseFreedom" disabled="{{pricing}}"><view class="bk-benefit-picker"><text wx:if="{{pricing}}">试算中</text><text wx:elif="{{freedomRightId}}">更换</text><text wx:else>选择补贴</text><text class="bk-benefit-arrow">›</text></view></picker></view>
+      <view wx:if="{{freedomRightId && freedomSelected}}" class="bk-benefit-detail"><view class="bk-benefit-copy"><view class="bk-benefit-rule"><text>满{{freedomSelected.thresholdText}}元</text><text>减{{freedomSelected.discountText}}元</text></view><view class="bk-fee-hint">有效期至 {{freedomSelected.validTo}}</view></view><view class="bk-benefit-amount"><text wx:if="{{pricing}}">—</text><text wx:else>−¥{{freedomDiscount}}</text></view></view>
       <view wx:else class="bk-fee-hint">{{freedomRows.length ? '可选择官方满减补贴' : '暂无适用的补贴'}}</view>
       <view class="bk-fee-hint" wx:if="{{freedomRightId}}">官方补贴可与旅豆抵扣同单使用，分别记账</view><view wx:if="{{freedomError}}" class="bk-benefit-error">{{freedomError}}</view>
     </view>

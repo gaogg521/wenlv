@@ -8,7 +8,8 @@ Page({
     const page = reset ? 1 : this.data.page + 1
     this.setData({ loading: true, error: '' })
     api.request('/c/notes/feed?page=' + page + '&pageSize=' + this.data.pageSize).then((d) => {
-      const items = reset ? d.items : this.data.items.concat(d.items)
+      const raw = reset ? d.items : this.data.items.concat(d.items)
+      const items = raw.map((x) => ({ ...x, productText: x.productTitle ? ' · ' + x.productTitle : '' }))
       this.setData({ items, page, loading: false, hasMore: d.items.length >= d.pageSize, demo: false })
     }).catch((e) => {
       if (api.demoAllowed()) this.setData({ loading: false, demo: true, error: '' })

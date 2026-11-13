@@ -111,7 +111,7 @@ async function risk() {
       <td>${r.severity >= 3 ? '<span class="pill s70">高</span>' : r.severity === 2 ? '<span class="pill warn">中</span>' : '<span class="pill off">低</span>'}</td>
       <td>${riskDetailHtml(r.detail)}</td>
       <td class="td-sub">${esc(String(r.created_at).slice(5, 16))}</td>
-      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(hasRiskKw || window.__riskQ.handled !== '' ? '没有符合条件的风控事件——试试清除关键词或切换处理状态。' : '暂无风控事件 🎉')}
+      <td>${r.handled ? '<span class="pill ok">已处理</span>' : `<button class="btn ghost sm" onclick="handleRisk(${r.id})">处理（填结论）</button> <button class="btn danger sm" onclick="caseFromEvent(${r.id}, ${Number(r.user_id) || 0})">升级为案件</button>`}</td></tr>`).join('')}</tbody></table>` : emptyBox(hasRiskKw || window.__riskQ.handled !== '' ? '没有符合条件的风控事件——试试清除关键词或切换处理状态。' : '暂无风控事件')}
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${rkPages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__riskQ.page--;risk()">上一页</button> <button class="btn ghost sm" ${data.page >= rkPages ? 'disabled' : ''} onclick="window.__riskQ.page++;risk()">下一页</button></div></div>
   </div>`
 }
@@ -149,12 +149,12 @@ async function system() {
   <div class="card">
     <div class="card-head"><h2>系统健康</h2><span class="muted">SRE 控制台 · 手动干预均留审计</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><div class="ico" style="background:${o.db.ok ? '#e3f6ec' : '#fdecec'}">🗄</div><div><div class="l">数据库</div><div class="v" style="font-size:18px">${o.db.latencyMs} ms</div><div class="s">${sp(o.db.ok, '正常', '异常')}</div></div></div>
-      <div class="kpi go" ${dxKey} title="定位到定时任务" onclick="document.getElementById('sysJobs').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:${o.jobs.alive ? '#e3f6ec' : '#fdecec'}">⏱</div><div><div class="l">任务进程</div><div class="v" style="font-size:18px">${o.jobs.runCount} 轮</div><div class="s">${sp(o.jobs.alive, '存活', '心跳丢失')}</div></div></div>
-      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:#e8effd">⛓</div><div><div class="l">存证队列</div><div class="v" style="font-size:18px">${o.attestQueue.pending}</div><div class="s">已锚 ${o.attestQueue.anchored} · 失败 ${o.attestQueue.failed}</div></div></div>
-      <div class="kpi"><div class="ico" style="background:#f1e9fd">🧾</div><div><div class="l">支付单</div><div class="v" style="font-size:18px">${o.payment.ok}/${o.payment.total}</div><div class="s">成功/总数</div></div></div>
+      <div class="kpi"><div class="ico" style="background:${o.db.ok ? '#e3f6ec' : '#fdecec'}">${ICONS.archive}</div><div><div class="l">数据库</div><div class="v" style="font-size:18px">${o.db.latencyMs} ms</div><div class="s">${sp(o.db.ok, '正常', '异常')}</div></div></div>
+      <div class="kpi go" ${dxKey} title="定位到定时任务" onclick="document.getElementById('sysJobs').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:${o.jobs.alive ? '#e3f6ec' : '#fdecec'}">${ICONS.clock}</div><div><div class="l">任务进程</div><div class="v" style="font-size:18px">${o.jobs.runCount} 轮</div><div class="s">${sp(o.jobs.alive, '存活', '心跳丢失')}</div></div></div>
+      <div class="kpi go" ${dxKey} title="去存证中心" onclick="go('attest')"><i class="go-arrow">↗</i><div class="ico" style="background:#e8effd">${ICONS.link}</div><div><div class="l">存证队列</div><div class="v" style="font-size:18px">${o.attestQueue.pending}</div><div class="s">已锚 ${o.attestQueue.anchored} · 失败 ${o.attestQueue.failed}</div></div></div>
+      <div class="kpi"><div class="ico" style="background:#fff1e6">${ICONS.doc}</div><div><div class="l">支付单</div><div class="v" style="font-size:18px">${o.payment.ok}/${o.payment.total}</div><div class="s">成功/总数</div></div></div>
       <div class="kpi"><div class="ico" style="background:${o.ledger.perOk ? '#e3f6ec' : '#fdecec'}">⚖️</div><div><div class="l">账本试算</div><div class="v" style="font-size:18px">${o.ledger.credit}</div><div class="s">${sp(o.ledger.perOk && o.ledger.globalOk, '借贷平衡', '不平衡P0')}</div></div></div>
-      <div class="kpi go" ${dxKey} title="查看待支付订单" onclick="dxGo('orders',{status:'10'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">🧯</div><div><div class="l">滞留待付</div><div class="v" style="font-size:18px">${o.ordersHealth.stuckWaitPay30m}</div><div class="s">超30分钟未付</div></div></div>
+      <div class="kpi go" ${dxKey} title="查看待支付订单" onclick="dxGo('orders',{status:'10'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">${ICONS.risk}</div><div><div class="l">滞留待付</div><div class="v" style="font-size:18px">${o.ordersHealth.stuckWaitPay30m}</div><div class="s">超30分钟未付</div></div></div>
     </div>
     ${o.mfaChannels ? `<div class="row" style="margin-top:6px"><span class="muted">验证码通道</span> 短信 ${mfaChanState(o.mfaChannels.sms)} 邮箱 ${mfaChanState(o.mfaChannels.email)} <button class="btn ghost sm" onclick="go('integrations')">去配置 →</button></div>` : ''}
     <div class="row" style="margin-top:6px"><span class="muted">服务运行 ${Math.floor(o.service.uptimeSec / 60)} 分钟 · Node ${esc(o.service.node)} · 支付通道 ${esc(o.service.payMode)} · ${o.tables} 张表 · 幂等键 ${o.idempotencyKeys}</span></div>
@@ -241,7 +241,7 @@ async function security() {
   <div class="card">
     <div class="card-head"><h2>登录二次认证（全局策略）</h2><button class="btn ghost sm" onclick="go('accounts')">去后台账号管理 →</button></div>
     <p class="td-sub">当前生效：<b>${({ off: '关闭', optional: '可选模式', required: '强制模式' })[chn.mode] || esc(chn.mode)}</b> · 全局策略是敏感参数，切换需另一位超级管理员在「参数中心 → 参数审批」复核后生效</p>
-    ${chn.pendingReview ? `<p class="td-sub" style="color:var(--red)">⏳ 待复核提案：${({ off: '关闭', optional: '可选模式', required: '强制模式' })[chn.pendingReview.newValue] || esc(chn.pendingReview.newValue)}（提案人 ${esc(chn.pendingReview.proposer)}）——请另一位超级管理员到参数中心处理</p>` : ''}
+    ${chn.pendingReview ? `<p class="td-sub" style="color:var(--red)">待复核提案：${({ off: '关闭', optional: '可选模式', required: '强制模式' })[chn.pendingReview.newValue] || esc(chn.pendingReview.newValue)}（提案人 ${esc(chn.pendingReview.proposer)}）——请另一位超级管理员到参数中心处理</p>` : ''}
     <div class="row" style="margin:10px 0;align-items:stretch">${MODE_CARDS.map(([v, n, d]) => `
       <div class="card" style="flex:1;margin:0;${chn.mode === v ? 'border:2px solid var(--brand);' : ''}cursor:pointer" onclick="mfaModeSet('${v}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mfaModeSet('${v}')">
         <b>${n}</b> ${chn.mode === v ? '<span class="pill ok">当前</span>' : ''}<div class="td-sub" style="margin-top:6px">${d}</div>
@@ -272,7 +272,7 @@ async function security() {
     <div class="card-head"><h3>最近验证码（MOCK 通道演示用）</h3><span class="muted">真实短信/邮箱凭据接入后此表为空，仅日志留痕</span></div>
     ${codes.length ? `<table><thead><tr><th>目标</th><th>通道</th><th>验证码</th><th>用途</th><th>状态</th><th>时间</th></tr></thead><tbody>
     ${codes.map((c3) => `<tr><td>${esc(c3.target)}</td><td>${esc(c3.channel)}</td><td><code>${esc(c3.code)}</code></td><td class="td-sub">${esc(c3.purpose)}</td>
-      <td>${c3.used_at ? '<span class="pill off">已用</span>' : (new Date(c3.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill s70">过期</span>')}</td>
+      <td>${c3.used_at ? '<span class="pill off">已用</span>' : (parseDate(c3.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill s70">过期</span>')}</td>
       <td class="td-sub">${esc(String(c3.created_at).slice(5, 19))}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无验证码记录')}
   </div>`
 }

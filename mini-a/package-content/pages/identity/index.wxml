@@ -1,5 +1,5 @@
 <block wx:if="{{d}}">
-  <view class="hero {{d.profile.card ? 'tier-' + d.profile.card.tier : ''}}">
+  <view class="hero {{d.profile.cardClass}}">
     <view class="tier-row" wx:if="{{d.profile.card}}"><text>向往的自由 · {{d.profile.card.series}}</text><text class="tier-name">{{d.profile.card.tierName}}</text></view>
     <view class="sub2">{{lex.did}} · Travel ID</view>
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
@@ -11,7 +11,7 @@
     <view class="bdg-group g-{{g.key}}">{{g.label}}<text class="more">{{g.got}}/{{g.items.length}}</text></view>
     <view class="bdg-tip" wx:if="{{g.key === 'trusted'}}">每枚都有封存编号，由可信记录证明，不可篡改</view>
     <view class="badge-wall">
-      <view class="bdg {{item.owned ? 'on' : ''}} r-{{item.rarity}}" wx:for="{{g.items}}" wx:key="id" bindtap="showBadge" data-id="{{item.id}}" style="{{item.owned && item.color ? '--bc:' + item.color : ''}}">
+      <view class="bdg {{item.owned ? 'on' : ''}} r-{{item.rarity}}" wx:for="{{g.items}}" wx:key="id" bindtap="showBadge" data-id="{{item.id}}" style="{{item.bcStyle}}">
         <view class="bdg-seal" wx:if="{{item.proof && item.proof.sealed}}">✓</view>
         <image class="bdg-img" src="{{item.iconImg || item.art}}" mode="aspectFit" />
         <view class="bdg-name">{{item.name}}</view>

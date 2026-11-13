@@ -500,7 +500,7 @@ async function merchants() {
     <div class="row" style="margin-top:0">${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}<span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
-      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
+      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td class="num">${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
       <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
   </div>`
 }
@@ -510,7 +510,7 @@ async function addMerchant() { return entityEditor('merchant', null, { onSaved: 
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const rows = await api('GET', '/admin/settlements')
-  const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#7c3aed', '#64748b']
+  const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#2f8f9d', '#64748b']
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}

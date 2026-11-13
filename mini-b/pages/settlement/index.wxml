@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="对账结算" />
-<view class="page-heading"><view class="page-eyebrow">RECONCILIATION</view><view class="page-title">每一笔经营，清楚有据</view><view class="page-caption">逐期核对金额，跟进真实支付进度</view></view>
+<view class="page-heading"><view class="page-eyebrow">对账结算</view><view class="page-title">每一笔经营，清楚有据</view><view class="page-caption">逐期核对金额，跟进真实支付进度</view></view>
 <view class="paper-metrics"><view><text class="paper-number">{{pendingCount || 0}}</text><text class="paper-label">待确认账单</text></view><view><text class="paper-number">¥{{pendingAmount || '0.00'}}</text><text class="paper-label">待确认应结金额</text></view></view>
 <view class="filter-chips settlement-filters"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{state === item.k ? 'active' : ''}}" bindtap="filterState" data-k="{{item.k}}">{{item.n}}</view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
@@ -9,29 +9,29 @@
   <block wx:if="{{expanded[s.id]}}">
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
     <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
-      <view style="font-size:34rpx;font-weight:800">¥{{s.total_amount/100}}</view></view>
+      <view style="font-size:38rpx;font-weight:600">¥{{s.totalText}}</view></view>
     <view style="text-align:right"><view class="tiny">本店应结{{s.fee_merchant > 0 ? '（含手续费分成）' : '（履约口径）'}}</view>
-      <view class="money" style="font-size:34rpx">¥{{s.payableLabel}}</view></view>
+      <view class="money" style="font-size:38rpx">¥{{s.payableLabel}}</view></view>
   </view>
   <view wx:if="{{s.total_amount > 0}}" style="font-size:22rpx;color:var(--sub);margin-top:6rpx">五口径分账（总额拆分，恒等校验）</view>
   <view class="split-bar" wx:if="{{s.total_amount > 0}}">
-    <i style="width:{{s.amt_fulfill / s.total_amount * 100}}%;background:#57704f"></i>
-    <i style="width:{{s.amt_service / s.total_amount * 100}}%;background:#9fa77a"></i>
-    <i style="width:{{s.amt_promoter / s.total_amount * 100}}%;background:#ad603d"></i>
-    <i style="width:{{s.amt_beanbudget / s.total_amount * 100}}%;background:#cfb77c"></i>
-    <i style="width:{{s.amt_retained / s.total_amount * 100}}%;background:#7a9690"></i>
+    <i style="width:{{s.pctFulfill}}%;background:#57704f"></i>
+    <i style="width:{{s.pctService}}%;background:#9fa77a"></i>
+    <i style="width:{{s.pctPromoter}}%;background:#ad603d"></i>
+    <i style="width:{{s.pctBean}}%;background:#cfb77c"></i>
+    <i style="width:{{s.pctRetained}}%;background:#7a9690"></i>
   </view>
   <view class="split-legend" wx:if="{{s.total_amount > 0}}">
-    <text><em style="background:#57704f"></em>履约 ¥{{s.amt_fulfill/100}}</text>
-    <text><em style="background:#9fa77a"></em>服务费 ¥{{s.amt_service/100}}</text>
-    <text><em style="background:#ad603d"></em>推广 ¥{{s.amt_promoter/100}}</text>
-    <text><em style="background:#cfb77c"></em>权益 ¥{{s.amt_beanbudget/100}}</text>
-    <text><em style="background:#7a9690"></em>留存 ¥{{s.amt_retained/100}}</text>
+    <text><em style="background:#57704f"></em>履约 ¥{{s.fulfillText}}</text>
+    <text><em style="background:#9fa77a"></em>服务费 ¥{{s.serviceText}}</text>
+    <text><em style="background:#ad603d"></em>推广 ¥{{s.promoterText}}</text>
+    <text><em style="background:#cfb77c"></em>权益 ¥{{s.beanText}}</text>
+    <text><em style="background:#7a9690"></em>留存 ¥{{s.retainedText}}</text>
   </view>
   <view class="split-rate" wx:if="{{s.splitText}}">{{s.splitNote}}：{{s.splitText}}</view>
   <view class="fee-box" wx:if="{{s.fee_total > 0}}">
-    <view>游客退改手续费 ¥{{s.fee_total/100}}（{{s.fee_count}} 笔）</view>
-    <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.fee_merchant/100}}</text></view>
+    <view>游客退改手续费 ¥{{s.feeTotalText}}（{{s.fee_count}} 笔）</view>
+    <view>本店分成 {{s.feeShareText}} · <text class="money">¥{{s.feeMerchantText}}</text></view>
   </view>
   <view class="fee-box fee-none" wx:elif="{{s.hasSnapshot}}">本期无游客退改手续费</view>
   <view wx:if="{{s.payment_ref}}" class="note">支付流水：{{s.payment_ref}} · {{s.paid_at}}</view>
@@ -39,13 +39,13 @@
   <view class="btn" wx:if="{{s.status === 0}}" bindtap="confirm" data-id="{{s.id}}">确认对账无误</view>
   <view class="note" wx:elif="{{s.status === 1}}" style="padding:14rpx 0 0;color:var(--green)">✓ 商户已确认 · 待财务复核打款</view>
   <view class="tiny" style="margin-top:10rpx;color:var(--brand)" bindtap="toggleDetail" data-id="{{s.id}}">
-    {{detail[s.id] ? '收起明细 ▲' : '查看订单明细（' + s.order_count + ' 单）▼'}}</view>
+    <text wx:if="{{detail[s.id]}}">收起明细 ▲</text><text wx:else>查看订单明细（{{s.order_count}} 单）▼</text></view>
   <view wx:if="{{detail[s.id]}}" class="fade-up" style="margin-top:10rpx">
     <view class="row" wx:for="{{detail[s.id]}}" wx:for-item="it" wx:key="order_no">
       <view style="flex:1;min-width:0"><b style="font-size:24rpx">{{it.title}}</b>
         <view class="sub">{{it.order_no}} · {{it.completed_at}}</view>
         <view wx:if="{{it.rebook}}" class="sub" style="color:var(--warn, #d97706)">免费改签单 · 实收 ¥0（不计入结算）</view></view>
-      <view class="money" style="font-size:24rpx">¥{{it.amount_pay/100}}</view>
+      <view class="money" style="font-size:24rpx">¥{{it.amountText}}</view>
     </view>
   </view>
   </block>

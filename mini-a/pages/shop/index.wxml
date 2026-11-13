@@ -12,7 +12,7 @@
     <view class="tour-title">{{item.title}}</view>
     <view class="tour-desc">{{item.subtitle || item.days_desc || ""}}</view>
     <view style="display:flex;align-items:center;gap:16rpx">
-      <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.priceText || item.price / 100}}</view>
+      <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.priceText}}</view>
       <view class="btn sm" bindtap="buy" data-id="{{item.id}}">预约领取</view>
     </view>
   </view>

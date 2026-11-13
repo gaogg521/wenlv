@@ -3,7 +3,7 @@
 // 运行：node test/api-e2e.mjs（自动重置业务数据）
 import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/api-e2e.mjs')
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }
 

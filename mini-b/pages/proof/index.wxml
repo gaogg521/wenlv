@@ -6,12 +6,12 @@
 </view>
 <view wx:if="{{err}}" class="pf-err">{{err}}</view>
 <view class="pf-card" wx:for="{{records}}" wx:key="date">
-  <view class="pf-result {{item.result}}"><view class="pf-mark">{{item.result === 'ok' ? '✓' : (item.result === 'bad' ? '!' : '·')}}</view><view><view class="pf-result-t">{{item.resultText}}</view><text>{{item.resultNote}}</text></view></view>
+  <view class="pf-result {{item.result}}"><view class="pf-mark">{{item.mark}}</view><view><view class="pf-result-t">{{item.resultText}}</view><text>{{item.resultNote}}</text></view></view>
   <view class="pf-row"><text>类型</text><view>{{item.kind}}</view></view>
   <view class="pf-row"><text>名称</text><view>{{item.title}}</view></view>
   <view class="pf-row"><text>日期</text><view>{{item.date}}</view></view>
   <view class="pf-row"><text>记录编号</text><view selectable>{{code}}</view></view>
-  <view class="pf-row"><text>处理状态</text><view>{{item.stateText}}{{item.batchText ? ' · ' + item.batchText : ''}}</view></view>
+  <view class="pf-row"><text>处理状态</text><view>{{item.stateLine}}</view></view>
 </view>
 <view wx:if="{{records.length > 1}}" class="note">前 8 位相同的记录有 {{records.length}} 条，已全部列出，请对照名称和日期。</view>
 <button wx:if="{{records.length}}" class="pf-link" bindtap="copyLink">复制复核链接（用浏览器自己再算一遍）</button>

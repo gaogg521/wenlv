@@ -73,17 +73,17 @@ async function tasks() {
   const cashPending = cashRows.filter((r) => Number(r.cash_status) === 1)
   // 无 taskcash：静态提示卡（不给手型与错误办理文案）；加载失败：错误态；正常：可点下钻
   const cashCard = !hasTaskcash
-    ? `<div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v">—</div><div class="s">现金奖励由财务在「现金加奖打款」登记</div></div></div>`
+    ? `<div class="kpi"><div class="ico">${ICONS.money}</div><div><div class="l">现金加奖待打款</div><div class="v">—</div><div class="s">现金奖励由财务在「现金加奖打款」登记</div></div></div>`
     : cashState.err
-      ? `<div class="kpi"><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="color:#b42318">!</div><div class="s">打款数据加载失败：${esc(cashState.err.message)}</div></div></div>`
-      : `<div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="去现金加奖打款" onclick="go('taskcash')"><i class="go-arrow">↗</i><div class="ico">💰</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>`
+      ? `<div class="kpi"><div class="ico">${ICONS.money}</div><div><div class="l">现金加奖待打款</div><div class="v" style="color:#b42318">!</div><div class="s">打款数据加载失败：${esc(cashState.err.message)}</div></div></div>`
+      : `<div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="去现金加奖打款" onclick="go('taskcash')"><i class="go-arrow">↗</i><div class="ico">${ICONS.money}</div><div><div class="l">现金加奖待打款</div><div class="v" style="font-size:20px">${cashPending.length}</div><div class="s">${cashPending.length ? '合计 ' + fen(cashPending.reduce((s, r) => s + N(r.cash_reward), 0)) : '没有待打款'}</div></div></div>`
   const TABS = [['', '全部', stats.all], ['review', '有待审', stats.review], ['open', '招募中', stats.open], ['off', '已下线', stats.off]]
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px">
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：招募中的任务" onclick="window.__taskSt='open';window.__taskQ.page=1;tasks()"><i class="go-arrow">↗</i><div class="ico">📢</div><div><div class="l">招募中任务</div><div class="v" style="font-size:20px">${stats.open}</div><div class="s">游客可在小程序领取</div></div></div>
-    <div class="kpi"><div class="ico">✍️</div><div><div class="l">创作中</div><div class="v" style="font-size:20px">${sums.doing}</div><div class="s">已领取未投稿 / 驳回待修改</div></div></div>
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：有待审投稿的任务" onclick="window.__taskSt='review';window.__taskQ.page=1;tasks()"><i class="go-arrow">↗</i><div class="ico">🔎</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sums.reviewing}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
-    <div class="kpi"><div class="ico">✅</div><div><div class="l">已通过</div><div class="v" style="font-size:20px">${sums.passed}</div><div class="s">旅豆已发放</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：招募中的任务" onclick="window.__taskSt='open';window.__taskQ.page=1;tasks()"><i class="go-arrow">↗</i><div class="ico">${ICONS.mega}</div><div><div class="l">招募中任务</div><div class="v" style="font-size:20px">${stats.open}</div><div class="s">游客可在小程序领取</div></div></div>
+    <div class="kpi"><div class="ico">${ICONS.pen}</div><div><div class="l">创作中</div><div class="v" style="font-size:20px">${sums.doing}</div><div class="s">已领取未投稿 / 驳回待修改</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="筛选：有待审投稿的任务" onclick="window.__taskSt='review';window.__taskQ.page=1;tasks()"><i class="go-arrow">↗</i><div class="ico">${ICONS.search}</div><div><div class="l">待审核投稿</div><div class="v" style="font-size:20px">${sums.reviewing}</div><div class="s">点任务的「参与者」逐个审核</div></div></div>
+    <div class="kpi"><div class="ico">${ICONS.check}</div><div><div class="l">已通过</div><div class="v" style="font-size:20px">${sums.passed}</div><div class="s">旅豆已发放</div></div></div>
     ${cashCard}
   </div>
   <div class="card">
@@ -188,7 +188,7 @@ function reviewDrawer(title, bodyHtml, footHtml) {
 }
 const NOTE_ST = ['机审中', '人工审核', '已发布', '已驳回', '已下架']
 function submissionHtml(n) {
-  if (!n) return `<div class="empty"><div class="e-ico">🗒</div>当前没有投稿（被驳回后作者尚未重新提交）</div>`
+  if (!n) return `<div class="empty"><div class="e-ico">${ICONS.doc}</div>当前没有投稿（被驳回后作者尚未重新提交）</div>`
   return `<div class="rv-sub">
     <div class="rv-meta"><span class="pill ${n.status === 2 ? 'ok' : 'warn'}">${NOTE_ST[n.status] || '—'}</span>
       <span>${n.wordCount} 字</span><span>${n.imageCount} 张图</span><span>${esc(n.machineCheck)}</span>
@@ -334,7 +334,7 @@ async function faqs() {
     <table><thead><tr><th>分类</th><th>问题</th><th>答案摘要</th><th>热门</th><th>序号</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${d.map((f) => `<tr><td><span class="pill off">${esc(f.category || '通用')}</span></td>
       <td class="td-main">${esc(f.question)}</td><td class="td-sub">${esc(String(f.answer).slice(0, 46))}…</td>
-      <td>${Number(f.is_hot) ? '<span class="pill s10">🔥 热门</span>' : '<span class="pill off">—</span>'}</td>
+      <td>${Number(f.is_hot) ? '<span class="pill s10">热门</span>' : '<span class="pill off">—</span>'}</td>
       <td class="num">${f.sort}</td>
       <td>${f.status === 1 ? '<span class="pill ok">上架</span>' : '<span class="pill s70">下架</span>'}</td>
       <td><button class="btn ghost sm" onclick="faqModal(${f.id})">编辑</button>
@@ -352,7 +352,7 @@ async function delFaq(id) {
 async function banners() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
   const d = await api('GET', '/admin/banners')
-  const live = (b) => Number(b.status) === 1 && (!b.start_at || new Date(b.start_at) <= new Date()) && (!b.end_at || new Date(b.end_at) >= new Date())
+  const live = (b) => Number(b.status) === 1 && (!b.start_at || parseDate(b.start_at) <= new Date()) && (!b.end_at || parseDate(b.end_at) >= new Date())
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>轮播媒体管理</h2><span class="muted">小程序首页轮播位 · 图片上传 + 投放窗口 + 排序</span>

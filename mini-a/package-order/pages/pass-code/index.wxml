@@ -22,10 +22,10 @@
   </view>
   <!-- 剧本游暗号：后台「暗号管理」配置；对上暗号也可核销 -->
   <view class="card phrase-card" wx:if="{{phrase}}" style="margin:24rpx">
-    <view class="fee-h">🎭 你的入戏暗号</view>
+    <view class="fee-h">你的入戏暗号</view>
     <view class="phrase-text">「{{phrase}}」</view>
     <view class="muted2">{{phraseHint}}</view>
-    <view class="muted2" wx:if="{{phraseWho}}" style="margin-top:6rpx">📍 {{phraseWho}}</view>
+    <view class="muted2" wx:if="{{phraseWho}}" style="margin-top:6rpx">{{phraseWho}}</view>
   </view>
   <view class="btn ghost" style="margin:24rpx" bindtap="markDelivered">返回订单查看进度</view>
 </block>

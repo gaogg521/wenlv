@@ -1,17 +1,13 @@
 // 向往的自由 · 运营后台 SPA（零依赖，设计系统见 app.css）
 const $ = (s) => document.querySelector(s)
 let TOKEN = localStorage.getItem('admin_token') || ''
-let ME = JSON.parse(localStorage.getItem('admin_me') || 'null')
+let ME = (() => { try { return JSON.parse(localStorage.getItem('admin_me') || 'null') } catch { return null } })()
 let ADMIN_CAPABILITIES = { actions: {} }
 const adminCan = action => ADMIN_CAPABILITIES.actions[action]?.allowed === true
 const adminWhy = action => ADMIN_CAPABILITIES.actions[action]?.reason || '当前账号无此操作权限'
 
+// 全站唯一的线性图标集：16-22px、1.5-2 描边、取文字色。UI 里不再使用 emoji 当图标。
 const ICONS = {
-  sys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>',
-  flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4c4-2 8 2 12 0v9c-4 2-8-2-12 0"/></svg>',
-  content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>',
-  eco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3c3 3.5 3 14.5 0 18M3.5 9h17M3.5 15h17"/></svg>',
-  withdraw: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5h.01M18 14.5h.01"/></svg>',
   sys: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>',
   flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4c4-2 8 2 12 0v9c-4 2-8-2-12 0"/></svg>',
   content: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>',
@@ -28,6 +24,40 @@ const ICONS = {
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-1-2 3.5 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.3 1 2-3.5-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>',
   risk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 3 20h18zM12 10v4M12 17.5v.5"/></svg>',
   audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM9 9h6M9 13h6M9 17h3"/></svg>',
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 7.5 3.5 4.5 3.5-4.5M12 12v6M9.5 13h5M9.5 15.5h5"/></svg>',
+  bean: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6M5 12v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-6"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3.5h6l.8 7 2.7 3H5.5l2.7-3z"/><path d="M12 13.5V21"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7.5 9 6 9-6"/></svg>',
+  scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16M8 20h8M6 7h12M6 7 3.5 13a2.8 2.8 0 0 0 5 0zM18 7l-2.5 6a2.8 2.8 0 0 0 5 0z"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-4 3.4-6 7-6s6.2 2 7 6"/></svg>',
+  city: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V8h6v12M10 20V4h7v16M4 20h16M13 8h2M13 12h2M13 16h2M6.5 11h1M6.5 14h1"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  mask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h7v6a3.5 3.5 0 0 1-7 0zM13 9h7v6a3.5 3.5 0 0 1-7 0z"/><path d="M6.5 8h.01M8.5 8h.01M15.5 12h.01M17.5 12h.01"/></svg>',
+  box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l9-4 9 4v9l-9 4-9-4z"/><path d="M3 8l9 4 9-4M12 12v9"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M7 16v-5M12 16V8M17 16v-8"/></svg>',
+  chartup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19h16M4 15l5-5 4 3 7-8"/><path d="M15 5h5v5"/></svg>',
+  clip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6v3H9zM9 11h6M9 15h4"/></svg>',
+  bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 4l9 5.5M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3 20h18"/></svg>',
+  mega: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a7 7 0 0 1 0 11"/></svg>',
+  pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m14.5 4.5 5 5L8 21H3v-5z"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h14v18H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h14"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14l2 8v7H3v-7z"/><path d="M3 13h6l2 3h4l2-3h6"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7.5" cy="15.5" r="4"/><path d="m10.5 12.5 9-9M16 7l3 3M13 10l2 2"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 15 6-6"/><path d="M10.5 6.5 12 5a4.5 4.5 0 0 1 6.4 6.4l-1.6 1.6M13.5 17.5 12 19a4.5 4.5 0 0 1-6.4-6.4l1.6-1.6"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>',
+  medal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="9" r="5"/><path d="m9 13-2 8 5-3 5 3-2-8"/></svg>',
+  compass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',
+  users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.7-3.5 2.8-5 5.5-5s4.8 1.5 5.5 5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16 14.5c2.5.3 4 1.7 4.5 4.5"/></svg>',
+  cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.5 11h10L20 8H6"/></svg>',
+  repeat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m17 2.5 4 4H7a4 4 0 0 0-4 4v1"/><path d="m7 21.5-4-4h14a4 4 0 0 0 4-4v-1"/></svg>',
+  archive: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4.5 12.5 5 5 10-11"/></svg>',
 }
 // 按"谁在什么场景下做什么事"分组，而不是按技术模块堆叠。
 // C-04：模块清单与角色默认集合的唯一数据源在后端（src/domain/modules.mjs，经 GET /admin/capabilities
@@ -90,6 +120,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // 参数按原文到达函数（round-trip），注入的代码不会执行。
 const escJs = (s) => String(s ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))
 const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
+// 统一的日期解析：后端下发 "YYYY-MM-DD HH:mm:ss"（空格分隔），Safari 的 Date 构造器不认，
+// 必须把空格换成 T 再解析；非法输入返回 Invalid Date，由调用方按需兜底。
+const parseDate = (s) => new Date(String(s ?? '').replace(' ', 'T').replace(/\./g, '-'))
 const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
 
 function toast(msg, err) {
@@ -128,7 +161,9 @@ function login() {
         const chName = { totp: '验证器 App 动态码', sms: '短信验证码', email: '邮箱验证码' }[d.channel] || '验证码'
         $('#mfaTip').textContent = d.mfaSetupRequired
           ? '该账号要求两步验证但尚未绑定：请先绑定验证方式（此阶段不能进入后台办理业务）'
-          : (d.target ? '已发送至 ' + d.target + '（' : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见'))) + (d.target ? '）' : '')
+          : (d.target
+            ? '验证码已发送至 ' + d.target
+            : ('请输入' + chName + (d.channel === 'totp' ? '' : '（MOCK 通道码在后台安全中心可见）')))
         $('#mfaSetupRow').style.display = d.mfaSetupRequired && d.channel === 'totp' ? 'block' : 'none'
         $('#step1').style.display = 'none'
         $('#step2').style.display = 'block'
@@ -161,13 +196,18 @@ window.mfaGuidedSetup = async () => {
       <p>在验证器 App（Microsoft/Google Authenticator 等）中添加账户：</p>
       <div class="row" style="margin:14px 0"><input readonly value="${esc(r.secret)}" style="width:100%"></div>
       <p class="muted" style="word-break:break-all">otpauth URI：<code>${esc(r.uri)}</code></p>
-      <div class="card" style="background:#f0faf7;margin-top:14px"><p><b>当前动态码：${r.current}</b>（30 秒轮换；演示直通码，正式账号请以验证器 App 为准）</p></div>
+      <div class="card" style="background:#f0faf7;margin-top:14px"><p><b>当前动态码：${esc(r.current)}</b>（30 秒轮换；演示直通码，正式账号请以验证器 App 为准）</p></div>
       <p class="td-sub">录入后回到本页输入 6 位动态码即可完成登录。</p>`,
       `<button class="btn primary" onclick="closeModal()">我已录入，返回输入动态码</button>`)
   } catch (e) { toast(e.message, true) }
 }
 function backToStep1() { $('#step2').style.display = 'none'; $('#step1').style.display = 'block'; MFA_CHALLENGE = null }
-function logout() { TOKEN = ''; ME = null; localStorage.clear(); location.reload() }
+function logout() {
+  TOKEN = ''; ME = null
+  // 只清理本应用写入的键，不 clear() 整个 origin（同源可能还有其他应用的存储）
+  for (const k of Object.keys(localStorage)) if (k.startsWith('admin_')) localStorage.removeItem(k)
+  location.reload()
+}
 
 async function boot() {
   if (!TOKEN) { $('#login').style.display = 'flex'; $('#frame').style.display = 'none'; return }
@@ -221,7 +261,7 @@ async function boot() {
 }
 
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')
-const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt}</div>`
+const emptyBox = (txt) => `<div class="empty"><div class="e-ico" style="color:var(--sub)">${ICONS.inbox}</div><div style="font-size:12px">${txt}</div></div>`
 
 
 // ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
@@ -234,7 +274,7 @@ const SETTLE_MODE = { monthly: '月结', per_order: '单结', prepaid: '预付' 
 
 
 /* ============ CSV 导出（下载逻辑见 workspace.js 的 downloadExport）============ */
-const EXPBTN = (what, label) => `<button class="btn ghost sm" style="margin-left:auto" onclick="downloadExport('${what}')">⬇ 导出${label || ''}</button>`
+const EXPBTN = (what, label) => `<button class="btn ghost sm" style="margin-left:auto" onclick="downloadExport('${what}')">导出${label || ''}</button>`
 
 
 document.addEventListener('DOMContentLoaded', () => boot(), { once: true })

@@ -20,9 +20,9 @@ async function tickets() {
   const canManage = adminCan('ticket.manage')
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi go" ${dxKey} title="筛选：待认领的工单" onclick="window.__tkQ={page:1,status:'0',kw:''};tickets()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">🧾</div><div><div class="l">待认领</div><div class="v">${Number(counts[0] || 0)}</div><div class="s">客服认领后开始处理</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">⚙️</div><div><div class="l">处理中 / 等待外部</div><div class="v">${dxNumGo(Number(counts[1] || 0), "window.__tkQ={page:1,status:'1',kw:''};tickets()", "筛选：处理中")} / ${dxNumGo(Number(counts[2] || 0), "window.__tkQ={page:1,status:'2',kw:''};tickets()", "筛选：等待外部")}</div><div class="s">含等待游客/商户/财务</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">已解决 / 已关闭</div><div class="v">${dxNumGo(Number(counts[3] || 0), "window.__tkQ={page:1,status:'3',kw:''};tickets()", "筛选：已解决")} / ${dxNumGo(Number(counts[4] || 0), "window.__tkQ={page:1,status:'4',kw:''};tickets()", "筛选：已关闭")}</div><div class="s">结论与时间线留痕</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：待认领的工单" onclick="window.__tkQ={page:1,status:'0',kw:''};tickets()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">${ICONS.orders}</div><div><div class="l">待认领</div><div class="v">${Number(counts[0] || 0)}</div><div class="s">客服认领后开始处理</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">${ICONS.config}</div><div><div class="l">处理中 / 等待外部</div><div class="v">${dxNumGo(Number(counts[1] || 0), "window.__tkQ={page:1,status:'1',kw:''};tickets()", "筛选：处理中")} / ${dxNumGo(Number(counts[2] || 0), "window.__tkQ={page:1,status:'2',kw:''};tickets()", "筛选：等待外部")}</div><div class="s">含等待游客/商户/财务</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e3f6ec">${ICONS.check}</div><div><div class="l">已解决 / 已关闭</div><div class="v">${dxNumGo(Number(counts[3] || 0), "window.__tkQ={page:1,status:'3',kw:''};tickets()", "筛选：已解决")} / ${dxNumGo(Number(counts[4] || 0), "window.__tkQ={page:1,status:'4',kw:''};tickets()", "筛选：已关闭")}</div><div class="s">结论与时间线留痕</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>售后工单队列</h2><span class="muted">按诉求类别发起，客服认领办理；城市账号可发起本城请求与补充材料，办结由平台客服负责</span></div>
@@ -30,7 +30,7 @@ async function tickets() {
       <input class="inp" id="tkKw" placeholder="工单号 / 订单号" value="${esc(Q.kw)}" style="width:180px;margin-left:8px"> <button class="btn ghost sm" onclick="window.__tkQ.kw=document.getElementById('tkKw').value.trim();window.__tkQ.page=1;tickets()">搜索</button></div>
     ${rows.length ? `<table><thead><tr><th>工单号</th><th>订单 / 类别</th><th>优先级</th><th>责任人</th><th>状态</th><th>创建 / 承诺</th><th>操作</th></tr></thead><tbody>
     ${rows.map((t) => {
-      const overdue = t.promised_at && Number(t.status) < 3 && new Date(t.promised_at) < new Date()
+      const overdue = t.promised_at && Number(t.status) < 3 && parseDate(t.promised_at) < new Date()
       const ops = [`<button class="btn ghost sm" onclick="ticketDrawer(${t.id})">时间线</button>`]
       if (canManage) {
         if (Number(t.status) === 0) ops.push(`<button class="btn primary sm" onclick="ticketAction(${t.id},'claim',{})">认领</button>`)

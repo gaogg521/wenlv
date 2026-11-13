@@ -31,7 +31,7 @@
   /* 窄卡片里图标在上、文字在下；数字不拆字，放不下就缩字号 */
   .kpi-grid .kpi:not(.dx-kpi) { min-width: 0; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
   .kpi-grid .kpi:not(.dx-kpi) > div:last-child { min-width: 0; max-width: 100%; }
-  .kpi-grid .kpi .v { font-size: 17px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-grid .kpi .v { font-size:16px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mp-hero { grid-template-columns: minmax(0, 1fr); padding: 18px 14px; gap: 18px; }
   .mp-phone { transform-origin: top center; max-width: 100%; }
   .mp-map { overflow-x: auto; -webkit-overflow-scrolling: touch; }

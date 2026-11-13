@@ -6,7 +6,7 @@ assertIsolatedDb('test/identity-link.mjs')
 import assert from 'node:assert/strict'
 import { q, one, closeDb } from '../src/db.mjs'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 const call = async (m, p, b, tk) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(tk ? { authorization: 'Bearer ' + tk } : {}) }, body: b == null ? undefined : JSON.stringify(b) })).json()
 let pass = 0
 const t = async (name, fn) => { try { await fn(); pass++; console.log('  ✓', name) } catch (e) { console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 } }

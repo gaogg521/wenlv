@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { q, one } from '../src/db.mjs'
 
-const BASE = 'http://127.0.0.1:' + process.env.PORT
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + process.env.PORT)
 const OUT = process.argv[2] || './automator-shots-cross'; fs.mkdirSync(OUT, { recursive: true })
 const api = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b ? JSON.stringify(b) : undefined })).json()
 const ok = (r, w = '') => { assert.equal(r.code, 0, w + ' ' + (r.msg || '')); return r.data }

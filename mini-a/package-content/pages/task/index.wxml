@@ -10,7 +10,7 @@
       <text class="tag blue" wx:for="{{t.tags}}" wx:key="*this">#{{item}}</text>
     </view>
     <view class="dt-price-row">
-      <view><text class="tour-price" style="font-size:40rpx">{{t.reward_beans}}</text><text class="muted2"> 旅豆</text>
+      <view><text class="tour-price" style="font-size:44rpx">{{t.reward_beans}}</text><text class="muted2"> 旅豆</text>
         <text wx:if="{{t.cash_reward_label}}" class="tk-cash">+ ¥{{t.cash_reward_label}} 现金</text></view>
       <text class="muted2" wx:if="{{t.deadlineText}}">截止 {{t.deadlineText}}</text>
     </view>
@@ -19,7 +19,7 @@
   <view class="card">
     <view class="rich-p">{{t.brief}}</view>
     <view class="kv" wx:if="{{t.platformsText}}"><text>建议发布</text><text class="v">{{t.platformsText}}</text></view>
-    <view class="kv" wx:if="{{t.min_words || t.min_images}}"><text>作品要求</text><text class="v">{{t.min_words ? '不少于 ' + t.min_words + ' 字' : ''}}{{t.min_words && t.min_images ? ' · ' : ''}}{{t.min_images ? t.min_images + ' 张图以上' : ''}}</text></view>
+    <view class="kv" wx:if="{{t.min_words || t.min_images}}"><text>作品要求</text><text class="v">{{t.wordsText}}{{t.min_words && t.min_images ? ' · ' : ''}}</text></view>
     <view class="kv" wx:if="{{t.max_participants}}"><text>名额</text><text class="v">{{t.max_participants}} 人</text></view>
     <view class="kv" wx:if="{{t.product}}" bindtap="goProduct"><text>种草线路</text><text class="v pl-link">{{t.product.title}} ›</text></view>
   </view>
@@ -47,8 +47,8 @@
   <view class="card" wx:if="{{t.review_rules.length}}"><view class="hl-item" wx:for="{{t.review_rules}}" wx:key="*this"><text class="hl-dot">·</text>{{item}}</view></view>
   <view style="height:150rpx"></view>
   <view class="dt-bottom" wx:if="{{t.status === 0}}">
-    <view class="dt-bottom-price">{{t.reward_beans}}<text class="muted2" style="font-size:22rpx;font-weight:400"> 旅豆{{t.cash_reward_label ? ' + ¥' + t.cash_reward_label : ''}}</text></view>
+    <view class="dt-bottom-price">{{t.reward_beans}}<text class="muted2" style="font-size:22rpx;font-weight:400"> 旅豆{{t.rewardText}}</text></view>
     <view class="btn dt-cta off" wx:if="{{t.full}}">名额已满</view>
-    <view class="btn dt-cta" wx:else bindtap="claim">领取任务{{t.slotsLeft !== null ? '（剩 ' + t.slotsLeft + ' 个名额）' : ''}}</view>
+    <view class="btn dt-cta" wx:else bindtap="claim">领取任务{{t.slotsText}}</view>
   </view>
 </block>

@@ -12,7 +12,7 @@ import { q, one } from '../src/db.mjs'
 import * as bean from '../src/domain/bean.mjs'
 import { cfgNum } from '../src/config.mjs'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b == null ? undefined : JSON.stringify(b) })).json()
 const ok = (r, what = '') => { assert.equal(r.code, 0, `${what} ${r.msg || ''}`); return r.data }
 let pass = 0

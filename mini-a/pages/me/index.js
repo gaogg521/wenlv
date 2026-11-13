@@ -17,7 +17,7 @@ Page({
   onShow() {
     this.setData({workAvailable:false,canPromote:false})
     api.request('/c/work-contexts').then(d=>this.setData({workAvailable:d.canCooperate,canPromote:d.canPromote})).catch(()=>{})
-    siteData.get().then((site) => this.setData({ site }))
+    siteData.get().then((site) => this.setData({ site, serviceLine: site.service_hours ? ' · ' + site.service_hours : '' }))
     this.setData({ user: app.globalData.user })
     this.loadMe()
   },

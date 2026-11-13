@@ -46,7 +46,7 @@ function walkRef(d) {
 for (const d of ['mini-a', 'mini-b']) walkRef(path.join(root, d))
 
 // ---------- 2) 运行时 ----------
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 let runtime = 'skipped'
 let db = null
 try {

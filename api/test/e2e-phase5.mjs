@@ -2,7 +2,7 @@
 // 前置：服务运行中 + V12 迁移已应用。运行：node test/e2e-phase5.mjs
 import { assertIsolatedDb } from './_guard.mjs'
 assertIsolatedDb('test/e2e-phase5.mjs') // 会写库：只能对隔离库运行
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 let pass = 0, fail = 0
 const ok = (c, n) => { c ? (pass++, console.log('  PASS  ' + n)) : (fail++, console.log('  FAIL  ' + n)) }
 async function api(method, path, body, token, expectFail) {

@@ -7,7 +7,7 @@ import { q } from '../src/db.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 const logs = []
 function step(who, action) {
   const line = `[${who}] ${action}`
@@ -216,4 +216,4 @@ async function main() {
   process.exit(failures ? 1 : 0)
 }
 
-main().catch((e) => { console.error('SCENARIO ERROR:', e.message); process.exit(1) })
+main().catch((e) => { console.error('SCENARIO ERROR:', e.stack || e.message); process.exit(1) })

@@ -49,11 +49,12 @@ Page({
     try {
       if (!app.globalData.token) await api.login()
       const r = await api.request('/m/auth/join', 'POST', { inviteCode: code })
-      const m = null
-      // join 成功后用门店 ID 正常登录拿完整会话
-      await api.login(r.merchantId)
-      this.setData({ merchant: wx.getStorageSync('merchant') || app.globalData.merchant, role: 1 })
-      wx.showToast({ title: '已加入 ' + (m && m.merchant ? m.merchant.name : '门店') })
+      // join 成功后用门店 ID 正常登录拿完整会话；门店名与角色以登录回包为准
+      //（此前 role 硬编码 1、门店名取自死变量 null，店长/老板被邀请会显示错误岗位）
+      const sess = await api.login(r.merchantId)
+      const merchant = (sess && sess.merchant) || wx.getStorageSync('merchant') || app.globalData.merchant
+      this.setData({ merchant, role: (sess && sess.role) || 0 })
+      wx.showToast({ title: '已加入 ' + ((merchant && merchant.name) || '门店') })
       this.fetchInvite()
     } catch (e) { wx.showToast({ title: e.msg || '加入失败', icon: 'none' }) }
   },

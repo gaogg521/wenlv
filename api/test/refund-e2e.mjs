@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { q, one } from '../src/db.mjs'
 import { bizDay } from '../src/infra/bizdate.mjs'
 
-const BASE = 'http://127.0.0.1:' + (process.env.PORT || 8080)
+const BASE = process.env.API_BASE || ('http://127.0.0.1:' + (process.env.PORT || 8080))
 async function api(method, path, body, token) {
   const r = await fetch(BASE + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined })
   return r.json()

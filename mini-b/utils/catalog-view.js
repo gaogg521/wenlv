@@ -15,7 +15,8 @@ function stockView(list, options = {}, now = Date.now()) {
   }).map(s => {
     const date = String(s.depart_date).slice(0, 10), past = date < today, left = Math.max(0, Number(s.left_seats))
     const statusLabel = past ? '已过期' : ({ 1: left ? '可售' : '已满', 2: '已成团', 3: '已截止', 4: '已取消' }[Number(s.status)] || '不可售')
-    return Object.assign({}, s, { date, dateShort: date.slice(5), priceLabel: money(s.price_adult), earlyLabel: money(s.early_price), left, statusLabel, canSell: !past && Number(s.status) === 1, tight: !past && Number(s.status) === 1 && left <= 2 })
+    return Object.assign({}, s, { date, dateShort: date.slice(5), priceLabel: money(s.price_adult), earlyLabel: money(s.early_price), left, statusLabel, canSell: !past && Number(s.status) === 1, tight: !past && Number(s.status) === 1 && left <= 2,
+      priceNote: Number(s.early_price) > 0 ? ('早鸟 ¥' + money(s.early_price) + ' · 提前' + s.early_days + '天') : '常规团期价格' })
   }).sort((a,b) => a.date.localeCompare(b.date) || Number(a.id) - Number(b.id))
   for (const s of rows) {
     // 商品ID是身份；同名商品不能混到一组。

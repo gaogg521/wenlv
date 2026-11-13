@@ -41,6 +41,14 @@
     button.disabled = true
     try { await mfaSubmit() } finally { button.disabled = false }
   })
-  // 演示快捷填充只在本机入口展示，公开入口不暴露默认凭据。
-  if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) document.getElementById('demoAccounts').hidden = false
+  // 演示快捷填充：仅本机入口展示；凭据只在此分支注入内存，公开部署的 HTML/JS 不含默认密码明文。
+  // （彻底方案是后端提供仅监听 127.0.0.1 的 dev-only 接口下发演示账号，见交接文档。）
+  if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
+    const demoCreds = { admin: ['admin', 'admin123'], finance: ['finance', 'admin123'], city310118: ['city310118', 'city123'] }
+    document.getElementById('demoAccounts').hidden = false
+    document.querySelectorAll('#demoAccounts .qa').forEach((btn) => {
+      const creds = demoCreds[btn.dataset.demoUser]
+      if (creds) btn.addEventListener('click', () => fill(creds[0], creds[1]))
+    })
+  }
 })()

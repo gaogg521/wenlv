@@ -4,29 +4,29 @@
   <view class="hero">
     <view class="hi">{{o.title}}</view>
     <view class="sub2">{{o.days_desc}} · {{o.qty}} 人 · 单号 {{o.order_no}}</view>
-    <view style="margin-top:14rpx"><text style="font-size:44rpx;font-weight:800">¥{{o.amountPayLabel}}</text>
+    <view style="margin-top:14rpx"><text style="font-size:44rpx;font-weight:600">¥{{o.amountPayLabel}}</text>
       <text class="st-tag">{{stName[o.status] || '—'}}</text></view>
   </view>
 
   <view class="card" wx:if="{{o.trip && o.status >= 20 && o.status <= 40}}">
     <view class="sec-title">出行安排</view>
     <view class="kv"><text>出发日期</text><text class="v">{{o.trip.departDate}}</text></view>
-    <view class="kv" wx:if="{{o.trip.gather_time}}"><text>集合时间</text><text class="v">{{o.trip.gather_time}}{{o.trip.end_time ? '，预计 ' + o.trip.end_time + ' 结束' : ''}}</text></view>
+    <view class="kv" wx:if="{{o.trip.gather_time}}"><text>集合时间</text><text class="v">{{o.trip.gather_time}}{{o.trip.endTimeText}}</text></view>
     <view class="kv" wx:if="{{o.trip.vehicle}}"><text>交通安排</text><text class="v">{{o.trip.vehicle}}</text></view>
     <view class="kv" wx:if="{{o.trip.leader_name}}" bindtap="callLeader"><text>领队</text><text class="v pl-link">{{o.trip.leader_name}}{{o.trip.leader_phone ? ' · 拨打 ›' : ''}}</text></view>
-    <view class="muted2" wx:if="{{o.trip.note}}">⚠️ {{o.trip.note}}</view>
+    <view class="muted2" wx:if="{{o.trip.note}}">{{o.trip.note}}</view>
   </view>
   <view class="card place-card" wx:if="{{o.merchantContact && o.merchantContact.name}}">
     <image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0"><view class="place-name">{{o.merchantContact.name}}</view><view class="muted2" wx:if="{{o.merchantContact.address}}">{{o.merchantContact.address}}</view></view>
-    <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">📞</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">🧭</text></view>
+    <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">电话</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">导航</text></view>
   </view>
 
   <view class="card" wx:if="{{o.refundInfo}}">
     <view class="sec-title">退款明细</view>
     <view class="kv"><text>实付金额</text><text>¥{{o.amountPayLabel}}</text></view>
     <view class="kv" wx:if="{{o.refundInfo.feeLabel !== '0.00'}}"><text>退改手续费</text><text>−¥{{o.refundInfo.feeLabel}}</text></view>
-    <view class="kv"><text>{{o.refundInfo.status === 2 ? '已原路退回' : '退款处理中'}}</text><text class="tour-price" style="font-size:30rpx">¥{{o.refundInfo.refundLabel}}</text></view>
+    <view class="kv"><text>{{o.refundInfo.status === 2 ? '已原路退回' : '退款处理中'}}</text><text class="tour-price" style="font-size:32rpx">¥{{o.refundInfo.refundLabel}}</text></view>
     <view class="note" wx:if="{{o.bean_deducted > 0}}">抵扣的 {{o.bean_deducted}} 旅豆已全额返还</view>
   </view>
 

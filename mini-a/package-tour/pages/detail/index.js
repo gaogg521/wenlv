@@ -46,7 +46,7 @@ Page({
         cityName: CITY[d.city_code] || '',
         rules: rulesOf(d),
         // B02：套餐组成项（名称/类型/每份数量/提供方）；空数组=非套餐产品不渲染
-        pkgItems: (d.packageItems || []).map((i) => ({ name: i.name, qty: i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefitDesc: i.benefitDesc || '', benefitRules: i.benefitRules || '' })),
+        pkgItems: (d.packageItems || []).map((i) => ({ name: i.name, qty: i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefitDesc: i.benefitDesc || '', benefitRules: i.benefitRules || '', benefitTail: (i.benefitDesc ? ' · ' + i.benefitDesc : '') + (i.benefitRules ? '；' + i.benefitRules : '') })),
         promoVideo: rich.video || '',
         merchant: d.merchantCard ? { ...d.merchantCard, honor: d.merchantHonor || null, hoursText: (d.merchantCard.business_hours || []).map((h) => (h.days || '每天') + ' ' + h.open + '-' + h.close).join('；') } : null,
         scenic: d.scenicCard || null, faqs: d.relatedFaqs || [], faqOpen: -1,
@@ -58,6 +58,7 @@ Page({
           notice: pf.notice || '', meetingGeo: pf.meeting_geo || '', shareTitle: pf.share_title || '', shareImage: pf.share_image ? api.img(pf.share_image) : '',
         },
         gallery: images.length ? images : [api.coverFor(d)], illustrated: !images.length || images.every(api.isReferencePhoto), gIdx: 0,
+        galleryCountText: (!images.length || images.every(api.isReferencePhoto)) ? '场景参考图' : '1/' + (images.length ? images.length : 1),
         rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [], excludes: rich.excludes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv,
       })
@@ -68,7 +69,7 @@ Page({
   navMeeting() { place.openGeo(this.data.extra.meetingGeo, '集合点', this.data.p.meeting_point) },
   goPlace(e) { wx.navigateTo({ url: `/package-tour/pages/place/index?kind=${e.currentTarget.dataset.kind}&id=${e.currentTarget.dataset.id}` }) },
   toggleFaq(e) { const i = Number(e.currentTarget.dataset.i); this.setData({ faqOpen: this.data.faqOpen === i ? -1 : i }) },
-  onSwiper(e) { this.setData({ gIdx: e.detail.current }) },
+  onSwiper(e) { const i = e.detail.current; this.setData({ gIdx: i, galleryCountText: this.data.illustrated ? '场景参考图' : (i + 1) + '/' + this.data.gallery.length }) },
   preview(e) {
     if (this.data.illustrated) return
     wx.previewImage({ urls: this.data.gallery, current: this.data.gallery[Number(e.currentTarget.dataset.i)] })

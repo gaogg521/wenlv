@@ -55,7 +55,8 @@ Page({
   refreshOfflineBar() {
     const q = wx.getStorageSync(queueKey()) || []
     const l = this._list || wx.getStorageSync(listKey()) || null
-    this.setData({ offline: { pending: q.length, syncedAt: l ? l.syncedAt.replace('T', ' ').slice(5, 16) : '', listReady: !!l } })
+    const syncedAtText = l && l.syncedAt ? String(l.syncedAt).replace('T', ' ').slice(5, 16) : ''
+    this.setData({ offline: { pending: q.length, syncedAt: syncedAtText, listReady: !!l } })
   },
   watchNetwork() {
     if (this._watched) return
@@ -140,7 +141,9 @@ Page({
       wx.vibrateShort({ type: 'light' })
       return this.setData({ result: { ok: false, payload, offline: true, reason: '离线且无名单缓存，请恢复网络后同步' } })
     }
-    if (Date.now() - new Date(list.syncedAt).getTime() > 30 * 60000) return this.setData({ result: { ok: false, reason: '离线名单已过期，请恢复网络刷新' } })
+    // fail-closed：时间戳缺失或解析成 NaN 一律视为已过期，绝不放行（此前 NaN 会恒判“未过期”）
+    const listTs = new Date(String(list.syncedAt || '').replace(' ', 'T')).getTime()
+    if (!listTs || Date.now() - listTs > 30 * 60000) return this.setData({ result: { ok: false, reason: '离线名单已过期，请恢复网络刷新' } })
     let passId = null, how = ''
     if (/^wl:\/\//.test(payload)) {
       passId = Number(String(payload).split('/')[3]) || null
@@ -164,11 +167,17 @@ Page({
 
   // ── 恢复上传：逐条重走服务端二次校验；失败条目服务端已进人工队列 ──
   async uploadQueue() {
+    if (this._uploading) return
     const q = wx.getStorageSync(queueKey()) || []
     if (!q.length) return
+    this._uploading = true
     try {
       const r = await api.request('/m/verify/offline-batch', 'POST', { items: q })
-      wx.setStorageSync(queueKey(), [])
+      // 只移除本次已上传的条目（按凭证号匹配）：上传飞行期间新扫码进队的记录必须保留，
+      // 否则会被整体清空覆盖（此前网络恢复自动上传与手点上传并发还会双跑）
+      const sent = new Set(q.map((x) => x.passId || x.payload))
+      const rest = (wx.getStorageSync(queueKey()) || []).filter((x) => !sent.has(x.passId || x.payload))
+      wx.setStorageSync(queueKey(), rest)
       this.refreshOfflineBar()
       this.syncList()
       wx.showModal({
@@ -176,6 +185,6 @@ Page({
         content: '成功 ' + r.uploaded + ' 条' + (r.conflicts ? '；' + r.conflicts + ' 条冲突已转人工队列（重复核销/凭证异常）' : ''),
         showCancel: false,
       })
-    } catch (e) { wx.showToast({ title: '上传失败，稍后重试', icon: 'none' }) }
+    } catch (e) { wx.showToast({ title: '上传失败，稍后重试', icon: 'none' }) } finally { this._uploading = false }
   },
 })

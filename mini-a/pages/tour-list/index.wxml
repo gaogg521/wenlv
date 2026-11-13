@@ -24,6 +24,6 @@
         <text class="u">返 {{item.beanGift || item.bean_gift}} 豆</text></view>
     </view>
   </view>
-  <view wx:if="{{!tours.length}}" class="empty"><view class="e-ico">🧭</view>{{kw ? '没找到「' + kw + '」相关线路' : '该分类暂无线路'}}</view>
+  <view wx:if="{{!tours.length}}" class="empty"><view class="e-ico">◌</view>{{emptyText}}</view>
 </block>
 <view class="note">{{site.list_footer}}</view>

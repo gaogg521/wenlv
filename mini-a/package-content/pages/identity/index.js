@@ -26,9 +26,11 @@ Page({
       const ownedCount = (d.badges || []).filter((b) => b.owned).length
       // 勋章墙按类别分组（分组顺序与名称由服务端给出）；组内同系列相邻、按阶数从低到高
       const groups = (d.groups || []).map((g) => {
-        const items = (d.badges || []).filter((b) => b.category === g.key).sort((x, y) => String(x.series).localeCompare(String(y.series)) || (x.tier - y.tier) || (x.order - y.order))
+        const items = (d.badges || []).filter((b) => b.category === g.key).sort((x, y) => String(x.series).localeCompare(String(y.series)) || (x.tier - y.tier) || (x.order - y.order)).map((b) => ({ ...b, bcStyle: b.owned && b.color ? '--bc:' + b.color : '' }))
         return { key: g.key, label: g.label, items, got: items.filter((b) => b.owned).length }
       }).filter((g) => g.items.length)
+      const cardTier = d.profile && d.profile.card && d.profile.card.tier
+      d.profile.cardClass = cardTier ? 'tier-' + cardTier : ''
       this.setData({ d, ownedCount, groups, lex: Object.assign({}, LEX_FALLBACK, lex || {}), loadTxt: '' })
     } catch (e) {
       // 后端不可达：用演示身份渲染（真机演示/断网兜底），不再只显示错误文案

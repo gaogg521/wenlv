@@ -15,7 +15,8 @@ Page({
     try {
       const list=await api.request('/m/verify/records?page='+page+'&pageSize=20&'+periodQuery(this.data.periodIndex,this.data.customDate,true))
       if(requestId!==this._requestId)return
-      this.setData({list:append?this.data.list.concat(list):list,page,loaded:true,loading:false,hasMore:list.length===20})
+      const rows = list.map(r => ({ ...r, codeText: r.order_no || ('凭证 #' + r.pass_id) }))
+      this.setData({list:append?this.data.list.concat(rows):rows,page,loaded:true,loading:false,hasMore:list.length===20})
     }catch(e){if(requestId===this._requestId)this.setData({loaded:true,loading:false,error:e.msg||'记录加载失败，请重试'})}
   },
 })

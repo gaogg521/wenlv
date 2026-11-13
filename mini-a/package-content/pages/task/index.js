@@ -7,7 +7,12 @@ Page({
     this.setData({ error: '' })
     api.request('/c/tasks/' + this.id).then((t) => {
       wx.setNavigationBarTitle({ title: t.title || '约稿任务' })
-      this.setData({ t: { ...t, platformsText: (t.platforms_labels || []).join(' · '), deadlineText: t.deadline ? String(t.deadline).slice(0, 16) : '' } })
+      this.setData({ t: { ...t,
+        platformsText: (t.platforms_labels || []).join(' · '),
+        deadlineText: t.deadline ? String(t.deadline).slice(0, 16) : '',
+        wordsText: t.min_words ? '不少于 ' + t.min_words + ' 字' : (t.min_images ? t.min_images + ' 张图以上' : ''),
+        rewardText: t.cash_reward_label ? ' + ¥' + t.cash_reward_label : '',
+        slotsText: t.slotsLeft !== null && t.slotsLeft !== undefined ? '（剩 ' + t.slotsLeft + ' 个名额）' : '' } })
     }).catch((e) => this.setData({ error: e.msg || '加载失败' }))
   },
   async claim() {

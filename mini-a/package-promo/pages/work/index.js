@@ -14,7 +14,7 @@ Page({
   async select(id){
     const seq=this.seq=(this.seq || 0)+1
     this.setData({current:null,resources:[],projects:[],profits:[],payments:[],feedback:[],error:'',note:'',page:1,total:0,from:'',to:'',productId:''})
-    try {const d=await api.request('/c/work-contexts/'+id);if(seq!==this.seq)return;const labels={merchant:'履约门店',supplier:'供应商',cocreator:'共创项目'};this.setData({current:d.subject,resources:d.resources.map(r=>({...r,label:labels[r.kind]})),note:d.note});await this.details(1)}
+    try {const d=await api.request('/c/work-contexts/'+id);if(seq!==this.seq)return;const labels={merchant:'履约门店',supplier:'供应商',cocreator:'共创项目'};this.setData({current:d.subject,resources:d.resources.map(r=>({...r,label:labels[r.kind]})),note:d.note,feedback:(d.feedback||[]).map(f=>({...f,replyText:f.status===1?('平台回复：'+(f.reply||'')):'等待平台核对'}))});await this.details(1)}
     catch(e){if(seq===this.seq)this.setData({error:e.msg || '授权已变更，请重新进入'})}
   },
   async details(page){
