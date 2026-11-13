@@ -3,9 +3,9 @@ const api = require('../../../utils/api')
 
 Page({
   data: {
-    notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
-    title: '', bodyHtml: '', bodyText: '', images: [], relatedProductId: null, relatedName: '',
-    pubMsg: '', video: '', videoSrc: '', imageUrls: [], editId: null, revision: null, busy: false, showPreview: false, formats: {},
+    blockViews: [], notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
+    title: '', bodyHtml: '', bodyText: '', relatedProductId: null, relatedName: '',
+    pubMsg: '', editId: null, revision: null, busy: false, showPreview: false, formats: {},
   },
   async onShow() { await this.fetch(); this.fetchTasks() },
 
@@ -16,7 +16,7 @@ Page({
       this.setData({loadError:'',notes:notes.map(n=>({...n,statusText:({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核',4:'已下架'})[n.status]||'处理中',appealText:n.appeal_status==null?'':({0:'申诉复核中',1:'申诉通过，恢复展示',2:'申诉未通过，维持下架'})[n.appeal_status]})),reports:reports.map(r=>({...r,statusText:r.status===2&&r.note_status===2?'处理后经复核恢复展示':({0:'待处理',1:'举报不成立',2:'已处理下架'})[r.status]}))})
     } catch (e) {
       // A-18：失败必须给可重试的错误态（此前 loadError 从不赋值，重试按钮永远出不来）；不展示假数据
-      this.setData({ loadError: e.msg || '加载失败，请检查网络后重试', notes: [], reports: [] })
+      this.setData({ loadError: e.msg || '加载失败，请检查网络后重试', blockViews: [], notes: [], reports: [] })
     }
   },
   openAppeal(e) {this.setData({appealNoteId:e.currentTarget.dataset.id,appealReason:'',appealMsg:''})},
@@ -74,17 +74,56 @@ Page({
     if (tag === 'br') this.editor.insertText({ text: '\n' })
     else if (formats[tag]) this.editor.format(...formats[tag])
   },
-  togglePreview() {
-    this.setData({ showPreview: !this.data.showPreview })
+  editorCall(method, options = {}) {
+    if (!this.editor) return Promise.reject({msg:'编辑器尚未就绪，请重试'})
+    return new Promise((success,fail)=>this.editor[method]({...options,success,fail}))
+  },
+  readBlocks(html) {
+    const blocks=[]
+    const addText=value=>{
+      const cleaned=value.replace(/^\s*(?:<\/p>|<\/div>)/,'').replace(/<(p|div)>\s*(?:<br\s*\/?>)?<\/\1>/gi,'')
+      if (cleaned.replace(/<[^>]+>|&nbsp;|\s/g,'')) blocks.push({type:'text',html:cleaned})
+    }
+    let at=0
+    const markers=/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|【视频：([^】]+)】/gi
+    for (const match of html.matchAll(markers)) {
+      addText(html.slice(at,match.index).replace(/<(?:p|div)>\s*$/i,''))
+      const url=match[1] ? this.imageUploads?.get(match[1].replace(/&amp;/g,'&')) : match[2]
+      if (!url || (match[2] && !this.videoUploads?.has(url))) throw {msg:'粘贴的媒体需通过工具栏导入'}
+      blocks.push({type:match[1]?'image':'video',url})
+      at=match.index+match[0].length
+    }
+    addText(html.slice(at))
+    return blocks
+  },
+  async togglePreview() {
+    if (this.data.showPreview) return this.setData({showPreview:false})
+    try {
+      const {html}=await this.editorCall('getContents')
+      const blocks=this.readBlocks(html)
+      this.setData({blockViews:blocks.map(b=>b.url?{...b,src:api.img(b.url)}:b),showPreview:true})
+    } catch(e) { wx.showToast({title:e.msg || '无法预览，请重试',icon:'none'}) }
+  },
+  loadArticle(blocks) {
+    this.imageUploads=new Map()
+    this.videoUploads=new Set()
+    const html=blocks.map(b=>{
+      if (b.type==='text') return b.html
+      if (b.type==='video') {
+        this.videoUploads.add(b.url)
+        return '<p>【视频：'+b.url+'】</p>'
+      }
+      const src=api.img(b.url)
+      this.imageUploads.set(src,b.url)
+      return '<p><img src="'+src.replace(/"/g,'&quot;')+'"></p>'
+    }).join('')
+    return this.editorCall('setContents',{html})
   },
 
-  setImages(images) {
-    this.setData({ images, imageUrls: images.map(api.img) })
-  },
   async editNote(e) {
     if (this.data.busy || this.data.uploading) return
     const id = e.currentTarget.dataset.id
-    if (this.data.bodyText.trim() || this.data.images.length || this.data.video) {
+    if (this.data.bodyText.trim() || this.data.bodyHtml) {
       const answer = await new Promise(resolve => wx.showModal({ title: '切换到编辑作品？', content: '当前未提交的内容将被替换。', success: resolve, fail: () => resolve({}) }))
       if (!answer.confirm) return
     }
@@ -92,19 +131,24 @@ Page({
     try {
       if (!this.editor) throw { msg: '编辑器尚未就绪，请重试' }
       const n = await api.request('/c/notes/' + id + '/edit')
-      await new Promise((resolve,reject) => this.editor.setContents({ html: n.text, success: resolve, fail: reject }))
-      this.setData({ editId:id, revision:n.revision,title:n.title || '',bodyHtml:n.text,
-        bodyText:n.text.replace(/<[^>]+>/g,' '),relatedProductId:n.relatedProductId,relatedName:n.relatedName || '',
-        video:n.video || '',videoSrc:api.img(n.video),pubMsg:'',showPreview:false })
-      this.setImages(n.images)
+      const blocks = n.blocks || [
+        ...(n.text ? [{type:'text',html:n.text}] : []),
+        ...(n.video ? [{type:'video',url:n.video}] : []),
+        ...n.images.map(url=>({type:'image',url}))
+      ]
+      await this.loadArticle(blocks)
+      this.setData({editId:id,revision:n.revision,title:n.title || '',bodyHtml:'',bodyText:'',
+        relatedProductId:n.relatedProductId,relatedName:n.relatedName || '',pubMsg:'',showPreview:false})
       wx.pageScrollTo({ scrollTop:0 })
     } catch (e) { wx.showToast({ title:e.msg || '作品加载失败',icon:'none' }) }
     finally { this.setData({ busy:false }) }
   },
   resetEditor() {
-    this.setData({ editId:null,revision:null,title:'',bodyHtml:'',bodyText:'',video:'',videoSrc:'',
+    this.setData({ editId:null,revision:null,title:'',bodyHtml:'',bodyText:'',
       relatedProductId:null,relatedName:'',showPreview:false,formats:{} })
-    this.setImages([])
+    this.imageUploads=new Map()
+    this.videoUploads=new Set()
+    this.setData({blockViews:[]})
     if (this.editor) this.editor.clear()
   },
   cancelEdit() {
@@ -112,57 +156,123 @@ Page({
   },
   async publish() {
     if (this.data.busy) return
-    if (!this.data.bodyHtml || this.data.bodyText.trim().length < 4) return wx.showToast({ title:'至少写 4 个字',icon:'none' })
     if (this.data.uploading) return wx.showToast({ title:'媒体上传中',icon:'none' })
     this.setData({ busy:true })
     try {
+      const {html}=await this.editorCall('getContents')
+      const blocks=this.readBlocks(html)
+      if (blocks.filter(b=>b.type==='text').map(b=>b.html.replace(/<[^>]+>/g,'').trim()).join('').length < 4) {
+        return wx.showToast({title:'至少写 4 个字',icon:'none'})
+      }
       await api.ensureLogin()
-      const {editId,revision,title,bodyHtml,images,video,relatedProductId} = this.data
+      const {editId,revision,title,relatedProductId}=this.data
       const r = await api.request(editId ? '/c/notes/'+editId : '/c/notes',editId ? 'PUT' : 'POST',
-        {title,body:bodyHtml,images,video,relatedProductId,revision})
+        {title,blocks,relatedProductId,revision})
       this.resetEditor()
       this.setData({ pubMsg:r.msg+(r.secMock && r.status===2?'（联调机审直通）':'') })
       await this.fetch()
     } catch (e) { wx.showToast({ title:e.msg || '提交失败',icon:'none' }) }
     finally { this.setData({busy:false}) }
   },
-  pickVideo() {
+  pickVideo() { this.pickMedia('video') },
+  pickImage() { this.pickMedia('image') },
+  pickMedia(type) {
     if (this.data.uploading || this.data.busy) return
-    wx.chooseMedia({count:1,mediaType:['video'],sourceType:['album','camera'],maxDuration:30,
-      success:async r=>{
-        const f=r.tempFiles[0]
-        if (!f || f.size > 8*1024*1024 || f.duration > 30) return wx.showToast({title:'请选择 30 秒、8 MB 内的视频',icon:'none'})
-        this.setData({uploading:true})
-        try {
-          await api.ensureLogin()
-          const data=wx.getFileSystemManager().readFileSync(f.tempFilePath,'base64')
-          const up=await api.request('/c/upload/note-video','POST',{data})
-          this.setData({video:up.url,videoSrc:api.img(up.url)})
-        } catch(e) { wx.showToast({title:e.msg || '视频上传失败',icon:'none'}) }
-        finally { this.setData({uploading:false}) }
-      } })
+    wx.chooseMedia({count:1,mediaType:[type],sizeType:['compressed'],maxDuration:30,
+      success:r=>this.insertMediaFiles(type,r.tempFiles)})
   },
-  removeVideo() { if (!this.data.busy && !this.data.uploading) this.setData({video:'',videoSrc:''}) },
-
-  // A-43：配图上传（chooseMedia → /c/upload/note-image → 版本文件名 URL）
-  pickImage() {
-    if (this.data.uploading || this.data.busy || this.data.images.length >= 9) return
-    wx.chooseMedia({ count: 9 - this.data.images.length, mediaType: ['image'], sizeType: ['compressed'],
-      success: async (r) => {
-        this.setData({ uploading: true })
-        try {
-          await api.ensureLogin()
-          for (const f of r.tempFiles) {
-            const b64 = wx.getFileSystemManager().readFileSync(f.tempFilePath, 'base64')
-            const ext = (f.tempFilePath.split('.').pop() || 'jpg').toLowerCase() === 'png' ? 'png' : 'jpg'
-            const up = await api.request('/c/upload/note-image', 'POST', { data: b64, ext })
-            this.setImages(this.data.images.concat(up.url))
-          }
-        } catch (e) { wx.showToast({ title: e.msg || '图片上传失败', icon: 'none' }) }
-        finally { this.setData({ uploading: false }) }
-      } })
+  async insertMediaFiles(type, files) {
+    if (this.data.uploading || this.data.busy) return
+    this.setData({uploading:true})
+    try {
+      await api.ensureLogin()
+      for (const f of files) await this.uploadAndInsert(type,f)
+    } catch(e) { wx.showToast({title:e.msg || '媒体插入失败',icon:'none'}) }
+    finally { this.setData({uploading:false}) }
   },
-  removeImage(e) { const i = Number(e.currentTarget.dataset.i); if (!this.data.busy && !this.data.uploading) this.setImages(this.data.images.filter((x, k) => k !== i)) },
+  async uploadAndInsert(type,f) {
+    const blocks=this.readBlocks((await this.editorCall('getContents')).html)
+    const count=blocks.filter(b=>b.type===type).length
+    if (count >= (type==='video'?1:9)) throw {msg:type==='video'?'每篇最多一段视频':'每篇最多九张图片'}
+    if (type==='video' && (f.size>8*1024*1024 || f.duration>30)) throw {msg:'请选择 30 秒、8 MB 内的视频'}
+    const fs=wx.getFileSystemManager()
+    const data=fs.readFileSync(f.tempFilePath,'base64')
+    const sig=data.slice(0,8)
+    const ext=sig.startsWith('iVBOR')?'png':sig.startsWith('UklGR')?'webp':'jpg'
+    const up=await api.request('/c/upload/note-'+type,'POST',{data,ext})
+    if (type==='video') {
+      this.videoUploads ||= new Set()
+      this.videoUploads.add(up.url)
+      await this.editorCall('insertText',{text:'\n【视频：'+up.url+'】\n'})
+    } else {
+      const src=api.img(up.url)
+      this.imageUploads ||= new Map()
+      this.imageUploads.set(src,up.url)
+      await this.editorCall('insertImage',{src,alt:'文章图片',width:'100%'})
+    }
+  },
+  onlineMedia() {
+    if (this.data.busy || this.data.uploading) return
+    wx.showActionSheet({itemList:['在线图片','在线 MP4 视频'],success:r=>{
+      wx.showModal({title:'输入 HTTPS 媒体直链',editable:true,placeholderText:'https://…',success:v=>{
+        if(v.confirm) this.importOnline(v.content.trim(),r.tapIndex===0?'image':'video')
+      }})
+    }})
+  },
+  async importOnline(url,type) {
+    if (this.data.uploading || this.data.busy) return
+    this.setData({uploading:true})
+    try {
+      await api.ensureLogin()
+      await this.importMediaFile(url,type)
+    } catch(e) { wx.showToast({title:e.msg || '下载失败，检查媒体链接和域名',icon:'none'}) }
+    finally { this.setData({uploading:false}) }
+  },
+  async importMediaFile(url,type) {
+    if (!/^https:\/\/[^\s]+$/i.test(url)) throw {msg:'仅支持 HTTPS 媒体直链'}
+    const file=await new Promise((resolve,reject)=>wx.downloadFile({url,success:r=>{
+      if(r.statusCode===200) resolve(r.tempFilePath)
+      else reject({msg:'媒体下载失败'})
+    },fail:reject}))
+    const stat=wx.getFileSystemManager().statSync(file)
+    if(stat.size>(type==='video'?8:2)*1024*1024) throw {msg:'媒体文件超过大小限制'}
+    await this.uploadAndInsert(type,{tempFilePath:file,size:stat.size})
+  },
+  async copyArticle() {
+    try {
+      const {html}=await this.editorCall('getContents')
+      const portable=this.readBlocks(html).map(b=>b.type==='text'?b.html:
+        '<'+(b.type==='image'?'img':'video')+' src="'+api.img(b.url)+'">').join('')
+      wx.setClipboardData({data:portable})
+    } catch(e) { wx.showToast({title:e.msg || '复制失败',icon:'none'}) }
+  },
+  async pasteArticle() {
+    if(this.data.busy || this.data.uploading) return
+    this.setData({uploading:true})
+    try {
+      const {data}=await new Promise((success,fail)=>wx.getClipboardData({success,fail}))
+      const parts=data.split(/(<(?:img|video)\b[^>]*\bsrc=["'][^"']+["'][^>]*>)/gi)
+      await api.ensureLogin()
+      for (const part of parts) {
+        const media=part.match(/^<(img|video)\b[^>]*\bsrc=["']([^"']+)["']/i)
+        if (media) {
+          const [,tag,url]=media,type=tag.toLowerCase()==='img'?'image':'video'
+          if (type==='image' && this.imageUploads?.has(url)) await this.editorCall('insertImage',{src:url,alt:'文章图片',width:'100%'})
+          else if (type==='video' && url.startsWith(api.img('/uploads/')) && this.videoUploads?.has(url.slice(api.img('/').length-1))) {
+            const blocks=this.readBlocks((await this.editorCall('getContents')).html)
+            if (blocks.some(b=>b.type==='video')) throw {msg:'每篇最多一段视频，请先删除原视频标记'}
+            await this.editorCall('insertText',{text:'\n【视频：'+url.slice(api.img('/').length-1)+'】\n'})
+          } else await this.importMediaFile(url,type)
+        } else if (part) {
+          const text=parts.length>1 || /<\/?(?:p|div|strong|h[1-6])\b/i.test(part)
+            ? part.replace(/<\/?(?:p|div|h[1-6]|br)\b[^>]*>/gi,'\n').replace(/<[^>]+>/g,'')
+            : part
+          await this.editorCall('insertText',{text})
+        }
+      }
+    } catch(e) { wx.showToast({title:e.msg || '粘贴失败，请检查剪贴板和媒体域名',icon:'none'}) }
+    finally {this.setData({uploading:false})}
+  },
   pickProduct() {
     api.getTours('all').then((list) => {
       wx.showActionSheet({ alertText: '关联到哪条线路？', itemList: list.slice(0, 6).map((x) => x.title),

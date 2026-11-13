@@ -4,9 +4,18 @@
     <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
   </view>
   <view class="card">
+    <block wx:if="{{n.blocks}}">
+      <block wx:for="{{n.blocks}}" wx:key="index">
+        <rich-text wx:if="{{item.type === 'text'}}" class="article-block" nodes="{{item.html}}" />
+        <image wx:elif="{{item.type === 'image'}}" class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
+        <video wx:else class="article-block" src="{{item.url}}" controls />
+      </block>
+    </block>
+    <block wx:else>
     <rich-text nodes="{{n.html}}" style="font-size:28rpx;line-height:1.8;color:#16232e"></rich-text>
     <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
     <image wx:for="{{n.images}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
+    </block>
     <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
     <button class="report-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
     <button class="report-toggle" bindtap="toggleReport">举报此笔记</button>

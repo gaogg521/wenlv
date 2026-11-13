@@ -5,3 +5,9 @@
 .rt-btn:active { background: var(--brand-soft); }
 .appeal-open,.appeal-submit { margin-top:18rpx;font-size:26rpx; }
 .appeal-reason { width:100%;min-height:160rpx;border:1rpx solid #ddd;padding:16rpx;box-sizing:border-box; }
+
+.ugc-block,.ugc-preview{margin:18rpx 0;padding:16rpx;border:1rpx solid var(--line);border-radius:14rpx}
+.ugc-block-image,.ugc-block-video{display:block;width:100%;margin:12rpx 0}
+.ugc-preview rich-text{display:block;margin:12rpx 0;word-break:break-word}
+
+.rt-toolbar{flex-wrap:wrap}.rt-toolbar button{margin:0;padding:0 12rpx}
