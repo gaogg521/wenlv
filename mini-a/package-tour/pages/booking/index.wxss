@@ -18,3 +18,10 @@ page { padding-bottom: 160rpx; }
 .bk-benefit-error{font-size:23rpx;color:#b95338;line-height:1.6;margin-top:12rpx}
 .bk-bean-row{display:flex;align-items:center;justify-content:space-between;gap:20rpx;padding:22rpx 0;border-bottom:1rpx solid var(--line)}
 .bk-bean-copy{flex:1;min-width:0}.bk-bean-row switch{flex-shrink:0}
+
+.bk-phone { padding: 20rpx 0 8rpx; }
+.bk-phone-label { display: block; margin-bottom: 12rpx; }
+.bk-phone-controls { display: flex; align-items: center; gap: 16rpx; }
+.bk-phone-input { flex: 1; min-width: 0; width: 0; height: 72rpx; padding: 0 16rpx; box-sizing: border-box; border: 1rpx solid var(--line); border-radius: 12rpx; }
+.bk-phone-controls .phone-btn { flex: none; width: auto; min-height: 64rpx; padding: 0 18rpx; line-height: 64rpx; white-space: nowrap; }
+.bk-phone-hint { display: block; margin-top: 10rpx; color: var(--sub); font-size: 22rpx; }
