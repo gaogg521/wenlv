@@ -153,9 +153,9 @@
   <view style="height:150rpx"></view>
 
   <!-- 底部常驻预订栏：滚动到任何位置都能下单 -->
-  <view class="dt-bottom">
+  <view class="dt-bottom dt-detail-bar">
     <button class="dt-share" open-type="share">分享</button>
-    <view class="dt-bottom-price"><text class="rmb">¥</text>{{p.priceLabel}}<text class="muted2"> 起</text></view>
+    <view class="dt-bottom-price"><text class="rmb">¥</text>{{p.priceLabel}}<text class="dt-price-suffix">起</text></view>
     <view class="btn dt-cta {{sessions.length ? '' : 'off'}}" bindtap="goBooking">{{sessions.length ? '选择日期' : '暂无团期'}}</view>
   </view>
 </block>
