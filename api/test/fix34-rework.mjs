@@ -453,6 +453,20 @@ try {
     await jobs.tickPartialRefundRefresh()
     assert.equal(Number((await one('SELECT COUNT(*) n FROM settlement_adjustment WHERE refund_no=? AND type=1', [rnF])).n), 1, '重复补登幂等不重复')
     assert.ok(adj.settlement_id != null, '补登调整挂被调结算单')
+    const secondBill = await promo.generateSettlement(midB, periodF)
+    const second = await one('SELECT id,cash_fen FROM order_item WHERE order_id=? AND merchant_id=? AND settle_line_id IS NOT NULL', [oidF, midB])
+    assert.ok(secondBill && second)
+    const allNets = [...nets, Number(second.cash_fen)]
+    await q('UPDATE partial_refund SET item_ids=?,item_nets=?,cash_fen=? WHERE refund_no=?', [
+      JSON.stringify([...itsF.map(x => Number(x.id)), Number(second.id)]), JSON.stringify(allNets), allNets.reduce((a,b) => a+b, 0), rnF])
+    await q('UPDATE order_item SET status=2 WHERE id=?', [second.id])
+    await jobs.tickPartialRefundRefresh()
+    await jobs.tickPartialRefundRefresh()
+    const recovered = await q('SELECT merchant_id,settlement_id,amount_fen FROM settlement_adjustment WHERE refund_no=? ORDER BY merchant_id', [rnF])
+    assert.equal(recovered.length, 2, 'second provider recovered once when first already exists')
+    const other = recovered.find(x => Number(x.merchant_id) === Number(midB))
+    assert.equal(Number(other.settlement_id), Number(secondBill))
+    assert.equal(Number(other.amount_fen), -4582)
     excluded.push(r.orderNo)
   })
   await check('R2a·跨两景区投影：只含本景区行的账单可见、无整单订单数、调整按景区行+未冲抵过滤', async () => {
@@ -495,6 +509,10 @@ try {
     const rowsA = ok(await call('GET', '/admin/settlements', null, tokSA))
     assert.ok(rowsA.some(x => Number(x.id) === Number(bill1)), '含本景区行的账单可见')
     assert.ok(!rowsA.some(x => Number(x.id) === Number(billC)), '无本景区行的账单不可见（Codex复验案例）')
+    const dashboard = ok(await call('GET', '/admin/partner-dash', null, tokSA)).settlement
+    assert.equal(dashboard.count, rowsA.length, 'dashboard uses the same scoped bills')
+    assert.equal(dashboard.payableFen, rowsA.reduce((sum, row) => sum + Number(row.scenic_payable_fen) + Number(row.adjust_pending), 0))
+    assert.equal(dashboard.paidFen, rowsA.filter(row => Number(row.status) === 3).reduce((sum, row) => sum + Number(row.scenic_payable_fen), 0))
     const rowA = rowsA.find(x => Number(x.id) === Number(bill1))
     assert.ok(!('order_count' in rowA), '整单订单数不下发')
     assert.ok('scenic_orders' in rowA, '按本景区行复算的订单数在')

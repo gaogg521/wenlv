@@ -15,14 +15,20 @@ const validId = value => {
 async function calculatorActor(req) {
   const actor = await requireAdmin(req, roles)
   if (actor.role === 'city_partner' && !actor.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+  await requireModule(req, actor.role === 'merchant_partner' ? 'merchants' : 'scenics')
   return actor
 }
 
 async function merchantScope(req, actor) {
-  if (req.query.merchantId == null) return null
+  const bound = actor.role === 'merchant_partner' ? subjectScope(actor).merchantId : null
+  if (actor.role === 'merchant_partner' && (!bound || (req.query.merchantId != null && validId(req.query.merchantId) !== Number(bound)))) {
+    throw new BizError(1004, '商户不存在或不在授权范围')
+  }
+  const merchantId = bound ?? req.query.merchantId
+  if (merchantId == null) return null
   await requireModule(req, 'merchants')
   const scope = scopeFilter(actor)
-  const merchant = await one('SELECT id,name,city_code FROM merchant WHERE id=?' + scope.sql, [validId(req.query.merchantId), ...scope.params])
+  const merchant = await one('SELECT id,name,city_code FROM merchant WHERE id=?' + scope.sql, [validId(merchantId), ...scope.params])
   if (!merchant) throw new BizError(1004, '商户不存在或不在授权范围')
   return merchant
 }
@@ -59,7 +65,7 @@ async function compute(c, ctx, body) {
   const { from, to } = period(body)
   const scenario = calculate(body.inputs)
   const { scenic, actor, merchant } = ctx
-  const internal = actor.role !== 'city_partner'
+  const internal = ['super', 'ops', 'finance'].includes(actor.role)
   const orders = await c.q(`
     SELECT o.id,o.order_no,o.status,o.paid_at,o.insurance_fee,p.title,pay.id paymentId,pay.amount paymentFen,
       o.promo_scene,o.settlement_id,s.period settlementPeriod,s.status settlementStatus,
@@ -126,9 +132,12 @@ export const scenicCalculatorRoutes = {
     const city = merchant?.city_code || String(req.query.city || '')
     if (!/^\d{6}$/.test(city)) throw new BizError(1001, '请选择有效城市')
     if (actor.scopeCity && actor.scopeCity !== city) throw new BizError(1003, '只能查看本城景区')
+    const scenicId = actor.role === 'scenic_partner' ? subjectScope(actor).scenicId : null
+    if (actor.role === 'scenic_partner' && !scenicId) return []
     return q(`SELECT s.id,s.name FROM scenic_spot s WHERE s.city_code=?
       ${merchant ? 'AND EXISTS (SELECT 1 FROM tour_product p WHERE p.scenic_id=s.id AND p.merchant_id=?)' : ''}
-      ORDER BY s.name,s.id`, [city, ...(merchant ? [merchant.id] : [])])
+      ${scenicId ? 'AND s.id=?' : ''}
+      ORDER BY s.name,s.id`, [city, ...(merchant ? [merchant.id] : []), ...(scenicId ? [scenicId] : [])])
   },
   ['GET ' + base]: async req => {
     const { scenic, actor, merchant } = await access(req)

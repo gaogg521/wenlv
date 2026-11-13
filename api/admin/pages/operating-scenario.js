@@ -8,7 +8,7 @@ const operatingSliderFields = [
 ]
 
 function operatingScenarioPanel(collapsible = false) {
-  if (!['super', 'ops', 'finance', 'city_partner'].includes(ME?.role)) return ''
+  if (!['super', 'ops', 'finance', 'city_partner', 'merchant_partner', 'scenic_partner'].includes(ME?.role)) return ''
   const title = '<strong>经营测算与示范案例</strong> <span class="operating-demo-tag">示例</span>'
   return collapsible
     ? `<details class="card operating-demo operating-demo-fold"><summary>${title}</summary><div data-operating-demo></div></details>`

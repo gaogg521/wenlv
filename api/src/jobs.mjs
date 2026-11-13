@@ -112,14 +112,21 @@ export async function tickPartialRefundRefresh() {
       // PROCESSING / ABNORMAL：保持处理中，下一轮重试
     } catch (e) { console.error('[job:partial-refund]', r.refund_no, e.message) }
   }
-  // Codex复验 R3 第二段：历史漏单补登——已确认成功（status=2）但被退项已进结算且缺调整登记的，
-  // 重跑幂等登记（uk_refund_merchant，部分提供方失败下轮重试剩余）。覆盖确认期写入失败与历史存量。
+  // 按退款实际选中的项核对每家提供方。已有一家分录不能阻止其他家补登。
+  const { fulfill } = await promo.splitBp()
   const missed = await q(`SELECT pr.order_id, pr.refund_no FROM partial_refund pr
-    WHERE pr.status = 2 AND EXISTS (SELECT 1 FROM order_item oi WHERE oi.order_id = pr.order_id AND oi.settle_line_id IS NOT NULL AND oi.status = 2)
-    AND NOT EXISTS (SELECT 1 FROM settlement_adjustment x WHERE x.refund_no = pr.refund_no AND x.type = 1)
-    ORDER BY pr.id LIMIT 50`)
+    WHERE pr.status = 2 AND EXISTS (
+      SELECT 1 FROM JSON_TABLE(pr.item_ids, '$[*]' COLUMNS (pos FOR ORDINALITY, item_id BIGINT PATH '$')) ids
+      JOIN JSON_TABLE(pr.item_nets, '$[*]' COLUMNS (pos FOR ORDINALITY, net BIGINT PATH '$')) nets ON nets.pos = ids.pos
+      JOIN order_item oi ON oi.id = ids.item_id AND oi.order_id = pr.order_id
+      JOIN settlement_line sl ON sl.id = oi.settle_line_id
+      JOIN settlement s ON s.id = sl.settlement_id
+      WHERE NOT EXISTS (SELECT 1 FROM settlement_adjustment x WHERE x.refund_no = pr.refund_no AND x.type = 1 AND x.merchant_id = sl.merchant_id)
+      GROUP BY sl.id, s.split_snapshot
+      HAVING ROUND(SUM(GREATEST(COALESCE(nets.net, 0), 0)) * COALESCE(JSON_EXTRACT(s.split_snapshot, '$.fulfill') + 0, ?) / 10000) > 0
+    ) ORDER BY pr.id LIMIT 50`, [fulfill])
   for (const m of missed) {
-    try { await (await import('./domain/promo.mjs')).recordRefundAdjustment(Number(m.order_id), m.refund_no, 'system:missed-adjust') }
+    try { await promo.recordRefundAdjustment(Number(m.order_id), m.refund_no, 'system:missed-adjust') }
     catch (e) { console.error('[job:partial-refund:missed]', m.refund_no, e.message) }
   }
   return rows.length + missed.length

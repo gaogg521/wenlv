@@ -74,6 +74,14 @@ try {
 void orders
     assert.ok((orders.rows || orders).every(o => Number(o.merchant_id) === Number(midA)), '订单列表只含本店')
     assert.ok((orders.rows || orders).some(o => o.order_no === noA), '本店订单在列')
+    const options = ok(await call('GET', '/admin/scenic-calculator/options', null, tokM))
+    assert.deepEqual(options.map(x => Number(x.id)), [Number(scenicId)])
+    assert.equal((await call('GET', '/admin/scenic-calculator/options?merchantId=' + midB, null, tokM)).code, 1004)
+    const merchantCalc = ok(await call('POST', '/admin/scenics/' + scenicId + '/calculator',
+      { from: bizDay(-1), to: bizDay(1), inputs: { orders: 100, priceFen: 10000, revenueBp: 2000, variableBp: 900, equityBp: 200, fixedFen: 0 } }, tokM))
+    assert.equal(Number(merchantCalc.merchant.id), Number(midA))
+    assert.ok(merchantCalc.sources.some(x => x.orderNo === noA))
+    assert.ok(merchantCalc.sources.every(x => x.orderNo !== noB && x.confirmedCostFen == null))
     const others = ok(await call('GET', '/admin/settlements', null, tokM))
     assert.ok(others.every(s => Number(s.merchant_id) === Number(midA)), '结算列表只含本店')
     assert.equal((await call('GET', `/admin/orders/${noB}`, null, tokM)).code, 1003, '他店订单详情拒绝')
