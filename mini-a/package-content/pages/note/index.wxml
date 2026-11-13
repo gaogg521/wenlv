@@ -5,6 +5,8 @@
   </view>
   <view class="card">
     <rich-text nodes="{{n.html}}" style="font-size:28rpx;line-height:1.8;color:#16232e"></rich-text>
+    <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
+    <image wx:for="{{n.images}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
     <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
     <button class="report-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
     <button class="report-toggle" bindtap="toggleReport">举报此笔记</button>

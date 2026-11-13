@@ -156,8 +156,8 @@ export const adminReviewQueue = {
       try {
         if (kind === 'note') {
           await tx(async (c) => {
-            const n = await c.upd(`UPDATE content_note SET status = 2, reject_reason = NULL, published_at = NOW(3) WHERE id = ? AND status IN (0,1)`, [id])
-            if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
+            const n = await c.upd(`UPDATE content_note SET status = 2, reject_reason = NULL, published_at = NOW(3) WHERE id = ? AND status IN (0,1) AND revision=1 AND COALESCE(JSON_TYPE(JSON_EXTRACT(body,'$.video')),'NULL') <> 'STRING'`, [id])
+            if (n !== 1) throw new BizError(2002, '请刷新状态，视频或修订作品需打开详情逐篇审核')
             await audit(c, 'admin:' + a.name, 'content', 'approve', 'note-' + id, null, { status: 2, batch: true })
             await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [id])
             const cityRow = await c.one('SELECT p.city_code city FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=?', [id])

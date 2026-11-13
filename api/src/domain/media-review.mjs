@@ -15,10 +15,17 @@ export async function applyMediaReview(message) {
     const pass = Number(message.errcode) === 0 && message.result?.suggest === 'pass'
     await c.upd('UPDATE content_media_check SET status=?,suggest=?,error_code=?,decided_at=NOW(3) WHERE trace_id=?', [pass ? 1 : 2, String(message.result?.suggest || 'error').slice(0, 32), Number(message.errcode) || 0, trace])
     if (Number(note.status) !== 0) return { preserved: true }
-    const counts = await c.one('SELECT SUM(status=0) pending,SUM(status=2) review FROM content_media_check WHERE note_id=?', [note.id])
     const body = typeof note.body === 'string' ? JSON.parse(note.body) : note.body
+    const active = (body.imgSec || []).filter(x => !x.mock).map(x => x.traceId)
+    if (active.length && !active.includes(trace)) return { preserved: true }
+    const counts = active.length
+      ? await c.one('SELECT SUM(status=0) pending,SUM(status=2) review FROM content_media_check WHERE note_id=? AND trace_id IN (?)', [note.id,active])
+      : await c.one('SELECT SUM(status=0) pending,SUM(status=2) review FROM content_media_check WHERE note_id=?', [note.id])
     if (Number(counts.review) > 0 || !body.textCheck?.pass) await c.upd('UPDATE content_note SET status=1 WHERE id=?', [note.id])
-    else if (Number(counts.pending) === 0) await c.upd('UPDATE content_note SET status=2,published_at=NOW(3) WHERE id=?', [note.id])
+    else if (Number(counts.pending) === 0) {
+      if (body.manualReview) await c.upd('UPDATE content_note SET status=1 WHERE id=?', [note.id])
+      else await c.upd('UPDATE content_note SET status=2,published_at=NOW(3) WHERE id=?', [note.id])
+    }
     return { accepted: true }
   })
 }
