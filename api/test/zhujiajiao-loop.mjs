@@ -29,7 +29,7 @@ const call = async (m, p, b, t) => (await fetch(base + p, { method: m, headers: 
 const ok = r => { assert.equal(r.code, 0, r.msg); return r.data }
 const token = uid => jwtSign({ end: 'c', uid })
 const admin = jwtSign({ end: 'admin', role: 'super', name: 'zjq-qa' })
-const fin = jwtSign({ end: 'admin', role: 'finance', name: 'zjq-fin' })
+const fin = jwtSign({ uid: 900002, end: 'admin', role: 'finance', name: 'zjq-fin' }) // 具名（跟进审批/登记要求 uid）
 const ops = jwtSign({ end: 'admin', role: 'ops', name: 'zjq-ops' })
 const city = jwtSign({ uid: 900001, end: 'admin', role: 'city_partner', name: 'zjq-city', scopeCity: '310118' }) // 具名（复盘保存要求 uid）
 const citySh = jwtSign({ end: 'admin', role: 'city_partner', name: 'zjq-city-sh', scopeCity: '310100' })
@@ -278,6 +278,23 @@ try {
     assert.ok(Number(saved.reviewId) > 0, '复盘保存（持续投入决策依据留痕）')
     const denied = await call('POST', `/admin/scenics/${scenicId}/calculator`, { from: date(-1), to: date(1) }, citySh)
     assert.equal(denied.code, 1004, '他城合伙人不能看青浦景区（跨城隔离）')
+  })
+
+  // ===== 步骤7b 同链单据：同一景区复盘 → 经营跟进申请 → 审批 → 登记（Codex 复验收口项） =====
+  await check('步骤7b·同链单据：复盘 ID 串起跟进申请、审批与登记，编号可溯源', async () => {
+    const reviews = ok(await call('GET', `/admin/scenics/${scenicId}/calculator`, null, city)).reviews
+    assert.ok(reviews.length >= 1, `复盘存在（reviewId 溯源）`)
+    const reviewId = Number(reviews[0].id)
+    const fu = ok(await call('POST', `/admin/scenics/${scenicId}/followups`, { reviewId, kind: 'renewal', purpose: '朱家角同链算例·续约申请', amountFen: 500000 }, city))
+    assert.equal(fu.status, 'submitted', '申请已提交')
+    ok(await call('POST', `/admin/scenics/${scenicId}/followups/${fu.id}/action`, { action: 'approve', note: '朱家角同链算例·审批通过' }, fin))
+    const rec = ok(await call('POST', `/admin/scenics/${scenicId}/followups/${fu.id}/action`, { action: 'record', note: '朱家角同链算例·已登记续约办理', reference: 'ZJ-RENEW-' + stamp }, fin))
+    assert.equal(rec.status, 'recorded', '办理已登记')
+    const rows = ok(await call('GET', `/admin/scenics/${scenicId}/followups`, null, city))
+    const mine = rows.rows.find(x => Number(x.id) === Number(fu.id))
+    assert.equal(mine.status, 'recorded', '同链单据终态=recorded')
+    assert.equal(mine.record_ref, 'ZJ-RENEW-' + stamp, '登记回执编号=ZJ-RENEW-*（可溯源）')
+    assert.equal(Number(mine.review_id), reviewId, '跟进挂同链复盘')
   })
 
   // ===== 跨主体权限矩阵 =====

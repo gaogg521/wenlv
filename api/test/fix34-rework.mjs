@@ -419,6 +419,105 @@ try {
     assert.equal(adjNow.applied_settlement_id, null, '无正额可出账时保持未冲抵（不出负数单）')
   })
 
+  // ===== Codex 二次复验：R3 故障注入（调整写失败→补偿补登）/ R2a 跨两景区投影 =====
+  await check('R3·调整写失败可恢复：确认成功但漏登→补偿任务幂等补登→挂正确结算单', async () => {
+    const pkg = await import('../src/domain/package.mjs')
+    const jobs = await import('../src/jobs.mjs')
+    const r = await order.place({ userId: uidA, sessionId: sid, qty: 1, wantedBeans: 0 })
+    await order.acceptPayment(r.orderNo, 'F3FAIL-' + stamp, true)
+    const oidF = Number((await one('SELECT id FROM orders WHERE order_no=?', [r.orderNo])).id)
+    await complete(r.orderNo)
+    const periodF = settlementPeriod(new Date())
+    const supF = await promo.generateSettlement(midA, periodF)
+    assert.ok(Number(supF) > 0, '结算单（含结算行）生成')
+    const itsF = await q('SELECT id, cash_fen FROM order_item WHERE order_id=? AND merchant_id=?', [oidF, midA])
+    const rnF = 'PRFAIL' + stamp
+    const nets = itsF.map(x => Number(x.cash_fen))
+    await q('INSERT INTO refunds (order_id, refund_no, amount, fee_amount, reason, status, operator) VALUES (?,?,?,0,?,0,?)',
+      [oidF, rnF, nets.reduce((a, b) => a + b, 0), '故障注入算例', 'st-qa'])
+    await q('INSERT INTO partial_refund (order_id, refund_no, item_ids, item_nets, cash_fen, fee_fen, reason, operator, status) VALUES (?,?,?,?,?,0,?,?,0)',
+      [oidF, rnF, JSON.stringify(itsF.map(x => Number(x.id))), JSON.stringify(nets), nets.reduce((a, b) => a + b, 0), '故障注入算例', 'st-qa'])
+    await q(`UPDATE order_item SET status = 2 WHERE id IN (${itsF.map(x => Number(x.id)).join(',')})`, [])
+    // 故障注入：调整 INSERT 对该单号 SIGNAL 失败
+    await q(`CREATE TRIGGER trg_fail_adj_${stamp} BEFORE INSERT ON settlement_adjustment FOR EACH ROW BEGIN IF NEW.refund_no = '${rnF}' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'inject fail'; END IF; END`, [])
+    const c1 = await pkg.confirmPartialRefund(oidF, rnF)
+    assert.equal(c1.confirmed, true, '确认返回成功（资金已退不可回滚）')
+    assert.equal(c1.adjustmentRetried, true, '登记失败被标记重试')
+    assert.equal(Number((await one('SELECT COUNT(*) n FROM settlement_adjustment WHERE refund_no=?', [rnF])).n), 0, '故障期调整确实漏登')
+    await q(`DROP TRIGGER trg_fail_adj_${stamp}`, [])
+    const dup = await pkg.confirmPartialRefund(oidF, rnF)
+    assert.equal(dup.confirmed, false, '重复确认幂等')
+    await jobs.tickPartialRefundRefresh()
+    const adj = await one('SELECT amount_fen, settlement_id FROM settlement_adjustment WHERE refund_no=? AND type=1', [rnF])
+    assert.ok(adj && Number(adj.amount_fen) < 0, '补偿任务补登调整（漏单恢复）')
+    await jobs.tickPartialRefundRefresh()
+    assert.equal(Number((await one('SELECT COUNT(*) n FROM settlement_adjustment WHERE refund_no=? AND type=1', [rnF])).n), 1, '重复补登幂等不重复')
+    assert.ok(adj.settlement_id != null, '补登调整挂被调结算单')
+    excluded.push(r.orderNo)
+  })
+  await check('R2a·跨两景区投影：只含本景区行的账单可见、无整单订单数、调整按景区行+未冲抵过滤', async () => {
+    const scA = (await q('INSERT INTO scenic_spot(city_code,name,scenic_level,coop_mode,status) VALUES(?,?,?,?,1)', ['310118', 'R2景区A' + stamp, '4A', '', 1])).insertId
+    const scB = (await q('INSERT INTO scenic_spot(city_code,name,scenic_level,coop_mode,status) VALUES(?,?,?,?,1)', ['310118', 'R2景区B' + stamp, '3A', '', 1])).insertId
+    const pA2 = (await q("INSERT INTO tour_product(channel,city_code,cat,title,price_from,merchant_id,scenic_id,status) VALUES('main','310118','theme','R2-A品',8000,?,?,1)", [midA, scA])).insertId
+    const pB2 = (await q("INSERT INTO tour_product(channel,city_code,cat,title,price_from,merchant_id,scenic_id,status) VALUES('main','310118','theme','R2-B品',6000,?,?,1)", [midA, scB])).insertId
+    const sA2 = (await q('INSERT INTO tour_session(product_id,depart_date,quota,min_go,price_adult,status) VALUES(?,?,?,?,8000,1)', [pA2, date(0), 10, 1])).insertId
+    const sB2 = (await q('INSERT INTO tour_session(product_id,depart_date,quota,min_go,price_adult,status) VALUES(?,?,?,?,6000,1)', [pB2, date(0), 10, 1])).insertId
+    // 单项套餐化（有 order_item 才能按项部分退款）
+    ok(await call('POST', '/admin/products/' + pA2 + '/package-items', { name: 'R2-A项', kind: 2, merchantId: midA, unitPriceFen: 8000, qtyPerUnit: 1, reason: 'R2a算例' }, admin))
+    ok(await call('POST', '/admin/products/' + pB2 + '/package-items', { name: 'R2-B项', kind: 2, merchantId: midA, unitPriceFen: 6000, qtyPerUnit: 1, reason: 'R2a算例' }, admin))
+    const mk = async (sidX, ref) => {
+      const r = await order.place({ userId: uidA, sessionId: sidX, qty: 1, wantedBeans: 0 })
+      await order.acceptPayment(r.orderNo, 'F3R2-' + ref + '-' + stamp, true)
+      await complete(r.orderNo)
+      return r.orderNo
+    }
+    const orderNoA = await mk(sA2, 'A')
+    await mk(sB2, 'B')
+    const periodX = settlementPeriod(new Date())
+    const bill1 = await promo.generateSettlement(midA, periodX) // 同商户同周期：A/B 两景区行进同一张账单
+    const bill2 = await promo.generateSettlement(midA, periodX)
+    assert.ok(Number(bill2) > 0, '重复生成幂等返回有效单（无新增可结算内容时不重复分账）')
+    const netA = Number((await one('SELECT COALESCE(SUM(sl.net_fen),0) n FROM settlement_line sl JOIN orders o ON o.id=sl.order_id WHERE sl.settlement_id=? AND o.product_id=?', [bill1, pA2])).n)
+    const netB = Number((await one('SELECT COALESCE(SUM(sl.net_fen),0) n FROM settlement_line sl JOIN orders o ON o.id=sl.order_id WHERE sl.settlement_id=? AND o.product_id=?', [bill1, pB2])).n)
+    assert.equal(netA, 8000, '账单含 A 景区行 8000')
+    assert.equal(netB, 6000, '账单含 B 景区行 6000')
+    // 无本景区行的账单（Codex复验案例）：第三方商品订单（无 scenic）单独成账
+    const pC2 = (await q("INSERT INTO tour_product(channel,city_code,cat,title,price_from,merchant_id,status) VALUES('main','310118','theme','R2-无景区品',9000,?,1)", [midA])).insertId
+    const sC2 = (await q('INSERT INTO tour_session(product_id,depart_date,quota,min_go,price_adult,status) VALUES(?,?,?,?,9000,1)', [pC2, date(0), 10, 1])).insertId
+    const rC = await order.place({ userId: uidA, sessionId: sC2, qty: 1, wantedBeans: 0 })
+    await order.acceptPayment(rC.orderNo, 'F3R2-C-' + stamp, true)
+    await complete(rC.orderNo)
+    const periodY = 'R2Y' + String(stamp).slice(-6) // period 列 VARCHAR(12)
+    const billC = await promo.generateSettlement(midA, periodY)
+    assert.ok(Number(billC) > 0, '无景区品账单生成')
+    const tokSA = jwtSign({ uid: 900002, end: 'admin', role: 'scenic_partner', name: 'r2-sa', scopeCity: '310118', subjectType: 'scenic', subjectId: scA })
+    const tokSB = jwtSign({ uid: 900004, end: 'admin', role: 'scenic_partner', name: 'r2-sb', scopeCity: '310118', subjectType: 'scenic', subjectId: scB })
+    const rowsA = ok(await call('GET', '/admin/settlements', null, tokSA))
+    assert.ok(rowsA.some(x => Number(x.id) === Number(bill1)), '含本景区行的账单可见')
+    assert.ok(!rowsA.some(x => Number(x.id) === Number(billC)), '无本景区行的账单不可见（Codex复验案例）')
+    const rowA = rowsA.find(x => Number(x.id) === Number(bill1))
+    assert.ok(!('order_count' in rowA), '整单订单数不下发')
+    assert.ok('scenic_orders' in rowA, '按本景区行复算的订单数在')
+    assert.equal(Number(rowA.scenic_net_fen), 8000, 'A 主体只取本景区行净额')
+    const rowsB = ok(await call('GET', '/admin/settlements', null, tokSB))
+    const rowB = rowsB.find(x => Number(x.id) === Number(bill1))
+    assert.ok(rowB && Number(rowB.scenic_net_fen) === 6000, '同账单 B 景区主体只取 B 行净额（同城不同主体）')
+    const itsA = await q('SELECT id, settle_line_id FROM order_item WHERE order_id IN (SELECT id FROM orders WHERE product_id=?) AND merchant_id=?', [pA2, midA])
+    assert.ok(itsA[0].settle_line_id != null)
+    const orderA = (await one('SELECT order_id FROM settlement_line WHERE id=?', [itsA[0].settle_line_id])).order_id
+    const orderA2 = (await one('SELECT order_no FROM orders WHERE id=?', [orderA])).order_no
+    const prA = ok(await call('POST', `/admin/orders/${orderA2}/partial-refund`, { itemIds: [itsA[0].id], reason: 'R2a调整过滤算例' }, admin))
+    assert.equal(prA.cashFen, 8000)
+    const adjA = await one('SELECT amount_fen FROM settlement_adjustment WHERE refund_no=? AND type=1', [prA.refundNo])
+    assert.ok(adjA && Number(adjA.amount_fen) < 0, 'A账调整已登记')
+    const tokSA2 = jwtSign({ uid: 900003, end: 'admin', role: 'scenic_partner', name: 'r2-sa2', scopeCity: '310118', subjectType: 'scenic', subjectId: scA })
+    const rowsA2 = ok(await call('GET', '/admin/settlements', null, tokSA2))
+    const rowA2 = rowsA2.find(x => Number(x.id) === Number(bill1))
+    assert.ok(Number(rowA2.adjust_pending) < 0, 'A账待冲抵调整（未冲抵口径）')
+    assert.equal(Number(rowA2.scenic_net_fen), 8000, '已出账行净额快照不改写（冲减由调整行承担，见 adjust_pending）')
+    excluded.push(orderNoA)
+  })
+
   // ===== 修复4：确认成本更正（已出账后成本变化走调整记录） =====
   await check('修复4·确认成本更正：finance 专用、orders 同步、type=2 调整留痕、不改商户应付', async () => {
     assert.equal((await call('POST', '/admin/settlements/cost-adjust', { orderNo: noW8, costConfirmedFen: 99000, reason: '越权测试' }, ops)).code, 1003, 'ops 无权')

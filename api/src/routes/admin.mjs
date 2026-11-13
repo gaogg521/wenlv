@@ -1149,16 +1149,22 @@ const admin = {
       subSql = ' AND s.merchant_id = ?'; subParams = [sub.merchantId]
     } else if (a.role === 'scenic_partner') {
       if (!sub.scenicId) return []
-      // V82（Codex复验）：景区主体方不拿整张结算单——按本景区行与字段口径投影：
-      // 只给本景区订单的结算行净额/按本景区口径的履约应付与调整，内部成本、五口径与他店份额不外露
+      // V82/Codex复验 R2 二次修复：按授权结算行决定账单可见性——只显示包含本景区订单行的结算单；
+      // 订单数按本景区行复算；调整按本景区行且未冲抵过滤；整单 order_count/五口径/成本不下发
       const sid = Number(sub.scenicId)
-      const rows = await q(`SELECT s.id, s.period, s.status, s.order_count, m.name merchant_name,
+      const rows = await q(`SELECT s.id, s.period, s.status, m.name merchant_name,
+          (SELECT COUNT(DISTINCT sl.order_id) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id
+            WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_orders,
           (SELECT COALESCE(SUM(sl.net_fen),0) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id
             WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_net_fen,
-          (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1) AS adjust_pending
+          (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1
+            AND x.applied_settlement_id IS NULL
+            AND x.order_id IN (SELECT o2.id FROM orders o2 JOIN tour_product p2 ON p2.id = o2.product_id WHERE p2.scenic_id = ?)) AS adjust_pending
         FROM settlement s JOIN merchant m ON m.id = s.merchant_id
-        WHERE EXISTS (SELECT 1 FROM tour_product p9 WHERE p9.merchant_id = s.merchant_id AND p9.scenic_id = ?)
-        ORDER BY s.id DESC`, [sid, sid])
+        WHERE EXISTS (SELECT 1 FROM settlement_line sl2 JOIN orders o3 ON o3.id = sl2.order_id
+          JOIN tour_product p3 ON p3.id = o3.product_id
+          WHERE sl2.settlement_id = s.id AND p3.scenic_id = ?)
+        ORDER BY s.id DESC`, [sid, sid, sid, sid])
       for (const r of rows) {
         const snap = await one('SELECT split_snapshot FROM settlement WHERE id = ?', [r.id])
         const sp = typeof snap.split_snapshot === 'string' ? JSON.parse(snap.split_snapshot || '{}') : (snap.split_snapshot || {})
@@ -1326,12 +1332,31 @@ const admin = {
         o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY o.id DESC LIMIT 5000`, args)
       name = 'orders-filtered'
     } else if (what === 'products') {
+      // V82 主体方：只导出授权行（商户=本店；景区=本景区商品），字段不含内部成本
+      const subPX = subjectScope(a)
+      let pxSql = '', pxParams = []
+      if (a.role === 'merchant_partner') { if (!subPX.merchantId) return { name, filename: name + '-empty.csv', csv: '' }; pxSql = ' AND p.merchant_id = ?'; pxParams = [subPX.merchantId] }
+      else if (a.role === 'scenic_partner') { if (!subPX.scenicId) return { name, filename: name + '-empty.csv', csv: '' }; pxSql = ' AND p.scenic_id = ?'; pxParams = [subPX.scenicId] }
       rows = await q(`SELECT p.id, p.title, p.channel, p.city_code, p.cat, p.price_from, p.bean_gift, p.status, m.name merchant_name
-        FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'p.city_code')} ORDER BY p.id`, sc.params)
+        FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'p.city_code')}${pxSql} ORDER BY p.id`, [...sc.params, ...pxParams])
     } else if (what === 'settlements') {
-      rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained,
+      const subSX = subjectScope(a)
+      if (a.role === 'scenic_partner') {
+        // V82 主体方（景区）：与结算页同口径的投影行（本景区净额），无整单五口径与成本
+        if (!subSX.scenicId) return { name, filename: name + '-empty.csv', csv: '' }
+        rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.status,
+          (SELECT COUNT(DISTINCT sl.order_id) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_orders,
+          (SELECT COALESCE(SUM(sl.net_fen),0) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_net_fen
+        FROM settlement s JOIN merchant m ON m.id = s.merchant_id
+        WHERE EXISTS (SELECT 1 FROM settlement_line sl2 JOIN orders o3 ON o3.id = sl2.order_id JOIN tour_product p3 ON p3.id = o3.product_id WHERE sl2.settlement_id = s.id AND p3.scenic_id = ?)
+        ORDER BY s.id DESC LIMIT 2000`, [subSX.scenicId, subSX.scenicId, subSX.scenicId])
+      } else {
+        let sxSql = '', sxParams = []
+        if (a.role === 'merchant_partner') { if (!subSX.merchantId) return { name, filename: name + '-empty.csv', csv: '' }; sxSql = ' AND s.merchant_id = ?'; sxParams = [subSX.merchantId] }
+        rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.order_count, s.total_amount, s.amt_fulfill, s.amt_service, s.amt_promoter, s.amt_beanbudget, s.amt_retained,
           s.fee_count, s.fee_total, s.fee_merchant, s.fee_platform, s.amt_fulfill + s.fee_merchant AS payable_to_merchant, s.status
-        FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'm.city_code')} ORDER BY s.id DESC LIMIT 2000`, sc.params)
+        FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql.replace(/city_code/g, 'm.city_code')}${sxSql} ORDER BY s.id DESC LIMIT 2000`, [...sc.params, ...sxParams])
+      }
     } else if (what === 'merchants') {
       rows = (await q(`SELECT id, name, kind, merchant_no, city_code, status, score, apply_contact, approved_at, created_at FROM merchant WHERE 1=1 ${sc.sql} ORDER BY id`, sc.params))
     } else if (what === 'scenics') {

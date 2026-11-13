@@ -22,9 +22,10 @@ export const ADMIN_ACTIONS = {
   'case.manage': { roles: ['super', 'risk'], label: '超级管理员或风控' },
   // T00：导出按报表类型定角色；城市账号一律不放导出（AC-06 导出不越界）
   'export.orders': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
-  'export.products': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
+  // V82 主体方：按绑定主体过滤导出行（products 只含本店；settlements 景区口径投影行）
+  'export.products': { roles: ['super', 'ops', 'finance', 'merchant_partner', 'scenic_partner'], label: '超管/运营/财务；商户·景区主体方（本主体范围）' },
   'export.merchants': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
-  'export.settlements': { roles: ['super', 'finance'], label: '超级管理员或财务' },
+  'export.settlements': { roles: ['super', 'finance', 'merchant_partner', 'scenic_partner'], label: '超管/财务；商户·景区主体方（本主体范围）' },
   'export.scenics': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.suppliers': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.creators': { roles: ['super', 'ops', 'review'], label: '超级管理员、运营或审核员' },
