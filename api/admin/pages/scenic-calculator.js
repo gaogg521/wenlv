@@ -1,5 +1,5 @@
 function scenicCalcHelpButton(context, id) {
-  if (!['super', 'ops', 'finance', 'city_partner', 'merchant_partner', 'scenic_partner'].includes(ME.role) || !ADMIN_CAPABILITIES.modules?.includes('scenics')) return '' // V82：主体方也可见测算入口
+  if (!['super', 'ops', 'finance', 'city_partner', 'merchant_partner', 'scenic_partner'].includes(ME.role) || !ADMIN_CAPABILITIES.modules?.includes(ME.role === 'merchant_partner' ? 'merchants' : 'scenics')) return '' // V82：主体方也可见测算入口
   return `<button type="button" class="btn ghost sm scenic-calc-help" data-context="${esc(context)}" data-target="${esc(id)}" onclick="openScenicCalcHelp(this)"><span aria-hidden="true">❓</span> 经营测算</button>`
 }
 

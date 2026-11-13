@@ -127,6 +127,33 @@ export async function splitBp() {
   return { fulfill: await g('settlement.split_fulfill', 0.58), service: await g('settlement.split_service', 0.12), beanbudget: await g('settlement.split_beanbudget', 0.05) }
 }
 
+/** Scenic settlement projection shared by list, export and dashboard. */
+export async function scenicSettlementRows(scenicId, limit = null) {
+  const params = [scenicId, scenicId]
+  if (limit != null) params.push(limit)
+  const rows = await q(`
+    SELECT s.id,s.period,s.status,m.name merchant_name,s.split_snapshot,
+           scoped.scenic_orders,scoped.scenic_net_fen,COALESCE(SUM(x.amount_fen),0) adjust_pending
+    FROM (
+      SELECT sl.settlement_id,COUNT(DISTINCT sl.order_id) scenic_orders,SUM(sl.net_fen) scenic_net_fen
+      FROM settlement_line sl JOIN orders o ON o.id=sl.order_id JOIN tour_product p ON p.id=o.product_id
+      WHERE COALESCE(o.contribution_scenic_id,p.scenic_id)=?
+      GROUP BY sl.settlement_id
+    ) scoped
+    JOIN settlement s ON s.id=scoped.settlement_id JOIN merchant m ON m.id=s.merchant_id
+    LEFT JOIN settlement_adjustment x ON x.settlement_id=s.id AND x.type=1 AND x.applied_settlement_id IS NULL
+      AND EXISTS (
+        SELECT 1 FROM orders o JOIN tour_product p ON p.id=o.product_id
+        WHERE o.id=x.order_id AND COALESCE(o.contribution_scenic_id,p.scenic_id)=?
+      )
+    GROUP BY s.id,s.period,s.status,m.name,s.split_snapshot,scoped.scenic_orders,scoped.scenic_net_fen
+    ORDER BY s.id DESC ${limit == null ? '' : 'LIMIT ?'}`, params)
+  return rows.map(({ split_snapshot, ...row }) => {
+    const snap = typeof split_snapshot === 'string' ? JSON.parse(split_snapshot) : split_snapshot
+    return { ...row, scenic_payable_fen: Math.round(Number(row.scenic_net_fen) * Number(snap?.fulfill ?? 5800) / 10000) }
+  })
+}
+
 /** 退改手续费商户分成（万分比）：商户资料「退改手续费分成」优先，否则参数中心 settlement.refund_fee_merchant_pct */
 export async function feeShareBp(c, merchantId) {
   const m = await c.one('SELECT profile FROM merchant WHERE id = ?', [merchantId])

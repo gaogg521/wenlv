@@ -1151,26 +1151,7 @@ const admin = {
       if (!sub.scenicId) return []
       // V82/Codex复验 R2 二次修复：按授权结算行决定账单可见性——只显示包含本景区订单行的结算单；
       // 订单数按本景区行复算；调整按本景区行且未冲抵过滤；整单 order_count/五口径/成本不下发
-      const sid = Number(sub.scenicId)
-      const rows = await q(`SELECT s.id, s.period, s.status, m.name merchant_name,
-          (SELECT COUNT(DISTINCT sl.order_id) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id
-            WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_orders,
-          (SELECT COALESCE(SUM(sl.net_fen),0) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id
-            WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_net_fen,
-          (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1
-            AND x.applied_settlement_id IS NULL
-            AND x.order_id IN (SELECT o2.id FROM orders o2 JOIN tour_product p2 ON p2.id = o2.product_id WHERE p2.scenic_id = ?)) AS adjust_pending
-        FROM settlement s JOIN merchant m ON m.id = s.merchant_id
-        WHERE EXISTS (SELECT 1 FROM settlement_line sl2 JOIN orders o3 ON o3.id = sl2.order_id
-          JOIN tour_product p3 ON p3.id = o3.product_id
-          WHERE sl2.settlement_id = s.id AND p3.scenic_id = ?)
-        ORDER BY s.id DESC`, [sid, sid, sid, sid])
-      for (const r of rows) {
-        const snap = await one('SELECT split_snapshot FROM settlement WHERE id = ?', [r.id])
-        const sp = typeof snap.split_snapshot === 'string' ? JSON.parse(snap.split_snapshot || '{}') : (snap.split_snapshot || {})
-        r.scenic_payable_fen = Math.round(Number(r.scenic_net_fen) * Number(sp.fulfill != null ? sp.fulfill : 5800) / 10000)
-      }
-      return rows
+      return promo.scenicSettlementRows(sub.scenicId)
     }
     // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
     const rows = await q(`SELECT s.*, m.name merchant_name,
@@ -1344,12 +1325,10 @@ const admin = {
       if (a.role === 'scenic_partner') {
         // V82 主体方（景区）：与结算页同口径的投影行（本景区净额），无整单五口径与成本
         if (!subSX.scenicId) return { name, filename: name + '-empty.csv', csv: '' }
-        rows = await q(`SELECT s.id, m.name merchant_name, s.period, s.status,
-          (SELECT COUNT(DISTINCT sl.order_id) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_orders,
-          (SELECT COALESCE(SUM(sl.net_fen),0) FROM settlement_line sl JOIN orders o ON o.id = sl.order_id WHERE sl.settlement_id = s.id AND o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)) AS scenic_net_fen
-        FROM settlement s JOIN merchant m ON m.id = s.merchant_id
-        WHERE EXISTS (SELECT 1 FROM settlement_line sl2 JOIN orders o3 ON o3.id = sl2.order_id JOIN tour_product p3 ON p3.id = o3.product_id WHERE sl2.settlement_id = s.id AND p3.scenic_id = ?)
-        ORDER BY s.id DESC LIMIT 2000`, [subSX.scenicId, subSX.scenicId, subSX.scenicId])
+        rows = (await promo.scenicSettlementRows(subSX.scenicId, 2000)).map(r => ({
+          id: r.id, merchant_name: r.merchant_name, period: r.period, status: r.status,
+          scenic_orders: r.scenic_orders, scenic_net_fen: r.scenic_net_fen,
+        }))
       } else {
         let sxSql = '', sxParams = []
         if (a.role === 'merchant_partner') { if (!subSX.merchantId) return { name, filename: name + '-empty.csv', csv: '' }; sxSql = ' AND s.merchant_id = ?'; sxParams = [subSX.merchantId] }

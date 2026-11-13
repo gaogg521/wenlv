@@ -1,6 +1,7 @@
 // 主体方经营看板（V82）：商户/景区主体方登录 PC 的默认首页——只聚合本主体授权范围，口径与各源账一致。
-import { q, one, BizError } from '../db.mjs'
+import { one, BizError } from '../db.mjs'
 import { requireAdmin, subjectScope } from './_shared.mjs'
+import { scenicSettlementRows } from '../domain/promo.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
 
 const num = v => Number(v || 0)
@@ -20,7 +21,7 @@ export const partnerDash = {
       const refund = await one(`SELECT COUNT(*) n, COALESCE(SUM(r.amount),0) amt FROM refunds r JOIN orders o ON o.id = r.order_id
         WHERE o.merchant_id = ? AND r.status = 2 AND r.settled_at >= ?`, [mid, from])
       const settle = await one(`SELECT COUNT(*) n,
-          COALESCE(SUM(amt_fulfill + COALESCE(fee_merchant,0) + (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1)),0) payable,
+          COALESCE(SUM(amt_fulfill + COALESCE(fee_merchant,0) + (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1 AND x.applied_settlement_id IS NULL)),0) payable,
           COALESCE(SUM(IF(status = 3, amt_fulfill + COALESCE(fee_merchant,0),0)),0) paid
         FROM settlement s WHERE s.merchant_id = ?`, [mid])
       const pendingItems = num((await one(`SELECT COUNT(*) n FROM order_item oi WHERE oi.merchant_id = ? AND oi.status = 0
@@ -41,17 +42,18 @@ export const partnerDash = {
         WHERE p.scenic_id = ? AND o.status IN (20,30,40,50) AND o.paid_at >= ?`, [sid, from])
       const refund = await one(`SELECT COUNT(*) n, COALESCE(SUM(r.amount),0) amt FROM refunds r JOIN orders o ON o.id = r.order_id JOIN tour_product p ON p.id = o.product_id
         WHERE p.scenic_id = ? AND r.status = 2 AND r.settled_at >= ?`, [sid, from])
-      const settle = await one(`SELECT COUNT(*) n,
-          COALESCE(SUM(s.amt_fulfill + COALESCE(s.fee_merchant,0) + (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1)),0) payable,
-          COALESCE(SUM(IF(s.status = 3, s.amt_fulfill + COALESCE(s.fee_merchant,0),0)),0) paid
-        FROM settlement s
-        WHERE EXISTS (SELECT 1 FROM tour_product p2 WHERE p2.merchant_id = s.merchant_id AND p2.scenic_id = ?)`, [sid])
+      const settlements = await scenicSettlementRows(sid)
+      const settlement = {
+        count: settlements.length,
+        payableFen: settlements.reduce((sum, row) => sum + row.scenic_payable_fen + num(row.adjust_pending), 0),
+        paidFen: settlements.reduce((sum, row) => sum + (Number(row.status) === 3 ? row.scenic_payable_fen : 0), 0),
+      }
       const merchants = num((await one(`SELECT COUNT(DISTINCT merchant_id) n FROM tour_product WHERE scenic_id = ?`, [sid])).n)
       const reviews = num((await one(`SELECT COUNT(*) n FROM scenic_review WHERE scenic_id = ?`, [sid])).n)
       return { kind: 'scenic', subject: { id: Number(sc.id), name: sc.name, cityCode: sc.city_code }, windowDays: 30,
         recent: { orders: num(recent.orders), gmvFen: num(recent.gmv) },
         refunds: { count: num(refund.n), amountFen: num(refund.amt) },
-        settlement: { count: num(settle.n), payableFen: num(settle.payable), paidFen: num(settle.paid) },
+        settlement,
         boundMerchants: merchants, reviews }
     }
     throw new BizError(1003, '主体方经营看板仅对商户/景区主体方开放')
