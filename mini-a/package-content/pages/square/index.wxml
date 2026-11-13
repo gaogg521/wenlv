@@ -5,7 +5,7 @@
     <image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" class="feed-cover" />
     <view class="feed-cover feed-ph" wx:else>📝</view>
     <view style="flex:1;min-width:0">
-      <view class="feed-title">{{item.title || '无标题笔记'}}</view>
+      <view class="feed-title">{{item.title || '无标题笔记'}}<text wx:if="{{item.hasVideo}}" class="tag">视频</text></view>
       <view class="sub2">{{item.author}} · {{item.when}}{{item.productTitle ? ' · ' + item.productTitle : ''}}</view>
       <view class="feed-actions">
         <text catchtap="like" data-id="{{item.id}}" data-liked="{{item.liked}}" style="{{item.liked ? 'color:#e87722' : ''}}">{{item.liked ? '♥' : '♡'}} {{item.likeCount}}</text>

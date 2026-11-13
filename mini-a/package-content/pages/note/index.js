@@ -8,9 +8,10 @@ Page({
     try {
       await api.ensureLogin()
       const n = await api.request('/c/notes/' + this.id)
-      this.setData({ liked: n.liked, likeCount: n.likeCount, n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || n.body || '' } })
-    } catch (e) { this.setData({ n: null, loadTxt: '内容暂未加载（演示模式）' }) }
+      this.setData({ liked: n.liked, likeCount: n.likeCount, n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '', images: (n.images || []).map(api.img) } })
+    } catch (e) { this.setData({ n: null, loadTxt: e.msg || '内容暂未加载，请重试' }) }
   },
+  previewImage(e) { const urls=this.data.n.images; wx.previewImage({urls,current:urls[e.currentTarget.dataset.i]}) },
   async toggleLike() {
     try {
       const r = await api.request('/c/notes/' + this.id + '/like', this.data.liked ? 'DELETE' : 'POST')

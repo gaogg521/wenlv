@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8080)
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' }
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp4': 'video/mp4' }
 
 async function bootstrap() {
   // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
@@ -91,7 +91,25 @@ const server = http.createServer(async (req, res) => {
   // 静态：/uploads → 用户上传文件（头像等；路径穿越已防护）
   if (req.method === 'GET' && pathname.startsWith('/uploads/')) {
     const file = path.join(__dirname, '..', 'static', pathname)
-    if (file.startsWith(path.join(__dirname, '..', 'static')) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+    if (file.startsWith(path.join(__dirname, '..', 'static', 'uploads') + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      if (/^ugc-video-/.test(path.basename(file))) {
+        const size = fs.statSync(file).size
+        const headers = {'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'public, max-age=86400'}
+        const range = req.headers.range
+        if (range) {
+          const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+          const start = match?.[1] ? Number(match[1]) : Math.max(0,size-Number(match?.[2]))
+          const end = match?.[1] && match[2] ? Math.min(Number(match[2]),size-1) : size-1
+          if (!match || !(start >= 0 && start <= end && start < size)) {
+            res.writeHead(416,{'Content-Range':'bytes */'+size})
+            return res.end()
+          }
+          res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${size}`,'Content-Length':end-start+1})
+          return fs.createReadStream(file,{start,end}).pipe(res)
+        }
+        res.writeHead(200,{...headers,'Content-Length':size})
+        return fs.createReadStream(file).pipe(res)
+      }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' })
       return res.end(fs.readFileSync(file))
     }
@@ -123,7 +141,14 @@ const server = http.createServer(async (req, res) => {
   if (!handler) return json(res, 1004, { message: '接口不存在: ' + req.method + ' ' + pathname }, 404)
 
   const chunks = []
-  for await (const ch of req) chunks.push(ch)
+  let size = 0
+  for await (const ch of req) {
+    size += ch.length
+    if (pathname === '/c/upload/note-video' && size > 12 * 1024 * 1024) {
+      return json(res,1001,{message:'请选择 8 MB 以内的 MP4 视频'},413)
+    }
+    chunks.push(ch)
+  }
   const rawBody = Buffer.concat(chunks).toString('utf8')
   let body = {}
   try { body = rawBody ? JSON.parse(rawBody) : {} } catch { body = {} }

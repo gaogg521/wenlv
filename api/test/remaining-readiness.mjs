@@ -44,6 +44,14 @@ try {
   await applyMediaReview(result(checks[1].trace_id))
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?', [note.id])).status), 2)
   assert.equal((await applyMediaReview(result(checks[1].trace_id, 'risky'))).duplicate, true)
+  const edit = cNotes['PUT /c/notes/:id']
+  const revised = await edit({ headers, params:{id:note.id}, body:{title:'修订待审',body:'编辑后必须再次人工审核',images:['/uploads/updated.jpg'],revision:1} })
+  assert.equal(revised.status,0)
+  const current = await one('SELECT body FROM content_note WHERE id=?',[note.id])
+  const currentBody = typeof current.body === 'string' ? JSON.parse(current.body) : current.body
+  await applyMediaReview(result(currentBody.imgSec[0].traceId))
+  assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?',[note.id])).status),1,'图片通过后仍需人工复审')
+  await assert.rejects(() => edit({headers,params:{id:note.id},body:{title:'旧版本',body:'旧内容',revision:1}}),/状态已变化/)
   const concurrent = await postNote({ title: '并发多图', body: '最后两张并发通过也必须发布', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }); notes.push(concurrent.id)
   const parallel = await q('SELECT trace_id FROM content_media_check WHERE note_id=?', [concurrent.id])
   await Promise.all(parallel.map(x => applyMediaReview(result(x.trace_id))))

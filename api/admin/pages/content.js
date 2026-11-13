@@ -196,6 +196,7 @@ function submissionHtml(n) {
     <h2 class="rv-title">${esc(n.title || '（无题）')}</h2>
     <div class="rv-body rt-preview">${n.html || esc(n.text) || '<span class="muted">（无正文）</span>'}</div>
     ${n.images.length ? `<div class="rv-h" style="margin-top:12px">图片一览（${n.images.length}，点击看原图）</div><div class="rv-imgs">${n.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="投稿图片" loading="lazy"></a>`).join('')}</div>` : ''}
+    ${n.video ? `<video controls preload="metadata" src="${esc(n.video)}" style="width:100%;max-height:420px"></video>` : ''}
     ${n.rejectReason ? `<p class="rv-reason">上次驳回原因：${esc(n.rejectReason)}</p>` : ''}
   </div>`
 }
@@ -259,14 +260,14 @@ async function reviewNote(id) {
     ${p.tasks.length ? `<div class="rv-box"><div class="rv-h">作为约稿投稿</div>${p.tasks.map((t) => esc(t.title)).join('<br>')}</div>` : ''}
     <div class="rv-box"><div class="rv-h">审核要点</div><div class="td-sub">是否原创、图文是否相符、有无广告导流/联系方式、有无不实承诺或违规内容。驳回原因会展示给作者。</div></div>`
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）"></textarea>
-    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false)">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true)">通过并发布</button></div>` : (pending ? '<p class="muted">当前账号仅可查看审核材料；请由审核员或超级管理员完成通过或驳回。</p>' : '')
+    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false, ${n.revision})">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true, ${n.revision})">通过并发布</button></div>` : (pending ? '<p class="muted">当前账号仅可查看审核材料；请由审核员或超级管理员完成通过或驳回。</p>' : '')
   reviewDrawer(`${live ? '审核笔记' : '查看笔记'} · ${esc(n.title || '（无题）')}`, `<div class="rv-grid"><div>${submissionHtml(n)}</div><div>${right}</div></div>`, foot)
 }
-async function noteVerdict(id, pass) {
+async function noteVerdict(id, pass, revision) {
   if (!adminCan('note.review')) return toast('请由审核员或超级管理员处理笔记审核', true)
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
-  try { await api('POST', `/admin/content/${id}/verdict`, { pass, reason }); toast(pass ? '已通过并发布' : '已驳回，作者可看到原因'); closeModal(); content() } catch (e) { toast(e.message, true) }
+  try { await api('POST', `/admin/content/${id}/verdict`, { pass, reason, revision }); toast(pass ? '已通过并发布' : '已驳回，作者可看到原因'); closeModal(); content() } catch (e) { toast(e.message, true) }
 }
 async function deleteTask(id) {
   if (!adminCan('task.delete')) return toast('任务删除由运营或超级管理员处理', true)
