@@ -28,6 +28,10 @@ window.partnerDashPage = async function () {
     <div class="kpi-grid">${cards.concat(extra).map(([t, v, s]) => `
       <div class="kpi"><div class="kpi-label">${t}</div><div class="kpi-value">${esc(v)}</div><div class="td-sub">${s}</div></div>`).join('')}
     </div>
+    <div class="card-head" style="margin-top:16px"><h3>经营测算与示例</h3></div>
+    <p class="muted" style="margin:-6px 0 8px">底部测算工具与已验收的经营分析一致：六项假设（订单量/客单价/综合变现率/变动成本率/权益成本率/固定成本）、月经营贡献结余、最少打平单量、四条单变量达标路径与敏感性表。朱家角示例（Codex 核验）：4,900 单月亏 ¥4,041，最少 5,013 单，最低变现率 20.21%；情景测算用于假设比较，实际收入/应付以订单与结算账本为准。</p>
+    <button type="button" class="btn primary sm scenic-calc-help" data-context="${isMerchant ? 'merchant' : 'scenic'}" data-target="${d.subject.id}" onclick="openScenicCalcHelp(this)">❓ 经营测算（六项假设 · 四条路径 · 敏感性 · 朱家角示例）</button>
+    <span class="muted" style="margin-left:10px">测算仅供估算；写入预算、付款、权益发放仍走既有审批与业务入口。</span>
     <div class="card-head" style="margin-top:16px"><h3>下一步</h3></div>
     <p class="muted" style="margin:-6px 0 0">
       ${isMerchant

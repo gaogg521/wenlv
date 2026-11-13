@@ -101,7 +101,7 @@ export async function tickRefundRefresh() {
 export async function tickPartialRefundRefresh() {
   const rows = await q(`SELECT pr.order_id, pr.refund_no FROM partial_refund pr JOIN refunds r ON r.refund_no = pr.refund_no
     WHERE pr.status = 0 AND r.status = 0 ORDER BY pr.id LIMIT 50`)
-  if (!rows.length) return 0
+  // Codex复验 R3：第一段为空不得早退——漏单补登（第二段）仍须执行
   const wxpay = await import('./domain/wxpay.mjs')
   const pkg = await import('./domain/package.mjs')
   for (const r of rows) {
@@ -112,7 +112,17 @@ export async function tickPartialRefundRefresh() {
       // PROCESSING / ABNORMAL：保持处理中，下一轮重试
     } catch (e) { console.error('[job:partial-refund]', r.refund_no, e.message) }
   }
-  return rows.length
+  // Codex复验 R3 第二段：历史漏单补登——已确认成功（status=2）但被退项已进结算且缺调整登记的，
+  // 重跑幂等登记（uk_refund_merchant，部分提供方失败下轮重试剩余）。覆盖确认期写入失败与历史存量。
+  const missed = await q(`SELECT pr.order_id, pr.refund_no FROM partial_refund pr
+    WHERE pr.status = 2 AND EXISTS (SELECT 1 FROM order_item oi WHERE oi.order_id = pr.order_id AND oi.settle_line_id IS NOT NULL AND oi.status = 2)
+    AND NOT EXISTS (SELECT 1 FROM settlement_adjustment x WHERE x.refund_no = pr.refund_no AND x.type = 1)
+    ORDER BY pr.id LIMIT 50`)
+  for (const m of missed) {
+    try { await (await import('./domain/promo.mjs')).recordRefundAdjustment(Number(m.order_id), m.refund_no, 'system:missed-adjust') }
+    catch (e) { console.error('[job:partial-refund:missed]', m.refund_no, e.message) }
+  }
+  return rows.length + missed.length
 }
 /** A-11 过期未核销：核销窗口（出发日 + pass.verify_end_days 天）已过仍未核销的订单 → 全额退款 + 凭证作废 + 通知游客。
  *  此前这类单永久停在 30：游客不能自助退（退改梯度不含已出发）、商户结算不了、提前核销还能进观察期。 */

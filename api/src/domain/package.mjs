@@ -223,9 +223,11 @@ export async function confirmPartialRefund(orderId, refundNo) {
     // V84：异步成功终态复用 recheckOrderContribution——按净实收重算贡献与成长冲正，与退款同事务
     await (await import('./contribution-growth.mjs')).recheckOrderContribution(c, orderId)
   })
-  // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）
-  try { await (await import('./promo.mjs')).recordRefundAdjustment(orderId, refundNo) } catch (e) { console.error('[partial-refund:adjust]', orderId, e.message) }
-  return { confirmed: true }
+  // 修复4：被退项已进结算（settle_line_id 非空）→ 按提供方登记结算调整（不改动已出账单快照）。
+  // Codex复验 R3：登记失败不吞——资金已退不可回滚，状态保持成功，由补偿任务按幂等登记补登（见 tickPartialRefundRefresh 第二段）。
+  let adjustmentRetried = false
+  try { await (await import('./promo.mjs')).recordRefundAdjustment(orderId, refundNo) } catch (e) { adjustmentRetried = true; console.error('[partial-refund:adjust-retry-scheduled]', orderId, refundNo, e.message) }
+  return { confirmed: true, adjustmentRetried }
 }
 
 /** 分项退款失败转人工（回执 CLOSED / 长期异常）：
