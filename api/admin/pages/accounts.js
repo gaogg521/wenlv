@@ -63,9 +63,9 @@ async function accountsList() {
   const MFA_CH_CN = { totp: '验证器 App', sms: '短信', email: '邮箱' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">${ICONS.user}</div><div><div class="l">有效账号</div><div class="v">${active.length}/${rows.length}</div><div class="s">停用后旧会话立即失效</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">${ICONS.city}</div><div><div class="l">城市合伙人账号</div><div class="v">${cityAccounts.length}</div><div class="s">必绑城市 · 只看本城</div></div></div>
-    <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">${ICONS.lock}</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
+    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🧑‍💼</div><div><div class="l">有效账号</div><div class="v">${active.length}/${rows.length}</div><div class="s">停用后旧会话立即失效</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">🏙</div><div><div class="l">城市合伙人账号</div><div class="v">${cityAccounts.length}</div><div class="s">必绑城市 · 只看本城</div></div></div>
+    <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 权限 / 验证方式（MFA）/ 停用恢复 / 重置密码 · 全部操作留审计</span></div>
@@ -85,7 +85,7 @@ async function accountsList() {
         ops.push(`<button class="btn ghost sm" onclick="accountResetPwd(${u.id}, '${escJs(u.username)}')">重置密码</button>`)
         if (Number(u.mfa_enabled) === 1) ops.push(`<button class="btn ghost sm" onclick="accountMfaReset(${u.id}, '${escJs(u.username)}')">重置MFA</button>`)
         // 内置 admin 或最后一个有效超管：停用入口置灰并给原因，不是「看着能点实际不能点」
-        if (u.username === 'admin' || lastSuper) ops.push('<span class="td-sub" title="内置管理员或最后一个有效超管，不能停用">停用</span>')
+        if (u.username === 'admin' || lastSuper) ops.push('<span class="td-sub" title="内置管理员或最后一个有效超管，不能停用">停用🔒</span>')
         else ops.push(Number(u.status) === 1
           ? `<button class="btn danger sm" onclick="accountToggle(${u.id}, 0, '${escJs(u.username)}')">停用</button>`
           : `<button class="btn primary sm" onclick="accountToggle(${u.id}, 1, '${escJs(u.username)}')">恢复</button>`)

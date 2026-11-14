@@ -29,7 +29,7 @@
   <view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
 </view>
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
-<view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">◌</view>暂无在架线路</view>
+<view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
 <view wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
     <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>

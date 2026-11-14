@@ -1,9 +1,9 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
 <view wx:if="{{loading}}"><view class="skeleton" wx:for="{{[1,2]}}" wx:key="*this"></view></view>
-<view wx:elif="{{empty}}" class="empty"><view class="e-ico">◌</view>还没有订单，去首页看看线路吧</view>
+<view wx:elif="{{empty}}" class="empty"><view class="e-ico">🧾</view>还没有订单，去首页看看线路吧</view>
 <block wx:else>
   <view class="tour-item fade-up" wx:for="{{orders}}" wx:key="order_no" bindtap="goDetail" data-no="{{item.order_no}}">
-    <view class="tour-cover cover-{{index % 5}}" style="font-size:44rpx">票</view>
+    <view class="tour-cover cover-{{index % 5}}" style="font-size:44rpx">🎫</view>
     <view style="flex:1;min-width:0">
       <view style="display:flex;align-items:center;gap:12rpx">
         <view class="tour-title" style="flex:1">{{item.title}}</view>

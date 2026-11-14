@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="对账结算" />
-<view class="page-heading"><view class="page-eyebrow">对账结算</view><view class="page-title">每一笔经营，清楚有据</view><view class="page-caption">逐期核对金额，跟进真实支付进度</view></view>
+<view class="page-heading"><view class="page-eyebrow">RECONCILIATION</view><view class="page-title">每一笔经营，清楚有据</view><view class="page-caption">逐期核对金额，跟进真实支付进度</view></view>
 <view class="paper-metrics"><view><text class="paper-number">{{pendingCount || 0}}</text><text class="paper-label">待确认账单</text></view><view><text class="paper-number">¥{{pendingAmount || '0.00'}}</text><text class="paper-label">待确认应结金额</text></view></view>
 <view class="filter-chips settlement-filters"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{state === item.k ? 'active' : ''}}" bindtap="filterState" data-k="{{item.k}}">{{item.n}}</view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>

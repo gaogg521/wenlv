@@ -15,8 +15,8 @@ async function phrases() {
   const noPhrase = unconf.rows
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fff1e6">${ICONS.mask}</div><div><div class="l">已配暗号产品</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">剧本游入戏凭证</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">${ICONS.box}</div><div><div class="l">待配置产品</div><div class="v">${noPhrase.length}</div><div class="s">可选配暗号（在架产品）</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#f1e9fd">🎭</div><div><div class="l">已配暗号产品</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">剧本游入戏凭证</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📦</div><div><div class="l">待配置产品</div><div class="v">${noPhrase.length}</div><div class="s">可选配暗号（在架产品）</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>暗号管理</h2><span class="muted">剧本游「入戏」凭证 · 用户暗号给游客 · 商家暗号核销员对答</span></div>
@@ -65,8 +65,8 @@ async function rateov() {
   const avgRate = d.avgBp ? (d.avgBp / 100).toFixed(1) : '—'
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:#fdf3e0">${ICONS.chart}</div><div><div class="l">已设覆盖</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">单品费率覆盖</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">${ICONS.chartup}</div><div><div class="l">平均覆盖费率</div><div class="v">${avgRate}%</div><div class="s">全量口径 · 上限 12% · 留空=恢复档位</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#fdf3e0">📊</div><div><div class="l">已设覆盖</div><div class="v">${Number(d.total).toLocaleString()}</div><div class="s">单品费率覆盖</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">📈</div><div><div class="l">平均覆盖费率</div><div class="v">${avgRate}%</div><div class="s">全量口径 · 上限 12% · 留空=恢复档位</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>逐品佣金覆盖</h2><span class="muted">D2 扩展 · 单品费率优先于推广商档位 5/8/12%</span></div>
@@ -98,7 +98,7 @@ async function kyc() {
   const passed = all.filter((x) => x.status === 1).length
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi go" ${dxKey} title="只看待审" onclick="window.__kycSt='0';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">${ICONS.clip}</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看待审" onclick="window.__kycSt='0';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
     <div class="kpi go" ${dxKey} title="只看已通过" onclick="window.__kycSt='1';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
     <div class="kpi go" ${dxKey} title="只看已驳回" onclick="window.__kycSt='2';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${all.filter((x) => x.status === 2).length}</div><div class="s">资料不符</div></div></div>
   </div>
@@ -136,10 +136,10 @@ async function cocreate() {
   const CO_ST = { 0: '<span class="pill warn">待打款</span>', 1: '<span class="pill ok">已结清</span>', 2: '<span class="pill s70">已作废</span>' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创人列表" onclick="document.getElementById('coList').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">${ICONS.money}</div><div><div class="l">累计投资额</div><div class="v">${fen(totalInvest)}</div><div class="s">共创人投入</div></div></div>
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">${ICONS.bank}</div><div><div class="l">应付分润</div><div class="v">${fen(totalDue)}</div><div class="s">结算期自动入账</div></div></div>
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">${ICONS.check}</div><div><div class="l">已登记打款</div><div class="v">${fen(totalPaid)}</div><div class="s">按真实回单累计</div></div></div>
-    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">${ICONS.clock}</div><div><div class="l">待打款 / 待复核</div><div class="v">${fen(pendingPay)}${pendingApprovals ? ' / ' + pendingApprovals + ' 笔' : ''}</div><div class="s">登记 ≠ 实际到账</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创人列表" onclick="document.getElementById('coList').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">💰</div><div><div class="l">累计投资额</div><div class="v">${fen(totalInvest)}</div><div class="s">共创人投入</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🏦</div><div><div class="l">应付分润</div><div class="v">${fen(totalDue)}</div><div class="s">结算期自动入账</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">✅</div><div><div class="l">已登记打款</div><div class="v">${fen(totalPaid)}</div><div class="s">按真实回单累计</div></div></div>
+    <div class="kpi go" role="link" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" title="定位到共创分润台账" onclick="document.getElementById('coLedger').scrollIntoView({behavior:'smooth'})"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">⏳</div><div><div class="l">待打款 / 待复核</div><div class="v">${fen(pendingPay)}${pendingApprovals ? ' / ' + pendingApprovals + ' 笔' : ''}</div><div class="s">登记 ≠ 实际到账</div></div></div>
   </div>
   <div class="card">
     <div class="card-head" id="coList"><h2>共创人管理</h2><span class="muted">资金商/商品商 · 按产品投资分润 · 结算期自动入账</span></div>
@@ -177,7 +177,7 @@ async function cocreate() {
       <td>${CO_ST[x.status] || x.status}${Number(x.pending_approvals) > 0 ? '<div><span class="pill warn">待复核 ' + x.pending_approvals + '</span></div>' : ''}</td>
       <td class="td-sub">${x.pay_ref ? esc(x.pay_ref) + '<br>' + esc(x.pay_channel || '') + (x.paid_by ? ' · ' + esc(x.paid_by) : '') : '—'}</td>
       <td><div class="td-actions">${actions.join('')}</div></td></tr>`}).join('')}</tbody></table>`
-    : '<div class="empty"><div class="e-ico">' + ICONS.chart + '</div>暂无分润记录——生成结算单后自动入账</div>'}</div>`
+    : '<div class="empty"><div class="e-ico">📊</div>暂无分润记录——生成结算单后自动入账</div>'}</div>`
 }
 window.toggleCo = async (id, st) => { await api('POST', '/admin/co-creators/' + id + '/status', { status: st === 1 ? 0 : 1 }); go('cocreate') }
 // 登记打款（T01）：真实流水号 + 回单附件 + 实付金额；达到审批阈值需超管复核后生效

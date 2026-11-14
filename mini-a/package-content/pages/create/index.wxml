@@ -40,7 +40,7 @@
   </view>
   <button class="btn" bindtap="publish" loading="{{busy}}" disabled="{{busy || uploading}}">{{editId ? '保存并提交审核' : '发布'}}</button>
   <button wx:if="{{editId}}" class="btn ghost" bindtap="cancelEdit" disabled="{{busy || uploading}}">取消编辑</button>
-  <view class="btn ghost" bindtap="goSquare" style="margin-top:12rpx">旅行笔记广场 · 看看大家去了哪</view>
+  <view class="btn ghost" bindtap="goSquare" style="margin-top:12rpx">🏮 旅行笔记广场 · 看看大家去了哪</view>
   <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
 </view>
 

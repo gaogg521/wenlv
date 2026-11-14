@@ -8,7 +8,7 @@ Component({
       { path: '/pages/index/index', text: '工作台', ico: '▦' },
       { path: '/pages/orders/index', text: '订单', ico: '☰' },
       { path: '/pages/supply/index', text: '库存', ico: '▣' },
-      { path: '/pages/me/index', text: '我的', ico: '◉' },
+      { path: '/pages/me/index', text: '我的', ico: '👤' },
     ],
   },
   lifetimes: { attached() { this.sync() } },

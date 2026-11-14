@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="我的门店" tab="{{true}}" />
-<view class="page-heading"><view class="page-eyebrow">门店经营</view><view class="page-title">我的门店，安心经营</view><view class="page-caption">门店身份、权益与日常管理</view></view>
+<view class="page-heading"><view class="page-eyebrow">MY BUSINESS</view><view class="page-title">我的门店，安心经营</view><view class="page-caption">门店身份、权益与日常管理</view></view>
 <view class="hero">
   <block wx:if="{{merchant}}"><view class="hi">{{merchant.name}}</view>
     <view class="sub2">商户号 {{merchant.merchant_no}}</view><view class="account-role">{{roleNames[role]}} · 已安全绑定门店</view></block>

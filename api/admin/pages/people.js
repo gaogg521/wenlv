@@ -50,10 +50,10 @@ async function users() {
     <button class="btn ghost sm" onclick="userSelClear()">清除选择</button></div>` : ''
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-    <div class="kpi go" ${dxKey} title="查看全部用户" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">${ICONS.users}</div><div><div class="l">注册用户</div><div class="v">${st.total.toLocaleString()}</div><div class="s">今日 +${st.today} · 近 7 日 +${sg.new7}</div></div></div>
-    <div class="kpi go" ${dxKey} title="筛选：下单用户" onclick="window.__userQ={seg:'buyer',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">${ICONS.cart}</div><div><div class="l">下单转化</div><div class="v">${pct(st.conversion)}</div><div class="s">下单用户 ${sg.buyer} 人</div></div></div>
-    <div class="kpi go" ${dxKey} title="筛选：复购用户" onclick="window.__userQ={seg:'repeat',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">${ICONS.repeat}</div><div><div class="l">复购率</div><div class="v">${pct(st.repeatRate)}</div><div class="s">复购 ${sg.repeat} 人 · 沉睡 ${sg.sleeping} 人</div></div></div>
-    <div class="kpi go" ${dxKey} title="筛选：下单用户，按消费金额排序" onclick="window.__userQ={seg:'buyer',kw:'',sort:'gmv',page:1};users()"><i class="go-arrow">↗</i><div class="ico">${ICONS.withdraw}</div><div><div class="l">人均消费</div><div class="v">${fen(st.arpu)}</div><div class="s">按下单用户计</div></div></div>
+    <div class="kpi go" ${dxKey} title="查看全部用户" onclick="window.__userQ={seg:'',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">👥</div><div><div class="l">注册用户</div><div class="v">${st.total.toLocaleString()}</div><div class="s">今日 +${st.today} · 近 7 日 +${sg.new7}</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：下单用户" onclick="window.__userQ={seg:'buyer',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">🛒</div><div><div class="l">下单转化</div><div class="v">${pct(st.conversion)}</div><div class="s">下单用户 ${sg.buyer} 人</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：复购用户" onclick="window.__userQ={seg:'repeat',kw:'',sort:'',page:1};users()"><i class="go-arrow">↗</i><div class="ico">🔁</div><div><div class="l">复购率</div><div class="v">${pct(st.repeatRate)}</div><div class="s">复购 ${sg.repeat} 人 · 沉睡 ${sg.sleeping} 人</div></div></div>
+    <div class="kpi go" ${dxKey} title="筛选：下单用户，按消费金额排序" onclick="window.__userQ={seg:'buyer',kw:'',sort:'gmv',page:1};users()"><i class="go-arrow">↗</i><div class="ico">💳</div><div><div class="l">人均消费</div><div class="v">${fen(st.arpu)}</div><div class="s">按下单用户计</div></div></div>
   </div>
   <div class="people-grid">
     <div class="card"><div class="card-head"><h2>近 14 日新增注册</h2></div>${dayBars(st.signups, { label: '新增注册' })}</div>
@@ -269,7 +269,7 @@ async function productProfile(id) {
     const bd = costPrev.breakdown
     return `<div class="rv-box"><h3>成本与预计毛利（实际成交口径 · 快照复算）</h3>
     ${bd ? `<p class="td-sub">每份固定成本 ${fen(bd.fixedFen)} + 每人/份变动成本 ${fen(bd.perUnitFen)}（当前生效供给项 ${bd.items.length} 项）；已售订单按下单时点快照，不受后续改价影响。</p>`
-      : '<p class="td-sub">尚未维护供给项成本——毛利“不可计算”，不默认为 0。到「商品与团期 → 供给项台账」录入，并用「成本构成」挂用。</p>'}
+      : '<p class="td-sub">⚠ 尚未维护供给项成本——毛利“不可计算”，不默认为 0。到「商品与团期 → 供给项台账」录入，并用「成本构成」挂用。</p>'}
     ${rows.length ? `<table class="ptable"><thead><tr><th>出发日</th><th>有效单价</th><th>每份成本</th><th>预计毛利</th><th>毛利率</th></tr></thead><tbody>
       ${rows.map((s) => `<tr><td>${esc(s.departDate)}</td><td class="money num">${fen(s.unitFen)}</td>
         <td class="num">${s.costFen != null ? fen(s.costFen) : '—'}</td>

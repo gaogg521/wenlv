@@ -3,7 +3,7 @@
 <view class="card" wx:if="{{items.length}}">
   <view class="feed-item" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
     <image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" class="feed-cover" />
-    <view class="feed-cover feed-ph" wx:else>✎</view>
+    <view class="feed-cover feed-ph" wx:else>📝</view>
     <view style="flex:1;min-width:0">
       <view class="feed-title">{{item.title || '无标题笔记'}}<text wx:if="{{item.hasVideo}}" class="tag">视频</text></view>
       <view class="sub2">{{item.author}} · {{item.when}}{{item.productText}}</view>
@@ -15,6 +15,6 @@
   </view>
   <view wx:if="{{hasMore}}" class="btn ghost" bindtap="fetch">加载更多</view>
 </view>
-<view wx:elif="{{!loading && !error}}" class="empty"><view class="e-ico">◌</view>还没有公开笔记 · 抢先发一篇</view>
+<view wx:elif="{{!loading && !error}}" class="empty"><view class="e-ico">🏮</view>还没有公开笔记 · 抢先发一篇</view>
 <view class="note">内容均通过平台安全检测 · 发现违规可在笔记详情页举报</view>
 <view class="btn" bindtap="goCreate" style="margin:16rpx 32rpx">去发布我的笔记</view>

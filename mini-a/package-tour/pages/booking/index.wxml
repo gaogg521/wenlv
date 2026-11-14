@@ -17,7 +17,7 @@
     <view class="kv" wx:if="{{selView.info.gather_time}}"><text>集合时间</text><text class="v">{{selView.info.gatherText}}</text></view>
     <view class="kv" wx:if="{{selView.info.vehicle}}"><text>交通安排</text><text class="v">{{selView.info.vehicle}}</text></view>
     <view class="kv" wx:if="{{selView.info.sign_deadline}}"><text>报名截止</text><text class="v">{{selView.info.sign_deadline}}</text></view>
-    <view class="muted2" wx:if="{{selView.info.note}}">{{selView.info.note}}</view>
+    <view class="muted2" wx:if="{{selView.info.note}}">⚠️ {{selView.info.note}}</view>
   </view>
 
   <view class="sec-title">2 · 出行人数与联系人</view>

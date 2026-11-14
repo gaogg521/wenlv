@@ -16,7 +16,7 @@ async function reviewqueue() {
     <div class="card" style="margin-bottom:12px">
       <div class="card-head"><h3>${esc(q.kindCn)} <span class="pill ${Number(q.total) ? 'warn' : 'off'}">共 ${Number(q.total).toLocaleString()} 待办</span></h3>
         <button class="btn ghost sm" onclick="go('${RQ_ROUTE[q.kind]}')">前往${esc(q.kindCn)} →</button></div>
-      ${q.truncated ? `<p class="td-sub" style="margin:4px 0 0">待办共 ${Number(q.total).toLocaleString()} 条，本页按等待时长仅显示最早 ${q.items.length} 条，其余请到${esc(q.kindCn)}栏目按列表翻页处理。</p>` : ''}
+      ${q.truncated ? `<p class="td-sub" style="margin:4px 0 0">⚠ 待办共 ${Number(q.total).toLocaleString()} 条，本页按等待时长仅显示最早 ${q.items.length} 条，其余请到${esc(q.kindCn)}栏目按列表翻页处理。</p>` : ''}
       ${q.items.length ? `<table><thead><tr><th style="width:36px"></th><th>ID</th><th>摘要</th><th>等待时长</th><th>认领状态</th><th>操作</th></tr></thead><tbody>
       ${q.items.map((it) => {
         // 本人判定优先按不可变 UID（旧数据无 uid 时回退名字快照）

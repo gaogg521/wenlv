@@ -3,7 +3,7 @@ const siteData = require('../../utils/site')
 const TAB_PAGES = ['home', 'tour-list', 'shop', 'bean', 'me'].map(p => '/pages/' + p + '/index')
 
 Page({
-  data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['◈', '⌕', '☼', '✧', '◌'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
+  data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
   onLoad(q) {
     const h = new Date().getHours()
     this.setData({ greet: h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好', themeEntries: siteData.DEFAULT.themes.map(t => ({ ...t, cover: api.coverFor(t) })) })

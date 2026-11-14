@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 Page({
-  data: { site: siteData.DEFAULT, items: [], fromApi: false, icons: ['◈', '✧', '◌'] },
+  data: { site: siteData.DEFAULT, items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
   retry() { this.onLoad() },
   onReady() { siteData.get().then((site) => this.setData({ site })) },
   onShow() { if (this.data.error) this.retry() }, // A-18：失败后回到本页自动重试

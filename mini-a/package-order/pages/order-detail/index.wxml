@@ -19,7 +19,7 @@
   <view class="card place-card" wx:if="{{o.merchantContact && o.merchantContact.name}}">
     <image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0"><view class="place-name">{{o.merchantContact.name}}</view><view class="muted2" wx:if="{{o.merchantContact.address}}">{{o.merchantContact.address}}</view></view>
-    <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">电话</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">导航</text></view>
+    <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">📞</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">🧭</text></view>
   </view>
 
   <view class="card" wx:if="{{o.refundInfo}}">

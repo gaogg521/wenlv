@@ -45,7 +45,7 @@
   <view class="card" wx:if="{{d.intro}}"><rich-text class="rich-p" nodes="{{d.intro}}"></rich-text></view>
 
   <view class="sec-title" wx:if="{{d.traffic}}">交通指引</view>
-  <view class="card" wx:if="{{d.traffic}}"><view class="rich-p">{{d.traffic}}</view></view>
+  <view class="card" wx:if="{{d.traffic}}"><view class="rich-p">🚇 {{d.traffic}}</view></view>
 
   <view class="sec-title" wx:if="{{d.tours.length}}">相关线路</view>
   <view class="tour-item" wx:for="{{d.tours}}" wx:key="id" bindtap="goTour" data-id="{{item.id}}">

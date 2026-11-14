@@ -66,7 +66,7 @@
         <image wx:if="{{item.image}}" class="iti-img" src="{{item.image}}" mode="aspectFill" lazy-load />
       </view>
     </view>
-    <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">交通 {{extra.transport}}</view>
+    <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">🚌 {{extra.transport}}</view>
   </view>
 
   <view class="sec-title" wx:if="{{rich.includes.length || rich.excludes.length}}">费用说明</view>
@@ -78,7 +78,7 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
-  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">{{p.meeting_point}}</view>
+  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
     <view wx:if="{{extra.meetingGeo}}" class="btn ghost sm-btn" bindtap="navMeeting">导航到集合点</view></view>
 
   <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
@@ -87,15 +87,15 @@
     <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{scenic.name}} <text class="tag" wx:if="{{scenic.scenic_level}}">{{scenic.scenic_level}}</text></view>
-      <view class="muted2" wx:if="{{scenic.open_hours}}">营业时间 {{scenic.open_hours}}</view>
-      <view class="muted2" wx:if="{{scenic.address}}">{{scenic.address}}</view>
+      <view class="muted2" wx:if="{{scenic.open_hours}}">🕘 {{scenic.open_hours}}</view>
+      <view class="muted2" wx:if="📍 {{scenic.address}}">📍 {{scenic.address}}</view>
     </view><text class="pl-link">›</text>
   </view>
   <view class="card place-card" wx:if="{{merchant}}" bindtap="goPlace" data-kind="merchant" data-id="{{p.merchant_id}}">
     <image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
-      <view class="muted2" wx:if="{{merchant.hoursText}}">营业时间 {{merchant.hoursText}}</view>
+      <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
       <view class="mh-row" wx:if="{{merchant.honor}}">
         <image class="mh-crest" src="{{merchant.honor.art}}" mode="aspectFit" />
         <text class="mh-lv">{{merchant.honor.name}}</text>
@@ -127,7 +127,7 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
-  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">安全提示：{{p.safety_note}}</view></view>
+  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
 
   <view class="sec-title" wx:if="{{faqs.length}}">关于这条线路的常见问题</view>
   <view class="card" wx:if="{{faqs.length}}">
@@ -148,7 +148,7 @@
       <view class="muted2" style="margin-top:6rpx">{{item.created_at}}</view>
     </view>
   </view>
-  <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">◌</view>还没有评价 · 核销完成后可以写第一条</view>
+  <view wx:else class="empty" style="padding:40rpx 0"><view class="e-ico">💬</view>还没有评价 · 核销完成后可以写第一条</view>
   <view class="note" wx:if="{{!merchant}}">履约商户：{{p.merchant_name || '—'}}</view>
   <view style="height:150rpx"></view>
 

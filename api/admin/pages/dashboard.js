@@ -218,7 +218,7 @@ function dxKpis(k, ins, c) {
   return `<div class="dx-kpis kpi-grid">
     ${card('c-blue', 'order', '订单数', dxInt(orders), dxDelta(orders, k.prev.orders, c.cmp), '已支付以上', "dxDrill('paid')", '查看本周期已支付订单', dxSpark(k.trend.map((t) => t.orders), 200, 46, '#2f6fd6', 'dxS1', { top: 0.2, sw: 1.6 }))}
     ${card('c-amber', 'gmv', '客单价', dxMoney(aov), dxDelta(aov, pAov, c.cmp), 'GMV ÷ 订单数', "dxDrill('paid')", '查看本周期已支付订单')}
-    ${card('c-gold', 'user', '支付用户', dxInt(k.payers), dxDelta(k.payers, k.prev.payers, c.cmp), '去重用户数', "dxDrill('users','gmv')", '去用户中心（按消费金额排序）')}
+    ${card('c-violet', 'user', '支付用户', dxInt(k.payers), dxDelta(k.payers, k.prev.payers, c.cmp), '去重用户数', "dxDrill('users','gmv')", '去用户中心（按消费金额排序）')}
     ${rate('c-teal', 'trend', '下单支付转化', F ? F.payRate : '', '按下单时间 · 下单 → 已支付', "dxDrill('created')", '查看本周期下单的订单')}
     ${rate('c-green', 'check', '核销率', F ? F.verifyRate : '', '按下单时间 · 已核销 ÷ 已支付', `dxDrill('status','40,50')`, '查看本周期已核销 / 完成的订单')}
     ${rate('c-gold', 'repeat', '用户复购率', F ? F.rebuyRate : '', '周期内支付 ≥2 单的用户占比', "dxDrill('users','orders')", '去用户中心（按订单数排序）')}
@@ -315,11 +315,12 @@ async function dash() {
         : Promise.resolve({ unavailable: true, list: [] }),
     ])
     if (seq !== window.__dashSeq) return
+    const hour = new Date().getHours()
     const c = {
       rangeCn: ({ today: '今日', '7d': '近 7 天', '30d': '近 30 天', '1y': '近一年' })[k.range] || '自定义周期',
       cmp: DX_CMP[k.range] || '上一周期',
       cityTag: k.scopeCity ? `本城 ${k.scopeCity}` : '全域',
-      hello: ({ today: '今日经营', '7d': '近 7 天经营', '30d': '近 30 天经营', '1y': '近一年经营' })[k.range] || '自定义周期经营',
+      hello: (hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好') + '，' + esc(ME?.displayName || ME?.username || ''),
       todoTotal: ins ? Object.values(ins.pending).reduce((s, n) => s + n, 0) : 0,
     }
     window.__dxPer = { from: k.from, to: k.to } // 下钻用：把当前周期带到明细页

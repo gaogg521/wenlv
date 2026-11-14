@@ -9,8 +9,8 @@ async function budgets() {
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>旅豆预算池</h2><span class="muted">发放双闸：批次 ≤ 总额+回流 且 全局 ≤ 600 万豆/年（严禁超发红线）</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">${ICONS.bean}</div><div><div class="l">累计预算</div><div class="v num">${totalSum.toLocaleString()}</div><div class="s">豆</div></div></div>
-      <div class="kpi go" ${dxKey} title="去积分发行台账：看批次与持有人" onclick="go('pointassets')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">${ICONS.check}</div><div><div class="l">累计发放</div><div class="v num">${grantedSum.toLocaleString()}</div><div class="s">豆 · ${(grantedSum / Math.max(totalSum, 1) * 100).toFixed(1)}%</div></div></div>
+      <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🫘</div><div><div class="l">累计预算</div><div class="v num">${totalSum.toLocaleString()}</div><div class="s">豆</div></div></div>
+      <div class="kpi go" ${dxKey} title="去积分发行台账：看批次与持有人" onclick="go('pointassets')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">✅</div><div><div class="l">累计发放</div><div class="v num">${grantedSum.toLocaleString()}</div><div class="s">豆 · ${(grantedSum / Math.max(totalSum, 1) * 100).toFixed(1)}%</div></div></div>
     </div>
     <div class="row"><button class="btn primary sm" onclick="budgetModal()">＋ 新建批次</button><span class="muted">批次 = 发放双闸的第一道闸：批次余额与全局哨兵双重校验</span></div>
     ${rows.length ? `<table><thead><tr><th>批次</th><th>总额</th><th>已发放</th><th>回流</th><th>余量</th><th>状态</th><th>周期</th></tr></thead><tbody>
@@ -35,7 +35,7 @@ async function promoters() {
     ${rows.length ? `<table><thead><tr><th>用户</th><th>档位</th><th>费率</th><th>90 天有效成交</th><th>评分</th><th>状态</th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td><div class="td-main">${esc(p.nickname || '')}</div><div class="td-sub">ID ${p.user_id}</div></td>
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
-      <td class="money num">${fen(p.valid_gmv_90d)}</td><td class="num">${p.service_score}</td>
+      <td class="money num">${fen(p.valid_gmv_90d)}</td><td>⭐ ${p.service_score}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('promoter', ${p.user_id}, { onSaved: () => promoters() })">资料</button> <button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广员')}
   </div>`
 }

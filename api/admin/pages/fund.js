@@ -8,12 +8,12 @@ async function fund() {
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>资金待办全景</h2>${['super','finance','ops'].includes(ME.role)?'<button class="btn ghost sm" onclick="freedomPanel()">自由豆规则与发放</button>':''}${['super','finance'].includes(ME.role)?'<button class="btn primary sm" onclick="freedomFinance()">自由豆补贴对账</button>':''}<span class="muted">只读聚合 · 每条线保留各自账本与办理入口，点「去办理」下钻源业务</span></div>
-    <p class="td-sub">${esc(d.metricNote)}</p>
+    <p class="td-sub">⚠ ${esc(d.metricNote)}</p>
     <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
-    ${d.lines.map((l) => `<div class="kpi go" ${dxKey} title="去办理：${esc(l.label)}" onclick="go('${l.goto}')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">${ICONS.money}</div>
+    ${d.lines.map((l) => `<div class="kpi go" ${dxKey} title="去办理：${esc(l.label)}" onclick="go('${l.goto}')"><i class="go-arrow">↗</i><div class="ico" style="background:var(--brand-soft)">💰</div>
       <div><div class="l">${esc(l.label)} · 待办</div><div class="v">${yuan(l.pending.amount)}</div>
       <div class="s">${l.pending.count} 笔待办${l.paidCount != null ? ' · 已登记回单 ' + l.paidCount + ' 笔' : ''}</div>
-      ${l.issues.length ? l.issues.map((x) => `<div style="color:var(--red);margin-top:4px">${esc(x)}</div>`).join('') : '<div class="td-sub" style="color:var(--green)">无异常标记</div>'}
+      ${l.issues.length ? l.issues.map((x) => `<div style="color:var(--red);margin-top:4px">⚠ ${esc(x)}</div>`).join('') : '<div class="td-sub" style="color:var(--green)">无异常标记</div>'}
       <div style="margin-top:8px"><button class="btn primary sm" onclick="event.stopPropagation();go('${l.goto}')">去办理 →</button></div></div></div>`).join('')}
     </div>
   </div>
@@ -52,7 +52,7 @@ async function economicsBoard() {
   const d = await api('GET', `/admin/economics/dashboard?from=${from}&to=${to}${pid ? '&productId=' + pid : ''}${city ? '&city=' + city : ''}`)
   const num = (v) => v == null ? '<span class="muted">—</span>' : fen(v)
   const dimRows = (rows, keyLabel) => rows.length ? `<table><thead><tr><th>${keyLabel}</th><th>订单/人数</th><th>净销售额</th><th>直接成本</th><th>毛利</th><th>毛利率</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr><td class="td-main">${esc(r.title || r.key)}${r.costMissing ? `<div class="td-sub">${r.costMissing} 单成本未维护（不可计算，未按0计）</div>` : ''}</td>
+    ${rows.map((r) => `<tr><td class="td-main">${esc(r.title || r.key)}${r.costMissing ? `<div class="td-sub">⚠ ${r.costMissing} 单成本未维护（不可计算，未按0计）</div>` : ''}</td>
       <td class="num">${r.orders} / ${r.qty}</td><td class="num">${fen(r.netSalesFen)}</td><td class="num">${num(r.costFen)}</td>
       <td class="num">${r.profitFen != null ? '<b style="color:' + (r.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + fen(r.profitFen) + '</b>' : '—'}${r.negativeProfit ? ' <span class="pill warn">含负毛利</span>' : ''}</td>
       <td class="num" style="white-space:nowrap">${r.marginPct != null ? r.marginPct.toFixed(2) + '%' : '—'}</td></tr>`).join('')}</tbody></table>` : `<p class="td-sub">该维度暂无订单</p>`

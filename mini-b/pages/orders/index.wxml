@@ -1,5 +1,5 @@
 <merchant-nav id="merchant-navigation" title="门店订单" tab="{{true}}" />
-<view class="page-heading"><view class="page-eyebrow">订单履约</view><view class="page-title">每一段旅程，用心接待</view><view class="page-caption">本店履约进度 · 日期按支付时间筛选</view></view>
+<view class="page-heading"><view class="page-eyebrow">GUEST ORDERS</view><view class="page-title">每一段旅程，用心接待</view><view class="page-caption">本店履约进度 · 日期按支付时间筛选</view></view>
 <view class="filter-panel"><view class="search-field"><text>⌕</text><input value="{{kw}}" bindinput="onSearch" placeholder="搜索商品、订单号或联系人" /></view><view class="filter-chips"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{status === item.k ? 'active' : ''}}" bindtap="filterStatus" data-k="{{item.k}}">{{item.n}}</view></view></view>
 <view class="order-date-filter"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view class="range-picker">{{periodNames[periodIndex]}}　⌄</view></picker><picker wx:if="{{periodIndex === 4}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker></view>
 <view class="list-summary"><text>已加载 {{matchedCount || 0}} 笔</text><text>其中待接待 {{waitingCount || 0}} 笔</text></view>

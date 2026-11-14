@@ -1,5 +1,5 @@
 .dt-detail-bar { gap: 16rpx; }
 .dt-detail-bar .dt-share { flex: none; width: auto; min-width: 0; padding: 0 12rpx; }
-.dt-detail-bar .dt-bottom-price { flex: 1; min-width: 0; white-space: nowrap; font-size: 36rpx; font-variant-numeric: tabular-nums; }
-.dt-detail-bar .dt-price-suffix { margin-left: 6rpx; color: var(--sub); font-size: 22rpx; font-weight: 400; }
+.dt-detail-bar .dt-bottom-price { flex: 1; min-width: 0; white-space: nowrap; font-size:38rpx; font-variant-numeric: tabular-nums; }
+.dt-detail-bar .dt-price-suffix { margin-left: 6rpx; color: var(--sub); font-size:22rpx; font-weight: 400; }
 .dt-detail-bar .dt-cta { flex: none; min-width: 218rpx; white-space: nowrap; }
