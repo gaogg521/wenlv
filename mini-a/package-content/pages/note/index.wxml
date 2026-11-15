@@ -34,10 +34,6 @@
       <block wx:else>
         <rich-text nodes="{{n.html}}" class="article-plain"></rich-text>
         <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
-        <!-- 无 blocks 的旧数据：无视频时图集轮播已展示图片；视频+图片并存时才在正文内补图 -->
-        <block wx:if="{{n.video}}">
-          <image wx:for="{{n.imagesFull}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
-        </block>
       </block>
     </view>
 

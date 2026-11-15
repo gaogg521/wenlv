@@ -853,11 +853,16 @@ const cNotes = {
   'GET /c/notes': async (req) => {
     const u = requireUser(req)
     if(u.end!=='c')throw new BizError(1003,'仅游客账号可查看作品')
-    return await q(`SELECT c.id,c.title,c.status,c.like_count,c.comment_count,c.published_at,c.reject_reason,
+    const rows = await q(`SELECT c.id,c.title,c.status,c.like_count,c.comment_count,c.published_at,c.reject_reason,
+      JSON_UNQUOTE(JSON_EXTRACT(c.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(c.body,'$.coverIndex'),0), ']'))) cover_path,
+      JSON_TYPE(JSON_EXTRACT(c.body, '$.video')) = 'STRING' has_video,
       m.reason offline_reason,a.status appeal_status,a.resolution appeal_resolution,
       (c.status=4 AND c.moderation_id IS NOT NULL AND a.id IS NULL) can_appeal
       FROM content_note c LEFT JOIN content_moderation m ON m.id=(SELECT x.id FROM content_moderation x WHERE x.note_id=c.id ORDER BY x.id DESC LIMIT 1)
       LEFT JOIN content_appeal a ON a.moderation_id=m.id WHERE c.user_id=? ORDER BY c.id DESC LIMIT 30`,[u.uid])
+    // 我的作品网格（小红书式三列）：下发封面与视频标记；正文混排旧稿封面可能取不到，前端文字卡兜底
+    return rows.map(r => { const { cover_path, has_video, ...row } = r
+      return { ...row, cover: cover_path ? apiImg(cover_path, req) : null, hasVideo: Boolean(has_video) } })
   },
   'POST /c/notes': req => saveNote(req,false),
   'PUT /c/notes/:id': req => saveNote(req,true),

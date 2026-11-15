@@ -33,19 +33,36 @@
 
 <view class="sec-title">我的作品（{{notes.length}}）</view>
 <view class="note" wx:if="{{loadError}}">{{loadError}}<button bindtap="fetch">重新加载</button></view>
-<view class="card" wx:if="{{notes.length}}">
-  <block wx:for="{{notes}}" wx:key="id">
-    <view class="kv" bindtap="goNote" data-id="{{item.id}}"><text>{{item.title || '（无题）'}}</text><text class="v">{{item.statusText}} · 👍{{item.like_count}} · 💬{{item.comment_count}} ›</text></view>
-    <button wx:if="{{item.status === 2 || item.status === 3}}" class="btn ghost" bindtap="editNote" data-id="{{item.id}}" disabled="{{busy}}">编辑作品</button>
-    <view class="reject-tip" wx:if="{{item.status === 3 && item.reject_reason}}"><view class="reject-h">未通过原因</view>{{item.reject_reason}}</view>
-    <view class="reject-tip" wx:if="{{item.status === 4}}"><view class="reject-h">下架原因</view>{{item.offline_reason || '请联系平台了解详情'}}</view>
+<view class="work-tabs">
+  <view class="w-tab {{workFilter === item.k ? 'on' : ''}}" wx:for="{{workTabs}}" wx:key="k" bindtap="onWorkFilter" data-k="{{item.k}}">{{item.name}}</view>
+</view>
+<view class="work-grid" wx:if="{{!worksEmpty}}">
+  <view class="work-col" wx:for="{{worksCols}}" wx:key="index" wx:for-item="col">
+    <view class="work-card" wx:for="{{col}}" wx:key="id" wx:for-item="item" bindtap="openWork" longpress="onWorkLongPress" data-id="{{item.id}}">
+      <view class="wk-cover-box">
+        <image wx:if="{{item.cover}}" class="wk-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <view wx:else class="wk-cover wk-ph"><text class="wk-ph-text">{{item.coverChar}}</text></view>
+        <view wx:if="{{item.hasVideo}}" class="wk-play">▶</view>
+        <view class="wk-badge {{item.badgeClass}}">{{item.statusText}}</view>
+      </view>
+      <view class="wk-title">{{item.title || '（无题）'}}</view>
+      <view class="wk-meta"><text>👍 {{item.like_count}}</text><text>💬 {{item.comment_count}}</text></view>
+    </view>
+  </view>
+</view>
+<view class="note" wx:if="{{worksEmpty && !loadError}}">这个状态下还没有作品 · 长按卡片可编辑/查看/复核</view>
+<view class="card" wx:if="{{rejectTips.length}}">
+  <block wx:for="{{rejectShown}}" wx:key="id">
+    <view class="reject-tip" wx:if="{{item.status === 3 && item.reject_reason}}"><view class="reject-h">「{{item.title || '（无题）'}}」未通过原因</view>{{item.reject_reason}}</view>
+    <view class="reject-tip" wx:if="{{item.status === 4}}"><view class="reject-h">「{{item.title || '（无题）'}}」下架原因</view>{{item.offline_reason || '请联系平台了解详情'}}</view>
     <view class="note" wx:if="{{item.appealText}}">{{item.appealText}} {{item.appeal_resolution}}</view>
-    <button class="appeal-open" wx:if="{{item.can_appeal}}" bindtap="openAppeal" data-id="{{item.id}}">申请复核</button>
     <view wx:if="{{appealNoteId === item.id}}">
       <textarea class="appeal-reason" value="{{appealReason}}" bindinput="onAppealReason" maxlength="300" placeholder="请说明申诉理由与事实依据（4—300 字）"></textarea>
       <button class="appeal-submit" bindtap="submitAppeal" loading="{{appealBusy}}" disabled="{{appealBusy}}">提交申诉</button>
     </view>
   </block>
+  <view wx:if="{{rejectHidden > 0}}" class="c-more" bindtap="toggleRejectTips">展开其余 {{rejectHidden}} 条原因</view>
+  <view wx:if="{{rejectShowAll}}" class="c-more" bindtap="toggleRejectTips">收起原因</view>
 </view>
 <view class="note" wx:if="{{appealMsg}}">{{appealMsg}}</view>
 <view class="sec-title">我的举报（最近 30 条）</view>

@@ -9,7 +9,7 @@
   </view>
 
   <!-- 图集轮播（小红书同款：页码 / 删除 / 设为封面） -->
-  <view wx:if="{{images.length && !video}}" class="media-area">
+  <view wx:if="{{images.length}}" class="media-area">
     <view class="media-stage">
       <swiper class="media-swiper" current="{{current}}" bindchange="onSwiper">
         <swiper-item wx:for="{{images}}" wx:key="key">

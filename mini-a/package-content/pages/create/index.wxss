@@ -3,3 +3,25 @@
 .compose-btn::after { border: none; }
 .appeal-open,.appeal-submit { margin-top:18rpx;font-size:26rpx; }
 .appeal-reason { width:100%;min-height:160rpx;border:1rpx solid #ddd;padding:16rpx;box-sizing:border-box; }
+
+/* 我的作品：三列封面网格（小红书式）+ 状态筛选 */
+.work-tabs { display: flex; gap: 14rpx; padding: 8rpx 32rpx 4rpx; flex-wrap: wrap; }
+.w-tab { padding: 10rpx 26rpx; border-radius: 999rpx; background: #fff; font-size: 25rpx; color: #6b7280; border: 1rpx solid var(--line, #eee); }
+.w-tab.on { background: var(--brand-soft, #fdf1e3); color: var(--brand, #e87722); border-color: var(--brand, #e87722); font-weight: 600; }
+.work-grid { display: flex; gap: 12rpx; padding: 12rpx 32rpx 8rpx; }
+.work-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14rpx; }
+.work-card { background: #fff; border-radius: 14rpx; overflow: hidden; box-shadow: 0 2rpx 10rpx rgba(0,0,0,.05); }
+.wk-cover-box { position: relative; }
+.wk-cover { display: block; width: 100%; height: 300rpx; background: #f3ece2; }
+.wk-ph { display: flex; align-items: center; justify-content: center; }
+.wk-ph-text { font-size: 40rpx; font-weight: 700; color: #8a5a1f; }
+.wk-play { position: absolute; left: 10rpx; bottom: 40rpx; width: 36rpx; height: 36rpx; line-height: 36rpx; text-align: center;
+  border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; font-size: 18rpx; }
+.wk-badge { position: absolute; top: 10rpx; left: 10rpx; padding: 4rpx 14rpx; border-radius: 999rpx; font-size: 20rpx; color: #fff; }
+.wk-badge.ok { background: #3f9e5f; }
+.wk-badge.ing { background: rgba(232,119,34,.9); }
+.wk-badge.bad { background: #d64545; }
+.wk-badge.off { background: rgba(90,98,110,.85); }
+.wk-title { padding: 10rpx 14rpx 4rpx; font-size: 24rpx; color: #1f2937; font-weight: 600;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+.wk-meta { display: flex; gap: 16rpx; padding: 2rpx 14rpx 12rpx; font-size: 20rpx; color: #9ca3af; }

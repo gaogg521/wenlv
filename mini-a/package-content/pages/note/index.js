@@ -25,7 +25,7 @@ Page({
         liked: n.liked, likeCount: n.likeCount,
         n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '',
           imagesFull: imgs, blocksReady: blocks, topicsReady: n.topics || [] },
-        hasGallery: imgs.length > 0 && !n.video,
+        hasGallery: imgs.length > 0,
         mediaLabel: imgs.length ? '1/' + imgs.length : '',
       })
     } catch (e) { this.setData({ n: null, loadTxt: e.msg || '内容暂未加载，请重试' }) }
