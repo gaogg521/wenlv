@@ -11,12 +11,13 @@ import { requireModule } from './routes/_shared.mjs'
 import { hashPassword, initialAdminPassword, isProduction } from './auth.mjs'
 import { isLive } from './domain/wxpay.mjs'
 import { serveBadgeArt } from './domain/badge-art.mjs'
+import { noteMediaOwner, canReadNoteMedia } from './domain/note-media.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8080)
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp4': 'video/mp4' }
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.mp3': 'audio/mpeg' }
 
 async function bootstrap() {
   // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
@@ -89,12 +90,22 @@ const server = http.createServer(async (req, res) => {
     }
   }
   // 静态：/uploads → 用户上传文件（头像等；路径穿越已防护）
-  if (req.method === 'GET' && pathname.startsWith('/uploads/')) {
+  // UGC 媒体门禁（三期/V88）：笔记素材（note_<uid>_* 与 ugc-video-*）不是公开文件——
+  // 仅本人、被公开笔记引用、或持 note-review/note-editor 票据可读；其余一律 404 no-store
+  if (['GET','HEAD'].includes(req.method) && pathname.startsWith('/uploads/')) {
     const file = path.join(__dirname, '..', 'static', pathname)
+    const restricted = noteMediaOwner(path.basename(file)) !== null
+    if (restricted && pathname !== '/uploads/' + path.basename(file)) { res.writeHead(404); return res.end() }
+    if (/^(?:\.|ugc-edit-)/.test(path.basename(file))) { res.writeHead(404); return res.end() }
     if (file.startsWith(path.join(__dirname, '..', 'static', 'uploads') + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      if (restricted) {
+        const allowed = await canReadNoteMedia(pathname,url.searchParams.get('media'),req).catch(() => false)
+        if (!allowed) { res.writeHead(404, {'Cache-Control':'no-store'}); return res.end() }
+      }
+      const cache = restricted ? 'private, no-store' : 'public, max-age=86400'
       if (/^ugc-video-/.test(path.basename(file))) {
         const size = fs.statSync(file).size
-        const headers = {'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'public, max-age=86400'}
+        const headers = {'Content-Type':file.endsWith('.mov') ? 'video/quicktime' : 'video/mp4','Accept-Ranges':'bytes','Cache-Control':cache}
         const range = req.headers.range
         if (range) {
           const match = /^bytes=(\d*)-(\d*)$/.exec(range)
@@ -105,13 +116,16 @@ const server = http.createServer(async (req, res) => {
             return res.end()
           }
           res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${size}`,'Content-Length':end-start+1})
+          if (req.method === 'HEAD') return res.end()
           return fs.createReadStream(file,{start,end}).pipe(res)
         }
         res.writeHead(200,{...headers,'Content-Length':size})
+        if (req.method === 'HEAD') return res.end()
         return fs.createReadStream(file).pipe(res)
       }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' })
-      return res.end(fs.readFileSync(file))
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Content-Length':fs.statSync(file).size })
+      if (req.method === 'HEAD') return res.end()
+      return fs.createReadStream(file).pipe(res)
     }
   }
   // 静态：/badge-art/<勋章id>.svg → 服务端生成的勋章图形（公开，不含任何用户数据；?state=off 为未获得灰阶）
@@ -146,6 +160,9 @@ const server = http.createServer(async (req, res) => {
     size += ch.length
     if (pathname === '/c/upload/note-video' && size > 12 * 1024 * 1024) {
       return json(res,1001,{message:'请选择 8 MB 以内的 MP4 视频'},413)
+    }
+    if (req.method === 'POST' && /^\/c\/notes\/[^/]+\/comments$/.test(pathname) && size > 1024 * 1024) {
+      return json(res, 1001, { message: '评论附件过大' }, 413)
     }
     chunks.push(ch)
   }

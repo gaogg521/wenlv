@@ -15,7 +15,12 @@ const stamp = Date.now().toString(36)
 const C = ok(await call('POST', '/c/auth/login', { code: 'mock-review-' + stamp })).token
 const created = { tasks: [], notes: [] }
 
-const BODY_OK = '<p>清晨从放生桥出发，在集合点和领队碰头。</p><p>' + '水乡的石板路很好走，'.repeat(12) + '</p><img src="/uploads/a.png"><img src="/uploads/b.png"><script>alert(1)</script><img src="/uploads/c.png" onerror="alert(2)">'
+// UGC 三期：saveNote 收紧为「图片必须本人上传」（note-media.mjs 所有权校验）——真上传 3 图，
+// 保留 script/onerror 以验证审核材料里 sanitize 已剥除（断言 87）
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+const uploadImg = async (tok) => ok(await call('POST', '/c/upload/note-image', { data: PNG_B64, ext: 'png' }, tok)).url
+const BODY_OK = (imgs) => '<p>清晨从放生桥出发，在集合点和领队碰头。</p><p>' + '水乡的石板路很好走，'.repeat(12) + '</p>' +
+  imgs.map((u, i) => `<img src="${u}"${i === 0 ? ' onerror="alert(2)"' : ''}>`).join('') + '<script>alert(1)</script>'
 const BODY_SHORT = '<p>只写了一句话，还剧透结局了。</p>'
 
 try {
@@ -53,7 +58,7 @@ try {
     const r = await call('POST', `/c/tasks/${task.id}/submit`, { noteId: n.id }, C)
     assert.equal(r.code, 1001); assert.match(r.msg, /字|图片/)
   })
-  const good = await submitAs(C, BODY_OK)
+  const good = await submitAs(C, BODY_OK([await uploadImg(C), await uploadImg(C), await uploadImg(C)]))
   const e1 = (await entryOf(C)).entry_id
   await t('审核材料包含投稿全文、图片数、字数，并按要求逐项自动核对', async () => {
     const p = ok(await call('GET', `/admin/task-entries/${e1}/review`, null, A))
@@ -79,7 +84,7 @@ try {
     assert.equal(Number(h.note_id), good); assert.equal(Number(h.verdict), 0); assert.match(h.reviewer, /^admin:/)
   })
   await t('重新投稿：自动核对全部通过；正文已清洗（脚本与事件属性被去掉）', async () => {
-    const good2 = await submitAs(C, BODY_OK)
+    const good2 = await submitAs(C, BODY_OK([await uploadImg(C), await uploadImg(C), await uploadImg(C)]))
     const p = ok(await call('GET', `/admin/task-entries/${e1}/review`, null, A))
     assert.equal(p.submission.id, good2)
     assert.ok(p.checks.every((c) => c.ok), JSON.stringify(p.checks.filter((c) => !c.ok)))
@@ -99,7 +104,7 @@ try {
     assert.deepEqual(hist.map((h) => Number(h.verdict)), [0, 1])
   })
   await t('第二位参与者独立投稿、独立通过', async () => {
-    await submitAs(C2, BODY_OK)
+    await submitAs(C2, BODY_OK([await uploadImg(C2), await uploadImg(C2), await uploadImg(C2)]))
     const e2 = (await entryOf(C2)).entry_id
     // 冻结期间不能通过（旅豆奖励暂停），投稿保持审核中；解冻后正常通过
     const u2 = Number((await one('SELECT user_id FROM content_task_entry WHERE id = ?', [e2])).user_id)

@@ -60,7 +60,8 @@ try {
     const feed = ok(await call('GET', '/c/notes/feed?page=1&pageSize=20', null, R))
     const item = feed.items.find(x => x.id === noteId)
     assert.ok(item, 'feed 缺少新笔记')
-    assert.equal(item.topics, undefined) // feed 卡片不下发话题
+    // 三期①：feed 卡片下发话题数组（广场卡片话题 chips 可点聚合）
+    assert.deepEqual(item.topics, ['古镇漫步', '美食探店'])
     assert.equal(item.commentCount, 0)
     assert.ok('avatar' in item)
   })

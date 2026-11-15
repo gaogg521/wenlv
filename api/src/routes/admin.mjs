@@ -24,6 +24,7 @@ import * as badgeDomain from '../domain/badge.mjs'
 import * as member from '../domain/member.mjs'
 import * as merchantLevel from '../domain/merchant-level.mjs'
 import * as taskReview from '../domain/task-review.mjs'
+import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
@@ -1476,7 +1477,7 @@ const admin = {
   // 审核材料（按参与记录）：约稿要求 + 投稿全文与图片 + 自动核对 + 该参与者的历次审核
   'GET /admin/task-entries/:id/review': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'review'])
-    const pack = await taskReview.entryReviewPack(req.params.id, (u) => apiImg(u, req))
+    const pack = await taskReview.entryReviewPack(req.params.id, (u) => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'), req))
     if (!pack) throw new BizError(1004, '参与记录不存在')
     return pack
   },

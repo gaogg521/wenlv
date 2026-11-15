@@ -25,3 +25,9 @@
 .wk-title { padding: 10rpx 14rpx 4rpx; font-size: 24rpx; color: #1f2937; font-weight: 600;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
 .wk-meta { display: flex; gap: 16rpx; padding: 2rpx 14rpx 12rpx; font-size: 20rpx; color: #9ca3af; }
+
+/* 三期：云草稿行 */
+.draft-row { display: flex; justify-content: space-between; align-items: center; padding: 14rpx 0; }
+.draft-name { font-size: 26rpx; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 420rpx; }
+
+.wk-lock { position: absolute; right: 8rpx; bottom: 8rpx; font-size: 24rpx; line-height: 1.2; }

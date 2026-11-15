@@ -151,7 +151,16 @@ async function getReviews(productId) { return await request('/c/tours/' + produc
 async function postReview(orderNo, rating, content) { return await request('/c/orders/' + orderNo + '/review', 'POST', { rating, content }) }
 function img(url) {
   if (!url) return ''
-  return /^https?:\/\//.test(url) ? url : g().apiBase + url
+  return /^(?:https?|wxfile|file):\/\//.test(url) ? url : g().apiBase + url
+}
+
+// 私密媒体（三期 V88）：带登录态下载到临时文件后展示（门禁只放行作者本人）
+function downloadPrivateMedia(path) {
+  return new Promise((resolve, reject) => wx.downloadFile({
+    url: img(path), header: { Authorization: 'Bearer ' + (g().token || '') },
+    success: r => r.statusCode === 200 ? resolve(r.tempFilePath) : reject({ msg: '私密素材无法读取' }),
+    fail: reject,
+  }))
 }
 
 function productImages(product) {
@@ -181,5 +190,5 @@ function coverFor(product) {
 module.exports = {
   request, login, ensureLogin, getTours, getTourDetail, getBean,
   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
-  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, businessImage, photoFor, isIllustration, isReferencePhoto, FALLBACK, demoAllowed,
+  getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, businessImage, photoFor, isIllustration, isReferencePhoto, FALLBACK, demoAllowed, downloadPrivateMedia,
 }

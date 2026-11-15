@@ -24,8 +24,19 @@
       </swiper>
       <view wx:if="{{mediaLabel}}" class="media-page">{{mediaLabel}}</view>
     </view>
+    <!-- 缩略图条（三期拖拽排序：长按拖动调整顺序，封面跟随） -->
+    <scroll-view id="thumbStrip" class="thumb-strip" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="thumb-row">
+        <view wx:for="{{thumbs}}" wx:key="key"
+          class="thumb {{item.isDragging ? 'dragging' : ''}} {{item.isTarget ? 'target' : ''}}"
+          data-i="{{item.i}}" catchlongpress="thumbLongPress" catchtouchmove="thumbMove" catchtouchend="thumbEnd">
+          <image class="thumb-img" src="{{item.src}}" mode="aspectFill" />
+          <view wx:if="{{item.isDragging}}" class="thumb-drag-tip">拖到目标位置</view>
+        </view>
+        <view wx:if="{{canAddMore}}" class="thumb thumb-add" bindtap="pickImages">＋</view>
+      </view>
+    </scroll-view>
     <view class="media-actions">
-      <view wx:if="{{canAddMore}}" class="m-act" bindtap="pickImages">＋ 继续添加</view>
       <view class="m-act" bindtap="setCover">设为封面</view>
     </view>
   </view>
@@ -58,6 +69,18 @@
       <view class="topic-chip" wx:for="{{topics}}" wx:key="*this" bindtap="removeTopic" data-t="{{item}}">#{{item}} ✕</view>
       <view class="topic-add" bindtap="openTopicSheet"># 添加话题</view>
     </view>
+    <!-- 可见范围（三期 V88）：公开 / 私密 -->
+    <view class="kv-line vis-line">
+      <text class="kv-k">👁 谁可以看</text>
+      <view class="vis-opts">
+        <view class="vis-opt {{visPublicOn ? 'on' : ''}}" bindtap="setVisibility" data-v="public">公开</view>
+        <view class="vis-opt {{visPrivateOn ? 'on' : ''}}" bindtap="setVisibility" data-v="private">仅自己</view>
+      </view>
+    </view>
+    <view class="kv-line" bindtap="pickScenic">
+      <text class="kv-k">🏞 关联景区</text>
+      <text class="kv-v">{{scenicName || '选填，笔记会进该景区的话题页'}} ›</text>
+    </view>
     <view class="kv-line" bindtap="pickProduct">
       <text class="kv-k">📍 关联线路</text>
       <text class="kv-v">{{relatedName || '选填，让笔记被更多旅人看到'}} ›</text>
@@ -67,6 +90,7 @@
       <text class="kv-v">{{canIdeas ? '看图帮你起标题、写正文' : '上传照片后可用'}} ›</text>
     </view>
     <view wx:if="{{editId}}" class="edit-tip">正在编辑已发布作品 · 提交后将暂时撤下并重新审核</view>
+    <view wx:if="{{cloudSavedAt}}" class="edit-tip">草稿已云存档，换设备也不丢</view>
   </view>
 </view>
 
@@ -82,6 +106,7 @@
     <view wx:if="{{visionResult}}" class="idea-result">
       <view class="ir-title">{{visionResult.title}}</view>
       <view class="ir-text">{{visionResult.text}}</view>
+      <view class="ir-guide">排版建议：{{visionResult.guideLabel}}<text class="ir-guide-sub">{{visionResult.guide ? '（按路线顺序组织图片）' : '（重点呈现画面氛围）'}}</text></view>
       <view wx:if="{{visionResult.reason}}" class="ir-reason">写作角度：{{visionResult.reason}}</view>
       <button class="ir-apply" bindtap="applyIdea">应用到笔记</button>
     </view>

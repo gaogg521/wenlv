@@ -3,6 +3,7 @@ import { requireUser } from '../auth.mjs'
 import { requireAdmin,audit,apiImg } from './_shared.mjs'
 import { findBanned } from '../domain/wording.mjs'
 import { noteView } from '../domain/task-review.mjs'
+import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 function reasonOf(v) {
   const s=String(v||'').trim()
   if(s.length<4||s.length>300) throw new BizError(1001,'请填写 4 至 300 字的具体原因')
@@ -49,7 +50,7 @@ export const contentGovernance={
       const n=await locked(c,req.params.id)
       const old=await c.one('SELECT id,status FROM content_report WHERE note_id=? AND user_id=?',[n.id,u.uid])
       if(old)return {id:old.id,status:old.status,duplicate:true}
-      if(Number(n.status)!==2)throw new BizError(1004,'笔记不存在或未发布')
+      if(Number(n.status)!==2 || n.visibility!=='public')throw new BizError(1004,'笔记不存在或未发布')
       if(Number(n.user_id)===Number(u.uid))throw new BizError(1001,'不能举报自己的笔记')
       const id=await c.ins('INSERT INTO content_report(note_id,user_id,city_code,reason) VALUES (?,?,?,?)',[n.id,u.uid,n.city_code||null,reason])
       return {id,status:0}
@@ -90,7 +91,9 @@ export const contentGovernance={
     if(!row)throw new BizError(1004,'记录不存在')
     scope(a,row.scope_city,row.city_code)
     const snapshot=row.snapshot?(typeof row.snapshot==='string'?JSON.parse(row.snapshot):row.snapshot):null
-    return {id:row.id,reason:row.reason,status:row.status,resolution:row.resolution,offlineReason:row.offline_reason||null,note:noteView({id:row.note_id,title:row.title,body:row.body,status:row.note_status},u=>apiImg(u,req)),snapshot:snapshot?noteView({id:row.note_id,...snapshot,status:4},u=>apiImg(u,req)):null}
+    // 私密媒体门禁（V88）：处置复核用 note-review 票据直读素材快照
+    const media = u => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'),req)
+    return {id:row.id,reason:row.reason,status:row.status,resolution:row.resolution,offlineReason:row.offline_reason||null,note:noteView({id:row.note_id,title:row.title,body:row.body,status:row.note_status},media),snapshot:snapshot?noteView({id:row.note_id,...snapshot,status:4},media):null}
   },
   'POST /admin/content-cases/reports/:id/verdict':async req=>{
     const a=await staff(req),reason=reasonOf(req.body.reason),action=req.body.action

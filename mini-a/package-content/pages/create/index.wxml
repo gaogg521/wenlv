@@ -7,6 +7,19 @@
   <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0" bindtap="goSquare">
     <text>旅行笔记广场</text><text class="v">看看大家去了哪 ›</text>
   </view>
+  <!-- 云草稿（三期 V89）：换设备不丢的防丢存档 -->
+  <block wx:if="{{drafts.length}}">
+    <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0">
+      <text>☁️ 云草稿（{{draftCount}}）</text><text class="v">点击恢复编辑 ›</text>
+    </view>
+    <view class="kv draft-row" wx:for="{{drafts}}" wx:key="id" bindtap="openDraft" data-id="{{item.id}}">
+      <text class="draft-name">{{item.name}}</text>
+      <view class="v" style="display:flex;align-items:center;gap:16rpx">
+        <text class="muted2">{{item.when}}</text>
+        <text catchtap="removeDraft" data-id="{{item.id}}" data-revision="{{item.revision}}">删除</text>
+      </view>
+    </view>
+  </block>
   <view class="note">图片和视频与正文分开上传 · 好内容有机会被约稿获得旅豆加现金奖励</view>
 </view>
 
@@ -43,6 +56,7 @@
         <image wx:if="{{item.cover}}" class="wk-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
         <view wx:else class="wk-cover wk-ph"><text class="wk-ph-text">{{item.coverChar}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wk-play">▶</view>
+        <view wx:if="{{item.isPrivate}}" class="wk-lock">🔒</view>
         <view class="wk-badge {{item.badgeClass}}">{{item.statusText}}</view>
       </view>
       <view class="wk-title">{{item.title || '（无题）'}}</view>

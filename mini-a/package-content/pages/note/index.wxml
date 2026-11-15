@@ -19,7 +19,8 @@
         <view class="author-name">{{n.author}}</view>
         <view class="author-time">{{n.when}}</view>
       </view>
-      <view wx:if="{{n.product_title}}" class="author-product">📍 {{n.product_title}}</view>
+      <view wx:if="{{n.isPrivate}}" class="author-product private-chip">🔒 仅自己可见</view>
+      <view wx:elif="{{n.product_title}}" class="author-product">📍 {{n.product_title}}</view>
     </view>
 
     <!-- 标题 + 正文 -->
@@ -37,51 +38,74 @@
       </block>
     </view>
 
-    <!-- 话题 -->
+    <!-- 话题（三期①：可点跳转话题聚合） + 关联景区 -->
     <view wx:if="{{n.topicsReady.length}}" class="topics-line">
-      <text class="topic-tag" wx:for="{{n.topicsReady}}" wx:key="*this">#{{item}}</text>
+      <text class="topic-tag" wx:for="{{n.topicsReady}}" wx:key="*this" data-topic="{{item}}" bindtap="goTopic">#{{item}}</text>
     </view>
+    <view wx:if="{{n.scenic_id}}" class="scenic-line" bindtap="goScenic">📍 {{n.scenic_name}} · 看这个景区的笔记 ›</view>
 
     <!-- 赞数 -->
     <view wx:if="{{likeCount}}" class="like-sum">👍 {{likeCount}} 人觉得有用</view>
   </view>
 
-  <!-- 评论区（小红书式：一级评论 + 楼内回复展开） -->
+  <!-- 评论区（小红书式：一级评论 + 楼内回复展开 + 骨架屏 + 语音） -->
   <view class="comments">
     <view class="c-head">共 {{commentTotal}} 条评论</view>
-    <view class="c-item" wx:for="{{comments}}" wx:key="id">
-      <image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
-      <view wx:else class="c-avatar c-avatar-ph">{{item.avatarChar}}</view>
-      <view class="c-main">
-        <view class="c-name">{{item.author}}<text wx:if="{{item.byAuthor}}" class="c-tag">作者</text></view>
-        <view class="c-content">{{item.body}}</view>
-        <image wx:if="{{item.mediaUrl}}" class="c-img" src="{{item.mediaUrl}}" mode="aspectFill" data-url="{{item.mediaUrl}}" bindtap="previewCommentImage" />
-        <view class="c-foot">
-          <text class="c-time">{{item.when}}</text>
-          <text class="c-act" bindtap="startReply" data-id="{{item.id}}" data-author="{{item.author}}">回复</text>
-          <text wx:if="{{item.mine}}" class="c-act" catchtap="deleteComment" data-id="{{item.id}}">删除</text>
-          <text class="c-like {{item.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{item.id}}" data-liked="{{item.liked}}">{{item.liked ? '♥' : '♡'}} {{item.likes}}</text>
-        </view>
-        <!-- 楼内回复 -->
-        <view wx:if="{{item.replies.length || item.repliesLeft > 0}}" class="c-replies">
-          <view class="c-reply" wx:for="{{item.replies}}" wx:for-item="r" wx:key="id">
-            <view class="c-rname">{{r.author}}<text wx:if="{{r.byAuthor}}" class="c-tag">作者</text><text wx:if="{{r.replyAuthor}}" class="c-rto">回复 @{{r.replyAuthor}}</text></view>
-            <view class="c-content">{{r.body}}</view>
-            <image wx:if="{{r.mediaUrl}}" class="c-img" src="{{r.mediaUrl}}" mode="aspectFill" data-url="{{r.mediaUrl}}" bindtap="previewCommentImage" />
-            <view class="c-foot">
-              <text class="c-time">{{r.when}}</text>
-              <text class="c-act" bindtap="startReply" data-id="{{r.id}}" data-root="{{item.id}}" data-author="{{r.author}}">回复</text>
-              <text wx:if="{{r.mine}}" class="c-act" catchtap="deleteComment" data-id="{{r.id}}">删除</text>
-              <text class="c-like {{r.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{r.id}}" data-liked="{{r.liked}}">{{r.liked ? '♥' : '♡'}} {{r.likes}}</text>
-            </view>
-          </view>
-          <view wx:if="{{item.repliesLeft > 0 && !item.expanded}}" class="c-more" bindtap="expandReplies" data-root="{{item.id}}">展开 {{item.repliesLeft}} 条回复</view>
-          <view wx:if="{{item.more}}" class="c-more" bindtap="moreReplies" data-root="{{item.id}}">展开更多回复</view>
+    <!-- 骨架屏（三期③）：首次加载中 -->
+    <block wx:if="{{commentsLoading}}">
+      <view class="c-skeleton" wx:for="{{[1,2,3]}}" wx:key="*this">
+        <view class="cs-avatar"></view>
+        <view class="cs-main">
+          <view class="cs-line cs-line-short"></view>
+          <view class="cs-line"></view>
+          <view class="cs-line cs-line-thin"></view>
         </view>
       </view>
-    </view>
-    <view wx:if="{{commentNext}}" class="c-more c-more-main" bindtap="loadMoreComments">展开更多评论</view>
-    <view wx:if="{{!comments.length}}" class="c-empty">还没有评论，来说点什么吧</view>
+    </block>
+    <block wx:else>
+      <view class="c-item" wx:for="{{comments}}" wx:key="id">
+        <image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
+        <view wx:else class="c-avatar c-avatar-ph">{{item.avatarChar}}</view>
+        <view class="c-main">
+          <view class="c-name">{{item.author}}<text wx:if="{{item.byAuthor}}" class="c-tag">作者</text></view>
+          <view class="c-content">{{item.body}}</view>
+          <image wx:if="{{item.hasImage}}" class="c-img" src="{{item.mediaUrl}}" mode="aspectFill" data-url="{{item.mediaUrl}}" bindtap="previewCommentImage" />
+          <view wx:if="{{item.isAudio}}" class="c-audio {{item.audioOn ? 'on' : ''}}" data-url="{{item.mediaUrl}}" bindtap="playCommentAudio">{{item.audioOn ? '■ 停止语音' : '▶ 播放语音'}}</view>
+          <view wx:if="{{item.mediaPending}}" class="c-media-state">{{item.mediaStateText}}</view>
+          <view class="c-foot">
+            <text class="c-time">{{item.when}}</text>
+            <text class="c-act" bindtap="startReply" data-id="{{item.id}}" data-author="{{item.author}}">回复</text>
+            <text wx:if="{{item.mine}}" class="c-act" catchtap="deleteComment" data-id="{{item.id}}">删除</text>
+            <text class="c-like {{item.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{item.id}}" data-liked="{{item.liked}}">{{item.liked ? '♥' : '♡'}} {{item.likes}}</text>
+          </view>
+          <!-- 楼内回复 -->
+          <view wx:if="{{item.hasReplyArea}}" class="c-replies">
+            <view class="c-reply" wx:for="{{item.replies}}" wx:for-item="r" wx:key="id">
+              <view class="c-rname">{{r.author}}<text wx:if="{{r.byAuthor}}" class="c-tag">作者</text><text wx:if="{{r.replyAuthor}}" class="c-rto">回复 @{{r.replyAuthor}}</text></view>
+              <view class="c-content">{{r.body}}</view>
+              <image wx:if="{{r.hasImage}}" class="c-img" src="{{r.mediaUrl}}" mode="aspectFill" data-url="{{r.mediaUrl}}" bindtap="previewCommentImage" />
+              <view wx:if="{{r.isAudio}}" class="c-audio {{r.audioOn ? 'on' : ''}}" data-url="{{r.mediaUrl}}" bindtap="playCommentAudio">{{r.audioOn ? '■ 停止语音' : '▶ 播放语音'}}</view>
+              <view wx:if="{{r.mediaPending}}" class="c-media-state">{{r.mediaStateText}}</view>
+              <view class="c-foot">
+                <text class="c-time">{{r.when}}</text>
+                <text class="c-act" bindtap="startReply" data-id="{{r.id}}" data-root="{{item.id}}" data-author="{{r.author}}">回复</text>
+                <text wx:if="{{r.mine}}" class="c-act" catchtap="deleteComment" data-id="{{r.id}}">删除</text>
+                <text class="c-like {{r.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{r.id}}" data-liked="{{r.liked}}">{{r.liked ? '♥' : '♡'}} {{r.likes}}</text>
+              </view>
+            </view>
+            <!-- 展开回复骨架行（三期③） -->
+            <view wx:if="{{item.repliesLoading}}" class="c-skeleton c-skeleton-inner">
+              <view class="cs-avatar"></view>
+              <view class="cs-main"><view class="cs-line cs-line-short"></view><view class="cs-line"></view></view>
+            </view>
+            <view wx:if="{{item.showExpandMore}}" class="c-more" bindtap="expandReplies" data-root="{{item.id}}">展开 {{item.repliesLeft}} 条回复</view>
+            <view wx:if="{{item.showMoreMore}}" class="c-more" bindtap="moreReplies" data-root="{{item.id}}">展开更多回复</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{commentNext}}" class="c-more c-more-main" bindtap="loadMoreComments">展开更多评论</view>
+      <view wx:if="{{!comments.length}}" class="c-empty">还没有评论，来说点什么吧</view>
+    </block>
     <view wx:if="{{commentMsg}}" class="note">{{commentMsg}}</view>
   </view>
 
@@ -98,14 +122,16 @@
 <view wx:else class="empty">{{loadTxt}}</view>
 <button wx:if="{{!n}}" bindtap="fetch">重新加载</button>
 
-<!-- 底部操作栏（图片评论 / 输入 / 点赞 / 分享） -->
+<!-- 底部操作栏（图片/语音评论 / 输入 / 点赞 / 分享） -->
 <view wx:if="{{n}}" class="action-bar">
   <view wx:if="{{replyTarget}}" class="ab-reply-chip" bindtap="cancelReply">回复 @{{replyTarget.label}} ✕</view>
   <image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" catchtap="removePendingImage" />
+  <view wx:if="{{pendingAudio}}" class="ab-pending-audio" catchtap="removePendingAudio">🎙 语音已录 ✕</view>
   <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment"
     placeholder="{{replyTarget ? '回复 @' + replyTarget.label + '：' : '说点什么…'}}" />
+  <text class="ab-img {{recording ? 'rec' : ''}}" catchtap="recordVoice">{{recording ? '■' : '🎙'}}</text>
   <text class="ab-img" catchtap="pickCommentImage">🖼</text>
-  <button class="ab-send {{commentDraft || pendingImage ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy}}">发送</button>
+  <button class="ab-send {{canSend ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy || recording}}">发送</button>
   <text class="ab-act {{liked ? 'on' : ''}}" catchtap="toggleLike">{{liked ? '♥' : '♡'}} {{likeCount}}</text>
   <button class="ab-share" open-type="share">分享</button>
 </view>

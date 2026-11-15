@@ -96,8 +96,8 @@ export async function sendSubscribeMessage(openid, templateId, data, page) {
   return { mock: false, accepted: j.errcode === 0, err: j.errcode ? j.errmsg : null }
 }
 
-/** 多媒体内容安全（mediaCheckAsync，异步回执）——P1 图片笔记审核 */
-export async function mediaCheckAsync(mediaUrl, openid, scene = 2) {
+/** 多媒体内容安全（mediaCheckAsync，异步回执）——P1 图片笔记审核；mediaType: 2=图片 1=音频 */
+export async function mediaCheckAsync(mediaUrl, openid, scene = 2, mediaType = 2) {
   if (demoIdentity(openid)) return { mock: true, traceId: 'mock-' + Date.now() }
   if (!openid || String(openid).startsWith('mock-')) throw new Error('图片审核需要真实微信登录身份')
   const url = new URL(mediaUrl)
@@ -105,7 +105,7 @@ export async function mediaCheckAsync(mediaUrl, openid, scene = 2) {
   const token = await accessToken()
   if (!token) return { mock: true, traceId: 'mock-' + Date.now() }
   const j = await post(base() + `/wxa/media_check_async?access_token=${token}`,
-    { media_url: mediaUrl, media_type: 2, version: 2, scene, openid })
+    { media_url: mediaUrl, media_type: mediaType, version: 2, scene, openid })
   if (Number(j.errcode) !== 0 || !j.trace_id) throw new Error('微信图片审核提交失败，错误码 ' + (j.errcode || 'missing_trace_id'))
   return { mock: false, traceId: j.trace_id }
 }

@@ -14,6 +14,7 @@ import * as refundPolicy from '../domain/refund-policy.mjs'
 import { plainText, wordCount } from '../domain/task-review.mjs'
 import { grantPublishReward } from '../domain/content-reward.mjs'
 import { draftFromPhotos } from '../domain/note-vision.mjs'
+import { noteMediaOwner, noteMediaTicket, conflictingMediaVisibility } from '../domain/note-media.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
 import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
@@ -40,6 +41,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
 import { annotateSessions, activeRules, scopeMatch, unitPrice } from '../domain/discount.mjs'
 import * as pkg from '../domain/package.mjs'
@@ -60,18 +63,25 @@ async function saveNote(req, editing) {
   const user = noteAuthor(req)
   const { title, body, images, relatedProductId, video, revision, blocks: submittedBlocks } = req.body
   const id = editing ? Number(req.params.id) : null
-  if (editing) {
-    const current = await one('SELECT status,revision FROM content_note WHERE id=? AND user_id=?', [id,user.uid])
-    if (!current) throw new BizError(1004, '作品不存在')
-    if (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision)) throw new BizError(2002, '作品状态已变化，请重新打开')
+  const current = editing ? await one('SELECT status,revision,visibility,scenic_id,body FROM content_note WHERE id=? AND user_id=?', [id,user.uid]) : null
+  if (editing && !current) throw new BizError(1004, '作品不存在')
+  if (current && (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision))) {
+    throw new BizError(2002, '作品状态已变化，请重新打开')
   }
-  // 小红书化：话题标签（≤5个、单个≤20字，入库不带 # 号）；封面取第几张图
-  const topics = [...new Set((Array.isArray(req.body.topics) ? req.body.topics : [])
-    .map(t => String(t || '').trim().replace(/^#+/, '')).filter(Boolean))]
-    .slice(0, 5)
-  if (topics.some(t => t.length > 20)) throw new BizError(1001, '单个话题最多 20 字')
-  const coverIndexRaw = req.body.coverIndex == null ? 0 : Math.floor(Number(req.body.coverIndex) || 0)
-  if (coverIndexRaw < 0) throw new BizError(1001, '封面参数无效')
+  const previousBody = current ? readNoteBody(current.body) : {}
+  // 可见范围（V88）：public 进广场/feed；private 仅作者可见，媒体走门禁
+  const visibility = req.body.visibility ?? current?.visibility ?? 'public'
+  if (!['public','private'].includes(visibility)) throw new BizError(1001, '可见范围无效')
+  const scenicId = req.body.scenicId === undefined ? (current ? current.scenic_id : null) : req.body.scenicId === null ? null : Number(req.body.scenicId)
+  if (req.body.scenicId !== undefined && scenicId !== null && (!Number.isSafeInteger(scenicId) || scenicId < 1 ||
+      !await one('SELECT id FROM scenic_spot WHERE id=? AND status=1', [scenicId]))) throw new BizError(1001, '请选择有效景区')
+  // 小红书化：话题标签（≤5个、单个≤20字）；入库统一小写，供话题聚合页 JSON_CONTAINS 精确匹配
+  // 兼容旧客户端/测试：服务端剥离前导 # 与空白（V86 契约）；非法字符仍拒绝
+  const rawTopicsIn = req.body.topics ?? previousBody.topics ?? []
+  if (!Array.isArray(rawTopicsIn) || rawTopicsIn.length > 5) throw new BizError(1001, '最多添加五个话题，每个限 20 个字')
+  const topicsClean = rawTopicsIn.map(t => String(t ?? '').trim().replace(/^#+/, '')).filter(Boolean)
+  if (topicsClean.some(t => !/^[\p{L}\p{N}_-]{1,20}$/u.test(t))) throw new BizError(1001, '最多添加五个话题，每个限 20 个字')
+  const topics = [...new Set(topicsClean.map(t => t.toLowerCase()))]
   let blocks
   if (submittedBlocks !== undefined) {
     if (!Array.isArray(submittedBlocks) || !submittedBlocks.length || submittedBlocks.length > 40) {
@@ -83,7 +93,7 @@ async function saveNote(req, editing) {
         const html = sanitizeRich(block.html, 10000).replace(/<\/?(?:img|video|audio|source|picture|track)\b[^>]*>/gi,'')
         if (plainText(html)) return {type:'text',html}
       }
-      if (['image','video'].includes(block?.type) && typeof block.url === 'string') return {type:block.type,url:block.url}
+      if (['image','video'].includes(block?.type) && typeof block.url === 'string') return {type:block.type,url:block.url,...(block.attachment === true ? {attachment:true} : {})}
       throw new BizError(1001,'内容块格式无效')
     })
   }
@@ -102,52 +112,94 @@ async function saveNote(req, editing) {
   if (!text.replace(/<[^>]*>|&nbsp;|\s/g,'').length) throw new BizError(1001, '内容不能为空')
   const videoUrl = articleVideo ? String(articleVideo) : null
   if (videoUrl) {
-    const file = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.]mp4$')
+    const file = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.](mp4|mov)$')
     if (!file.test(videoUrl) || !fs.existsSync(path.join(noteUploadDir, path.basename(videoUrl)))) throw new BizError(1001, '请选择本人上传的视频')
   }
   const account = await one('SELECT mini_a_openid FROM user_account WHERE id=?', [user.uid])
-  const sec = await wxsec.msgSecCheck((title || '') + ' ' + text + (topics.length ? ' ' + topics.join(' ') : ''), account?.mini_a_openid)
+  const sec = await wxsec.msgSecCheck([title || '', topics.join(' '), text].join(' '), account?.mini_a_openid)
   const imgUrls = [...new Set([...(Array.isArray(articleImages) ? articleImages : []), ...inlineImages].map(String))].slice(0,9)
   if (imgUrls.some(x => !/^\/uploads\/[a-z0-9_.-]+$/i.test(x))) throw new BizError(1001, '请选择站内上传的图片')
+  // 封面：优先显式 cover URL（拖拽排序后前端下发），兼容 coverIndex（旧客户端/旧测试）
+  const coverIndexRaw = Math.floor(Number(req.body.coverIndex) || 0)
+  let cover
+  if (req.body.cover !== undefined) cover = req.body.cover || null
+  else if (req.body.coverIndex !== undefined) cover = imgUrls[Math.min(Math.max(coverIndexRaw, 0), Math.max(imgUrls.length - 1, 0))] || null
+  else cover = previousBody.cover || null
+  if (cover && (typeof cover !== 'string' || (!imgUrls.includes(cover) &&
+      (!new RegExp('^/uploads/note_' + Number(user.uid) + '_[0-9]+[.](jpg|png|webp)$').test(cover) ||
+      !fs.existsSync(path.join(noteUploadDir, path.basename(cover))))))) throw new BizError(1001, '请选择笔记中的图片或本人上传的封面')
+  const livePhotos = req.body.livePhotos ?? previousBody.livePhotos ?? []
+  if (!Array.isArray(livePhotos) || livePhotos.length > 9 || new Set(livePhotos.map(p=>p?.photo)).size !== livePhotos.length ||
+      livePhotos.some(p => !imgUrls.includes(p?.photo) || typeof p.motion !== 'string' ||
+        !/^\/uploads\/ugc-video-.*\.(mp4|mov)$/.test(p.motion) || noteMediaOwner(p.motion) !== Number(user.uid) ||
+        !fs.existsSync(path.join(noteUploadDir,path.basename(p.motion))))) throw new BizError(1001,'实况照片需绑定正文图片及本人上传的短片')
+  if (visibility === 'private' && [...imgUrls, cover].some(p=>p && noteMediaOwner(p) === null)) {
+    throw new BizError(1001,'请重新上传旧版图片后再设为私密')
+  }
+  for (const {motion} of livePhotos) {
+    const probe = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
+      ['-v','error','-select_streams','v:0','-show_entries','stream=duration','-of','csv=p=0',path.join(noteUploadDir,path.basename(motion))],
+      { timeout:10000, windowsHide:true }).catch(()=>null)
+    const seconds = Number(probe?.stdout.trim())
+    if (!(seconds > 0 && seconds <= 3.1)) throw new BizError(1001,'实况动态片段需为 3 秒以内的视频')
+  }
   const imgSec = []
-  let status = editing || videoUrl || !sec.pass ? 1 : 2
+  const manualReview = Boolean(editing || videoUrl || livePhotos.length)
+  let status = manualReview || !sec.pass ? 1 : 2
   // 机审通道降级（演示/内网部署无公网 HTTPS 图片地址、凭据缺失等）：不阻断发布、绝不跳过安全检查——
   // 整篇转人工审核（status=1），由审核员在后台核图后放行；真实机审回执路径不受影响。
   let imgDegraded = false
-  for (const url of imgUrls) {
+  const originalImages = new Set([...(previousBody.images || []), previousBody.cover])
+  for (const url of new Set([...imgUrls, ...(cover ? [cover] : [])])) {
+    if (noteMediaOwner(url) !== Number(user.uid) && !originalImages.has(url)) throw new BizError(1001, '请选择本人上传的图片')
     let check
-    try { check = await wxapi.mediaCheckAsync(apiImg(url,req), account?.mini_a_openid) }
+    try { check = await wxapi.mediaCheckAsync(apiImg(noteMediaTicket(url, 3600, 'note-review'),req), account?.mini_a_openid) }
     catch (e) { imgDegraded = true; imgSec.push({ url, traceId: null, mock: true, degraded: String(e.message).slice(0, 80) }); continue }
     imgSec.push({ url, traceId: check.traceId, mock: check.mock })
     if (!check.mock && sec.pass) status = 0
   }
   if (imgDegraded && status === 2) status = 1
-  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, topics, coverIndex: Math.min(coverIndexRaw, Math.max(imgUrls.length - 1, 0)), manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
+  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, cover, topics, livePhotos,
+    coverIndex: Math.max(imgUrls.indexOf(cover), 0), manualReview, imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
   const saved = await tx(async c => {
-    const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,status]
+    await c.one('SELECT id FROM user_account WHERE id=? FOR UPDATE',[user.uid])
+    // 同一素材不能同时出现在公开与私密笔记里（否则门禁形同虚设）
+    for (const assetPath of new Set([...imgUrls,cover,videoUrl,...livePhotos.map(p=>p.motion)].filter(Boolean))) {
+      if (noteMediaOwner(assetPath) !== null && await conflictingMediaVisibility(c,assetPath,visibility,id)) {
+        throw new BizError(1001,'素材已用于不同可见范围的笔记，请重新上传一份')
+      }
+    }
+    const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,visibility,scenicId,status]
     let noteId = id
     if (editing) {
       await c.one('SELECT id FROM content_note WHERE id=? FOR UPDATE',[id])
       if (await c.one('SELECT id FROM content_task_entry WHERE note_id=? AND status IN (2,3) LIMIT 1',[id])) throw new BizError(2002,'已提交约稿的作品暂不可编辑')
-      const updated = await c.upd(`UPDATE content_note SET title=?,body=?,status=?,sec_check_id=?,related_product_id=?,
+      const updated = await c.upd(`UPDATE content_note SET title=?,body=?,status=?,sec_check_id=?,related_product_id=?,visibility=?,scenic_id=?,
         published_at=IF(?=2,NOW(3),NULL),reject_reason=NULL,revision=revision+1 WHERE id=? AND user_id=? AND status IN (2,3) AND revision=?`,
         [...fields,id,user.uid,Number(revision)])
       if (updated !== 1) throw new BizError(2002, '作品状态已变化，请重新打开')
       await c.upd("UPDATE review_claim SET released_at=NOW(3) WHERE queue_kind='note' AND item_id=? AND released_at IS NULL",[id])
       await audit(c,'tourist:'+user.uid,'content','edit','note-'+id,null,{revision:Number(revision)+1,status})
     } else {
-      noteId = await c.ins(`INSERT INTO content_note(user_id,title,body,status,sec_check_id,related_product_id,published_at)
-        VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))`,[user.uid,...fields])
+      noteId = await c.ins(`INSERT INTO content_note(user_id,title,body,status,sec_check_id,related_product_id,visibility,scenic_id,published_at)
+        VALUES (?,?,?,?,?,?,?,?,IF(?=2,NOW(3),NULL))`,[user.uid,...fields])
     }
     for (const check of imgSec.filter(x => !x.mock)) await c.ins('INSERT INTO content_media_check(trace_id,note_id) VALUES (?,?)',[check.traceId,noteId])
+    // 从云草稿发布：提交成功即原子清理草稿（乐观锁防双设备重复发布）
+    if (!editing && req.body.draftId != null) {
+      const deleted = await c.upd('DELETE FROM content_note_draft WHERE id=? AND user_id=? AND revision=?',
+        [req.body.draftId,user.uid,req.body.draftRevision ?? 0])
+      if (deleted !== 1) throw new BizError(2002, '草稿已在其他设备修改，请重新打开后提交')
+    }
     // 发布奖励（小红书化）：机审直通即正式发布，三条发布路径之一；幂等由 reward_granted + 账本 biz_ref 双保险
     if (status === 2) await grantPublishReward(c, user.uid, noteId)
     return noteId
   })
-  return {id:saved,status,secMock:sec.mock,imgChecked:imgSec.length,msg:status===2?'已发布':status===0?'图片机审中':'已提交人工审核'}
+  return {id:saved,status,visibility,secMock:sec.mock,imgChecked:imgSec.length,msg:status===2?'已发布':status===0?'图片机审中':'已提交人工审核'}
 }
 
 const noteUploadDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..','..','static','uploads')
+const runMedia = promisify(execFile)
 
 // ---------- /c 游客端 ----------
 const c = {
@@ -609,7 +661,8 @@ const c = {
     fs.mkdirSync(dir, { recursive: true })
     const name = `note_${u.uid}_${Date.now()}${crypto.randomInt(100000,999999)}.` + (ext === 'jpeg' ? 'jpg' : ext)
     fs.writeFileSync(path.join(dir, name), buf)
-    return { url: '/uploads/' + name }
+    const url = '/uploads/' + name
+    return { url, access: noteMediaTicket(url) }
   },
 
   'POST /c/upload/note-video': async req => {
@@ -622,39 +675,55 @@ const c = {
     fs.mkdirSync(noteUploadDir,{recursive:true})
     const name = 'ugc-video-' + u.uid + '-' + crypto.randomUUID() + '.mp4'
     fs.writeFileSync(path.join(noteUploadDir,name),buf,{flag:'wx'})
-    return {url:'/uploads/'+name}
+    const url = '/uploads/' + name
+    return { url, access: noteMediaTicket(url) }
   },
 
-  // 旅行笔记广场（A-43）：仅已发布（status=2）笔记，分页，带封面/作者/点赞/关联线路
+  // 旅行笔记广场（A-43）：仅已发布公开笔记，分页，带封面/作者/点赞/关联线路
+  // 话题聚合（三期①）：?topic= 按 body.topics 精确匹配；?scenic= 按关联景区聚合，页头展示景区名
   'GET /c/notes/feed': async (req) => {
-    requireUser(req)
     const u = requireUser(req)
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const topic = String(req.query.topic || '').trim().toLowerCase().slice(0, 20)
+    const scenic = Math.floor(Number(req.query.scenic) || 0)
     const rows = await q(`SELECT n.id, n.title, n.like_count, n.comment_count, n.published_at, u.nickname author, u.avatar_url, p.title product_title,
-        JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']'))) cover,
-        JSON_TYPE(JSON_EXTRACT(n.body, '$.video')) = 'STRING' hasVideo
+        COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.cover')), 'null'),
+          JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']')))) cover,
+        JSON_TYPE(JSON_EXTRACT(n.body, '$.video')) = 'STRING' hasVideo,
+        JSON_EXTRACT(n.body, '$.topics') topics, s.name scenic_name
       FROM content_note n JOIN user_account u ON u.id = n.user_id
       LEFT JOIN tour_product p ON p.id = n.related_product_id
-      WHERE n.status = 2 ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize])
+      LEFT JOIN scenic_spot s ON s.id = n.scenic_id AND s.status = 1
+      WHERE n.status = 2 AND n.visibility = 'public'
+        AND (? = '' OR JSON_CONTAINS(JSON_EXTRACT(n.body, '$.topics'), JSON_QUOTE(?)))
+        AND (? = 0 OR n.scenic_id = ?)
+      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`,
+      [topic, topic, scenic, scenic, pageSize, (page - 1) * pageSize])
     const liked = rows.length ? await q(`SELECT note_id FROM content_note_likes WHERE user_id = ? AND note_id IN (${rows.map(() => '?').join(',')})`, [u.uid, ...rows.map((r) => r.id)]) : []
     const likedSet = new Set(liked.map((x) => Number(x.note_id)))
     return {
       page, pageSize,
-      items: rows.map((r) => ({
-        ...r, cover: r.cover ? apiImg(r.cover, req) : null, hasVideo: Boolean(r.hasVideo),
-        avatar: r.avatar_url ? apiImg(r.avatar_url, req) : null,
-        liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count), commentCount: Number(r.comment_count),
-        productTitle: r.product_title || null,
-        when: String(r.published_at || '').slice(0, 10),
-      })),
+      items: rows.map((r) => {
+        // mysql2 对 JSON_EXTRACT 结果可能直接给数组（JSON 列自动解析），也可能是字符串——两种都兼容
+        let cardTopics = []
+        try { const parsed = typeof r.topics === 'string' ? JSON.parse(r.topics) : r.topics; if (Array.isArray(parsed)) cardTopics = parsed.slice(0, 3) } catch { /* 旧稿 topics 缺失 */ }
+        return {
+          ...r, cover: r.cover ? apiImg(r.cover, req) : null, hasVideo: Boolean(r.hasVideo),
+          avatar: r.avatar_url ? apiImg(r.avatar_url, req) : null,
+          liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count), commentCount: Number(r.comment_count),
+          productTitle: r.product_title || null, scenicName: r.scenic_name || null,
+          topics: cardTopics,
+          when: String(r.published_at || '').slice(0, 10),
+        }
+      }),
     }
   },
 
   // 点赞（A-43）：一用户一笔记一赞，重复点赞给业务错误；取消可重赞
   'POST /c/notes/:id/like': async (req) => {
     const u = requireUser(req)
-    const n = await one('SELECT id, status FROM content_note WHERE id = ?', [req.params.id])
+    const n = await one("SELECT id, status FROM content_note WHERE id = ? AND visibility='public'", [req.params.id])
     if (!n || Number(n.status) !== 2) throw new BizError(1004, '笔记不存在或未发布')
     try {
       await tx(async (c) => {
@@ -853,8 +922,9 @@ const cNotes = {
   'GET /c/notes': async (req) => {
     const u = requireUser(req)
     if(u.end!=='c')throw new BizError(1003,'仅游客账号可查看作品')
-    const rows = await q(`SELECT c.id,c.title,c.status,c.like_count,c.comment_count,c.published_at,c.reject_reason,
-      JSON_UNQUOTE(JSON_EXTRACT(c.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(c.body,'$.coverIndex'),0), ']'))) cover_path,
+    const rows = await q(`SELECT c.id,c.title,c.status,c.visibility,c.like_count,c.comment_count,c.published_at,c.reject_reason,
+      COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(c.body, '$.cover')), 'null'),
+        JSON_UNQUOTE(JSON_EXTRACT(c.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(c.body,'$.coverIndex'),0), ']')))) cover_path,
       JSON_TYPE(JSON_EXTRACT(c.body, '$.video')) = 'STRING' has_video,
       m.reason offline_reason,a.status appeal_status,a.resolution appeal_resolution,
       (c.status=4 AND c.moderation_id IS NOT NULL AND a.id IS NULL) can_appeal
@@ -888,24 +958,82 @@ const cNotes = {
     return draftFromPhotos({ uid: user.uid, photos, place: product?.title || '', intent: typeof intent === 'string' ? intent.trim().slice(0, 80) : '',
       topics: Array.isArray(topics) ? topics.filter(t => typeof t === 'string').slice(0, 5).map(t => t.slice(0, 24)) : [] })
   },
+  // 素材读取票据（三期私密媒体）：批量给本人素材发 note-editor ticket，编辑器/预览免 404
+  'POST /c/note-media/access': req => {
+    const u = noteAuthor(req)
+    const { paths } = req.body || {}
+    if (!Array.isArray(paths) || paths.length > 30 || paths.some(p => typeof p !== 'string' || !p.startsWith('/uploads/') || noteMediaOwner(p) !== Number(u.uid))) {
+      throw new BizError(1004, '素材不存在')
+    }
+    return Object.fromEntries(paths.map(p => [p, noteMediaTicket(p)]))
+  },
+  // 云草稿（V89）：本地即时存 + 云端防丢；乐观锁 revision，发布成功由 saveNote 原子清理
+  'GET /c/note-drafts': async req => {
+    const u = noteAuthor(req)
+    return q(`SELECT id,revision,updated_at,JSON_UNQUOTE(JSON_EXTRACT(body,'$.title')) title
+      FROM content_note_draft WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 30`, [u.uid])
+  },
+  'GET /c/note-drafts/:id': async req => {
+    const u = noteAuthor(req)
+    const row = await one('SELECT id,revision,body FROM content_note_draft WHERE id=? AND user_id=?', [req.params.id,u.uid])
+    if (!row) throw new BizError(1004, '草稿不存在')
+    return { id:row.id, revision:row.revision, content:readNoteBody(row.body) }
+  },
+  'POST /c/note-drafts': async req => {
+    const u = noteAuthor(req)
+    const { id, revision, content } = req.body || {}
+    const payload = JSON.stringify(content ?? null)
+    if (!Array.isArray(content?.blocks) || typeof content.title !== 'string' || payload.length > 230000) throw new BizError(1001, '草稿内容无效或过长')
+    return tx(async c => {
+      await c.one('SELECT id FROM user_account WHERE id=? FOR UPDATE', [u.uid])
+      if (id != null) {
+        const changed = await c.upd('UPDATE content_note_draft SET body=?,revision=revision+1 WHERE id=? AND user_id=? AND revision=?', [payload,id,u.uid,revision ?? 0])
+        if (!changed) throw new BizError(2002, '草稿已在其他设备修改，请重新打开')
+        return { id, revision:Number(revision)+1 }
+      }
+      const { n } = await c.one('SELECT COUNT(*) n FROM content_note_draft WHERE user_id=?', [u.uid])
+      if (Number(n) >= 30) throw new BizError(1001, '最多保存 30 篇草稿，请先清理')
+      return { id:await c.ins('INSERT INTO content_note_draft(user_id,body) VALUES(?,?)', [u.uid,payload]), revision:1 }
+    })
+  },
+  'DELETE /c/note-drafts/:id': async req => {
+    const u = noteAuthor(req)
+    const result = await q('DELETE FROM content_note_draft WHERE id=? AND user_id=? AND revision=?', [req.params.id,u.uid,req.body?.revision ?? 0])
+    if (!result.affectedRows) throw new BizError(2002, '草稿已变更，请刷新')
+    return { deleted:true }
+  },
+  // 景区选择器（三期话题聚合）：compose 关联景区 → feed 可按景区聚合
+  'GET /c/note-scenics': async req => {
+    noteAuthor(req)
+    const kw = String(req.query.kw || '').trim().slice(0,40)
+    return q('SELECT id,name,city_code FROM scenic_spot WHERE status=1 AND LOCATE(?,name)>0 ORDER BY name,id LIMIT 30', [kw])
+  },
   'GET /c/notes/:id/edit': async req => {
     const u = noteAuthor(req)
-    const n = await one(`SELECT n.title,n.body,n.revision,n.related_product_id,p.title related_name FROM content_note n
+    const n = await one(`SELECT n.title,n.body,n.revision,n.related_product_id,n.visibility,s.id scenic_id,s.name scenic_name,p.title related_name FROM content_note n
+      LEFT JOIN scenic_spot s ON s.id=n.scenic_id AND s.status=1
       LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? AND n.user_id=? AND n.status IN (2,3)`,[req.params.id,u.uid])
     if (!n) throw new BizError(1004, '作品不存在或暂不可编辑')
     const body = readNoteBody(n.body)
     // 兼容旧版图文混排 blocks：文本块回编辑器，图片/视频块并入独立图库与视频位（compose 页负责拆分）
+    // mediaAccess：私密笔记编辑时图片/视频走 ticket 直读（门禁放行 note-editor 票据）
+    const paths = [...(body.images || []), body.video, body.cover, ...(body.livePhotos || []).map(p=>p.motion)].filter(p=>noteMediaOwner(p) !== null)
     return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,
-      topics:Array.isArray(body.topics) ? body.topics : [],coverIndex:Number(body.coverIndex) || 0,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
+      topics:Array.isArray(body.topics) ? body.topics : [],coverIndex:body.cover ? Math.max((body.images || []).indexOf(body.cover), 0) : Number(body.coverIndex) || 0,
+      revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name,
+      visibility:n.visibility,scenicId:n.scenic_id,scenicName:n.scenic_name,livePhotos:body.livePhotos || [],
+      mediaAccess:Object.fromEntries(paths.map(p=>[p,noteMediaTicket(p)]))}
   },
-  // 笔记详情独立页（P2）：仅已发布可见
+  // 笔记详情独立页（P2）：仅已发布可见；私密笔记（V88）仅作者本人可打开
   'GET /c/notes/:id': async (req) => {
     const user = requireUser(req)
     const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.comment_count, c.published_at, c.related_product_id,
+      c.visibility, s.id scenic_id, s.name scenic_name,
       u.nickname author, u.avatar_url, p.title product_title
       FROM content_note c JOIN user_account u ON u.id = c.user_id
       LEFT JOIN tour_product p ON p.id = c.related_product_id
-      WHERE c.id = ? AND c.status = 2`, [req.params.id])
+      LEFT JOIN scenic_spot s ON s.id = c.scenic_id AND s.status = 1
+      WHERE c.id = ? AND c.status = 2 AND (c.visibility='public' OR c.user_id=?)`, [req.params.id, user.uid])
     if (!n) throw new BizError(1004, '笔记不存在或未发布')
     let body = n.body
     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
@@ -975,7 +1103,7 @@ const cNotes = {
     const u = requireUser(req)
     const { noteId } = req.body
     await tx(async c => {
-      const note = await c.one('SELECT id, user_id, status, body FROM content_note WHERE id = ? FOR UPDATE', [noteId])
+      const note = await c.one("SELECT id, user_id, status, body FROM content_note WHERE id = ? AND visibility='public' FOR UPDATE", [noteId])
       if (!note || Number(note.user_id) !== Number(u.uid)) throw new BizError(1004, '笔记不存在')
       if (Number(note.status) !== 2) throw new BizError(1001, '仅已发布的笔记可提交审核')
       // A-16：任务状态与截止时间在提交时复检（此前只在领取时校验，截止后仍能提交）

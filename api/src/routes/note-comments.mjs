@@ -101,7 +101,7 @@ export const noteCommentRoutes = {
         mediaPath = '/uploads/' + name
         await mkdir(uploads, { recursive: true })
         await writeFile(file, media.buffer, { flag: 'wx' })
-        try { review = await mediaCheckAsync(apiImg(mediaPath, req), account?.mini_a_openid) }
+        try { review = await mediaCheckAsync(apiImg(mediaPath, req), account?.mini_a_openid, 2, media.kind === 'audio' ? 1 : 2) }
         catch { throw new BizError(1001, '媒体审核暂不可用，请稍后重试') }
       }
       const pending = Boolean(review && !review.mock)

@@ -1,12 +1,49 @@
 // 旅行笔记广场（小红书化改造）：双列瀑布流——3:4 封面卡 + 标题两行 + 作者行 + 点赞
+// 三期①话题聚合：?topic= / ?scenic= 进页即过滤；搜索框可改话题；卡片话题可点再聚合
 // WXML 铁律：左右两列与点赞态全部在 JS 预计算，wxml 只做取值与单三元
 const api = require('../../../utils/api')
 Page({
-  data: { leftItems: [], rightItems: [], page: 1, pageSize: 20, loading: true, error: '', demo: false, hasMore: false },
+  data: {
+    leftItems: [], rightItems: [], page: 1, pageSize: 20, loading: true, error: '', demo: false, hasMore: false,
+    topic: '', topicInput: '', scenicId: 0, scenicName: '',
+  },
+  onLoad(q) {
+    // 详情页话题/景区可点跳转进来的聚合视图
+    this.applyFilter(q.topic || '', Number(q.scenic) || 0, q.scenicName || '')
+    this.setData({ topicInput: this.data.topic })
+  },
+  // 过滤头/空态文案全部预计算（wxml 只取值）
+  applyFilter(topic, scenicId, scenicName) {
+    const hasFilter = Boolean(topic || scenicId)
+    this.setData({
+      topic: topic || '', scenicId: scenicId || 0, scenicName: scenicName || '',
+      hasFilter,
+      filterLabel: scenicId ? '📍 ' + (scenicName || ('景区 #' + scenicId)) : '#' + topic,
+      emptyText: hasFilter ? '这个话题还没有公开笔记' : '还没有公开笔记 · 抢先发一篇',
+    })
+  },
   onShow() { if (!this.data.leftItems.length && !this.data.rightItems.length) this.fetch(true) },
   retry() { this.fetch(true) },
   // bindtap 会把事件对象传进 reset 位——单独包一层，保证翻页语义正确
   more() { this.fetch(false) },
+  onTopicInput(e) { this.setData({ topicInput: e.detail.value }) },
+  searchTopic() {
+    const t = String(this.data.topicInput || '').trim().replace(/^#+/, '').slice(0, 20)
+    this.applyFilter(t, 0, '')
+    this.fetch(true)
+  },
+  clearTopic() {
+    this.setData({ topicInput: '' })
+    this.applyFilter('', 0, '')
+    this.fetch(true)
+  },
+  goTopic(e) {
+    const t = e.currentTarget.dataset.topic
+    if (!t || t === this.data.topic) return
+    this.setData({ topicInput: t })
+    this.applyFilter(t, 0, '')
+    this.fetch(true)
+  },
   // 奇偶分列：封面统一 3:4，无需按高度精确配平；标题行数差异由卡片自适应
   split(items) {
     const left = [], right = []
@@ -16,11 +53,16 @@ Page({
   fetch(reset) {
     const page = reset ? 1 : this.data.page + 1
     this.setData({ loading: true, error: '' })
-    api.request('/c/notes/feed?page=' + page + '&pageSize=' + this.data.pageSize).then((d) => {
+    const topic = this.data.topic || ''
+    const scenic = this.data.scenicId || 0
+    const qs = 'page=' + page + '&pageSize=' + this.data.pageSize + '&topic=' + encodeURIComponent(topic) + '&scenic=' + scenic
+    api.request('/c/notes/feed?' + qs).then((d) => {
+      if (topic !== (this.data.topic || '') || scenic !== (this.data.scenicId || 0)) return // 已切话题，丢弃旧响应
       const raw = (reset ? d.items : this.all().concat(d.items)).map((x) => ({
         ...x, productText: x.productTitle ? ' · ' + x.productTitle : '',
         cover: x.cover || '', avatar: x.avatar || '', authorChar: (x.author || '旅').slice(0, 1),
         excerpt: (x.title || '无标题笔记').slice(0, 24),
+        cardTopics: (x.topics || []).slice(0, 2),
       }))
       this.setData({ page, loading: false, hasMore: d.items.length >= d.pageSize, demo: false, ...this.split(raw) })
     }).catch((e) => {

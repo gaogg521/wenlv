@@ -28,8 +28,11 @@ const uid = Number(user.insertId), notes = []
 const headers = { authorization: 'Bearer ' + jwtSign({ uid, end: 'c' }), host: 'media.example.org', 'x-forwarded-proto': 'https' }
 const savedSite = await one('SELECT profile FROM site_config WHERE id=1')
 const postNote = body => cNotes['POST /c/notes']({ headers, body })
+// UGC 三期：saveNote 收紧为「图片必须本人上传」——真上传后再发（进程内直调上传 handler）
+const PNG_B64_RR = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+const upImgRR = async () => (await c['POST /c/upload/note-image']({ headers, body: { data: PNG_B64_RR, ext: 'png' } })).url
 try {
-  const note = await postNote({ title: '两张图片', body: '测试多图审核链路', images: ['/uploads/first.jpg', '/uploads/second.jpg'] }); notes.push(note.id)
+  const note = await postNote({ title: '两张图片', body: '测试多图审核链路', images: [await upImgRR(), await upImgRR()] }); notes.push(note.id)
   assert.equal(note.status, 0)
   const textCall = received.find(x => x.path === '/wxa/msg_sec_check')
   assert.equal(textCall.body.openid, (await one('SELECT mini_a_openid FROM user_account WHERE id=?', [uid])).mini_a_openid)
@@ -45,20 +48,20 @@ try {
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?', [note.id])).status), 2)
   assert.equal((await applyMediaReview(result(checks[1].trace_id, 'risky'))).duplicate, true)
   const edit = cNotes['PUT /c/notes/:id']
-  const revised = await edit({ headers, params:{id:note.id}, body:{title:'修订待审',body:'编辑后必须再次人工审核',images:['/uploads/updated.jpg'],revision:1} })
+  const revised = await edit({ headers, params:{id:note.id}, body:{title:'修订待审',body:'编辑后必须再次人工审核',images:[await upImgRR()],revision:1} })
   assert.equal(revised.status,0)
   const current = await one('SELECT body FROM content_note WHERE id=?',[note.id])
   const currentBody = typeof current.body === 'string' ? JSON.parse(current.body) : current.body
   await applyMediaReview(result(currentBody.imgSec[0].traceId))
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?',[note.id])).status),1,'图片通过后仍需人工复审')
   await assert.rejects(() => edit({headers,params:{id:note.id},body:{title:'旧版本',body:'旧内容',revision:1}}),/状态已变化/)
-  const concurrent = await postNote({ title: '并发多图', body: '最后两张并发通过也必须发布', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }); notes.push(concurrent.id)
+  const concurrent = await postNote({ title: '并发多图', body: '最后两张并发通过也必须发布', images: [await upImgRR(), await upImgRR()] }); notes.push(concurrent.id)
   const parallel = await q('SELECT trace_id FROM content_media_check WHERE note_id=?', [concurrent.id])
   await Promise.all(parallel.map(x => applyMediaReview(result(x.trace_id))))
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?', [concurrent.id])).status), 2)
   await assert.rejects(() => applyMediaReview(result('unknown-task')))
   reviewText = true
-  const review = await postNote({ title: '文字需复核', body: '测试文本不能被图片放行', images: ['/uploads/third.jpg'] }); notes.push(review.id)
+  const review = await postNote({ title: '文字需复核', body: '测试文本不能被图片放行', images: [await upImgRR()] }); notes.push(review.id)
   const check = await one('SELECT trace_id FROM content_media_check WHERE note_id=?', [review.id])
   await applyMediaReview(result(check.trace_id))
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?', [review.id])).status), 1)
@@ -66,7 +69,7 @@ try {
   // V87 机审通道降级契约：提交侧机审失败不再拒绝/500，而是整篇转人工审核（status=1），绝不直发；
   // 降级原因记录在 body.imgSec[].degraded 供审核员看到通道异常。
   const before = await one('SELECT COUNT(*) n FROM content_note WHERE user_id=?', [uid])
-  const degraded = await postNote({ title: '机审失败转人工', body: '失败不能冒充审核已提交，必须转人工', images: ['/uploads/fourth.jpg'] }); notes.push(degraded.id)
+  const degraded = await postNote({ title: '机审失败转人工', body: '失败不能冒充审核已提交，必须转人工', images: [await upImgRR()] }); notes.push(degraded.id)
   assert.equal(Number(degraded.status), 1, '机审失败必须转人工审核，不得直发')
   const degradedRow = await one('SELECT body FROM content_note WHERE id=?', [degraded.id])
   const degradedBody = typeof degradedRow.body === 'string' ? JSON.parse(degradedRow.body) : degradedRow.body || {}

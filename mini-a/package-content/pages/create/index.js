@@ -8,8 +8,33 @@ Page({
     ],
     reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
     busy: false,
+    drafts: [], draftCount: 0, // 云草稿（三期 V89）：防丢存档，入口在本页
   },
-  async onShow() { await this.fetch(); this.fetchTasks() },
+  async onShow() { await this.fetch(); this.fetchTasks(); this.fetchDrafts() },
+
+  /* ---------- 云草稿（三期）：列表 → 恢复到 compose / 长按删除 ---------- */
+  async fetchDrafts() {
+    try {
+      await api.ensureLogin()
+      const list = await api.request('/c/note-drafts')
+      this.setData({ drafts: (list || []).slice(0, 6).map(d => ({
+        ...d, when: String(d.updated_at || '').replace('T', ' ').slice(0, 16),
+        name: d.title || '未命名草稿' })) , draftCount: (list || []).length })
+    } catch (e) { this.setData({ drafts: [], draftCount: 0 }) }
+  },
+  openDraft(e) {
+    const id = e.currentTarget.dataset.id
+    if (!id) return
+    wx.navigateTo({ url: '/package-content/pages/compose/index?draftId=' + id })
+  },
+  removeDraft(e) {
+    const { id, revision } = e.currentTarget.dataset
+    wx.showModal({ title: '删除云草稿？', content: '删除后不可恢复。', success: async m => {
+      if (!m.confirm) return
+      try { await api.request('/c/note-drafts/' + id, 'DELETE', { revision: Number(revision) || 0 }); wx.showToast({ title: '已删除' }); this.fetchDrafts() }
+      catch (err) { wx.showToast({ title: err.msg || '删除失败，请刷新', icon: 'none' }) }
+    } })
+  },
 
   async fetch() {
     try {
@@ -17,7 +42,7 @@ Page({
       const [notes,reports]=await Promise.all([api.request('/c/notes'),api.request('/c/content-reports')])
       const decorated=notes.map(n=>({...n,statusText:({0:'机审中',1:'人工审核中',2:'已发布',3:'未通过',4:'已下架'})[n.status]||'处理中',
         badgeClass:({2:'ok',3:'bad',4:'off'})[n.status]||'ing',
-        cover:n.cover||'',coverChar:(n.title||'无题').slice(0,2),hasVideo:!!n.hasVideo,
+        cover:n.cover||'',coverChar:(n.title||'无题').slice(0,2),hasVideo:!!n.hasVideo,isPrivate:n.visibility==='private',
         appealText:n.appeal_status==null?'':({0:'申诉复核中',1:'申诉通过，恢复展示',2:'申诉未通过，维持下架'})[n.appeal_status]}))
       this.setData({loadError:'',notes:decorated,reports:reports.map(r=>({...r,statusText:r.status===2&&r.note_status===2?'处理后经复核恢复展示':({0:'待处理',1:'举报不成立',2:'已处理下架'})[r.status]}))})
       this.applyWorkFilter()

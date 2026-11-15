@@ -76,3 +76,27 @@ page { background: #fff; }
 .ab-act.on { color: #e0344a; }
 .ab-share { flex-shrink: 0; min-width: 96rpx; height: 60rpx; line-height: 60rpx; padding: 0 20rpx; border-radius: 999rpx;
   background: #f5f6f7; color: #6b7280; font-size: 24rpx; }
+
+/* 话题可点 + 景区行（三期①） */
+.topic-tag { padding: 6rpx 14rpx; background: var(--brand-soft, #fdf1e3); border-radius: 10rpx; }
+.scenic-line { margin-top: 18rpx; font-size: 25rpx; color: #6b7280; }
+.private-chip { color: #6b7280; background: #f3f4f6; }
+
+/* 评论骨架屏（三期③）：三段灰阶呼吸行 */
+.c-skeleton { display: flex; gap: 16rpx; padding: 20rpx 0; }
+.c-skeleton-inner { padding: 10rpx 0 0; }
+.cs-avatar { width: 60rpx; height: 60rpx; border-radius: 50%; flex-shrink: 0; background: #eef0f2; animation: cs-breath 1.2s ease-in-out infinite; }
+.cs-main { flex: 1; min-width: 0; }
+.cs-line { height: 26rpx; border-radius: 8rpx; background: #eef0f2; margin: 10rpx 0; animation: cs-breath 1.2s ease-in-out infinite; }
+.cs-line-short { width: 30%; }
+.cs-line-thin { width: 70%; height: 20rpx; }
+@keyframes cs-breath { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* 语音评论（三期）：胶囊按钮 */
+.c-audio { display: inline-flex; align-items: center; gap: 8rpx; margin: 8rpx 0; padding: 10rpx 24rpx; border-radius: 999rpx;
+  background: var(--brand-soft, #fdf1e3); color: var(--brand, #e87722); font-size: 24rpx; }
+.c-audio.on { background: var(--brand, #e87722); color: #fff; }
+.c-media-state { font-size: 22rpx; color: #c0c4cc; margin: 4rpx 0; }
+.ab-pending-audio { flex-shrink: 0; font-size: 22rpx; color: var(--brand, #e87722); background: var(--brand-soft, #fdf1e3);
+  border-radius: 999rpx; padding: 10rpx 18rpx; }
+.ab-img.rec { color: #e0344a; font-weight: 700; }

@@ -20,6 +20,7 @@ import * as vc from '../domain/vc.mjs'
 import * as asset from '../domain/asset.mjs'
 import * as badgeDomain from '../domain/badge.mjs'
 import * as taskReview from '../domain/task-review.mjs'
+import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
@@ -209,7 +210,8 @@ const adminEco = {
     }
     const product = n.related_product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [n.related_product_id]) : null
     const tasks = await q(`SELECT t.id,t.title,e.status FROM content_task_entry e JOIN content_task t ON t.id=e.task_id LEFT JOIN tour_product p ON p.id=t.product_id WHERE e.note_id=?${a.scopeCity?' AND p.city_code=?':''}`,a.scopeCity?[n.id,a.scopeCity]:[n.id])
-    return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
+    // 私密媒体门禁（V88）：审核端用 note-review 票据直读笔记素材
+    return { note: taskReview.noteView(n, (u) => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'), req)), author, product, tasks }
   },
   'POST /admin/content/:id/verdict': async (req) => {
     const a = await requireAdmin(req, 'note.review')

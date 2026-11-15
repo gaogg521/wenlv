@@ -97,9 +97,13 @@ await t('A43-1 笔记图片上传：文件头校验 + 版本文件名；非图�
   assert.notEqual(fake.code, 0, '非图片内容必须被文件头校验拒绝')
 })
 
+// UGC 三期：saveNote 收紧为「图片必须本人上传」（note-media.mjs 所有权校验）——真上传
+const PNG_B64_A43 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+const upImgA43 = async (tok) => ok(await call('POST', '/c/upload/note-image', { data: PNG_B64_A43, ext: 'png' }, tok)).url
+
 await t('A43-2 带图笔记可发布（images 数组入正文）', async () => {
   const u = await cLogin('a43b')
-  const r = ok(await call('POST', '/c/notes', { title: '带图笔记' + stamp, body: '图文内容', images: ['/uploads/note_1_1.jpg', '/uploads/note_1_2.jpg'] }, u.token))
+  const r = ok(await call('POST', '/c/notes', { title: '带图笔记' + stamp, body: '图文内容', images: [await upImgA43(u.token), await upImgA43(u.token)] }, u.token))
   created.notes.push(r.id)
   const n = await one('SELECT status FROM content_note WHERE id = ?', [r.id])
   assert.equal(Number(n.status), 2, 'mock 机审直通已发布')
@@ -107,7 +111,7 @@ await t('A43-2 带图笔记可发布（images 数组入正文）', async () => {
 
 await t('A43-3 公开内容流：仅已发布笔记可見，带封面/作者/点赞数/关联线路', async () => {
   const u = await cLogin('a43c')
-  const pub = ok(await call('POST', '/c/notes', { title: '广场笔记' + stamp, body: '公开内容流测试', images: ['/uploads/a.jpg'], relatedProductId: created.products[0] || 1 }, u.token))
+  const pub = ok(await call('POST', '/c/notes', { title: '广场笔记' + stamp, body: '公开内容流测试', images: [await upImgA43(u.token)], relatedProductId: created.products[0] || 1 }, u.token))
   created.notes.push(pub.id)
   const draft = ok(await call('POST', '/c/notes', { title: '未过审草稿', body: '不该出现在广场', }, u.token))
   await q('UPDATE content_note SET status = 1 WHERE id = ?', [draft.id])
