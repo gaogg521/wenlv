@@ -63,9 +63,15 @@ try {
   await applyMediaReview(result(check.trace_id))
   assert.equal(Number((await one('SELECT status FROM content_note WHERE id=?', [review.id])).status), 1)
   reviewText = false; failImage = true
+  // V87 机审通道降级契约：提交侧机审失败不再拒绝/500，而是整篇转人工审核（status=1），绝不直发；
+  // 降级原因记录在 body.imgSec[].degraded 供审核员看到通道异常。
   const before = await one('SELECT COUNT(*) n FROM content_note WHERE user_id=?', [uid])
-  await assert.rejects(() => postNote({ title: '提交失败', body: '失败不能冒充审核已提交', images: ['/uploads/fourth.jpg'] }), /40013/)
-  assert.equal(Number((await one('SELECT COUNT(*) n FROM content_note WHERE user_id=?', [uid])).n), Number(before.n))
+  const degraded = await postNote({ title: '机审失败转人工', body: '失败不能冒充审核已提交，必须转人工', images: ['/uploads/fourth.jpg'] }); notes.push(degraded.id)
+  assert.equal(Number(degraded.status), 1, '机审失败必须转人工审核，不得直发')
+  const degradedRow = await one('SELECT body FROM content_note WHERE id=?', [degraded.id])
+  const degradedBody = typeof degradedRow.body === 'string' ? JSON.parse(degradedRow.body) : degradedRow.body || {}
+  assert.ok((degradedBody.imgSec || []).some(x => x.degraded), '降级原因应记录在 imgSec')
+  assert.equal(Number((await one('SELECT COUNT(*) n FROM content_note WHERE user_id=?', [uid])).n), Number(before.n) + 1)
   await assert.rejects(() => mediaCheckAsync('http://127.0.0.1/private.png', textCall.body.openid), /公网HTTPS/)
   const req = { headers, body: { scene: 'privacy', granted: true } }
   await c['POST /c/consent'](req)

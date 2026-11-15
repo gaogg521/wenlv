@@ -1525,8 +1525,8 @@ const admin = {
       await cc.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'task_entry' AND item_id = ? AND released_at IS NULL", [e.id])
       return passed ? { finished: true, rewarded: Number(t.reward_beans), cashReward: cash, userId: Number(e.user_id), entryId: Number(e.id) } : { rejected: true, backTo: '创作中' }
     })
-    // 闭环步骤4 贡献确认 S：事务提交后再计分（幂等；旅豆奖励仍走既有 grant，不重复触发资金）
-    if (r && r.finished) { try { await (await import('../domain/contribution.mjs')).recordS(r.userId, r.entryId) } catch (err) { console.error('[task:contribution]', r.entryId, err.message) } }
+    // 贡献确认 S：V84 起由 enqueueContribution('entry') 入队、processContribution 计分（kind=2 + sCap 月上限），
+    // 事务内已入队；此处旧 recordS 调用（contribution.mjs 无此导出）为死代码，每次通过投稿都会刷错，已移除。
     return r
   },
   // 现金加奖：待打款列表 / 登记打款（财务；流水号唯一，防重复登记）
