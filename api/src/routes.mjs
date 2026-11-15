@@ -22,6 +22,7 @@ import { open } from './routes/open.mjs'
 import { callback } from './routes/callback.mjs'
 import { people } from './routes/people.mjs'
 import { contentGovernance } from './routes/content-governance.mjs'
+import { noteCommentRoutes } from './routes/note-comments.mjs'
 import { workAccess } from './routes/work-access.mjs'
 import { salesRoutes } from './routes/sales.mjs'
 import { freedomRoutes } from './routes/freedom.mjs'
@@ -30,7 +31,7 @@ import { supplyAdminRoutes } from './routes/supply-admin.mjs'
 import { pkgAdminRoutes } from './routes/pkg-admin.mjs'
 
 
-export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes, ...scenicFollowupRoutes, ...partnerDash }
+export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes, ...scenicFollowupRoutes, ...partnerDash, ...noteCommentRoutes }
 
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {

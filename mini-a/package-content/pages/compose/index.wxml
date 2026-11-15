@@ -62,7 +62,29 @@
       <text class="kv-k">📍 关联线路</text>
       <text class="kv-v">{{relatedName || '选填，让笔记被更多旅人看到'}} ›</text>
     </view>
+    <view class="kv-line {{canIdeas ? '' : 'off'}}" bindtap="openIdeas">
+      <text class="kv-k">✨ 写作建议</text>
+      <text class="kv-v">{{canIdeas ? '看图帮你起标题、写正文' : '上传照片后可用'}} ›</text>
+    </view>
     <view wx:if="{{editId}}" class="edit-tip">正在编辑已发布作品 · 提交后将暂时撤下并重新审核</view>
+  </view>
+</view>
+
+<!-- ✨ 写作建议面板 -->
+<view wx:if="{{showIdeas}}" class="sheet-mask" bindtap="closeIdeas">
+  <view class="idea-sheet" catchtap="noop">
+    <view class="sheet-title">✨ 写作建议</view>
+    <view class="idea-sub">根据照片和话题，帮你起标题、写正文；只描述画面里看得见的细节</view>
+    <textarea class="idea-intent" value="{{writingIntent}}" bindinput="onIntentInput" maxlength="80"
+      placeholder="想表达什么？例如：想记录慢下来的感觉（选填）"></textarea>
+    <button class="idea-gen" bindtap="genIdeas" loading="{{visionBusy}}" disabled="{{visionBusy}}">{{visionResult ? '重新生成' : '生成文案'}}</button>
+    <view wx:if="{{visionError}}" class="idea-error">{{visionError}}</view>
+    <view wx:if="{{visionResult}}" class="idea-result">
+      <view class="ir-title">{{visionResult.title}}</view>
+      <view class="ir-text">{{visionResult.text}}</view>
+      <view wx:if="{{visionResult.reason}}" class="ir-reason">写作角度：{{visionResult.reason}}</view>
+      <button class="ir-apply" bindtap="applyIdea">应用到笔记</button>
+    </view>
   </view>
 </view>
 

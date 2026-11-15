@@ -7,7 +7,17 @@ export async function applyMediaReview(message) {
   const trace = String(message.trace_id || '')
   if (!trace) throw new Error('图片回执缺少任务标识')
   const found = await one('SELECT note_id FROM content_media_check WHERE trace_id = ?', [trace])
-  if (!found) throw new Error('图片回执任务尚未登记，请稍后重试')
+  if (!found) {
+    // 评论附件（V87）：未登记到笔记机审表的 trace 按评论附件处理——过审转展示并同步计数
+    const comment = await one('SELECT id, note_id FROM content_note_comment WHERE media_trace=?', [trace])
+    if (!comment) throw new Error('媒体回执任务尚未登记，请稍后重试')
+    const pass = Number(message.errcode) === 0 && message.result?.suggest === 'pass'
+    return tx(async c => {
+      const changed = await c.upd('UPDATE content_note_comment SET media_state=? WHERE id=? AND media_state=0', [pass ? 1 : 2, comment.id])
+      if (changed === 1 && pass) await c.q('UPDATE content_note SET comment_count=GREATEST(comment_count+1,0) WHERE id=?', [comment.note_id])
+      return { accepted: Boolean(changed) }
+    })
+  }
   return tx(async c => {
     // 同一篇先锁笔记，所有回执采用相同锁序，避免多图并发死锁。
     const note = await c.one('SELECT id, status, body, user_id FROM content_note WHERE id = ? FOR UPDATE', [found.note_id])

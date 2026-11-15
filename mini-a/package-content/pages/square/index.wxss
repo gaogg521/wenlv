@@ -4,7 +4,10 @@
 .wf-card { background: #fff; border-radius: 16rpx; overflow: hidden; box-shadow: 0 2rpx 12rpx rgba(0,0,0,.05); }
 .wf-cover-box { position: relative; width: 100%; }
 .wf-cover { display: block; width: 100%; height: 472rpx; background: #f3ece2; }
-.wf-ph { display: flex; align-items: center; justify-content: center; font-size: 72rpx; }
+.wf-ph { display: flex; align-items: center; justify-content: center; padding: 24rpx; box-sizing: border-box;
+  background: var(--brand-soft, #fdf1e3); }
+.wf-ph-text { font-size: 30rpx; font-weight: 600; color: #8a5a1f; line-height: 1.6; word-break: break-all;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .wf-play { position: absolute; left: 14rpx; bottom: 14rpx; width: 44rpx; height: 44rpx; line-height: 44rpx; text-align: center;
   border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; font-size: 20rpx; }
 .wf-title { padding: 14rpx 16rpx 6rpx; font-size: 27rpx; font-weight: 600; color: #1f2937;

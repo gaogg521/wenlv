@@ -30,18 +30,31 @@ page { background: #fff; }
 .topic-tag { color: var(--brand, #e87722); font-size: 27rpx; font-weight: 600; }
 .like-sum { margin-top: 20rpx; font-size: 26rpx; color: var(--brand, #e87722); }
 
-/* 评论区 */
+/* 评论区（小红书式） */
 .comments { padding: 24rpx 32rpx; border-top: 12rpx solid #f7f8fa; }
 .c-head { font-size: 30rpx; font-weight: 600; color: #111; margin-bottom: 20rpx; }
-.c-item { display: flex; gap: 16rpx; padding: 16rpx 0; }
+.c-item { display: flex; gap: 16rpx; padding: 20rpx 0; }
 .c-avatar { width: 60rpx; height: 60rpx; border-radius: 50%; flex-shrink: 0; background: #f0f0f0; }
 .c-avatar-ph { display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 26rpx; }
 .c-main { flex: 1; min-width: 0; }
-.c-name { font-size: 24rpx; color: #9ca3af; }
+.c-name { font-size: 24rpx; color: #9ca3af; display: flex; align-items: center; gap: 10rpx; }
+.c-tag { font-size: 20rpx; color: var(--brand, #e87722); border: 1rpx solid var(--brand, #e87722); border-radius: 6rpx; padding: 0 8rpx; }
+.c-rto { font-size: 24rpx; color: #9ca3af; }
 .c-content { font-size: 28rpx; color: #1f2937; line-height: 1.6; margin: 6rpx 0; word-break: break-word; }
+.c-img { width: 240rpx; height: 240rpx; border-radius: 12rpx; margin: 8rpx 0; }
+.c-foot { display: flex; align-items: center; gap: 24rpx; margin-top: 6rpx; }
 .c-time { font-size: 22rpx; color: #c0c4cc; }
+.c-act { font-size: 24rpx; color: #6b7280; }
+.c-like { margin-left: auto; font-size: 24rpx; color: #9ca3af; }
+.c-like.on { color: #e0344a; }
+.c-replies { margin-top: 12rpx; background: #f7f8fa; border-radius: 12rpx; padding: 14rpx 18rpx; }
+.c-reply { padding: 10rpx 0; border-bottom: 1rpx solid #eef0f2; }
+.c-reply:last-child { border-bottom: none; }
+.c-rname { font-size: 24rpx; color: #9ca3af; display: flex; align-items: center; gap: 10rpx; flex-wrap: wrap; }
+.c-reply .c-img { width: 180rpx; height: 180rpx; }
+.c-more { text-align: center; padding: 14rpx 0; font-size: 24rpx; color: var(--brand, #e87722); }
+.c-more-main { border-top: 1rpx solid #f0f0f0; margin-top: 8rpx; }
 .c-empty { padding: 32rpx 0; text-align: center; font-size: 26rpx; color: #9ca3af; }
-.c-more { text-align: center; padding: 20rpx 0; font-size: 26rpx; color: var(--brand, #e87722); }
 
 /* 举报 */
 .report-area { padding: 8rpx 32rpx 24rpx; }
@@ -50,7 +63,10 @@ page { background: #fff; }
 
 /* 底部操作栏 */
 .action-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; align-items: center; gap: 16rpx;
-  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); background: #fff; border-top: 1rpx solid #f0f0f0; }
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); background: #fff; border-top: 1rpx solid #f0f0f0; flex-wrap: wrap; }
+.ab-reply-chip { width: 100%; font-size: 22rpx; color: var(--brand, #e87722); background: var(--brand-soft, #fdf1e3); border-radius: 999rpx; padding: 8rpx 20rpx; }
+.ab-pending { width: 64rpx; height: 64rpx; border-radius: 10rpx; flex-shrink: 0; }
+.ab-img { flex-shrink: 0; font-size: 34rpx; }
 .ab-input { flex: 1; min-width: 0; height: 68rpx; padding: 0 28rpx; border-radius: 999rpx; background: #f5f6f7; font-size: 26rpx; }
 .ab-send { flex-shrink: 0; min-width: 110rpx; height: 60rpx; line-height: 60rpx; padding: 0 20rpx; border-radius: 999rpx;
   background: #f5f6f7; color: #9ca3af; font-size: 24rpx; }

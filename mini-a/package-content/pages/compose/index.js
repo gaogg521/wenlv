@@ -15,6 +15,10 @@ Page({
     editId: null, revision: null, textMode: false, loaded: false,
     uploadingCount: 0, hasFailed: false, barHint: '', canPublish: false, bodyLen: 0,
     formats: {}, busy: false,
+    // ✨ 写作建议（AI 看图成文）
+    showIdeas: false, writingIntent: '', visionBusy: false, visionError: '', visionResult: null, canIdeas: false,
+    // 本地草稿
+    draftRestored: false,
   },
 
   onLoad(q) {
@@ -25,8 +29,40 @@ Page({
   },
   onReady() {
     if (this.data.editId) this.loadForEdit()
-    else this.pickImages()
+    else {
+      if (!this.maybeRestoreDraft()) this.pickImages()
+    }
   },
+  onHide() { if (!this.data.editId && (this.data.title || this.plainLenValue > 0 || this.data.topics.length)) this.saveLocalDraft() },
+
+  /* ---------- 本地草稿（文字部分；图片临时路径会失效，不保存） ---------- */
+  saveLocalDraft() {
+    try {
+      wx.setStorageSync('xhs-compose-draft', { title: this.data.title, bodyHtml: this.data.bodyHtml,
+        topics: this.data.topics, relatedProductId: this.data.relatedProductId, relatedName: this.data.relatedName, at: Date.now() })
+    } catch (e) { /* 存储失败静默 */ }
+  },
+  maybeRestoreDraft() {
+    let d = null
+    try { d = wx.getStorageSync('xhs-compose-draft') } catch (e) { d = null }
+    if (!d || (!d.title && !d.bodyHtml && !(d.topics || []).length)) return false
+    wx.showModal({ title: '检测到未发布的草稿', content: '是否恢复上次编辑的文字？', confirmText: '恢复', cancelText: '不恢复',
+      success: r => {
+        if (r.confirm) {
+          this.pendingHtml = d.bodyHtml || ''
+          this.plainLenValue = this.plainLen(this.pendingHtml)
+          this.setData({ title: d.title || '', titleLen: (d.title || '').length, topics: d.topics || [],
+            relatedProductId: d.relatedProductId || null, relatedName: d.relatedName || '', loaded: true, textMode: true, draftRestored: true })
+          if (this.editor && this.pendingHtml) { this.editor.setContents({ html: this.pendingHtml }); this.pendingHtml = '' }
+          this.refresh()
+        } else {
+          try { wx.removeStorageSync('xhs-compose-draft') } catch (e) { /* 忽略 */ }
+          this.pickImages()
+        }
+      } })
+    return true
+  },
+  clearLocalDraft() { try { wx.removeStorageSync('xhs-compose-draft') } catch (e) { /* 忽略 */ } },
 
   /* ---------- 媒体选择与上传 ---------- */
   pickImages() {
@@ -134,10 +170,48 @@ Page({
       mediaLabel: imgs.length ? (d.current + 1) + '/' + imgs.length : '',
       hasFailed: imgs.some(x => x.failed) || !!(d.video && d.video.failed),
       bodyLen: this.plainLenValue,
+      canIdeas: imgs.filter(x => x.url && !x.failed).length > 0,
       barHint: d.uploadingCount > 0 ? '正在上传媒体 ' + d.uploadingCount + ' 个…'
         : (imgs.some(x => x.failed) || (d.video && d.video.failed) ? '有媒体上传失败，请重试或删除' : ''),
       canPublish,
     })
+  },
+
+  /* ---------- ✨ 写作建议（AI 看图成文） ---------- */
+  openIdeas() {
+    if (!this.data.canIdeas) return wx.showToast({ title: '先上传照片，再让 AI 帮你写', icon: 'none' })
+    this.setData({ showIdeas: true, visionError: '' })
+  },
+  closeIdeas() { this.setData({ showIdeas: false }) },
+  onIntentInput(e) { this.setData({ writingIntent: e.detail.value }) },
+  async genIdeas() {
+    if (this.data.visionBusy) return
+    const paths = this.data.images.filter(x => x.url && !x.failed).map(x => x.url).slice(0, 3)
+    if (!paths.length) return wx.showToast({ title: '先上传照片', icon: 'none' })
+    this.setData({ visionBusy: true, visionError: '' })
+    try {
+      await api.ensureLogin()
+      const r = await api.request('/c/note-vision-draft', 'POST', { paths, relatedProductId: this.data.relatedProductId,
+        topics: this.data.topics, intent: this.data.writingIntent || '' })
+      this.setData({ visionResult: { title: r.title || '', text: r.text || '', reason: r.reason || '', guide: !!r.guide } })
+    } catch (e) { this.setData({ visionError: e.msg || '生成失败，请稍后重试' }) }
+    finally { this.setData({ visionBusy: false }) }
+  },
+  applyIdea() {
+    const r = this.data.visionResult
+    if (!r) return
+    // 标题直接回填；正文按空行分段写入编辑器（保留用户已有内容时不覆盖——XHS 习惯是覆盖，这里确认）
+    const hasBody = this.plainLenValue > 0
+    const apply = () => {
+      this.pendingHtml = r.text.split(/\n{2,}/).map(s => '<p>' + s.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch])).replace(/\n/g, '<br>') + '</p>').join('')
+      this.plainLenValue = this.plainLen(this.pendingHtml)
+      if (this.editor) { this.editor.setContents({ html: this.pendingHtml }); this.pendingHtml = '' }
+      this.setData({ title: r.title.slice(0, 20), titleLen: Math.min(r.title.length, 20), showIdeas: false })
+      this.refresh()
+    }
+    if (hasBody) {
+      wx.showModal({ title: '应用 AI 文案？', content: '当前已写的正文将被替换。', success: m => { if (m.confirm) apply() } })
+    } else apply()
   },
 
   /* ---------- 文字编辑 ---------- */
@@ -232,6 +306,7 @@ Page({
       const payload = { title: title.trim(), blocks, images: imageUrls, video: this.data.video ? this.data.video.url : null,
         topics, coverIndex, relatedProductId }
       const r = await api.request(editId ? '/c/notes/' + editId : '/c/notes', editId ? 'PUT' : 'POST', { ...payload, revision })
+      this.clearLocalDraft()
       wx.showToast({ title: r.status === 2 ? '已发布' : r.msg || '已提交审核', icon: 'success' })
       setTimeout(() => wx.navigateBack({ fail: () => wx.reLaunch({ url: '/package-content/pages/create/index' }) }), 900)
     } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }

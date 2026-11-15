@@ -5,7 +5,7 @@
     <view class="wf-card" wx:for="{{leftItems}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
       <view class="wf-cover-box">
         <image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
-        <view wx:else class="wf-cover wf-ph">📝</view>
+        <view wx:else class="wf-cover wf-ph"><text class="wf-ph-text">{{item.excerpt}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wf-play">▶</view>
       </view>
       <view class="wf-title">{{item.title || '无标题笔记'}}</view>
@@ -21,7 +21,7 @@
     <view class="wf-card" wx:for="{{rightItems}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
       <view class="wf-cover-box">
         <image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
-        <view wx:else class="wf-cover wf-ph">📝</view>
+        <view wx:else class="wf-cover wf-ph"><text class="wf-ph-text">{{item.excerpt}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wf-play">▶</view>
       </view>
       <view class="wf-title">{{item.title || '无标题笔记'}}</view>

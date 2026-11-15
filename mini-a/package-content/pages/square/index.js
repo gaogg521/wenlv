@@ -20,6 +20,7 @@ Page({
       const raw = (reset ? d.items : this.all().concat(d.items)).map((x) => ({
         ...x, productText: x.productTitle ? ' · ' + x.productTitle : '',
         cover: x.cover || '', avatar: x.avatar || '', authorChar: (x.author || '旅').slice(0, 1),
+        excerpt: (x.title || '无标题笔记').slice(0, 24),
       }))
       this.setData({ page, loading: false, hasMore: d.items.length >= d.pageSize, demo: false, ...this.split(raw) })
     }).catch((e) => {

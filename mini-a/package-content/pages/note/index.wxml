@@ -50,20 +50,42 @@
     <view wx:if="{{likeCount}}" class="like-sum">👍 {{likeCount}} 人觉得有用</view>
   </view>
 
-  <!-- 评论区 -->
+  <!-- 评论区（小红书式：一级评论 + 楼内回复展开） -->
   <view class="comments">
-    <view class="c-head">评论</view>
+    <view class="c-head">共 {{commentTotal}} 条评论</view>
     <view class="c-item" wx:for="{{comments}}" wx:key="id">
       <image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
-      <view wx:else class="c-avatar c-avatar-ph">旅</view>
+      <view wx:else class="c-avatar c-avatar-ph">{{item.avatarChar}}</view>
       <view class="c-main">
-        <view class="c-name">{{item.author}}</view>
-        <view class="c-content">{{item.content}}</view>
-        <view class="c-time">{{item.when}}</view>
+        <view class="c-name">{{item.author}}<text wx:if="{{item.byAuthor}}" class="c-tag">作者</text></view>
+        <view class="c-content">{{item.body}}</view>
+        <image wx:if="{{item.mediaUrl}}" class="c-img" src="{{item.mediaUrl}}" mode="aspectFill" data-url="{{item.mediaUrl}}" bindtap="previewCommentImage" />
+        <view class="c-foot">
+          <text class="c-time">{{item.when}}</text>
+          <text class="c-act" bindtap="startReply" data-id="{{item.id}}" data-author="{{item.author}}">回复</text>
+          <text wx:if="{{item.mine}}" class="c-act" catchtap="deleteComment" data-id="{{item.id}}">删除</text>
+          <text class="c-like {{item.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{item.id}}" data-liked="{{item.liked}}">{{item.liked ? '♥' : '♡'}} {{item.likes}}</text>
+        </view>
+        <!-- 楼内回复 -->
+        <view wx:if="{{item.replies.length || item.repliesLeft > 0}}" class="c-replies">
+          <view class="c-reply" wx:for="{{item.replies}}" wx:for-item="r" wx:key="id">
+            <view class="c-rname">{{r.author}}<text wx:if="{{r.byAuthor}}" class="c-tag">作者</text><text wx:if="{{r.replyAuthor}}" class="c-rto">回复 @{{r.replyAuthor}}</text></view>
+            <view class="c-content">{{r.body}}</view>
+            <image wx:if="{{r.mediaUrl}}" class="c-img" src="{{r.mediaUrl}}" mode="aspectFill" data-url="{{r.mediaUrl}}" bindtap="previewCommentImage" />
+            <view class="c-foot">
+              <text class="c-time">{{r.when}}</text>
+              <text class="c-act" bindtap="startReply" data-id="{{r.id}}" data-root="{{item.id}}" data-author="{{r.author}}">回复</text>
+              <text wx:if="{{r.mine}}" class="c-act" catchtap="deleteComment" data-id="{{r.id}}">删除</text>
+              <text class="c-like {{r.liked ? 'on' : ''}}" catchtap="likeComment" data-id="{{r.id}}" data-liked="{{r.liked}}">{{r.liked ? '♥' : '♡'}} {{r.likes}}</text>
+            </view>
+          </view>
+          <view wx:if="{{item.repliesLeft > 0 && !item.expanded}}" class="c-more" bindtap="expandReplies" data-root="{{item.id}}">展开 {{item.repliesLeft}} 条回复</view>
+          <view wx:if="{{item.more}}" class="c-more" bindtap="moreReplies" data-root="{{item.id}}">展开更多回复</view>
+        </view>
       </view>
     </view>
+    <view wx:if="{{commentNext}}" class="c-more c-more-main" bindtap="loadMoreComments">展开更多评论</view>
     <view wx:if="{{!comments.length}}" class="c-empty">还没有评论，来说点什么吧</view>
-    <view wx:if="{{comments.length}}" class="c-more" bindtap="loadMoreComments">加载更多评论</view>
     <view wx:if="{{commentMsg}}" class="note">{{commentMsg}}</view>
   </view>
 
@@ -80,10 +102,14 @@
 <view wx:else class="empty">{{loadTxt}}</view>
 <button wx:if="{{!n}}" bindtap="fetch">重新加载</button>
 
-<!-- 底部操作栏（点赞 / 评论 / 分享） -->
+<!-- 底部操作栏（图片评论 / 输入 / 点赞 / 分享） -->
 <view wx:if="{{n}}" class="action-bar">
-  <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment" placeholder="说点什么…" />
-  <button class="ab-send {{commentDraft ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy}}">发送</button>
+  <view wx:if="{{replyTarget}}" class="ab-reply-chip" bindtap="cancelReply">回复 @{{replyTarget.label}} ✕</view>
+  <image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" catchtap="removePendingImage" />
+  <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment"
+    placeholder="{{replyTarget ? '回复 @' + replyTarget.label + '：' : '说点什么…'}}" />
+  <text class="ab-img" catchtap="pickCommentImage">🖼</text>
+  <button class="ab-send {{commentDraft || pendingImage ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy}}">发送</button>
   <text class="ab-act {{liked ? 'on' : ''}}" catchtap="toggleLike">{{liked ? '♥' : '♡'}} {{likeCount}}</text>
   <button class="ab-share" open-type="share">分享</button>
 </view>

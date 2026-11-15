@@ -65,33 +65,83 @@ try {
     assert.ok('avatar' in item)
   })
 
-  await t('详情返回话题；评论发布 → 列表 → comment_count 同步', async () => {
+  await t('详情返回话题；评论（V87 社交层）发布 → 列表 → comment_count 同步', async () => {
     const d = ok(await call('GET', `/c/notes/${noteId}`, null, R))
     assert.deepEqual(d.topics, ['古镇漫步', '美食探店'])
-    const bad = await call('POST', `/c/notes/${noteId}/comments`, { content: '短' }, R)
+    const bad = await call('POST', `/c/notes/${noteId}/comments`, { body: '', media: null }, R)
     assert.equal(bad.code, 1001)
-    ok(await call('POST', `/c/notes/${noteId}/comments`, { content: '写得真好，请问古镇晚上几点闭园？' }, R))
+    const c1 = ok(await call('POST', `/c/notes/${noteId}/comments`, { body: '写得真好，请问古镇晚上几点闭园？' }, R))
+    assert.equal(c1.pending, false)
     const list = ok(await call('GET', `/c/notes/${noteId}/comments`, null, C))
-    assert.equal(list.items.length, 1); assert.match(list.items[0].content, /闭园/)
-    const d2 = ok(await call('GET', `/c/notes/${noteId}`, null, R))
-    assert.equal(d2.commentCount, 1)
+    assert.equal(list.items.length, 1); assert.match(list.items[0].body, /闭园/)
+    assert.equal(list.items[0].byAuthor, false)
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 1)
+  })
+
+  await t('盖楼回复：replyTo 平铺 + replyAuthor；作者标 byAuthor', async () => {
+    const roots = ok(await call('GET', `/c/notes/${noteId}/comments`, null, R))
+    const root = roots.items[0]
+    ok(await call('POST', `/c/notes/${noteId}/comments`, { body: '傍晚五点前闭园，祝玩得开心！', replyTo: root.id }, C))
+    const thread = ok(await call('GET', `/c/notes/${noteId}/comments?root=${root.id}`, null, R))
+    assert.equal(thread.items.length, 1)
+    assert.equal(thread.items[0].replyAuthor, root.author)
+    assert.equal(thread.items[0].byAuthor, true, '作者回复应有作者标')
+    const roots2 = ok(await call('GET', `/c/notes/${noteId}/comments`, null, R))
+    assert.equal(roots2.items[0].replies, 1, '一级评论应统计到 1 条回复')
+    assert.equal(ok(await call('GET', '/c/notes/' + noteId, null, R)).commentCount, 2)
+  })
+
+  await t('评论点赞：一用户一评一赞可取消；评论删除（软删）同步计数', async () => {
+    const roots = ok(await call('GET', `/c/notes/${noteId}/comments`, null, C))
+    const target = roots.items[0]
+    const l1 = ok(await call('PUT', `/c/notes/${noteId}/comments/${target.id}/like`, { liked: true }, R))
+    assert.equal(l1.likes, 1)
+    const l2 = ok(await call('PUT', `/c/notes/${noteId}/comments/${target.id}/like`, { liked: true }, R))
+    assert.equal(l2.likes, 1, '重复点赞不叠加')
+    const l3 = ok(await call('PUT', `/c/notes/${noteId}/comments/${target.id}/like`, { liked: false }, R))
+    assert.equal(l3.likes, 0)
+    const extra = ok(await call('POST', `/c/notes/${noteId}/comments`, { body: '马上安排，谢谢分享！' }, C))
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 3)
+    const del = ok(await call('DELETE', `/c/notes/${noteId}/comments/${extra.id}`, {}, C))
+    assert.equal(del.deleted, true)
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 2)
+  })
+
+  await t('图片评论：magic bytes 校验 + mock 机审直发 + 计数', async () => {
+    const png1px = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const bad = await call('POST', `/c/notes/${noteId}/comments`, { body: '', media: { kind: 'image', data: 'aGVsbG8gd29ybGQ=' } }, R)
+    assert.equal(bad.code, 1001, '非图片内容应被拒')
+    const r = ok(await call('POST', `/c/notes/${noteId}/comments`, { body: '', media: { kind: 'image', data: png1px } }, R))
+    const list = ok(await call('GET', `/c/notes/${noteId}/comments`, null, R))
+    const imgComment = list.items.find(x => x.id === r.id)
+    assert.ok(imgComment.mediaUrl, '图片评论应返回附件地址')
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 3)
+  })
+
+  await t('AI 写作建议：路径校验 + 未配置服务时的提示', async () => {
+    const bad = await call('POST', '/c/note-vision-draft', { paths: ['/uploads/note_999_1.jpg'] }, C)
+    assert.equal(bad.code, 1001); assert.match(bad.msg, /本人上传/)
+    const none = await call('POST', '/c/note-vision-draft', { paths: [] }, C)
+    assert.equal(none.code, 1001)
   })
 
   await t('同人同笔记日限 20 条', async () => {
-    for (let i = 0; i < 19; i++) ok(await call('POST', `/c/notes/${noteId}/comments`, { content: `评论占位内容第${i}条，凑足每日上限` }, R))
-    const r = await call('POST', `/c/notes/${noteId}/comments`, { content: '这条评论应该被日上限拦住不放行' }, R)
+    // R 今日已发 2 条（首评 + 图片评论）；再发 18 条凑满 20，第 21 条被拦
+    for (let i = 0; i < 18; i++) ok(await call('POST', `/c/notes/${noteId}/comments`, { body: `评论占位内容第${i}条，凑足每日上限` }, R))
+    const r = await call('POST', `/c/notes/${noteId}/comments`, { body: '这条评论应该被日上限拦住不放行' }, R)
     assert.equal(r.code, 1001); assert.match(r.msg, /上限/)
   })
 
   await t('后台评论管理：列表 → 隐藏（计数-1）→ 恢复（计数+1）', async () => {
+    const before = ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount
     const list = ok(await call('GET', '/admin/comments?status=all', null, A))
     assert.ok(list.rows.length >= 20)
     const target = list.rows.find(r => r.note_id === noteId)
     assert.ok(target)
     ok(await call('POST', `/admin/comments/${target.id}/hide`, {}, A))
-    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 19)
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, before - 1)
     ok(await call('POST', `/admin/comments/${target.id}/restore`, {}, A))
-    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, 20)
+    assert.equal(ok(await call('GET', `/c/notes/${noteId}`, null, R)).commentCount, before)
     const again = await call('POST', `/admin/comments/${target.id}/restore`, {}, A)
     assert.equal(again.code, 2002)
   })

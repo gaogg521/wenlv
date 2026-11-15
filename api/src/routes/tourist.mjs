@@ -13,6 +13,7 @@ import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { plainText, wordCount } from '../domain/task-review.mjs'
 import { grantPublishReward } from '../domain/content-reward.mjs'
+import { draftFromPhotos } from '../domain/note-vision.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
 import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
@@ -89,9 +90,10 @@ async function saveNote(req, editing) {
   const articleText = blocks ? blocks.filter(x=>x.type==='text').map(x=>x.html).join('<br>') : body
   if (blocks && articleText.length > 200000) throw new BizError(1001,'文章正文过长')
   const videos = blocks?.filter(x=>x.type==='video')
-  const articleImages = blocks ? blocks.filter(x=>x.type==='image').map(x=>x.url) : images
-  if (videos?.length > 1 || (blocks && articleImages.length > 9)) throw new BizError(1001,'最多 9 张图片和 1 段视频')
-  const articleVideo = blocks ? videos[0]?.url : video
+  // 小红书化图库模型：正文块与独立图集并存（compose 发纯文本 blocks + 独立 images/video），两种来源合并去重
+  const articleImages = [...new Set([...(blocks ? blocks.filter(x=>x.type==='image').map(x=>x.url) : []), ...(Array.isArray(images) ? images : [])].filter(Boolean).map(String))]
+  if (videos?.length > 1 || articleImages.length > 9) throw new BizError(1001,'最多 9 张图片和 1 段视频')
+  const articleVideo = (blocks && videos[0]?.url) || video || null
   if (!articleText) throw new BizError(1001, '内容不能为空')
   if (title != null && String(title).trim().length > 20) throw new BizError(1001, '标题最多 20 字，请精简后发布')
   const rich = sanitizeRich(String(articleText))
@@ -109,11 +111,17 @@ async function saveNote(req, editing) {
   if (imgUrls.some(x => !/^\/uploads\/[a-z0-9_.-]+$/i.test(x))) throw new BizError(1001, '请选择站内上传的图片')
   const imgSec = []
   let status = editing || videoUrl || !sec.pass ? 1 : 2
+  // 机审通道降级（演示/内网部署无公网 HTTPS 图片地址、凭据缺失等）：不阻断发布、绝不跳过安全检查——
+  // 整篇转人工审核（status=1），由审核员在后台核图后放行；真实机审回执路径不受影响。
+  let imgDegraded = false
   for (const url of imgUrls) {
-    const check = await wxapi.mediaCheckAsync(apiImg(url,req), account?.mini_a_openid)
+    let check
+    try { check = await wxapi.mediaCheckAsync(apiImg(url,req), account?.mini_a_openid) }
+    catch (e) { imgDegraded = true; imgSec.push({ url, traceId: null, mock: true, degraded: String(e.message).slice(0, 80) }); continue }
     imgSec.push({ url, traceId: check.traceId, mock: check.mock })
     if (!check.mock && sec.pass) status = 0
   }
+  if (imgDegraded && status === 2) status = 1
   const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, topics, coverIndex: Math.min(coverIndexRaw, Math.max(imgUrls.length - 1, 0)), manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
   const saved = await tx(async c => {
     const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,status]
@@ -853,6 +861,28 @@ const cNotes = {
   },
   'POST /c/notes': req => saveNote(req,false),
   'PUT /c/notes/:id': req => saveNote(req,true),
+  // ✨ 写作建议（AI 看图成文）：1-3 张本人上传照片 + 表达意图 → 标题/正文/排版建议
+  // 提示词约束「只写可见细节、禁止虚构亲历」，见 domain/note-vision.mjs；未配置服务时提示可手写
+  'POST /c/note-vision-draft': async req => {
+    const user = noteAuthor(req)
+    const { paths, relatedProductId, topics, intent } = req.body || {}
+    const ownerOf = p => { const m = /^\/uploads\/note_([0-9]+)_[0-9]+\.(?:jpg|png|webp)$/.exec(String(p || '')); return m ? Number(m[1]) : null }
+    if (!Array.isArray(paths) || !paths.length || paths.length > 3 ||
+        paths.some(p => ownerOf(p) !== Number(user.uid))) {
+      throw new BizError(1001, '请选择 1 至 3 张本人上传的照片')
+    }
+    const product = relatedProductId ? await one('SELECT title FROM tour_product WHERE id=? AND status=1', [Number(relatedProductId) || 0]) : null
+    const photos = []
+    for (const p of new Set(paths)) {
+      const file = path.join(noteUploadDir, path.basename(p))
+      const stat = await fs.promises.stat(file).catch(() => null)
+      if (!stat?.isFile() || stat.size > 2 * 1024 * 1024) throw new BizError(1001, '照片已失效或过大，请重新选择')
+      const ext = path.extname(p).slice(1)
+      photos.push('data:image/' + (ext === 'jpg' ? 'jpeg' : ext) + ';base64,' + (await fs.promises.readFile(file)).toString('base64'))
+    }
+    return draftFromPhotos({ uid: user.uid, photos, place: product?.title || '', intent: typeof intent === 'string' ? intent.trim().slice(0, 80) : '',
+      topics: Array.isArray(topics) ? topics.filter(t => typeof t === 'string').slice(0, 5).map(t => t.slice(0, 24)) : [] })
+  },
   'GET /c/notes/:id/edit': async req => {
     const u = noteAuthor(req)
     const n = await one(`SELECT n.title,n.body,n.revision,n.related_product_id,p.title related_name FROM content_note n
@@ -881,37 +911,7 @@ const cNotes = {
       authorAvatar: n.avatar_url ? apiImg(n.avatar_url, req) : null,
       video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
   },
-  // 评论（小红书化）：已发布笔记可评，文本机审前置 + 同人同笔记日限 20 条防刷
-  'POST /c/notes/:id/comments': async (req) => {
-    const u = requireUser(req)
-    if (u.end !== 'c') throw new BizError(1003, '仅游客账号可评论')
-    const content = String(req.body?.content || '').trim()
-    if (content.length < 4 || content.length > 200) throw new BizError(1001, '评论需 4 至 200 字')
-    const n = await one('SELECT id, status FROM content_note WHERE id = ?', [req.params.id])
-    if (!n || Number(n.status) !== 2) throw new BizError(1004, '笔记不存在或未发布')
-    const today = await one('SELECT COUNT(*) n FROM content_note_comment WHERE note_id = ? AND user_id = ? AND created_at >= CURDATE()', [n.id, u.uid])
-    if (Number(today.n) >= 20) throw new BizError(1001, '今天在这篇笔记下的评论已达上限，明天再来吧')
-    const account = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [u.uid])
-    const sec = await wxsec.msgSecCheck(content, account?.mini_a_openid)
-    if (!sec.pass) throw new BizError(1001, '评论含不适宜内容，请调整后发布')
-    return tx(async c => {
-      const id = await c.ins('INSERT INTO content_note_comment (note_id, user_id, content) VALUES (?,?,?)', [n.id, u.uid, content])
-      await c.upd('UPDATE content_note SET comment_count = comment_count + 1 WHERE id = ?', [n.id])
-      return { id, status: 1 }
-    })
-  },
-  'GET /c/notes/:id/comments': async (req) => {
-    requireUser(req)
-    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
-    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
-    const rows = await q(`SELECT x.id, x.content, x.created_at, u.nickname, u.avatar_url
-      FROM content_note_comment x JOIN user_account u ON u.id = x.user_id
-      WHERE x.note_id = ? AND x.status = 1 ORDER BY x.id DESC LIMIT ? OFFSET ?`,
-      [req.params.id, pageSize, (page - 1) * pageSize])
-    return { page, pageSize,
-      items: rows.map(r => ({ id: r.id, content: r.content, author: r.nickname,
-        avatar: r.avatar_url ? apiImg(r.avatar_url, req) : null, when: String(r.created_at || '').replace('T', ' ').slice(0, 16) })) }
-  },
+  // 评论社交层（V87）已迁至 routes/note-comments.mjs：盖楼/回复@/点赞/图片评论/软删
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {
     const u = requireUser(req)

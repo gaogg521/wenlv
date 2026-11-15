@@ -130,22 +130,24 @@ export const contentGovernance={
       return {status}
     })
   },
-  // 评论管理（小红书化改造）：列表 + 隐藏/恢复，与 comment_count 对账同步
+  // 评论管理（V87 社交层）：列表 + 隐藏/恢复，status 治理列与 comment_count 对账同步
   'GET /admin/comments':async req=>{
     const a=await staff(req),pg=pageOf(req)
     const status=String(req.query.status||'all')
     if(!['all','shown','hidden'].includes(status))throw new BizError(1001,'状态无效')
     const kw=String(req.query.kw||'').trim()
-    const conds=['1=1'],args=[]
+    const conds=['x.deleted_at IS NULL'],args=[]
     if(status==='shown')conds.push('x.status=1')
     if(status==='hidden')conds.push('x.status=0')
-    if(kw){conds.push('(x.content LIKE ? OR u.nickname LIKE ? OR n.title LIKE ?)');args.push('%'+kw+'%','%'+kw+'%','%'+kw+'%')}
+    if(kw){conds.push('(x.body LIKE ? OR u.nickname LIKE ? OR n.title LIKE ?)');args.push('%'+kw+'%','%'+kw+'%','%'+kw+'%')}
     if(a.scopeCity){conds.push('p.city_code=?');args.push(a.scopeCity)}
     const from='FROM content_note_comment x JOIN content_note n ON n.id=x.note_id JOIN user_account u ON u.id=x.user_id LEFT JOIN tour_product p ON p.id=n.related_product_id'
     const W='WHERE '+conds.join(' AND ')
     const total=Number((await one(`SELECT COUNT(*) n ${from} ${W}`,args)).n)
-    const rows=await q(`SELECT x.id,x.note_id,n.title note_title,x.content,x.status,u.nickname,x.created_at,p.city_code ${from} ${W} ORDER BY x.id DESC LIMIT ? OFFSET ?`,[...args,pg.size,pg.offset])
-    return {total,page:pg.page,size:pg.size,rows:rows.map(r=>({...r,created_at:String(r.created_at||'').replace('T',' ').slice(0,16)}))}
+    const rows=await q(`SELECT x.id,x.note_id,n.title note_title,x.body,x.status,x.media_kind,x.media_path,x.media_state,u.nickname,x.created_at,p.city_code ${from} ${W} ORDER BY x.id DESC LIMIT ? OFFSET ?`,[...args,pg.size,pg.offset])
+    return {total,page:pg.page,size:pg.size,
+      rows:rows.map(r=>({...r,content:r.body + (r.media_kind==='image' && r.media_state===1 ? '［图片］' : r.media_kind==='audio' ? '［语音］' : ''),
+        created_at:String(r.created_at||'').replace('T',' ').slice(0,16)}))}
   },
   'POST /admin/comments/:id/hide':async req=>{
     const a=await staff(req)
@@ -153,9 +155,9 @@ export const contentGovernance={
       const row=await c.one(`SELECT x.*,p.city_code note_city FROM content_note_comment x JOIN content_note n ON n.id=x.note_id LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE x.id=? FOR UPDATE`,[req.params.id])
       if(!row)throw new BizError(1004,'评论不存在')
       scope(a,row.note_city,row.note_city)
-      if(Number(row.status)!==1)throw new BizError(2002,'评论已处理，请刷新')
+      if(Number(row.status)!==1||row.deleted_at)throw new BizError(2002,'评论已处理，请刷新')
       await c.upd('UPDATE content_note_comment SET status=0 WHERE id=?',[row.id])
-      await c.upd('UPDATE content_note SET comment_count=GREATEST(comment_count-1,0) WHERE id=?',[row.note_id])
+      if(Number(row.media_state)===1)await c.q('UPDATE content_note SET comment_count=GREATEST(comment_count-1,0) WHERE id=?',[row.note_id])
       await audit(c,'admin:'+a.name,'content','comment-hide','comment-'+row.id,{status:1},{status:0,noteId:row.note_id})
       return {status:0}
     })
@@ -166,9 +168,9 @@ export const contentGovernance={
       const row=await c.one(`SELECT x.*,p.city_code note_city FROM content_note_comment x JOIN content_note n ON n.id=x.note_id LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE x.id=? FOR UPDATE`,[req.params.id])
       if(!row)throw new BizError(1004,'评论不存在')
       scope(a,row.note_city,row.note_city)
-      if(Number(row.status)!==0)throw new BizError(2002,'评论已处理，请刷新')
+      if(Number(row.status)!==0||row.deleted_at)throw new BizError(2002,'评论已处理，请刷新')
       await c.upd('UPDATE content_note_comment SET status=1 WHERE id=?',[row.id])
-      await c.upd('UPDATE content_note SET comment_count=comment_count+1 WHERE id=?',[row.note_id])
+      if(Number(row.media_state)===1)await c.q('UPDATE content_note SET comment_count=comment_count+1 WHERE id=?',[row.note_id])
       await audit(c,'admin:'+a.name,'content','comment-restore','comment-'+row.id,{status:0},{status:1,noteId:row.note_id})
       return {status:1}
     })
