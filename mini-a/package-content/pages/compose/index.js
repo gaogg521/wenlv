@@ -41,7 +41,7 @@ Page({
     else if (!this.maybeRestoreDraft()) this.pickImages()
   },
   onHide() {
-    if (this.data.editId) return
+    if (this.data.editId || this._published) return
     const hasText = this.data.title || this.plainLenValue > 0 || this.data.topics.length
     const hasMedia = this.data.images.length || this.data.video
     if (hasText || hasMedia) {
@@ -497,6 +497,8 @@ Page({
         } else throw err
       }
       this.clearLocalDraft()
+      // 发布成功后本页任何 onHide 都不再存草稿（否则已发布内容会在下次进页时弹"恢复草稿"）
+      this._published = true
       // 云草稿已由服务端在发布事务里原子删除；清空本地状态
       this.setData({ cloudDraftId: null, cloudDraftRevision: null, cloudSavedAt: '' })
       wx.showToast({ title: r.status === 2 ? '已发布' : r.msg || '已提交审核', icon: 'success' })
