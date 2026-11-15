@@ -15,6 +15,7 @@ const ADMIN_PAGE_OPERATIONS = {
   contentdash: ['内容分析', '查看发布、审核与转化数据；内容处理进入审核或举报申诉。', ['content','contentcases','tasks']],
   content: ['审核处理', '查看投稿全文与图片，审核笔记、处理评价展示或下架违规笔记；正文由作者修改。', ['contentcases','tasks']],
   contentcases: ['举报与申诉', '处理举报、记录下架原因，复核作者申诉并反馈处理结论。', ['content']],
+  comments: ['评论管理', '隐藏违规评论或恢复误隐藏评论；计数与小程序同步，不可直接编辑评论内容。', ['contentcases']],
   tasks: ['任务管理', '创建和编辑约稿，管理上线状态、参与者与投稿审核；现金奖励交财务登记。', ['taskcash','creators']],
   creators: ['合作维护', '查看创作者作品与履约表现，维护合作标签和限制状态。', ['tasks']],
   partners: ['合作管理', '可直接编辑推广服务商、共创人合作资料；城市账号的新建、改城市与停用流程尚未开放。', ['promoters','partnerperf']],

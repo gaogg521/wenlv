@@ -12,6 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
+import { grantPublishReward } from '../domain/content-reward.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -220,7 +221,7 @@ const adminEco = {
     if (bad) throw new BizError(1001, `原因会展示在小程序里，不能出现「${bad}」${SUGGEST[bad] ? '，可改为「' + SUGGEST[bad] + '」' : ''}`)
     const st = passed ? 2 : 3
     return tx(async (c) => {
-      const row=await c.one('SELECT n.id,n.revision,n.status,n.body,p.city_code FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? FOR UPDATE',[req.params.id])
+      const row=await c.one('SELECT n.id,n.user_id,n.revision,n.status,n.body,p.city_code FROM content_note n LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? FOR UPDATE',[req.params.id])
       if(a.scopeCity&&a.scopeCity!==row?.city_code)throw new BizError(1003,'仅可处理本城内容')
       if (row && (req.body.revision != null || Number(row.revision) > 1) && Number(req.body.revision) !== Number(row.revision)) throw new BizError(2002,'作品版本已变化，请重新打开审核')
       const body = typeof row?.body === 'string' ? JSON.parse(row.body) : row?.body
@@ -228,6 +229,8 @@ const adminEco = {
       const n = await c.upd(`UPDATE content_note SET status = ?, reject_reason = ?, published_at = IF(? = 2, NOW(3), published_at)
         WHERE id = ? AND status IN (0,1)`, [st, passed ? null : reason, st, req.params.id])
       if (n !== 1) throw new BizError(2002, '该笔记已处理，请刷新')
+      // 三条发布路径之三：人工审核通过即正式发布，发放发布奖励（失败静默，不阻断审核结论）
+      if (passed) await grantPublishReward(c, row.user_id, row.id)
       await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
       await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [req.params.id])
       // 审核结论入存证：内容是平台对外承诺的一部分，"谁在什么时候放行/驳回"必须可追溯

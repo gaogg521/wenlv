@@ -34,3 +34,24 @@ async function contentTakedown(id) {
   if(reason==null)return
   try{await api('POST',`/admin/content/${id}/takedown`,{reason});toast('已下架，作者可在创作中心申诉');content()}catch(e){toast(e.message,true)}
 }
+async function adminComments() {
+  const Q={...(window.__commentsQ ||= {status:'all',kw:'',page:1})}
+  const load=window.__commentsLoad=(window.__commentsLoad||0)+1
+  let d
+  try{d=await api('GET','/admin/comments?'+new URLSearchParams(Q))}
+  catch(e){if(load===window.__commentsLoad&&location.hash==='#comments')$('#app').innerHTML=`<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="adminComments()">重试</button></div>`;return}
+  if(load!==window.__commentsLoad||location.hash!=='#comments')return
+  const labels=['已隐藏','展示中']
+  $('#app').innerHTML=`<div class="card"><div class="card-head"><h2>评论管理</h2><span class="muted">${d.total} 条 · 隐藏/恢复与小程序计数同步</span></div>
+    <div class="orders-search"><select aria-label="评论状态" onchange="window.__commentsQ.status=this.value;window.__commentsQ.page=1;adminComments()">
+      <option value="all" ${Q.status==='all'?'selected':''}>全部</option>
+      <option value="shown" ${Q.status==='shown'?'selected':''}>展示中</option>
+      <option value="hidden" ${Q.status==='hidden'?'selected':''}>已隐藏</option></select>
+      <input type="search" placeholder="搜索评论 / 用户 / 笔记" value="${esc(Q.kw)}" oninput="window.__commentsQ.kw=this.value" onchange="window.__commentsQ.page=1;adminComments()"></div>
+    ${d.rows.length?`<table><thead><tr><th>评论内容</th><th>用户</th><th>所属笔记</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>${d.rows.map(r=>`<tr><td>${esc(r.content)}</td><td>${esc(r.nickname)}</td><td>${esc(r.note_title||'（无题）')}</td><td>${labels[r.status]||'未知'}</td><td>${dt(r.created_at)}</td><td><button class="btn ${r.status===1?'danger':'primary'} sm" data-id="${r.id}" data-act="${r.status===1?'hide':'restore'}" onclick="commentModerate(this.dataset.id,this.dataset.act)">${r.status===1?'隐藏':'恢复'}</button></td></tr>`).join('')}</tbody></table>`:emptyBox('暂无评论')}
+    <div class="pagination"><span>第 ${d.page} 页</span><div><button class="btn ghost sm" ${d.page<=1?'disabled':''} onclick="window.__commentsQ.page--;adminComments()">上一页</button><button class="btn ghost sm" ${d.page*d.size>=d.total?'disabled':''} onclick="window.__commentsQ.page++;adminComments()">下一页</button></div></div></div>`
+}
+async function commentModerate(id,act) {
+  try{await api('POST',`/admin/comments/${id}/${act}`);toast(act==='hide'?'已隐藏，小程序评论数已同步':'已恢复展示');adminComments()}
+  catch(e){toast(e.message,true)}
+}

@@ -175,6 +175,10 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/content-cases/:kind/:id', 'contentcases', 'view'],
   ['POST', '/admin/content-cases/reports/:id/verdict', 'contentcases', 'manage'],
   ['POST', '/admin/content-cases/appeals/:id/verdict', 'contentcases', 'manage'],
+  // 评论管理（小红书化改造）：列表与隐藏/恢复同一模块
+  ['GET', '/admin/comments', 'comments', 'view'],
+  ['POST', '/admin/comments/:id/hide', 'comments', 'manage'],
+  ['POST', '/admin/comments/:id/restore', 'comments', 'manage'],
   ['GET', '/admin/partners', 'partners', 'view'],
   // ===== D-06 批次 4（QA-03）：全量映射——撤权后的读写直调一律 1003。
   // 订单（orders 模块）：查看/检索/详情/办理/改期；改期列表与动作同属 orders

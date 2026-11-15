@@ -30,6 +30,7 @@ Page({
   },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
   goTours(e) { wx.setStorageSync('tourFilter', { cat: e.currentTarget.dataset.cat || 'all', city: '' }); wx.switchTab({ url: '/pages/tour-list/index' }) },
+  goSquare() { wx.navigateTo({ url: '/package-content/pages/square/index' }) },
   checkConsent() {
     // A-44：首次使用同意流程——未授权隐私政策时弹窗（同意/拒绝），拒绝不阻断浏览但下单会被服务端拦
     api.request('/c/consent').then((d) => {

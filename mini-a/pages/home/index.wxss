@@ -23,3 +23,11 @@ page { background: #f8f6f1; }
 .theme-arrow { position: absolute; right: 22rpx; bottom: 29rpx; color: rgba(255,255,255,.9); font-size:28rpx; z-index: 1; }
 .sec-title { margin-top: 24rpx; color: #393b32; }
 .sec-title .more { color: #9a8a74; font-weight: 400; }
+/* 旅行笔记广场入口（小红书化改造） */
+.content-entry { display: flex; align-items: center; justify-content: space-between; margin: 4rpx 32rpx 8rpx;
+  padding: 22rpx 28rpx; border-radius: 18rpx; background: #fff; box-shadow: 0 2rpx 12rpx rgba(0,0,0,.05); }
+.ce-main { display: flex; align-items: center; gap: 12rpx; min-width: 0; }
+.ce-ico { font-size: 34rpx; }
+.ce-name { font-size: 28rpx; font-weight: 600; color: #1f2937; }
+.ce-sub { font-size: 22rpx; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ce-go { flex-shrink: 0; font-size: 24rpx; color: var(--brand, #e87722); }

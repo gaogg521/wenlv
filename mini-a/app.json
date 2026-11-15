@@ -31,6 +31,7 @@
       "pages": [
         "pages/identity/index",
         "pages/create/index",
+        "pages/compose/index",
         "pages/note/index",
         "pages/task/index",
         "pages/doc/index",

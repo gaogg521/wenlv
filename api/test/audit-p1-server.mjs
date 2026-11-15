@@ -347,7 +347,8 @@ await t('A16-1 一篇笔记只能投一个任务；字数/图片不足被拒；�
   const s1 = await call('POST', `/c/tasks/${t1}/submit`, { noteId: short.id }, u.token)
   assert.notEqual(s1.code, 0, '不满足字数/图片要求的提交必须被拒')
   // 合格笔记投任务一（notes 接口的 body 是纯文本、images 单独传）
-  const good = ok(await call('POST', '/c/notes', { title: '合格', body: '长'.repeat(520), images: ['a.png', 'b.png', 'c.png'] }, u.token))
+  // f3d3f10 起 saveNote 强制站内 /uploads/ 前缀（A-29 安全口径），裸文件名的旧写法会被 1001 拒
+  const good = ok(await call('POST', '/c/notes', { title: '合格', body: '长'.repeat(520), images: ['/uploads/a.png', '/uploads/b.png', '/uploads/c.png'] }, u.token))
   ok(await call('POST', `/c/tasks/${t1}/submit`, { noteId: good.id }, u.token))
   // 同一篇投任务二 → 拒
   const dup = await call('POST', `/c/tasks/${t2}/submit`, { noteId: good.id }, u.token)

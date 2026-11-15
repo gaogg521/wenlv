@@ -1,23 +1,74 @@
-<view wx:if="{{n}}">
-  <view class="hero">
-    <view class="hi" style="font-size:44rpx">{{n.title || '旅行笔记'}}</view>
-    <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
+<view wx:if="{{n}}" class="detail">
+  <!-- 图集轮播（小红书式：全宽 + 页码） -->
+  <view wx:if="{{hasGallery}}" class="gallery">
+    <swiper class="gallery-swiper" current="{{current}}" bindchange="onSwiper">
+      <swiper-item wx:for="{{n.imagesFull}}" wx:key="*this">
+        <image class="gallery-img" src="{{item}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
+      </swiper-item>
+    </swiper>
+    <view wx:if="{{mediaLabel}}" class="gallery-page">{{mediaLabel}}</view>
   </view>
-  <view class="card">
-    <block wx:if="{{n.blocks}}">
-      <block wx:for="{{n.blocks}}" wx:key="index">
-        <rich-text wx:if="{{item.type === 'text'}}" class="article-block" nodes="{{item.html}}" />
-        <image wx:elif="{{item.type === 'image'}}" class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
-        <video wx:else class="article-block" src="{{item.url}}" controls />
+  <video wx:if="{{n.video}}" class="detail-video" src="{{n.video}}" controls object-fit="contain"></video>
+
+  <view class="body-card">
+    <!-- 作者行 -->
+    <view class="author-row">
+      <image wx:if="{{n.authorAvatar}}" class="author-avatar" src="{{n.authorAvatar}}" mode="aspectFill" />
+      <view wx:else class="author-avatar author-ph">旅</view>
+      <view class="author-main">
+        <view class="author-name">{{n.author}}</view>
+        <view class="author-time">{{n.when}}</view>
+      </view>
+      <view wx:if="{{n.product_title}}" class="author-product">📍 {{n.product_title}}</view>
+    </view>
+
+    <!-- 标题 + 正文 -->
+    <view class="detail-title">{{n.title || '旅行笔记'}}</view>
+    <view class="detail-body">
+      <block wx:if="{{n.blocksReady}}">
+        <block wx:for="{{n.blocksReady}}" wx:key="index">
+          <rich-text wx:if="{{item.isText}}" class="article-block" nodes="{{item.html}}" />
+          <image wx:else class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
+        </block>
       </block>
-    </block>
-    <block wx:else>
-    <rich-text nodes="{{n.html}}" style="font-size:28rpx;line-height:1.8;color:#16232e"></rich-text>
-    <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
-    <image wx:for="{{n.images}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
-    </block>
-    <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
-    <button class="report-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
+      <block wx:else>
+        <rich-text nodes="{{n.html}}" class="article-plain"></rich-text>
+        <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
+        <!-- 无 blocks 的旧数据：无视频时图集轮播已展示图片；视频+图片并存时才在正文内补图 -->
+        <block wx:if="{{n.video}}">
+          <image wx:for="{{n.imagesFull}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
+        </block>
+      </block>
+    </view>
+
+    <!-- 话题 -->
+    <view wx:if="{{n.topicsReady.length}}" class="topics-line">
+      <text class="topic-tag" wx:for="{{n.topicsReady}}" wx:key="*this">#{{item}}</text>
+    </view>
+
+    <!-- 赞数 -->
+    <view wx:if="{{likeCount}}" class="like-sum">👍 {{likeCount}} 人觉得有用</view>
+  </view>
+
+  <!-- 评论区 -->
+  <view class="comments">
+    <view class="c-head">评论</view>
+    <view class="c-item" wx:for="{{comments}}" wx:key="id">
+      <image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
+      <view wx:else class="c-avatar c-avatar-ph">旅</view>
+      <view class="c-main">
+        <view class="c-name">{{item.author}}</view>
+        <view class="c-content">{{item.content}}</view>
+        <view class="c-time">{{item.when}}</view>
+      </view>
+    </view>
+    <view wx:if="{{!comments.length}}" class="c-empty">还没有评论，来说点什么吧</view>
+    <view wx:if="{{comments.length}}" class="c-more" bindtap="loadMoreComments">加载更多评论</view>
+    <view wx:if="{{commentMsg}}" class="note">{{commentMsg}}</view>
+  </view>
+
+  <!-- 举报 -->
+  <view class="report-area">
     <button class="report-toggle" bindtap="toggleReport">举报此笔记</button>
     <view wx:if="{{reporting}}">
       <textarea class="report-reason" value="{{reportReason}}" bindinput="onReportReason" maxlength="300" placeholder="请描述违规内容或事实依据（4—300 字）"></textarea>
@@ -28,3 +79,11 @@
 </view>
 <view wx:else class="empty">{{loadTxt}}</view>
 <button wx:if="{{!n}}" bindtap="fetch">重新加载</button>
+
+<!-- 底部操作栏（点赞 / 评论 / 分享） -->
+<view wx:if="{{n}}" class="action-bar">
+  <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment" placeholder="说点什么…" />
+  <button class="ab-send {{commentDraft ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy}}">发送</button>
+  <text class="ab-act {{liked ? 'on' : ''}}" catchtap="toggleLike">{{liked ? '♥' : '♡'}} {{likeCount}}</text>
+  <button class="ab-share" open-type="share">分享</button>
+</view>

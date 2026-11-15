@@ -1,0 +1,84 @@
+<view class="wrap">
+  <!-- 第一步 · 媒体入口（未选时） -->
+  <view wx:if="{{!hasMedia}}" class="entry-area">
+    <view class="entry-hero">📝</view>
+    <view class="entry-tip">选几张照片，记录这次旅行</view>
+    <view class="entry-card" bindtap="pickImages"><text class="e-ico">🖼</text><text class="e-name">图文</text><text class="e-sub">最多 9 张图片</text></view>
+    <view class="entry-card" bindtap="pickVideo"><text class="e-ico">🎬</text><text class="e-name">视频</text><text class="e-sub">30 秒 · 8MB 内</text></view>
+    <view class="entry-card" bindtap="skipMedia"><text class="e-ico">✏️</text><text class="e-name">纯文字</text><text class="e-sub">先写下想法</text></view>
+  </view>
+
+  <!-- 图集轮播（小红书同款：页码 / 删除 / 设为封面） -->
+  <view wx:if="{{images.length && !video}}" class="media-area">
+    <view class="media-stage">
+      <swiper class="media-swiper" current="{{current}}" bindchange="onSwiper">
+        <swiper-item wx:for="{{images}}" wx:key="key">
+          <view class="media-cell">
+            <image class="media-img" src="{{item.src}}" mode="aspectFit" data-i="{{index}}" bindtap="previewCurrent" />
+            <view wx:if="{{item.isCover}}" class="cover-badge">封面</view>
+            <view wx:if="{{item.uploading}}" class="media-flag">上传中…</view>
+            <view wx:elif="{{item.failed}}" class="media-flag bad" catchtap="retryItem" data-key="{{item.key}}">上传失败 · 点重试</view>
+            <view class="media-del" catchtap="removeImage" data-key="{{item.key}}">✕</view>
+          </view>
+        </swiper-item>
+      </swiper>
+      <view wx:if="{{mediaLabel}}" class="media-page">{{mediaLabel}}</view>
+    </view>
+    <view class="media-actions">
+      <view wx:if="{{canAddMore}}" class="m-act" bindtap="pickImages">＋ 继续添加</view>
+      <view class="m-act" bindtap="setCover">设为封面</view>
+    </view>
+  </view>
+
+  <!-- 视频位 -->
+  <view wx:if="{{video}}" class="media-area">
+    <view class="video-stage">
+      <video class="video-player" src="{{video.src}}" controls object-fit="contain"></video>
+      <view wx:if="{{video.uploading}}" class="media-flag">上传中…</view>
+      <view wx:elif="{{video.failed}}" class="media-flag bad" catchtap="retryItem" data-key="{{video.key}}">上传失败 · 点重试</view>
+      <view class="media-del" catchtap="removeVideo">✕</view>
+    </view>
+    <view class="media-actions"><view class="m-act" bindtap="pickVideo">换一个视频</view></view>
+  </view>
+
+  <!-- 第二步 · 编辑区 -->
+  <view wx:if="{{hasMedia}}" class="form-area">
+    <view class="title-row">
+      <input class="title-input" maxlength="20" value="{{title}}" bindinput="onTitle" placeholder="填写标题会有更多赞哦" />
+      <text class="title-count">{{titleLen}}/20</text>
+    </view>
+    <view class="fmt-row">
+      <view class="fmt-btn {{formats.bold ? 'on' : ''}}" catchtouchend="rtCmd" data-tag="b"><b>B</b></view>
+      <view class="fmt-btn {{formats.italic ? 'on' : ''}}" catchtouchend="rtCmd" data-tag="i"><i>I</i></view>
+      <view class="fmt-btn" catchtouchend="rtCmd" data-tag="ul">≡</view>
+      <text class="body-count">{{bodyLen}} 字</text>
+    </view>
+    <editor id="bodyEditor" class="body-editor" placeholder="添加笔记描述…" bindready="onEditorReady" bindinput="onEditorInput" bindstatuschange="onEditorStatus"></editor>
+    <view class="topics-row">
+      <view class="topic-chip" wx:for="{{topics}}" wx:key="*this" bindtap="removeTopic" data-t="{{item}}">#{{item}} ✕</view>
+      <view class="topic-add" bindtap="openTopicSheet"># 添加话题</view>
+    </view>
+    <view class="kv-line" bindtap="pickProduct">
+      <text class="kv-k">📍 关联线路</text>
+      <text class="kv-v">{{relatedName || '选填，让笔记被更多旅人看到'}} ›</text>
+    </view>
+    <view wx:if="{{editId}}" class="edit-tip">正在编辑已发布作品 · 提交后将暂时撤下并重新审核</view>
+  </view>
+</view>
+
+<!-- 话题选择面板 -->
+<view wx:if="{{showTopicSheet}}" class="sheet-mask" bindtap="closeTopicSheet">
+  <view class="topic-sheet" catchtap="noop">
+    <view class="sheet-title">选择话题</view>
+    <view class="topic-grid">
+      <view class="topic-opt" wx:for="{{hotTopics}}" wx:key="*this" bindtap="addTopic" data-t="{{item}}">#{{item}}</view>
+    </view>
+    <view class="topic-custom" bindtap="customTopic">＋ 自定义话题</view>
+  </view>
+</view>
+
+<!-- 底部发布栏 -->
+<view class="bottom-bar">
+  <text class="bar-hint">{{barHint}}</text>
+  <button class="pub-btn {{canPublish ? '' : 'off'}}" bindtap="publish" loading="{{busy}}" disabled="{{busy || !canPublish}}">{{editId ? '保存并提交审核' : '发布'}}</button>
+</view>

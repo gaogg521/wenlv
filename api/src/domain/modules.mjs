@@ -11,7 +11,7 @@ export const MODULE_GROUPS = [
   ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
-  ['内容运营', [['contentdash', '内容看板', 'content'], ['reviewqueue', '审核队列', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
+  ['内容运营', [['contentdash', '内容看板', 'content'], ['reviewqueue', '审核队列', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['comments', '评论管理', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
   ['合伙人与推广', [['partners', '合伙人中心', 'promoters'], ['partnerperf', '排行与对账', 'settlements'], ['promoters', '推广服务商', 'promoters']]],
   ['资金结算', [['fund', '资金工作台', 'settlements'], ['settlements', '结算', 'settlements'], ['withdrawals', '提现审批', 'withdraw'], ['taskcash', '现金加奖打款', 'withdraw'], ['agreements', '协议变更', 'eco'], ['budgets', '旅豆预算', 'budgets'], ['rateov', '逐品佣金', 'promoters'], ['cocreate', '共创分润', 'eco']]],
   ['渠道装修', [['miniapp', '小程序装修与映射', 'content'], ['banners', '轮播管理', 'flag'], ['faqs', '常见问题', 'audit']]],
@@ -34,11 +34,11 @@ export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 
  * - 未知角色：空集合（默认拒绝，不再缺省放行全菜单）。
  */
 export const ROLE_DEFAULT_MODULES = {
-  ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'taskcash'],
+  ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
   finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
-  review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases'],
+  review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases', 'comments'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],
-  city_partner: ['dash', 'orders', 'tickets', 'products', 'merchants', 'settlements', 'cases', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases'],
+  city_partner: ['dash', 'orders', 'tickets', 'products', 'merchants', 'settlements', 'cases', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments'],
   readonly: ['dash', 'orders', 'products', 'merchants', 'scenics', 'settlements', 'contentdash', 'partners', 'partnerperf'],
   sre: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest'],
   dev: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest', 'features', 'terms'],

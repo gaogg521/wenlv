@@ -198,9 +198,10 @@ function submissionHtml(n) {
       ? `<div class="rv-body rt-preview">${b.html}</div>`
       : b.type === 'image'
         ? `<div class="rv-imgs"><img src="${esc(b.url)}" alt="投稿图片" loading="lazy"></div>`
-        : `<video controls preload="metadata" src="${esc(b.url)}" style="width:100%;max-height:420px"></video>`).join('') : `<div class="rv-body rt-preview">${n.html || esc(n.text) || '<span class="muted">（无正文）</span>'}</div>
+        : `<video controls preload="metadata" src="${esc(b.url)}" style="width:100%;max-height:420px"></video>`).join('') : `<div class="rv-body rt-preview">${n.html || esc(n.text) || '<span class="muted">（无正文）</span>'}</div>`}
     ${n.images.length ? `<div class="rv-h" style="margin-top:12px">图片一览（${n.images.length}，点击看原图）</div><div class="rv-imgs">${n.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="投稿图片" loading="lazy"></a>`).join('')}</div>` : ''}
-    ${n.video ? `<video controls preload="metadata" src="${esc(n.video)}" style="width:100%;max-height:420px"></video>` : ''}`}
+    ${n.video ? `<video controls preload="metadata" src="${esc(n.video)}" style="width:100%;max-height:420px"></video>` : ''}
+    ${n.topics && n.topics.length ? `<div class="rv-h" style="margin-top:12px">话题</div><p class="rv-body">${n.topics.map((t) => '#' + esc(t)).join('　')}</p>` : ''}
     ${n.rejectReason ? `<p class="rv-reason">上次驳回原因：${esc(n.rejectReason)}</p>` : ''}
   </div>`
 }

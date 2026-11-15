@@ -30,7 +30,8 @@ export function noteView(note, img = (u) => u) {
     id: Number(note.id), title: note.title || '', html: html.replace(/(<img[^>]+src=")([^"]+)"/gi, (_, a, u) => a + img(u) + '"'),
     text, blocks: Array.isArray(body.blocks) ? body.blocks.map(b=>b.type==='text'?{type:b.type,html:sanitizeRich(b.html)}:{type:b.type,url:img(b.url)}) : null, images: images.map(img), video: body.video ? img(body.video) : null, revision: Number(note.revision || 1), wordCount: wordCount(text), imageCount: images.length,
     status: Number(note.status), publishedAt: note.published_at || null, createdAt: note.created_at || null,
-    likeCount: Number(note.like_count || 0), rejectReason: note.reject_reason || null,
+    topics: Array.isArray(body.topics) ? body.topics : [],
+    likeCount: Number(note.like_count || 0), commentCount: Number(note.comment_count || 0), rejectReason: note.reject_reason || null,
     machineCheck: note.sec_check_id === 'mock' ? '联调通道（未经真实机审）' : (note.sec_check_id ? '已过微信内容安全检测' : '—'),
   }
 }

@@ -12,6 +12,7 @@ import * as attestDomain from '../domain/attest.mjs'
 import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { plainText, wordCount } from '../domain/task-review.mjs'
+import { grantPublishReward } from '../domain/content-reward.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
 import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
@@ -63,6 +64,13 @@ async function saveNote(req, editing) {
     if (!current) throw new BizError(1004, '作品不存在')
     if (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision)) throw new BizError(2002, '作品状态已变化，请重新打开')
   }
+  // 小红书化：话题标签（≤5个、单个≤20字，入库不带 # 号）；封面取第几张图
+  const topics = [...new Set((Array.isArray(req.body.topics) ? req.body.topics : [])
+    .map(t => String(t || '').trim().replace(/^#+/, '')).filter(Boolean))]
+    .slice(0, 5)
+  if (topics.some(t => t.length > 20)) throw new BizError(1001, '单个话题最多 20 字')
+  const coverIndexRaw = req.body.coverIndex == null ? 0 : Math.floor(Number(req.body.coverIndex) || 0)
+  if (coverIndexRaw < 0) throw new BizError(1001, '封面参数无效')
   let blocks
   if (submittedBlocks !== undefined) {
     if (!Array.isArray(submittedBlocks) || !submittedBlocks.length || submittedBlocks.length > 40) {
@@ -85,7 +93,7 @@ async function saveNote(req, editing) {
   if (videos?.length > 1 || (blocks && articleImages.length > 9)) throw new BizError(1001,'最多 9 张图片和 1 段视频')
   const articleVideo = blocks ? videos[0]?.url : video
   if (!articleText) throw new BizError(1001, '内容不能为空')
-  if (title != null && String(title).trim().length > 30) throw new BizError(1001, '标题最多 30 字，请精简后发布')
+  if (title != null && String(title).trim().length > 20) throw new BizError(1001, '标题最多 20 字，请精简后发布')
   const rich = sanitizeRich(String(articleText))
   const inlineImages = [...rich.matchAll(/<img[^>]+src="([^"]+)"/gi)].map(m => m[1])
   const text = rich.replace(/<\/?(?:img|video|audio|source|picture|track)\b[^>]*>/gi, '')
@@ -96,7 +104,7 @@ async function saveNote(req, editing) {
     if (!file.test(videoUrl) || !fs.existsSync(path.join(noteUploadDir, path.basename(videoUrl)))) throw new BizError(1001, '请选择本人上传的视频')
   }
   const account = await one('SELECT mini_a_openid FROM user_account WHERE id=?', [user.uid])
-  const sec = await wxsec.msgSecCheck((title || '') + ' ' + text, account?.mini_a_openid)
+  const sec = await wxsec.msgSecCheck((title || '') + ' ' + text + (topics.length ? ' ' + topics.join(' ') : ''), account?.mini_a_openid)
   const imgUrls = [...new Set([...(Array.isArray(articleImages) ? articleImages : []), ...inlineImages].map(String))].slice(0,9)
   if (imgUrls.some(x => !/^\/uploads\/[a-z0-9_.-]+$/i.test(x))) throw new BizError(1001, '请选择站内上传的图片')
   const imgSec = []
@@ -106,7 +114,7 @@ async function saveNote(req, editing) {
     imgSec.push({ url, traceId: check.traceId, mock: check.mock })
     if (!check.mock && sec.pass) status = 0
   }
-  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
+  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, topics, coverIndex: Math.min(coverIndexRaw, Math.max(imgUrls.length - 1, 0)), manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
   const saved = await tx(async c => {
     const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,status]
     let noteId = id
@@ -124,6 +132,8 @@ async function saveNote(req, editing) {
         VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))`,[user.uid,...fields])
     }
     for (const check of imgSec.filter(x => !x.mock)) await c.ins('INSERT INTO content_media_check(trace_id,note_id) VALUES (?,?)',[check.traceId,noteId])
+    // 发布奖励（小红书化）：机审直通即正式发布，三条发布路径之一；幂等由 reward_granted + 账本 biz_ref 双保险
+    if (status === 2) await grantPublishReward(c, user.uid, noteId)
     return noteId
   })
   return {id:saved,status,secMock:sec.mock,imgChecked:imgSec.length,msg:status===2?'已发布':status===0?'图片机审中':'已提交人工审核'}
@@ -613,8 +623,8 @@ const c = {
     const u = requireUser(req)
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
-    const rows = await q(`SELECT n.id, n.title, n.like_count, n.published_at, u.nickname author, p.title product_title,
-        JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.images[0]')) cover,
+    const rows = await q(`SELECT n.id, n.title, n.like_count, n.comment_count, n.published_at, u.nickname author, u.avatar_url, p.title product_title,
+        JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']'))) cover,
         JSON_TYPE(JSON_EXTRACT(n.body, '$.video')) = 'STRING' hasVideo
       FROM content_note n JOIN user_account u ON u.id = n.user_id
       LEFT JOIN tour_product p ON p.id = n.related_product_id
@@ -625,7 +635,8 @@ const c = {
       page, pageSize,
       items: rows.map((r) => ({
         ...r, cover: r.cover ? apiImg(r.cover, req) : null, hasVideo: Boolean(r.hasVideo),
-        liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count),
+        avatar: r.avatar_url ? apiImg(r.avatar_url, req) : null,
+        liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count), commentCount: Number(r.comment_count),
         productTitle: r.product_title || null,
         when: String(r.published_at || '').slice(0, 10),
       })),
@@ -834,7 +845,7 @@ const cNotes = {
   'GET /c/notes': async (req) => {
     const u = requireUser(req)
     if(u.end!=='c')throw new BizError(1003,'仅游客账号可查看作品')
-    return await q(`SELECT c.id,c.title,c.status,c.like_count,c.published_at,c.reject_reason,
+    return await q(`SELECT c.id,c.title,c.status,c.like_count,c.comment_count,c.published_at,c.reject_reason,
       m.reason offline_reason,a.status appeal_status,a.resolution appeal_resolution,
       (c.status=4 AND c.moderation_id IS NOT NULL AND a.id IS NULL) can_appeal
       FROM content_note c LEFT JOIN content_moderation m ON m.id=(SELECT x.id FROM content_moderation x WHERE x.note_id=c.id ORDER BY x.id DESC LIMIT 1)
@@ -848,13 +859,15 @@ const cNotes = {
       LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? AND n.user_id=? AND n.status IN (2,3)`,[req.params.id,u.uid])
     if (!n) throw new BizError(1004, '作品不存在或暂不可编辑')
     const body = readNoteBody(n.body)
-    return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
+    // 兼容旧版图文混排 blocks：文本块回编辑器，图片/视频块并入独立图库与视频位（compose 页负责拆分）
+    return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,
+      topics:Array.isArray(body.topics) ? body.topics : [],coverIndex:Number(body.coverIndex) || 0,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
   },
   // 笔记详情独立页（P2）：仅已发布可见
   'GET /c/notes/:id': async (req) => {
     const user = requireUser(req)
-    const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.published_at, c.related_product_id,
-      u.nickname author, p.title product_title
+    const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.comment_count, c.published_at, c.related_product_id,
+      u.nickname author, u.avatar_url, p.title product_title
       FROM content_note c JOIN user_account u ON u.id = c.user_id
       LEFT JOIN tour_product p ON p.id = c.related_product_id
       WHERE c.id = ? AND c.status = 2`, [req.params.id])
@@ -862,7 +875,42 @@ const cNotes = {
     let body = n.body
     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
     const liked = await one('SELECT note_id FROM content_note_likes WHERE note_id = ? AND user_id = ?', [n.id, user.uid])
-    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [], video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
+    return { ...n, liked: !!liked, likeCount: Number(n.like_count), commentCount: Number(n.comment_count), body,
+      text: (body && body.text) || '', images: (body && body.images) || [],
+      topics: Array.isArray(body?.topics) ? body.topics : [],
+      authorAvatar: n.avatar_url ? apiImg(n.avatar_url, req) : null,
+      video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
+  },
+  // 评论（小红书化）：已发布笔记可评，文本机审前置 + 同人同笔记日限 20 条防刷
+  'POST /c/notes/:id/comments': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'c') throw new BizError(1003, '仅游客账号可评论')
+    const content = String(req.body?.content || '').trim()
+    if (content.length < 4 || content.length > 200) throw new BizError(1001, '评论需 4 至 200 字')
+    const n = await one('SELECT id, status FROM content_note WHERE id = ?', [req.params.id])
+    if (!n || Number(n.status) !== 2) throw new BizError(1004, '笔记不存在或未发布')
+    const today = await one('SELECT COUNT(*) n FROM content_note_comment WHERE note_id = ? AND user_id = ? AND created_at >= CURDATE()', [n.id, u.uid])
+    if (Number(today.n) >= 20) throw new BizError(1001, '今天在这篇笔记下的评论已达上限，明天再来吧')
+    const account = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [u.uid])
+    const sec = await wxsec.msgSecCheck(content, account?.mini_a_openid)
+    if (!sec.pass) throw new BizError(1001, '评论含不适宜内容，请调整后发布')
+    return tx(async c => {
+      const id = await c.ins('INSERT INTO content_note_comment (note_id, user_id, content) VALUES (?,?,?)', [n.id, u.uid, content])
+      await c.upd('UPDATE content_note SET comment_count = comment_count + 1 WHERE id = ?', [n.id])
+      return { id, status: 1 }
+    })
+  },
+  'GET /c/notes/:id/comments': async (req) => {
+    requireUser(req)
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const rows = await q(`SELECT x.id, x.content, x.created_at, u.nickname, u.avatar_url
+      FROM content_note_comment x JOIN user_account u ON u.id = x.user_id
+      WHERE x.note_id = ? AND x.status = 1 ORDER BY x.id DESC LIMIT ? OFFSET ?`,
+      [req.params.id, pageSize, (page - 1) * pageSize])
+    return { page, pageSize,
+      items: rows.map(r => ({ id: r.id, content: r.content, author: r.nickname,
+        avatar: r.avatar_url ? apiImg(r.avatar_url, req) : null, when: String(r.created_at || '').replace('T', ' ').slice(0, 16) })) }
   },
   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
   'GET /c/tasks': async (req) => {

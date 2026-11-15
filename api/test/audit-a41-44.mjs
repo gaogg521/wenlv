@@ -144,10 +144,13 @@ await t('A43-4 点赞：一用户一赞、可取消、计数准确', async () =>
   assert.equal(detail.likeCount, 1)
 })
 
-await t('A43-5 创作页有图片选择与关联线路；广场页已登记 MINI_MAP', async () => {
+await t('A43-5 发布页有图片选择与关联线路；广场页已登记 MINI_MAP', async () => {
+  // V86 小红书化：发布/编辑迁至 compose 页（创作中心保留任务/作品/举报）
+  const composeJs = read('mini-a/package-content/pages/compose/index.js')
+  assert.ok(/chooseMedia/.test(composeJs), '发布页应有图片选择')
+  assert.ok(/relatedProductId/.test(composeJs), '发布页应支持关联线路')
   const createJs = read('mini-a/package-content/pages/create/index.js')
-  assert.ok(/chooseMedia|chooseImage/.test(createJs), '创作页应有图片选择')
-  assert.ok(/relatedProductId/.test(createJs), '创作页应支持关联线路')
+  assert.ok(/pages\/compose\/index/.test(createJs), '创作中心应有发布入口跳转 compose')
   const appJson = JSON.parse(read('mini-a/app.json'))
   assert.ok(appJson.pages.concat((appJson.subPackages || []).flatMap((s) => s.pages.map((p) => s.root + '/' + p))).some((p) => p === 'package-content/pages/square/index'), 'app.json 应登记广场页')
   const map = read('api/admin/miniapp.js')
