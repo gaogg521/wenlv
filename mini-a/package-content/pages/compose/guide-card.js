@@ -90,4 +90,3 @@ async function renderGuide(page, { title, text, photo, style }) {
 }
 
 module.exports = { GUIDE_STYLES, renderGuide, suggestTitle }
-
