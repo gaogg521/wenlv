@@ -23,7 +23,7 @@
     <view class="kv" wx:for="{{d.business_hours}}" wx:key="index"><text>{{index === 0 ? '营业时间' : ''}}</text><text class="v">{{item.days || '每天'}} {{item.open}}-{{item.close}}</text></view>
     <view class="kv" wx:if="{{d.address}}" bindtap="nav"><text>地址</text><text class="v pl-link">{{d.address}} ›</text></view>
     <view class="kv" wx:if="{{d.service_phone}}" bindtap="call"><text>电话</text><text class="v pl-link">{{d.service_phone}} ›</text></view>
-    <view class="kv" wx:if="{{kind === 'scenic'}}" bindtap="goScenicNotes"><text>笔记</text><text class="v pl-link">看这个景区的旅行笔记 ›</text></view>
+    <view class="kv" wx:if="{{d.kind === 'scenic'}}" bindtap="goScenicNotes"><text>笔记</text><text class="v pl-link">看这个景区的旅行笔记 ›</text></view>
     <view class="pl-fac" wx:if="{{d.facilityText.length}}"><text class="tag" wx:for="{{d.facilityText}}" wx:key="*this">✓ {{item}}</text></view>
   </view>
 

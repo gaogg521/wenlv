@@ -14,12 +14,13 @@ Page({
     pendingAudio: null,          // {kind:'audio', path} 待发送的语音评论（临时文件）
     recording: false, playingAudio: '',
     liked: false, likeCount: 0, current: 0, mediaLabel: '', hasGallery: false,
-    livePlayer: '', playerLabel: '',
+    livePlayer: '', playerLabel: '', liveLoading: false,
   },
   onLoad(q) { this.id = q.id; this.cursor = null },
   onShow() { if (this.id) { this.fetch(); this.fetchComments(true) } },
-  onHide() { if (this.commentPlayer) this.commentPlayer.stop(); if (this.data.recording && this.recorder) this.recorder.stop() },
+  onHide() { this.closeLive(); if (this.commentPlayer) this.commentPlayer.stop(); if (this.data.recording && this.recorder) this.recorder.stop() },
   onUnload() {
+    this.liveRequest = null
     if (this.commentPlayer) { this.commentPlayer.destroy(); this.commentPlayer = null }
     if (this.recorder && this.recordStopped) { this.recorder.offStop(this.recordStopped); this.recorder.offError(this.recordFailed) }
   },
@@ -27,6 +28,8 @@ Page({
     try {
       await api.ensureLogin()
       const n = await api.request('/c/notes/' + this.id)
+      const motionByPhoto = new Map((n.livePhotos || []).map(({ photo, motion }) => [api.img(photo), api.img(motion)]))
+      const gallery = (n.images || []).map(url => ({ url, motion: motionByPhoto.get(api.img(url)) || '' }))
       // 私密笔记（三期 V88）：媒体经门禁，直接 src 会 404——统一下载为临时文件再渲染
       if (n.visibility === 'private') {
         const paths = [...new Set([...(n.images || []), ...((n.blocks || []).filter(b => b.type === 'image').map(b => b.url)), n.cover, n.video].filter(Boolean))]
@@ -35,24 +38,19 @@ Page({
         n.images = (n.images || []).map(u => local[u] || '').filter(Boolean)
         if (n.video) n.video = local[n.video] || ''
         if (Array.isArray(n.blocks)) n.blocks = n.blocks.map(b => b.type === 'image' && local[b.url] ? { ...b, url: local[b.url] } : b)
+        for (const image of gallery) image.url = local[image.url] || ''
       }
-      // 实况映射（photo 原始路径 → motion 完整 URL）：按原始路径索引，与 imagesFull 一一对应
-      const motionByImg = {}
-      for (const p of (n.livePhotos || [])) {
-        const idx = (n.images || []).indexOf(p.photo)
-        if (idx >= 0) motionByImg[idx] = api.img(p.motion)
-      }
-      const imgs = (n.images || []).map(api.img)
+      const imagesFull = gallery.filter(image => image.url).map(image => ({ ...image, url: api.img(image.url) }))
       const blocks = Array.isArray(n.blocks)
         ? n.blocks.map(b => b.type === 'text' ? { ...b, isText: true } : { ...b, isText: false })
         : null
       this.setData({
         liked: n.liked, likeCount: n.likeCount,
         n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '',
-          imagesFull: imgs.map((u, i) => ({ url: u, motion: motionByImg[i] || '' })),
+          imagesFull,
           blocksReady: blocks, topicsReady: n.topics || [], isPrivate: n.visibility === 'private' },
-        hasGallery: imgs.length > 0,
-        mediaLabel: imgs.length ? '1/' + imgs.length : '',
+        hasGallery: imagesFull.length > 0,
+        mediaLabel: imagesFull.length ? '1/' + imagesFull.length : '',
       })
     } catch (e) { this.setData({ n: null, loadTxt: e.msg || '内容暂未加载，请重试' }) }
   },
@@ -64,12 +62,25 @@ Page({
     const urls = this.data.n.imagesFull.map(x => x.url)
     wx.previewImage({ urls, current: urls[e.currentTarget.dataset.i] || urls[0] })
   },
-  playLive(e) {
+  async playLive(e) {
     const motion = e.currentTarget.dataset.motion
-    if (!motion) return
-    this.setData({ livePlayer: motion, playerLabel: '关闭实况' })
+    if (!motion || this.data.liveLoading) return
+    const request = {}
+    this.liveRequest = request
+    this.setData({ liveLoading: true })
+    try {
+      const src = this.data.n.isPrivate ? await api.downloadPrivateMedia(motion) : motion
+      if (this.liveRequest === request) this.setData({ livePlayer: src, playerLabel: '关闭实况' })
+    } catch (err) {
+      if (this.liveRequest === request) wx.showToast({ title: err.msg || '实况暂时无法播放', icon: 'none' })
+    } finally {
+      if (this.liveRequest === request) this.setData({ liveLoading: false })
+    }
   },
-  closeLive() { this.setData({ livePlayer: '' }) },
+  closeLive() {
+    this.liveRequest = null
+    this.setData({ livePlayer: '', liveLoading: false })
+  },
   previewCommentImage(e) { wx.previewImage({ urls: [e.currentTarget.dataset.url] }) },
 
   /* ---------- 话题/景区聚合跳转（三期①） ---------- */

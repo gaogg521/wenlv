@@ -2320,7 +2320,7 @@ const DB = {
     did:'did:cn:86:9f3a2c2b7d41…4e21b',
     chain:'向往自由可信记录',
     createdAt:'2025-03-18',
-    vcStandard:'W3C 数字身份凭证 兼容',
+    vcStandard:'W3C 数字身份凭证兼容',
     passes:[
       {n:'朱家角剧本游 · 江南谜案', t:'Travel Pass · 服务使用权', ic:'i-mask', c:'#7048e8', st:'有效', d:'含 4 幕剧情任务 · 双人成行', exp:'2026-12-31 前有效', act:'核销入园'},
       {n:'安吉瑜伽谷 · 2天1夜', t:'Travel Pass · 服务使用权', ic:'i-yoga', c:'#0e9f8a', st:'已核销', d:'2026-05-02 于安吉云上草原核销', exp:'已完成体验', act:''},
@@ -2739,11 +2739,11 @@ const DB_INIT = JSON.parse(JSON.stringify(DB));
 const ENDS = {
   tourist:{ key:'tourist', name:'游客端',     sub:'A 层 · 会员消费生态',
     tabs:[{k:'home',l:'首页',i:'i-home'},{k:'theme',l:'主题游',i:'i-compass'},{k:'shop',l:'商城',i:'i-bag'},{k:'wallet',l:'旅豆',i:'i-wallet'},{k:'me',l:'我的',i:'i-user'}] },
-  partner:{ key:'partner', name:'推广服务商端',   sub:'B 层 · 贡献经济共同体',
+  partner:{ key:'partner', name:'推广服务商',   sub:'B 层 · 贡献经济共同体',
     tabs:[{k:'earn',l:'收益',i:'i-money'},{k:'team',l:'团队',i:'i-tree'},{k:'invite',l:'邀请',i:'i-invite'},{k:'pme',l:'我的',i:'i-user'}] },
   merch:{   key:'merch',    name:'商户端',     sub:'履约层 · 核销与供给',
     tabs:[{k:'work',l:'工作台',i:'i-work'},{k:'order',l:'订单',i:'i-box'},{k:'supply',l:'货源',i:'i-layers'},{k:'mme',l:'我的',i:'i-user'}] },
-  admin:{   key:'admin',    name:'平台运营端', sub:'管理舱 · 经营与风控',
+  admin:{   key:'admin',    name:'平台运营', sub:'管理舱 · 经营与风控',
     tabs:[{k:'dash',l:'驾驶舱',i:'i-chart'},{k:'risk',l:'风控',i:'i-shield'},{k:'audit',l:'审核',i:'i-task'},{k:'calc',l:'测算',i:'i-calc'},{k:'ame',l:'我的',i:'i-user'}] },
 };
 
@@ -3513,7 +3513,7 @@ DB.x = {
   ],
 };
 /* ==========================================================================
-   v1.10 · 经营口径引擎（平台运营端多时间维度）
+   v1.10 · 经营口径引擎（平台运营多时间维度）
    —— 一份逐日底账聚合出「今日 / 近 7 日 / 近 30 日 / 近 90 日 / 本月」全部口径
    —— 铁律：视图层不得硬写数字，KPI 值、环比、目标达成、分城占比全部派生
    ========================================================================== */
@@ -3954,7 +3954,7 @@ DB.gateway = {
   ],
   keys:[
     { id:'AK-SZ-8823', n:'朱家角景区运营方', sk:'****7f2a', q:'境内', st:'启用', d:'累计调用 1.2 万 · 最近 5 分钟前' },
-    { id:'AK-HK-4471', n:'香港 City Pass 代理', sk:'****c9b4', q:'境外', st:'启用', d:'走 Voyage 权益积分 通道，与境内账本隔离' },
+    { id:'AK-HK-4471', n:'香港 City Pass 代理', sk:'****c9b4', q:'境外', st:'启用', d:'走 Voyage 权益积分通道，与境内账本隔离' },
     { id:'AK-SH-1092', n:'安吉民宿联盟', sk:'****3e77', q:'境内', st:'已停用', d:'配额用尽后未续期' },
   ],
   logs:[],
@@ -4616,7 +4616,7 @@ function renderLogin(){
     body = `
       <div class="login-step on">
         <div class="login-title">选择你的身份</div>
-        <div class="login-desc">四个身份 = 四套数据、四套功能、四套权限，共用同一个 Travel ID，进入后可随时切换</div>
+        <div class="login-desc">演示按游客、推广服务商、商户和平台运营四类角色展示对应功能与权限。进入后可切换角色，各角色共用同一 Travel ID。</div>
         ${LOGIN_ROLES.map(r=>`
           <button class="role-card" onclick="pickRole('${r.k}')">
             <div class="ri" style="background:${r.c}18;color:${r.c}">${ic(r.ic)}</div>
@@ -4648,7 +4648,7 @@ function renderLogin(){
     </div>
     <div class="login-foot">
       <div class="agree">登录即代表同意 <a onclick="toast('演示环境')">《用户协议》</a> 与 <a onclick="toast('演示环境')">《隐私政策》</a></div>
-      <p>境内：向往自由可信记录 · 旅豆可信权益凭证闭环<br>境外：独立主体 · 稳定币 + 法币 · 与境内完全隔离（演示说明）</p>
+      <p>境内：向往自由可信记录 · 旅豆可信权益凭证闭环<br>境外：独立主体运营，收付与境内账本隔离（规划说明）</p>
     </div>`;
   L.classList.add('on');
   if(S.loginStep === 'phone') setTimeout(()=>{ const i=$('#phoneInput'); i&&i.focus(); }, 250);
@@ -4748,7 +4748,7 @@ function loginAs(k){ S.loggedIn = true; $('#loginLayer').classList.remove('on');
 function switchIdentity(){
   openSheet(
     '<div class="sheet-title">切换身份</div>' +
-    '<div class="sheet-sub">同一 Travel ID 贯通三端 · 底层数据实时互通</div>' +
+    '<div class="sheet-sub">四类演示角色共用同一 Travel ID，业务数据在三端同步</div>' +
     LOGIN_ROLES.map(r=>`
       <button class="role-card" style="margin-bottom:10px" onclick="doSwitch('${r.k}')">
         <div class="ri" style="background:${r.c}18;color:${r.c}">${ic(r.ic)}</div>
@@ -4775,7 +4775,7 @@ function renderPanel(){
     <div class="arch">
       ${order.map(k=>'<div class="arch-box '+(S.end===k?'live':'')+'" style="background:'+archC[k]+'">'+archName[k]+'<small>'+archSub[k]+'</small></div>').join('')}
     </div>
-    <div class="arch-note">C 层全球 可信数字 网络（境外稳定币独立运营）不在本演示范围 · 三端共用同一 Travel ID</div>
+    <div class="arch-note">C 层可信数字网络由境外主体独立运营。三端业务演示以境内场景为主。</div>
     <div class="panel-sec">
       <h4>${ic('i-chain')} 数字身份（Travel ID · 数字身份凭证）</h4>
       <div class="panel-flow">
@@ -4808,12 +4808,12 @@ function renderPanel(){
         <li>预算驱动发行：积分预算上限 = min（已批准营销预算， 可承受的订单贡献利润比例）</li>
         <li>商家收豆兑换平台资源与服务，纳入平台权益预算统一核算</li>
         <li>贡献分（CS）仅用于评级、推荐与服务激励</li>
-        <li>境内旅豆与境外 Voyage 权益积分 完全隔离，独立运营</li>
-        <li>推广服务商只对真实服务与有效交易计酬，不依靠新用户购买 积分 支付旧用户奖励</li>
+        <li>境内旅豆与境外 Voyage 权益积分完全隔离，独立运营</li>
+        <li>推广服务商只对真实服务与有效交易计酬，不依靠新用户购买积分来支付旧用户奖励</li>
       </ul>
     </div>
     <div class="panel-foot">
-      本原型为高保真交互演示：数据均为示例假设（依据《「向往的自由」可信数字 文旅生态商业与技术总体方案》经营测算参数），
+      本原型为高保真交互演示：数据均为示例假设（依据《「向往的自由」可信数字文旅生态商业与技术总体方案》经营测算参数），
       产品形态依据《产品原型设计思路》重构为三端，补充剧本闯关互动、垂类商城、创作中心与平台运营舱。
     </div>`;
 }
@@ -5213,7 +5213,7 @@ VIEWS.tourist = {
       <button class="chip ${txFilter==='all'?'on':''}" onclick="txFilter='all';renderBase()">全部</button>
       <button class="chip ${txFilter==='in'?'on':''}" onclick="txFilter='in';renderBase()">收入</button>
       <button class="chip ${txFilter==='out'?'on':''}" onclick="txFilter='out';renderBase()">支出</button>
-      <button class="chip" onclick="push可信数字Page()" style="margin-left:auto">可信数字 底座 ${ic('i-arrow')}</button>
+      <button class="chip" onclick="push可信数字Page()" style="margin-left:auto">可信数字底座 ${ic('i-arrow')}</button>
       <button class="chip" onclick="pushBeanDetailPage()">全部明细 ${ic('i-arrow')}</button>
     </div>
     <div class="card">
@@ -5388,7 +5388,7 @@ function travelIdHtml(){
         </div>`; }).join('')}
     </div>
 
-    <div class="sec-title">纪念卡 数字纪念卡 · ${DB.web3.nfts.length} 件 <span class="more">鲸探联盟链</span></div>
+    <div class="sec-title">数字纪念卡 · ${DB.web3.nfts.length} 件 <span class="more">鲸探联盟链</span></div>
     <div style="font-size:10px;color:var(--sub);padding:2px 16px 8px">只代表荣誉与线下权益，不做二级交易炒作 · 点击查看纪念卡详情</div>
     <div class="nft-row">
       ${DB.web3.nfts.map(function(n,i){ return `
@@ -5407,7 +5407,7 @@ function travelIdHtml(){
     </div>
 
     <div class="sec-title">三端身份贯通</div>
-    <div style="font-size:10px;color:var(--sub);padding:2px 16px 10px">同一 Travel ID 贯通四个端 · 底层数据实时互通 · 进入任一端无需重复注册</div>
+    <div style="font-size:10px;color:var(--sub);padding:2px 16px 10px">同一 Travel ID 贯通游客小程序、商户小程序与 PC 后台，业务数据实时同步，无需重复注册。</div>
     <div class="tid-ends">
       ${ends.map(e=>`<div class="te ${e.cur?'cur':''}"><div class="dot" style="${e.cur?'':'background:#c9d4e8'}"></div><div style="color:${e.cur?'var(--brand)':'var(--sub)'}">${ic(e.ic2)}</div><b>${e.n}</b><span>${e.cur?'当前所在':'一号通行'}</span></div>`).join('')}
     </div>
@@ -5487,9 +5487,9 @@ function travelIdHtml(){
 function pushTravelIdPage(){
   return push('Travel ID 数字身份', travelIdHtml(), {});
 }
-/* ===== 可信数字 数字底座：Travel ID · 可信权益 · 贡献可信记录 ===== */
+/* ===== 可信数字底座：Travel ID · 可信权益 · 贡献可信记录 ===== */
 function push可信数字Page(){
-  return push('可信数字 数字底座', web3Html(), {});
+  return push('可信数字底座', web3Html(), {});
 }
 function web3Html(){
   const T = DB.travelId;
@@ -5498,8 +5498,8 @@ function web3Html(){
   const bPct = Math.round(b.issued / b.total * 100);
   return `
   <div class="egm-hero" style="background:linear-gradient(140deg,#0e3a5c,#2f6f9f)">
-    <div class="eh-t">${ic('i-chain')} 可信数字 数字底座</div>
-    <div class="eh-s">Travel ID 确权 · 旅豆可信权益 · 贡献可信记录 —— 可信数字 负责确权、协作、记录与激励；真实旅游消费创造收入；平台通过提供服务获得利润</div>
+    <div class="eh-t">${ic('i-chain')} 可信数字底座</div>
+    <div class="eh-s">Travel ID 确权 · 旅豆可信权益 · 贡献可信记录 —— 可信数字底座负责确权、协作、记录与激励；真实旅游消费创造收入；平台通过提供服务获得利润</div>
     <div class="eh-chips"><span class="eh-chip">链数根联盟链</span><span class="eh-chip">数字身份 / VC 兼容</span><span class="eh-chip">境内权益 · 境内外隔离</span></div>
   </div>
 
@@ -5624,9 +5624,9 @@ function web3Html(){
         <th style="padding:8px 9px;text-align:left;color:#8a94a6;font-weight:800">${ic('i-globe')} Voyage 权益积分 · 境外</th>
       </tr>
       ${[
-        ['底层链','链数根联盟链','Polygon / Base（EVM 兼容）'],
-        ['计价获取','人民币消费赠送','稳定币消费返 积分、创作赚 积分'],
-        ['流通性','仅生态内兑换服务，不交易','可在 DEX 兑换稳定币、可转账'],
+        ['记录体系','国内可信记录','境外独立账本（规划）'],
+        ['计价获取','人民币消费赠送','消费与创作可获境外积分（规划）'],
+        ['流通性','仅生态内兑换服务，不交易','按境外主体规则使用，经当地合规评估后确定'],
         ['用途','门票 / 酒店折扣 / 剧本 / 纪念卡 徽章','抵扣订单 / 纪念卡 通行证 / 路线 DAO 投票'],
         ['账户','App 内中心化账户','去中心化账户（MetaMask / WalletConnect）'],
       ].map(r=>`
@@ -5636,7 +5636,7 @@ function web3Html(){
           <td style="padding:7px 9px;line-height:1.5;color:var(--ink2)">${r[2]}</td>
         </tr>`).join('')}
     </table>
-    <div style="font-size:9.5px;color:var(--sub);line-height:1.7;margin-top:9px">境外做外国人生意：稳定币 + 法币，两边用正常 B2B 采购协议连接；境外公司收稳定币须六项条件同时满足（客户身份过滤、纯境外产品、资金完全境外闭环、零境内营销、境外独立团队、当地持牌）。两个账户不互通，仅通过 B2B 采购、品牌互认、内容互通三种方式联动。</div>
+    <div style="font-size:9.5px;color:var(--sub);line-height:1.7;margin-top:9px">境外业务按当地规则收付。准入须同时满足客户身份核验、纯境外产品、境外资金闭环、零境内营销、独立团队和当地持牌。境内外账户各自独立，双方通过 B2B 采购、品牌互认和内容协作对接。</div>
   </div>
 
   <div class="sec-title">Travel ID · 统一数字身份 <span class="more">三端通用</span></div>
@@ -5656,7 +5656,7 @@ function web3Html(){
           <b style="font-size:10.5px;display:block;margin-top:3px">${x[2]}</b>
         </div>`).join('')}
     </div>
-    <div style="font-size:10px;color:var(--sub);margin-top:10px;line-height:1.7">游客、推广服务商、商户、平台运营三端共用同一 Travel ID；C 层全球 可信数字 网络承担跨区域身份互认、跨平台权益互通与跨境商家协作。授权变更与凭证使用记录均可信封存，合作方仅能验证最小必要信息。</div>
+    <div style="font-size:10px;color:var(--sub);margin-top:10px;line-height:1.7">游客、推广服务商、商户和平台运营四类角色共用同一 Travel ID，业务数据在游客小程序、商户小程序和 PC 后台之间同步。C 层全球可信数字网络承担跨区域身份互认、跨平台权益互通与跨境商家协作。授权变更与凭证使用记录均可信封存，合作方仅能验证最小必要信息。</div>
     <button class="btn sm" style="width:100%;margin-top:11px" onclick="pushTravelIdPage()">查看数字身份与凭证 ${ic('i-arrow')}</button>
   </div>
 
@@ -5689,7 +5689,7 @@ function web3Html(){
 
   <div class="info-block" style="margin:0 14px 16px">
     <h4>${ic('i-shield')} 合规底线</h4>
-    <p>本产品不是发币项目：旅豆为预算驱动发行的可信权益凭证（已发行 ${fmtNum(b.issued)} / ${fmtNum(b.total)} 豆 · ${bPct}%），不靠新用户购买 积分 支付旧用户奖励；贡献分不直接对应股权、投资收益或可交易资产；数字纪念卡只代表荣誉和权益，不做二级交易炒作。本页数据均为演示示例，依据《「向往的自由」可信数字 文旅生态商业与技术总体方案》（1019 版）整理。</p>
+    <p>本产品不是发币项目：旅豆为预算驱动发行的可信权益凭证（已发行 ${fmtNum(b.issued)} / ${fmtNum(b.total)} 豆 · ${bPct}%），不靠新用户购买积分来支付旧用户奖励；贡献分不直接对应股权、投资收益或可交易资产；数字纪念卡只代表荣誉和权益，不做二级交易炒作。本页数据均为演示示例，依据《「向往的自由」可信数字文旅生态商业与技术总体方案》（1019 版）整理。</p>
   </div>`;
 }
 
@@ -5968,8 +5968,8 @@ function viewEarnImpact(){
       ${[
         ['ok','游客端','旅豆 +'+t.earn*n+' · 待核销 · 订单已入「我的行程」'],
         ['ok','商户端','新增待核销订单 · 今日流水 +¥'+gmv],
-        ['ok','推广服务商端','下线"'+DB.partner.referrals[0].n+'"返佣 +¥'+fee+' · 可提现余额 +¥'+fee],
-        ['ok','平台运营端','GMV +¥'+gmv+' · 积分发行 +'+(t.earn*n)+' 豆 · 预算池 +¥'+pool],
+        ['ok','推广服务商','下线"'+DB.partner.referrals[0].n+'"返佣 +¥'+fee+' · 可提现余额 +¥'+fee],
+        ['ok','平台运营','GMV +¥'+gmv+' · 积分发行 +'+(t.earn*n)+' 豆 · 预算池 +¥'+pool],
       ].map((r,i)=>'<div class="ll-row" style="animation-delay:'+(i*0.2)+'s"><span class="ok">✔</span><span class="tag2">['+r[1]+']</span><span>'+r[2]+'</span></div>').join('')}
     </div>
     <div class="note" style="padding:0 2px 14px">推广服务商只对真实成交计佣，贡献分仅用于评级推荐；旅豆为向往自由可信记录发行的可信权益凭证，预算驱动发行。</div>
@@ -6026,9 +6026,9 @@ function applyOrder(t, n, beans){
   if(beans>0) DB.merch.beans += beans;
   LINK_LOG = [
     ['ok','游客端','订单创建 · 旅豆 +'+earn+' · 待核销'],
-    ['ok','推广服务商端','黄金推广服务商 8% 返佣 +¥'+fee+'（'+DB.partner.referrals[0].n+'）'],
+    ['ok','推广服务商','黄金推广服务商 8% 返佣 +¥'+fee+'（'+DB.partner.referrals[0].n+'）'],
     ['ok','商户端','新增待核销订单 · 流水 +¥'+t.price*n],
-    ['ok','平台运营端','GMV / 订单 / 积分发行数据已更新'],
+    ['ok','平台运营','GMV / 订单 / 积分发行数据已更新'],
   ];
 }
 function renderLinkLog(){
@@ -6854,7 +6854,7 @@ function beanLoopBodyHtml(){
     <div id="loopBody">${beanLoopBody()}</div>
     <div class="sec-title">闭环判定标准 <span class="more">方案 §11</span></div>
     <div class="info-block" style="margin:0 14px 12px">
-      <p>各方在履约与成本核算后均有合理收益，游客愿意复购，且<b>不依靠新用户购买 积分 支付旧用户奖励</b> —— 满足这三条，闭环才算成立。</p>
+      <p>各方在履约与成本核算后均有合理收益，游客愿意复购，且<b>不依靠新用户购买积分来支付旧用户奖励</b> —— 满足这三条，闭环才算成立。</p>
     </div>
     <div class="note">技术底座：向往自由可信记录（联盟链），已落地上海中心、徐州文旅票根、南京西路街区、七宝古镇、静安寺等场景。旅豆发行受权益预算约束，不无限增发。</div>`;
 }
@@ -7408,7 +7408,7 @@ function settingsBodyHtml(){
     <div class="menu-group">
       <div class="mg-title">关于</div>
       <div class="row" onclick="pushAboutPage()"><div class="ric">${ic('i-doc')}</div><div class="rt"><b>关于向往的自由</b><span>版本 · 主体 · 合规说明</span></div><div class="arr">${ic('i-arrow')}</div></div>
-      <div class="row" onclick="switchIdentity()"><div class="ric">${ic('i-users')}</div><div class="rt"><b>切换身份</b><span>三端共用同一 Travel ID，可随时切换</span></div><div class="arr">${ic('i-arrow')}</div></div>
+      <div class="row" onclick="switchIdentity()"><div class="ric">${ic('i-users')}</div><div class="rt"><b>切换身份</b><span>四类演示角色共用同一 Travel ID，可切换查看</span></div><div class="arr">${ic('i-arrow')}</div></div>
     </div>`;
 }
 /** 设置项真实持久化：写入 DB.settings 并原地重绘，开关态可见 */
@@ -7443,7 +7443,7 @@ function pushAboutPage(){
   const RISKS = [
     ['积分发行超过可承担成本','建立预算及负债监控'],
     ['多级推广服务商激励异化','只对真实服务和有效交易付费'],
-    ['积分 经济脱离旅游收入','隔离国内会员积分与境外可交易资产'],
+    ['积分经济脱离旅游收入','隔离国内会员积分与境外可交易资产'],
     ['线下数据真实性不足','订单、动态核销码、商家确认与异常检测联合验证'],
     ['跨城市履约失控','标准化准入、服务质量、投诉与资金对账'],
     ['技术投入先于市场验证','先单城跑通交易和分账，再扩展可信能力'],
@@ -7452,13 +7452,13 @@ function pushAboutPage(){
     <div class="about-hero">
       <div class="logo-mark" style="margin:0 auto 12px"><svg width="32" height="32" viewBox="0 0 64 64"><path d="M20 44V24l12-8 12 8v20" fill="none" stroke="#e87722" stroke-width="5" stroke-linejoin="round"/></svg></div>
       <b class="ab-t">向往的自由</b>
-      <div class="ab-s">Tourism 可信数字 OS · 文旅生态操作系统</div>
+      <div class="ab-s">文旅生态操作系统</div>
       <div class="ab-v">演示原型 v1.4 · Build 20261019 · 上海璟宬文化发展有限公司</div>
     </div>
 
     <div class="info-block"><h4>${ic('i-doc')} 产品说明</h4>
-      <p>三端一体的文旅生态操作系统：游客端（A 层 · 消费与会员）、推广服务商端（B 层 · 贡献共同体）、商户端（履约与供给）、平台运营端（经营与风控），共用同一 Travel ID 数字身份。</p>
-      <p style="margin-top:8px">可信数字 负责确权、协作、记录与激励；真实旅游消费负责创造收入；平台通过提供服务获得利润 —— 不是单纯的旅游 App，也不是发币项目。</p>
+      <p>系统提供游客小程序、商户小程序和 PC 后台。原型按游客、推广服务商、商户和平台运营四类角色展示消费、推广、履约与经营能力，统一使用 Travel ID。</p>
+      <p style="margin-top:8px">可信数字底座负责确权、协作、记录与激励；真实旅游消费负责创造收入；平台通过提供服务获得利润 —— 不是单纯的旅游 App，也不是发币项目。</p>
     </div>
 
     <div class="sec-title">国内已跑通的四种闭环 <span class="more">方案 §6.3 对标</span></div>
@@ -7473,7 +7473,7 @@ function pushAboutPage(){
     </div>
 
     <div class="info-block"><h4>${ic('i-shield')} 业务铁律</h4>
-      <p>旅豆为向往自由可信记录发行的可信权益凭证，预算驱动发行；境内旅豆与境外 Voyage 权益积分 完全隔离，境外由独立主体以稳定币 + 法币运营。城市合伙人只对真实服务和有效交易计酬。本原型数据均为演示示例。</p>
+      <p>旅豆为向往自由可信记录发行的可信权益凭证，预算驱动发行；境内旅豆与境外 Voyage 权益积分完全隔离，境外收付由当地独立主体运营。城市合伙人只对真实服务和有效交易计酬。本原型数据均为演示示例。</p>
     </div>
 
     <div class="sec-title">经营指标口径 <span class="more">方案 §14</span></div>
@@ -7497,14 +7497,14 @@ function pushAboutPage(){
     <div class="info-block"><h4>${ic('i-store')} 运营主体</h4>
       <p>上海璟宬文化发展有限公司（演示）· 合作旅行社作为收款主体，预收资金符合旅游行业监管要求。</p>
     </div>
-    <div class="note">以上结构、指标与风险清单均取自《「向往的自由」可信数字 文旅生态商业与技术总体方案》，经济数字为示例假设，不代表已验证经营数据。Slogan：世界就是我的游乐场。</div>`;
+    <div class="note">以上结构、指标与风险清单均取自《「向往的自由」可信数字文旅生态商业与技术总体方案》，经济数字为示例假设，不代表已验证经营数据。Slogan：世界就是我的游乐场。</div>`;
   return push('关于', html, {});
 }
 </script>
 
 <script>
 /* =====================================================
-   推广服务商端（B 层 · 贡献经济共同体）
+   推广服务商（B 层 · 贡献经济共同体）
 ===================================================== */
 VIEWS.partner = {
   earn(){
@@ -7759,7 +7759,7 @@ function qrSvg(seed){
   return '<svg viewBox="0 0 110 110" style="width:100%;height:100%"><g fill="#1a2233">'+cells+'</g>'+eye(0,0)+eye(80,0)+eye(0,80)+'</svg>';
 }
 
-/* ===== 推广服务商端子页面 ===== */
+/* ===== 推广服务商子页面 ===== */
 function pushEarnDetailPage(){
   const html = `
     <div class="sec-title" style="padding-top:16px">月度账单</div>
@@ -8756,7 +8756,7 @@ function openCollabSheet(){
 
 <script>
 /* =====================================================
-   平台运营端（管理舱 · 经营与风控）
+   平台运营（管理舱 · 经营与风控）
 ===================================================== */
 VIEWS.admin = {
   dash(){
@@ -8908,7 +8908,7 @@ VIEWS.admin = {
     </div>
     <div class="eco-entry" onclick="push可信数字Page()">
       <div class="ee-ic" style="background:#e8f0f7;color:#2f6f9f">${ic('i-chain')}</div>
-      <div class="ee-b"><b>可信数字 数字底座</b><span>Travel ID 确权 · 旅豆可信凭证 · 贡献可信记录 · 境内外隔离</span></div>
+      <div class="ee-b"><b>可信数字底座</b><span>Travel ID 确权 · 旅豆可信凭证 · 贡献可信记录 · 境内外隔离</span></div>
       <div class="ee-a">${ic('i-arrow')}</div>
     </div>
     <div class="eco-entry" onclick="pushNftOpsPage()">
@@ -9242,9 +9242,9 @@ const ECO_LAYERS = [
     c:'#e87722', c2:'#f5a623', jump:"setEnd('tourist')", jl:'进游客端' },
   { k:'B', n:'贡献经济共同体', role:'商家、创作者、推广服务商协作与价值分配',
     d:'商家出供给、创作者出内容、推广服务商出渠道，按可核验订单与合同分配收益。',
-    c:'#2f6f9f', c2:'#5ba8c9', jump:"setEnd('partner')", jl:'进推广服务商端' },
-  { k:'C', n:'全球 可信数字 网络', role:'跨区域身份互认 · 权益互通 · 跨境协作',
-    d:'数字身份凭证 互认、权益跨平台核销、跨境商家订单与对账，境外独立闭环。',
+    c:'#2f6f9f', c2:'#5ba8c9', jump:"setEnd('partner')", jl:'查看推广服务商工作台' },
+  { k:'C', n:'全球可信数字网络', role:'跨区域身份互认 · 权益互通 · 跨境协作',
+    d:'数字身份凭证互认、权益跨平台核销、跨境商家订单与对账，境外独立闭环。',
     c:'#0f766e', c2:'#14b8a6', jump:"pushOverseaPage()", jl:'看境外模型' },
 ];
 const ECO_ENGINES = [
@@ -9272,7 +9272,7 @@ const ECO_STAGES = [
   { n:'2. 会员权益闭环', d:'Travel ID、积分、会员、Travel Pass', g:'权益成本可预测、可核销、可追踪', st:'已跑通' },
   { n:'3. 贡献经济闭环', d:'创作者归因、推广服务商佣金、反作弊', g:'贡献可核验，分润可审计', st:'建设中' },
   { n:'4. 多城市网络', d:'多租户、商家 API、跨城权益', g:'新城市可独立经营和核算', st:'规划' },
-  { n:'5. 国际 可信数字 网络', d:'数字身份凭证 互认、境外合作、链适配', g:'完成目标市场法律、支付及数据合规评估', st:'规划' },
+  { n:'5. 国际可信数字网络', d:'数字身份凭证互认、境外合作、链适配', g:'完成目标市场法律、支付及数据合规评估', st:'规划' },
 ];
 /* ===== 我的角色 · 生态位（v1.12） =====
    三端共用一个入口，但内容按角色完全不同：你在第几环 / 能做什么 / 钱怎么算 / 不做什么。
@@ -9425,10 +9425,10 @@ function pushEcoPage(){
   const html = `
     <div class="eco-hero">
       <div class="eh-tag">战略定位 · D 模式</div>
-      <div class="eh-title">Tourism 可信数字 OS</div>
-      <div class="eh-sub">文旅生态操作系统 —— 不是旅游 App，也不是发币项目</div>
+      <div class="eh-title">文旅生态操作系统</div>
+      <div class="eh-sub">连接旅行消费、商户履约和平台经营</div>
       <div class="eh-hr"></div>
-      <div class="eh-rule">可信数字 负责<b>确权、协作、记录与激励</b>；真实旅游消费负责<b>创造收入</b>；平台通过<b>提供服务</b>获得利润。</div>
+      <div class="eh-rule">可信数字底座负责<b>确权、协作、记录与激励</b>；真实旅游消费负责<b>创造收入</b>；平台通过<b>提供服务</b>获得利润。</div>
     </div>
 
     <div class="sec-title">每个用户关联三个权益对象 <span class="more">方案 §3</span></div>
@@ -9464,7 +9464,7 @@ function pushEcoPage(){
       </div>
     </div>
 
-    <div class="sec-title">可信数字 数字底座 <span class="more">确权 · 记录 · 激励</span></div>
+    <div class="sec-title">可信数字底座 <span class="more">确权 · 记录 · 激励</span></div>
     <div class="eco-entry" onclick="push可信数字Page()">
       <div class="ee-ic" style="background:#e8f0f7;color:#2f6f9f">${ic('i-chain')}</div>
       <div class="ee-b"><b>Travel ID · 可信权益 · 贡献可信记录</b><span>数字身份 身份 / 旅豆凭证 / CS 贡献确权 / 境内外隔离</span></div>
@@ -9528,7 +9528,7 @@ function pushEcoPage(){
       ${[['文旅经营','商品销售、主题游、履约','资质、合同、退款'],
          ['平台技术','软件、数据、积分、凭证','信息安全、隐私、审计'],
          ['生态运营','商家、创作者、推广服务商','佣金合同、税务、反舞弊'],
-         ['境外业务','国际合作与当地服务','属地支付、虚拟资产、税务和消费者保护']].map(function(r){ return `
+         ['境外业务','国际合作与当地服务','属地支付、税务和消费者保护']].map(function(r){ return `
         <div class="resp-row"><b>${r[0]}</b><span class="rs-d">${r[1]}</span><span class="rs-k">${ic('i-shield')} ${r[2]}</span></div>`; }).join('')}
     </div>
     <div class="resp-note">不必从一开始成立四家独立公司；可先实现业务、账务和权限隔离，待许可和规模需要再考虑法律实体拆分。</div>
@@ -9543,7 +9543,7 @@ function pushEcoPage(){
       <div class="moat"><b>商家网络壁垒</b><span>供给密度与履约质量</span></div>
       <div class="moat"><b>数字权益与数据壁垒</b><span>权益记录与用户资产</span></div>
     </div>
-    <div class="note">可信数字 只在闭环能于多个城市独立成立时，才从营销概念转化为文旅产业基础设施。以上结构、引擎与技术选型均取自《「向往的自由」可信数字 文旅生态商业与技术总体方案》，经济数字为示例假设。</div>`;
+    <div class="note">当经营闭环能在多个城市独立运行时，可信数字底座才具备跨城市复用的条件。以上结构、引擎与技术选型均取自《「向往的自由」可信数字文旅生态商业与技术总体方案》，经济数字为示例假设。</div>`;
   return push('生态架构', html, {});
 }
 
@@ -9561,7 +9561,7 @@ function pushOverseaPage(){
   const html = `
     <div class="ov-hero">
       <div class="ov-tag">C 层 · 境外业务</div>
-      <div class="ov-t">境外做外国人生意：稳定币 + 法币</div>
+      <div class="ov-t">境外业务与属地结算</div>
       <div class="ov-d">两边用正常的 B2B 采购协议连接。境内做境内生意（人民币 + 向往自由可信记录旅豆），境内外严格隔离。</div>
     </div>
     <div class="sec-title">安全区准入 · 六项必须同时满足 <span class="more">方案 §7</span></div>
@@ -9570,11 +9570,11 @@ function pushOverseaPage(){
     <div class="sec-title">境内外隔离</div>
     <div class="info-block" style="margin:0 14px 12px">
       <div class="kvs"><span>境内资产</span><b>人民币 + 向往自由可信记录旅豆（可信权益凭证）</b></div>
-      <div class="kvs"><span>境外资产</span><b>Voyage 权益积分（EVM 链）+ 稳定币 / 法币结算，独立主体独立账</b></div>
+      <div class="kvs"><span>境外资产</span><b>Voyage 权益积分与境外结算由独立主体管理并单独记账</b></div>
       <div class="kvs"><span>连接方式</span><b>仅 B2B 采购协议，不做用户级资产互通</b></div>
       <div class="kvs"><span>共同底线</span><b>只对真实服务与有效交易计酬 · 不资金池</b></div>
     </div>
-    <div class="note">境外公司收稳定币须六项条件同时满足，缺一不可。任一条不满足，该市场不进入 —— 这是准入闸门，不是评分项。</div>`;
+    <div class="note">境外业务须同时满足六项准入条件，缺一不可。任一条不满足，该市场不进入 —— 这是准入闸门，不是评分项。</div>`;
   return push('境外业务', html, {});
 }
 function ovListHtml(){
@@ -9667,7 +9667,7 @@ function pushDemoCasePage(){
     <div class="judge-wrap">
       ${[['各方均有合理收益','履约与成本核算后，四方的收益都能站住'],
          ['游客愿意复购','体验本身值得回头，而不是靠补贴拉动'],
-         ['不靠新钱付旧账','不依靠新用户购买 积分 支付旧用户奖励']].map(function(x,i){ return `
+         ['不靠新钱付旧账','不依靠新用户购买积分来支付旧用户奖励']].map(function(x,i){ return `
         <div class="judge-row"><div class="jg-n">${i+1}</div><div class="jg-b"><b>${x[0]}</b><span>${x[1]}</span></div></div>`; }).join('')}
     </div>
     <div class="note">示范场景取自方案 §11。金额为单位经济模型示例，实际分账比例以商家协议与创作者合同为准；积分部分受权益预算约束，不超发。</div>`;
@@ -9947,7 +9947,7 @@ function gwKey(){
   engMark('gateway','key');
   const cn = DB.gateway.keys.filter(k=>k.q==='境内' && k.st==='启用').length;
   const hk = DB.gateway.keys.filter(k=>k.q==='境外' && k.st==='启用').length;
-  engLog('gateway','权限盘点：境内启用 '+cn+' 个密钥（旅豆通道），境外启用 '+hk+' 个（Voyage 权益积分 通道），两套账本物理隔离');
+  engLog('gateway','权限盘点：境内启用 '+cn+' 个密钥（旅豆通道），境外启用 '+hk+' 个（Voyage 权益积分通道），两套账本物理隔离');
   toast('密钥与权限已盘点 · 境内外双通道');
   repaintEngine('gateway');
 }
@@ -10123,7 +10123,7 @@ function gwBody(){
   return `
     <div class="egm-formula">
       <b>双通道隔离</b>（方案 §7 境内外物理隔离）
-      <span class="fx">境内 → 向往自由可信记录 · 旅豆账本　｜　境外 → EVM 链 · Voyage 权益积分</span>
+      <span class="fx">境内 → 向往自由可信记录 · 旅豆账本　｜　境外 → 独立账本 · Voyage 权益积分</span>
       开放接口 <b>${DB.gateway.apis.length}</b> 个 · 密钥 <b>${DB.gateway.keys.filter(k=>k.st==='启用').length}</b> 个启用 · 境内外账本互不交叉。
     </div>
     <div class="egm-card">
@@ -10809,7 +10809,7 @@ function rightsHtml(){
   <div class="spl-real" style="margin:0 14px 10px">
     <div class="rh">${ic('i-calc')} 实绩已回写到「一单 ¥298 怎么分」</div>
     <div class="rd">${splitRealNote().text}。分账页的「权益预留」行显示实绩单均 <b>¥${splitRowsReal().rows.filter(function(w){return w.g==='pool';})[0].v.toFixed(2)}</b>，「留存毛利」行同步扣减 <b>¥${Math.abs(splitRowsReal().gap).toFixed(2)}</b>，五口径合计恒为 ¥298 —— 权益超支不会凭空消失，只会从平台留存里扣。</div>
-    <div class="spl-row-real"><span>推广服务商端 / 运营端两处分账视图同源</span><b>合计 ¥298.0</b></div>
+    <div class="spl-row-real"><span>推广服务商与平台运营的分账视图同源</span><b>合计 ¥298.0</b></div>
   </div>
   <div class="note" style="padding:0 16px 12px">权益成本不是「白送的营销费用」，而是<b>有协议单价的应付账款</b>：先有核销、再有对账、最后才入分账。池子不够就走超支审批调剂或协议调价，绝不靠超发旅豆填坑——这是积分与权益两条账必须分开的原因。</div>
 
