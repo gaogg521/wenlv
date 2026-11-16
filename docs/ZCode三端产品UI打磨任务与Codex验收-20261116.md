@@ -124,6 +124,7 @@
 | `node test/partner-identity.mjs`（超管预览契约更新） | 隔离库 | 7/7 |
 | `node test/polish-walk-mini-a.mjs` | devtools 9421 → **API_BASE=http://127.0.0.1:18251** | **14/14**（截图 `automator-shots-polish/`，不入库） |
 | `node test/polish-walk-mini-b.mjs` | devtools 9422 → 18251（走查期间临时借用 A 端测试号 AppID，`project.config.json` 已还原不入库） | **9/9** |
+| `node test/polish-walk-mini-a-sup.mjs`（补充走查，复验后新增） | devtools 9421 → 18251 | **3/3**（双地点/发笔记返回保留/试算失败+恢复） |
 
 > 重现走查：先 `node test/polish-walk-seed.mjs`（隔离库夹具：3 篇公开稿/景区/今日出发订单/异常单/带调整结算单），再跑两个 walk 脚本。
 
@@ -141,8 +142,12 @@
 | C-01 | `c01-guide-restored` | 文字/样式恢复；失效配图清引用并提示；不误发 |
 | C-02 | `c02-supply-paged`/`c02-supply-batch-entry` | 首屏一页+总数；批量入口店长可见 |
 | C-03 | `c03-fund-coverage` | 覆盖率 43.75%（28/64）+受影响商品清单+缺成本毛利空值 |
-| C-04 | `c04-partnerdash-preview`/`c04-city-role-scope` | 超管只读预览横幅；城市角色全域科目=不在本角色范围、有权无待办=已清空 |
-| 窄屏/状态 | 模拟器均为 iPhone 窄屏宽度；卡片长标题两行省略；状态 pill 文字+颜色双通道 | 文案视觉走查 |
+| C-04 | `c04-partnerdash-preview`/`c04-city-role-scope`/`b3-finance-role-coverage` | 超管只读预览横幅；城市角色全域科目=不在本角色范围、有权无待办=已清空；**财务角色**落资金工作台（homeModule 按职责下发）且经营看板/覆盖率 42.42%（全域口径）可见、菜单按财务裁剪 |
+| B-01 失败态 | `b1-quote-failure`/`b1-quote-recovered` | **制造一次试算失败**（通道断网）：明细与底栏出现失败反馈；恢复后点重试金额恢复——失败可恢复闭环 |
+| A-01 双地点 | `a1-home-two-places` | 首页作品卡地点行覆盖两个地点（景区名「朱家角走查景区」+ 线路名「朱家角剧本游 · 江南谜案」） |
+| A-04 发笔记返回 | `a3-square-after-create` | 点「去发布我的笔记」进 compose 返回后，广场筛选（#朱家角漫步）与已加载内容保留 |
+| 窄屏/状态 | 模拟器均为 iPhone 窄屏宽度；卡片长标题两行省略；状态 pill 文字+颜色双通道；PC Esc 关抽屉+焦点落抽屉按钮 | 文案视觉与键盘走查 |
+| 录屏说明 | 模拟器无录制通道（automator 仅静态截图）；动态行为以**多帧截图序列**呈现（失败态→恢复态、返回前后、下钻前后等成对截图） | 以序列截图替代录屏的证据口径 |
 
 ### 7.4 接口变化清单
 
