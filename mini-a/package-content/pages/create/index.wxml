@@ -4,6 +4,7 @@
 </view>
 <view class="card">
   <button class="btn compose-btn" bindtap="goCompose">＋ 发布新笔记</button>
+  <button class="btn ghost" bindtap="goGuide">做攻略图</button>
   <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0" bindtap="goSquare">
     <text>旅行笔记广场</text><text class="v">看看大家去了哪 ›</text>
   </view>

@@ -124,6 +124,7 @@ Page({
 
   goNote(e) { const n = this.data.notes.find(n => n.id === e.currentTarget.dataset.id); if (n && n.status !== 2) return wx.showToast({ title: n.statusText, icon: 'none' }); wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   goCompose() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
+  goGuide() { wx.navigateTo({ url: '/package-content/pages/compose/index?guide=1' }) },
   editNote(e) {
     if (this.data.busy) return
     const n = this.data.notes.find(n => n.id === e.currentTarget.dataset.id)
