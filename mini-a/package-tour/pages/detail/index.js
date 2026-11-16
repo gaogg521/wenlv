@@ -6,7 +6,7 @@ const CITY = { '310118': '上海·青浦', '330523': '湖州·安吉', '320508':
 
 Page({
   data: { extra: { tags: [], suitable: '', itinerary: [] }, rules: rulesOf({}), p: null, sessions: [], sessPreview: [], minGo: 0, cityName: '', loading: true, error: '',
-    gallery: [], gIdx: 0, illustrated: false, rich: { intro: '', highlights: [], includes: [], excludes: [] }, rv: { avg: 0, count: 0, list: [] } },
+    gallery: [], gIdx: 0, illustrated: false, lineNotes: [], scenicNotes: [], rich: { intro: '', highlights: [], includes: [], excludes: [] }, rv: { avg: 0, count: 0, list: [] } },
   async onLoad(q) {
     this.pid = q.id
     if(q.scene)try{const r=await require('../../../utils/promo-source')(q);this.pid=r.id}catch(e){wx.removeStorageSync('promoScene');wx.showModal({title:'推广来源已失效',content:e.msg||'请重新获取有效推广码',showCancel:false});if(!this.pid)return this.setData({loading:false,error:e.msg||'推广码无效'})}
@@ -63,8 +63,28 @@ Page({
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv,
       })
       api.getReviews(this.pid).then((rv) => this.setData({ rv })).catch(() => {})
+      // A2：线路关联笔记（related_product_id=pid），不足 3 条用「同景区笔记」补充（防重复、显式区分）
+      this.fetchNotes(this.pid, Number(d.scenic_id) || (d.scenicCard && d.scenicCard.id) || 0)
     }).catch(e => this.setData({ error: e.msg || '线路加载失败，请重试', loading: false }))
   },
+  // A2 线路笔记：feed?product= 线路关联；补充块 feed?scenic= 同景区（排除已展示，避免同一篇出现两次）
+  fetchNotes(pid, scenicId) {
+    const mapCard = (x) => ({ id: x.id, title: x.title || '无标题笔记', cover: x.cover || '', video: !!x.hasVideo,
+      excerpt: x.excerpt || (x.title || '').slice(0, 30), scenicName: x.scenicName || '' })
+    api.request('/c/notes/feed?product=' + pid + '&pageSize=3').then((d) => {
+      const lineNotes = (d.items || []).slice(0, 3).map(mapCard)
+      const patch = { lineNotes }
+      const need = 3 - lineNotes.length
+      if (need > 0 && scenicId) {
+        api.request('/c/notes/feed?scenic=' + scenicId + '&pageSize=6').then((d2) => {
+          const seen = new Set(lineNotes.map((n) => n.id))
+          patch.scenicNotes = (d2.items || []).filter((x) => !seen.has(x.id)).slice(0, need).map(mapCard)
+          this.setData(patch)
+        }).catch(() => this.setData(patch))
+      } else { patch.scenicNotes = []; this.setData(patch) }
+    }).catch(() => this.setData({ lineNotes: [], scenicNotes: [] }))
+  },
+  goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   retry() { this.load() },
   navMeeting() { place.openGeo(this.data.extra.meetingGeo, '集合点', this.data.p.meeting_point) },
   goPlace(e) { wx.navigateTo({ url: `/package-tour/pages/place/index?kind=${e.currentTarget.dataset.kind}&id=${e.currentTarget.dataset.id}` }) },

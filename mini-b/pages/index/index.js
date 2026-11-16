@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const { day, periodQuery } = require('../../utils/period')
 Page({
-  data: { wb: null, merchant: null, err: '', greet: '', stats: null, bars: [], weekTotal: 0, loading: true, periodIndex: 1, periodNames: ['今日','近7日','近30日','指定日期'], customDate: day(), today: day(), chartWidth: 560 },
+  data: { wb: null, merchant: null, err: '', greet: '', stats: null, bars: [], weekTotal: 0, loading: true, periodIndex: 1, periodNames: ['今日','近7日','近30日','指定日期'], customDate: day(), today: day(), chartWidth: 560, todoItems: [] },
   onShow() {
     const now = new Date(), h = now.getHours(), role = Number(getApp().globalData.role) || 0
     this.setData({ greet: h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好',
@@ -13,7 +13,7 @@ Page({
     const query = periodQuery(this.data.periodIndex,this.data.customDate)
     this.setData({periodLabel:this.data.periodIndex === 3 ? this.data.customDate : this.data.periodNames[this.data.periodIndex]})
     api.request('/m/site').then((s) => { if (requestId===this._requestId) this.setData({ notice: s.notice || '' }) }).catch(() => {})
-    api.request('/m/workbench?'+query).then((wb) => { if (requestId===this._requestId) this.setData({ wb, wbHint: wb && wb.pendingVerify ? (wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码') : '有游客到店时，可从上方进入扫码核销', err: '', loading: false }) }).catch((e) => { if (requestId===this._requestId) this.setData({ wb: null, err: e.msg || '数据暂不可用，请重试', loading: false }) })
+    api.request('/m/workbench?'+query).then((wb) => { if (requestId===this._requestId) this.setData({ wb, todoItems: this.todoItems(wb, role), wbHint: wb && wb.pendingVerify ? (wb.pendingVerify + ' 张凭证待核销，到店后请引导游客出示动态码') : '有游客到店时，可从上方进入扫码核销', err: '', loading: false }) }).catch((e) => { if (requestId===this._requestId) this.setData({ wb: null, err: e.msg || '数据暂不可用，请重试', loading: false }) })
     api.request('/m/stats?'+query).then((st) => {
       if (requestId!==this._requestId) return
       const max = Math.max(...st.week.map((w) => w.orders), 1)
@@ -23,6 +23,25 @@ Page({
     }).catch(() => {})
   },
   retry() { this.onShow() },
+  // B2 今日待办：口径与下钻列表一致；核销员仅见待核销（权限以现有配置为准）
+  todoItems(wb, role) {
+    const t = (wb && wb.todos) || {}
+    const items = [{ k: 'verify', label: '待核销', cap: '在店待核销凭证', v: Number(t.verify) || 0 }]
+    if (role >= 2) {
+      items.unshift({ k: 'arrivals', label: '待接待', cap: '今日出发待服务订单', v: Number(t.arrivals) || 0 })
+      items.push({ k: 'closing', label: '临近截止', cap: '7日内出发在售团期', v: Number(t.closing) || 0 },
+        { k: 'abnormal', label: '异常待处理', cap: '退款申请中订单', v: Number(t.abnormal) || 0 })
+    }
+    return items
+  },
+  // 下钻：待接待/异常→订单页（带筛选预设）；临近截止→库存页（未来7天）；待核销→核销页
+  goTodo(e) {
+    const k = e.currentTarget.dataset.k
+    if (k === 'verify') return this.goVerify()
+    if (k === 'arrivals') { wx.setStorageSync('ordersPreset', { status: 'waiting', depart: this.data.today }); wx.showToast({ title: '已按今日出发筛选', icon: 'none' }); return this.goOrders() }
+    if (k === 'abnormal') { wx.setStorageSync('ordersPreset', { status: 'refund' }); return this.goOrders() }
+    if (k === 'closing') { wx.setStorageSync('supplyPreset', { rangeIndex: 1 }); wx.showToast({ title: '已按未来7天筛选', icon: 'none' }); return this.goSupply() }
+  },
   filterPeriod(e) { this.setData({periodIndex:Number(e.detail.value)}); this.onShow() },
   selectDate(e) { this.setData({customDate:e.detail.value}); this.onShow() },
   toggleNotice() { this.setData({ noticeExpanded: !this.data.noticeExpanded }) },

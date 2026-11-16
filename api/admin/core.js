@@ -219,6 +219,11 @@ async function boot() {
   }
   const requested = location.hash.slice(1).split('?')[0]
   const home = ADMIN_CAPABILITIES.homeModule
+  // C-04：主体方经营（partnerdash）仅商户/景区主体角色——其他角色（含超管）直敲 hash 时明确告知去向，
+  // 不再只收到不可用提示；入口在侧栏本就不渲染（modules.mjs 仅主体方默认集合含 partnerdash）
+  if (requested === 'partnerdash' && !keys.includes('partnerdash')) {
+    toast('主体方经营仅对商户/景区主体方账号开放，已转到你的角色首页', true)
+  }
   const destination = keys.includes(requested) ? requested : (home && keys.includes(home) ? home : keys[0])
   // URL 与实际页面必须一致：请求页无效/无权限时重写 hash（不能保留 #dash 却显示别的页面），
   // 有效时保留完整 hash（含筛选查询串）

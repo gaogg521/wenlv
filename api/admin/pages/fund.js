@@ -26,7 +26,8 @@ async function fund() {
     </div>
     <div id="econBoard">${skel(3)}</div>
     <p class="td-sub" style="margin-top:8px">"已知费用后收益"只扣减已接入的推广佣金；未含税费、工资、房租及全部期间费用，不冒充公司最终净利润；留存金额/GMV 均不等于平台净利润。汇总毛利率＝合计毛利÷合计同口径净销售额，不平均各单毛利率。</p>
-  </div>` : ''}
+  </div>` : `<div class="card"><div class="card-head"><h2>经营看板 · 商品毛利与已知费用后收益</h2></div>
+    <p class="td-sub">不在本角色范围——经营看板（成本/毛利口径）仅对超级管理员、财务、运营开放；如需科目数据请联系超级管理员调整角色权限。</p></div>`}
   <div class="card">
     <div class="card-head"><h2>对账口径说明</h2></div>
     <ul class="tl">
@@ -56,13 +57,23 @@ async function economicsBoard() {
       <td class="num">${r.orders} / ${r.qty}</td><td class="num">${fen(r.netSalesFen)}</td><td class="num">${num(r.costFen)}</td>
       <td class="num">${r.profitFen != null ? '<b style="color:' + (r.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + fen(r.profitFen) + '</b>' : '—'}${r.negativeProfit ? ' <span class="pill warn">含负毛利</span>' : ''}</td>
       <td class="num" style="white-space:nowrap">${r.marginPct != null ? r.marginPct.toFixed(2) + '%' : '—'}</td></tr>`).join('')}</tbody></table>` : `<p class="td-sub">该维度暂无订单</p>`
+  // C-03 成本覆盖率：缺成本毛利一律空值（不按0计）；覆盖比例 + 主要受影响商品清单可下钻
+  const cov = d.coverage || null
+  const covHtml = cov ? `<div class="pstat"><div class="l">成本覆盖率</div><div class="v">${cov.coveredPct != null ? cov.coveredPct.toFixed(2) + '%' : '—'}</div><div class="s">${cov.covered}/${cov.orders} 单已维护成本${cov.missing ? ' · 缺 ' + cov.missing + ' 单' : ' · 全覆盖'}</div></div>` : ''
+  const missRows = (d.missingProducts || []).length ? `<div class="rv-box"><div class="rv-h">成本未维护 · 主要受影响商品（按缺失单数）</div>
+    <table><thead><tr><th>商品</th><th>缺成本订单</th><th>净销售额</th><th>操作</th></tr></thead><tbody>
+    ${d.missingProducts.map((m) => `<tr><td class="td-main">${esc(m.title || ('产品#' + m.key))}</td><td class="num">${m.missing}</td><td class="num">${fen(m.netSalesFen)}</td>
+      <td><button class="btn ghost sm" onclick="go('products')">查商品与成本 →</button></td></tr>`).join('')}</tbody></table>
+    <div class="td-sub">毛利在成本维护前一律空值，不按 0 计；维护入口：「商品与团期」→ 商品成本与供给。</div></div>` : ''
   el.innerHTML = `
   <div class="pstats">
     ${econStat('净销售额', num(d.netSalesFen), d.orders + ' 单 · ' + d.qty + ' 人 · ' + esc(d.caliber))}
     ${econStat('直接成本', num(d.costFen), d.costMissing ? d.costMissing + ' 单成本未维护（不按0计）' : '下单快照合计')}
     ${econStat('商品经营毛利', d.profitFen != null ? num(d.profitFen) : '—', d.marginPct != null ? '毛利率 ' + d.marginPct.toFixed(2) + '%' : '毛利率 —（净销售额为0或成本缺失）')}
     ${econStat('已知费用后收益', d.operatingIncomeFen != null ? num(d.operatingIncomeFen) : '—', '扣推广佣金 ' + fen(d.commissionFen) + '；未含税费/工资/房租')}
+    ${covHtml}
   </div>
+  ${missRows}
   <p class="td-sub">全额退款 ${d.refunedOrders} 单（冲减现金 ${fen(d.refundCashFen)}，实退以退款单为准）${d.pendingOrders ? ' · 另有 ' + d.pendingOrders + ' 单待支付/退款中未计入' : ''}${d.negativeProfit ? ' · 含 ' + d.negativeProfit + ' 单负毛利（保留并提示）' : ''} · 统计口径 ${esc(d.period.by)}，含税/未税与订单状态口径一致</p>
   <div class="rv-grid"><div><div class="rv-box"><div class="rv-h">按产品下钻（点单号看订单经营明细）</div>${dimRows(d.byProduct, '产品')}</div></div>
   <div><div class="rv-box"><div class="rv-h">按城市下钻</div>${dimRows(d.byCity, '城市')}</div></div></div>

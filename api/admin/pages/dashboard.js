@@ -202,9 +202,9 @@ function dxLive(k, ins) {
     <div class="dx-live-grid">
       ${todos.map(([key, l, ic, n, verb]) => `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`).join('')}
       <span class="dx-sep"></span>
-      <button class="dx-stat red${k.alerts ? ' has' : ''}" onclick="go('risk')"><span class="dx-todo-l"><i>${DX_ICON.alert}</i>待处理告警</span><b>${k.globalScope ? k.alerts : '—'}</b><span class="dx-todo-go">${k.globalScope ? (k.alerts ? '去处置 →' : '一切正常') : '全域风控 · 仅总部'}</span></button>
+      <button class="dx-stat red${k.alerts ? ' has' : ''}" onclick="go('risk')"><span class="dx-todo-l"><i>${DX_ICON.alert}</i>待处理告警</span><b>${k.globalScope ? k.alerts : '—'}</b><span class="dx-todo-go">${k.globalScope ? (k.alerts ? '去处置 →' : '一切正常') : '不在本角色范围'}</span></button>
       <button class="dx-stat gold" onclick="go('budgets')"><span class="dx-todo-l"><i>${DX_ICON.bean}</i>旅豆预算池水位</span><b>${k.globalScope ? esc(k.budgetUsage) : '—'}</b>
-        ${isNaN(pool) ? '' : `<span class="dx-meter"><i style="width:${Math.min(Math.max(pool, 0.6), 100)}%"></i></span>`}<span class="dx-todo-go">${k.globalScope ? '累计已发放 ÷ 批次总额' : '全域科目 · 仅总部'}</span></button>
+        ${isNaN(pool) ? '' : `<span class="dx-meter"><i style="width:${Math.min(Math.max(pool, 0.6), 100)}%"></i></span>`}<span class="dx-todo-go">${k.globalScope ? '累计已发放 ÷ 批次总额' : '不在本角色范围'}</span></button>
     </div></section>`
 }
 
@@ -235,9 +235,9 @@ function dxTrendCard(k, c) {
 function dxTopCard(k, ins, c) {
   const tours = ins ? ins.topTours : [], maxG = Math.max(...tours.map((t) => Number(t.gmv)), 1), total = Number(k.gmv) * 100
   const medal = ['#d9a21b', '#9aa3ab', '#c27b43']
-  return `<section class="dx-card"><div class="dx-hd"><h3>热门主题游 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数</span></div>
+  return `<section class="dx-card"><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数 · 含品类（B3 口径：原「热门主题游」混入商城礼盒，现以品类区分）</span></div>
     ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
-        <span class="nm" title="${esc(t.title)}">${esc(t.title)}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
+        <span class="nm" title="${esc(t.title)}">${esc(t.title)}${t.cat ? ` <span class="pill s20" style="font-size:11px">${esc(CAT_CN[t.cat] || t.cat)}</span>` : ''}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
         <span class="trk"><i style="width:${Math.max((Number(t.gmv) / maxG) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单${total ? ' · 占 ' + ((Number(t.gmv) / total) * 100).toFixed(0) + '%' : ''}</span></li>`).join('')}</ol>`
       : emptyBox('该周期内暂无成交')}</section>`
 }
@@ -284,6 +284,12 @@ function dxMiniCard(wxd, c) {
     <div class="dx-mini-chart">${dxSpark(list.map((t) => t.visitPv), 320, 90, '#2f8f9d', 'dxMini', { top: 0.3 })}</div></section>`
 }
 
+// B3：最新订单时间显示——跨年带年份，当年内省略年份；口径=支付时间优先（服务端 sort=recent）
+function dxWhen(v) {
+  const str = String(v || '').replace(' ', 'T')
+  if (!str || str.slice(0, 4) === 'null') return '—'
+  return (str.slice(0, 4) === String(new Date().getFullYear()) ? str.slice(5, 16) : str.slice(0, 16)).replace('T', ' ')
+}
 function dxOrdersCard(recent) {
   return `<section class="dx-card"><div class="dx-hd"><h3>最新订单</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">最近 8 笔，不随统计周期变化</span>
     <span class="dx-right"><button class="btn ghost sm" onclick="go('orders')">全部订单 →</button></span></div>
@@ -291,7 +297,7 @@ function dxOrdersCard(recent) {
       ${recent.map((o) => `<tr style="cursor:pointer" onclick="orderDrawer('${escJs(o.order_no)}')">
         <td class="num">${esc(o.order_no)}</td><td class="td-main">${esc(o.title)}</td><td>${esc(o.nickname)}</td>
         <td class="money num">${fen(o.amount_pay)}</td><td><span class="pill s${o.status}">${ST[o.status]}</span></td>
-        <td class="td-sub">${esc(String(o.paid_at || o.created_at || '').slice(5, 16))}</td></tr>`).join('')}</tbody></table></div>` : emptyBox('还没有订单')}</section>`
+        <td class="td-sub">${esc(dxWhen(o.paid_at || o.created_at))}</td></tr>`).join('')}</tbody></table></div>` : emptyBox('还没有订单')}</section>`
 }
 
 /* ============ 驾驶舱入口 ============ */
@@ -309,7 +315,7 @@ async function dash() {
     const [k, ins, orders, wxd] = await Promise.all([
       api('GET', '/admin/dash/kpi?' + qs),
       api('GET', '/admin/dash/insights?' + qs).catch(() => null),
-      api('GET', '/admin/orders').catch(() => []),
+      api('GET', '/admin/orders?sort=recent').catch(() => []),
       ['super', 'ops', 'city_partner'].includes(ME?.role)
         ? api('GET', '/admin/wxdata/visit-trend?days=' + wxDays).catch(() => ({ mock: true, list: [] }))
         : Promise.resolve({ unavailable: true, list: [] }),

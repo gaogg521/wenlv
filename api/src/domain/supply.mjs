@@ -136,6 +136,11 @@ export function summarizeEconomics(rows, commissions = new Map()) {
     negativeProfit: v.negative,
   }))
   const hasMissing = total.costMissing > 0
+  // C-03 成本覆盖率：缺成本不按0计（V76 铁律），给出覆盖率与主要受影响商品（前端可从清单下钻到商品/订单）
+  const coveredOrders = total.orders - total.costMissing
+  const missingProducts = finish(byProduct).filter((p) => p.costMissing > 0)
+    .sort((a, b) => b.costMissing - a.costMissing || b.netSalesFen - a.netSalesFen).slice(0, 10)
+    .map((p) => ({ key: p.key, missing: p.costMissing, orders: p.orders, netSalesFen: p.netSalesFen }))
   return {
     caliber: 'v1-实际成交/退款冲减-快照复算',
     orders: total.orders, qty: total.qty,
@@ -146,6 +151,10 @@ export function summarizeEconomics(rows, commissions = new Map()) {
     negativeProfit: total.negative, refunedOrders, refundCashFen: refundCash + partialCash, partialRefunds: partialCount,
     commissionFen: commissionTotal,
     operatingIncomeFen: hasMissing ? null : total.profit - commissionTotal,
+    coverage: { orders: total.orders, covered: coveredOrders, missing: total.costMissing,
+      coveredPct: total.orders <= 0 ? null : Math.round(coveredOrders / total.orders * 10000) / 100,
+      note: '成本覆盖率=已维护成本订单÷周期内已支付订单；缺成本毛利一律空值，不按0计' },
+    missingProducts,
     confirmed: { status: 'not_available', note: '确认成本/应付/实付随B04结算单元接入，未接入前一律未确认' },
     byProduct: finish(byProduct), byCity: finish(byCity),
   }

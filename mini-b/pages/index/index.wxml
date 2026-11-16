@@ -27,6 +27,16 @@
     <view class="error-panel" wx:else><view>{{err}}</view><button bindtap="retry">重新加载</button></view>
     <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
     <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
+    <view class="todo-panel" wx:if="{{wb && todoItems.length}}">
+      <view class="todo-head"><text>今日待办</text><text class="todo-note">口径与下钻列表一致 · 仅本店</text></view>
+      <view class="todo-grid">
+        <view class="todo-item" wx:for="{{todoItems}}" wx:key="k" bindtap="goTodo" data-k="{{item.k}}">
+          <text class="todo-num {{item.v ? 'todo-hot' : ''}}">{{item.v ? item.v : '无'}}</text>
+          <text class="todo-label">{{item.label}}</text>
+          <text class="todo-cap">{{item.cap}}</text>
+        </view>
+      </view>
+    </view>
     <view class="section-heading services-heading"><text>门店日常</text><text class="section-note">把接待安排得井井有条</text></view>
     <view class="service-grid">
       <button class="service-order" wx:if="{{role >= 2}}" bindtap="goOrders"><view class="service-icon">☰</view><view>门店订单</view><text>跟进预约与游客安排</text><view class="service-arrow">↗</view></button>

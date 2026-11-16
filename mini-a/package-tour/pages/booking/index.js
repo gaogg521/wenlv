@@ -45,6 +45,29 @@ Page({
     const p = this.data.p || {}
     return { title: p.title || '向往的自由 · 主题游', query: 'id=' + this.pid + (this.myScene ? '&scene=' + this.myScene : '') }
   },
+  // B1：实付解释文案——底栏「最主要优惠原因」与明细「应付合计」的算式串，全部 JS 预计算（wxml 铁律）
+  payExplain({ discountYuan, deductYuan, insYuan, goodsYuan, payYuan, hasIns }) {
+    const reasons = []
+    if (discountYuan > 0) reasons.push('自由豆已减 ¥' + discountYuan)
+    if (deductYuan > 0) reasons.push('旅豆已抵 ¥' + deductYuan)
+    const payReason = reasons.slice(0, 2).join(' · ')
+    const parts = ['活动费 ¥' + goodsYuan]
+    if (discountYuan > 0) parts.push('− 自由豆 ¥' + discountYuan)
+    if (deductYuan > 0) parts.push('− 旅豆 ¥' + deductYuan)
+    if (hasIns && insYuan > 0) parts.push('+ 保险 ¥' + insYuan)
+    return { payReason, payCalcText: parts.join(' ') + ' ＝ 应付 ¥' + payYuan }
+  },
+  // B1：实付变动高亮提示（金额变化短脉冲，不打断操作）；沙箱（测试 VM）无定时器时跳过恢复
+  pulsePay(pay) {
+    if (this._lastPay != null && this._lastPay !== pay) {
+      this.setData({ payPulse: true })
+      if (typeof setTimeout === 'function') {
+        if (this._pulseT) clearTimeout(this._pulseT)
+        this._pulseT = setTimeout(() => this.setData({ payPulse: false }), 700)
+      }
+    }
+    this._lastPay = pay
+  },
   // 本地估算（登录试算前的即时反馈）：s.priceNow 已是详情接口按早鸟/折扣同源注价的有效单价
   updatePrice() {
     const s = this.data.sessions[this.data.sel]
@@ -55,14 +78,28 @@ Page({
     const ins = this.data.buyInsurance ? Math.max(0, Number(this.data.p.insurance_fee) || 0) * this.data.qty : 0
     const promo = s.promo || null
     const zheLabel = promo ? String(promo.zheLabel || promo.zhe || '') : ''
+    const discount = this.data.freedomRightId && this.data.freedomDiscount ? Number(this.data.freedomDiscount) : 0
+    const pay = ((goods - discount * 100 - beans * 10 + ins) / 100).toFixed(2)
+    const ex = this.payExplain({ unitYuan: (unit / 100).toFixed(2), discountYuan: discount.toFixed(2),
+      deductYuan: (beans / 10).toFixed(2), insYuan: (ins / 100).toFixed(2), goodsYuan: (goods / 100).toFixed(2),
+      payYuan: pay, hasIns: ins > 0 })
     this.setData({ priceSummary: { unit: (unit / 100).toFixed(2), goods: (goods / 100).toFixed(2),
       originalUnit: promo ? (Number(promo.originalFen) / 100).toFixed(2) : '', showPromo: !!(promo && unit < Number(promo.originalFen)),
-      zheLabel, promoText: promo && unit < Number(promo.originalFen) ? zheLabel + '折 · 按原价' + Math.round(Number(promo.zhe) * 10 * 10) / 10 + '%付款' : '',
+      zheLabel, promoText: promo && unit < Number(promo.originalFen) ? zheLabel + '折 · 按原价' + Math.round(Number(s.promo.zhe) * 10 * 10) / 10 + '%付款' : '',
       capYuan: (this.beanCap(goods, 0) / 10).toFixed(2),
       insurance: (ins / 100).toFixed(2), showInsRow: ins > 0,
-      deduct: (beans / 10).toFixed(2), pay: ((goods - beans * 10 + ins) / 100).toFixed(2) } })
+      deduct: (beans / 10).toFixed(2), pay }, payReason: ex.payReason, payCalcText: ex.payCalcText })
+    this.pulsePay(pay)
     this.quoteFreedom(s)
   },
+  // B1：明细行点回对应控件调整（人数/日期在联系人卡，保险在上卡）
+  scrollToSec(e) {
+    const sel = e.currentTarget.dataset.target
+    if (!sel) return
+    wx.pageScrollTo({ selector: sel, duration: 250, offsetTop: -20, fail: () => {} })
+  },
+  // B1：试算失败可重试（底栏与明细区同一入口）
+  retryQuote() { this.updatePrice() },
   // 服务端试算（权威）：有效商品价→自由豆门槛与满减→旅豆实付锚定→现金应付，全部以本结果覆盖本地估算
   async quoteFreedom(s){
     const seq=this.priceSeq=(this.priceSeq||0)+1,rightId=this.data.freedomRightId
@@ -77,8 +114,21 @@ Page({
       // 不再从展示金额反推（此前除以10导致抵扣十倍显示、提交数量按错误金额计算）
       const quoted={goods:(d.goods/100).toFixed(2),deduct:(d.beanDeduct/100).toFixed(2),pay:(d.cashPay/100).toFixed(2),insurance:(d.insurance/100).toFixed(2),
         capYuan:(d.beanCapBeans/10).toFixed(2),discount:(d.discount/100).toFixed(2),beanDeductCount:Math.max(0,Math.round(Number(d.beanDeductCount)||0))}
+      // B1：试算回包（权威口径）刷新底栏优惠原因与明细算式
+      const s2=this.data.sessions[this.data.sel]
+      const promoActive=s2&&s2.promo&&Number(s2.priceNow)<Number(s2.promo.originalFen)
+      const reasons=[]
+      if(promoActive)reasons.push('活动价 ¥'+quoted.goods)
+      if(Number(d.discount)>0)reasons.push('自由豆已减 ¥'+quoted.discount)
+      if(Number(d.beanDeduct)>0)reasons.push('旅豆已抵 ¥'+quoted.deduct)
+      const calc=['活动费 ¥'+quoted.goods]
+      if(Number(d.discount)>0)calc.push('− 自由豆 ¥'+quoted.discount)
+      if(Number(d.beanDeduct)>0)calc.push('− 旅豆 ¥'+quoted.deduct)
+      if(Number(d.insurance)>0)calc.push('+ 保险 ¥'+quoted.insurance)
       this.setData({freedomRows:rows,freedomOptions:[{label:'不使用自由豆'}].concat(rows),freedomSelected:rightId?rows.find(x=>Number(x.id)===Number(rightId))||null:null,freedomDiscount:quoted.discount,
-        quoted,'priceSummary.goods':quoted.goods,'priceSummary.deduct':quoted.deduct,'priceSummary.pay':quoted.pay,'priceSummary.insurance':quoted.insurance,'priceSummary.capYuan':quoted.capYuan})
+        quoted,'priceSummary.goods':quoted.goods,'priceSummary.deduct':quoted.deduct,'priceSummary.pay':quoted.pay,'priceSummary.insurance':quoted.insurance,'priceSummary.capYuan':quoted.capYuan,
+        payReason:reasons.slice(0,2).join(' · '),payCalcText:calc.join(' ')+' ＝ 应付 ¥'+quoted.pay})
+      this.pulsePay(quoted.pay)
     }catch(e){if(seq===this.priceSeq)this.setData({freedomRows:[],freedomError:e.msg||'补贴试算失败，请重试'})}finally{if(seq===this.priceSeq)this.setData({pricing:false})}
   },
   // D01：自由豆与旅豆同单可用——选择/取消券不再清空旅豆选择，反之亦然；两者分别试算、独立记账

@@ -5,7 +5,7 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重试</view></view>
 <view class="card settlement-paper" wx:for="{{visibleList}}" wx:key="id" wx:for-item="s">
   <view class="bill-heading" bindtap="toggleBill" data-id="{{s.id}}"><view class="bill-title">{{s.periodTitle}}</view><text class="status-label status-{{s.status}}">{{s.statusText}}</text></view>
-  <view class="bill-amount" bindtap="toggleBill" data-id="{{s.id}}"><view><text class="paper-label">本店应结</text><view>¥{{s.payableLabel}}</view></view><view class="bill-count">{{s.order_count}} 笔订单<text>{{expanded[s.id] ? '收起账单 −' : '展开账单 +'}}</text></view></view>
+  <view class="bill-amount" bindtap="toggleBill" data-id="{{s.id}}"><view><text class="paper-label">本店应结</text><view>¥{{s.payableLabel}}</view><text wx:if="{{s.hasAdjust}}" class="tiny" style="color:#b45309">调整待冲抵 ¥{{s.adjustText}} · 调整后 ¥{{s.payableAfterAdjText}}</text></view><view class="bill-count">{{s.order_count}} 笔订单<text>{{expanded[s.id] ? '收起账单 −' : '展开账单 +'}}</text></view></view>
   <block wx:if="{{expanded[s.id]}}">
   <view class="row" style="border-bottom:none;padding-bottom:8rpx">
     <view><view class="tiny">订单总额（{{s.order_count}} 单）</view>
@@ -46,6 +46,14 @@
         <view class="sub">{{it.order_no}} · {{it.completed_at}}</view>
         <view wx:if="{{it.rebook}}" class="sub" style="color:var(--warn, #d97706)">免费改签单 · 实收 ¥0（不计入结算）</view></view>
       <view class="money" style="font-size:24rpx">¥{{it.amountText}}</view>
+    </view>
+  </view>
+  <view wx:if="{{adjustDetail[s.id] && adjustDetail[s.id].length}}" class="fade-up" style="margin-top:10rpx;padding-top:8rpx;border-top:1rpx dashed #e5ded2">
+    <view class="tiny" style="font-weight:600">调整明细（按项退款/成本变化）</view>
+    <view class="row" wx:for="{{adjustDetail[s.id]}}" wx:for-item="adj" wx:key="id">
+      <view style="flex:1;min-width:0"><b style="font-size:24rpx">{{adj.typeText}}</b>
+        <view class="sub">{{adj.order_no || adj.reason || '整单调整'}}{{adj.applied_settlement_id ? ' · 已冲抵补充单 #' + adj.applied_settlement_id : ' · 待冲抵'}}</view></view>
+      <view class="money" style="font-size:24rpx;color:{{adj.amount_fen < 0 ? '#b45309' : '#1a9c6b'}}">¥{{adj.amountText}}</view>
     </view>
   </view>
   </block>

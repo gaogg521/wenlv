@@ -25,7 +25,7 @@
     <view class="sec-title" style="margin:0 0 8rpx">套餐包含</view>
     <view class="muted2" wx:for="{{p.pkgItems}}" wx:key="name" style="font-size:24rpx;line-height:1.7">› {{item.name}} {{item.qtyText}}（{{item.kindText}} · {{item.merchantName}}）{{item.benefit}}</view>
   </view>
-  <view class="card">
+  <view class="card" id="sec-contact">
     <view class="kv"><text>出行人数</text>
       <view class="qty-box">
         <text class="qty-btn {{qty <= 1 ? 'off' : ''}}" bindtap="subQty">－</text><text class="v" style="min-width:48rpx;text-align:center">{{qty}}</text><text class="qty-btn" bindtap="addQty">＋</text>
@@ -44,7 +44,7 @@
   </view>
 
   <view class="sec-title" wx:if="{{p.hasInsurance}}">出行保障</view>
-  <view class="card" wx:if="{{p.hasInsurance}}">
+  <view class="card" wx:if="{{p.hasInsurance}}" id="sec-insurance">
     <view class="kv">
       <view style="flex:1;min-width:0">
         <view><text style="font-weight:600">出行意外险</text><text class="muted2"> ¥{{p.insuranceFeeYuan}}/人</text></view>
@@ -57,24 +57,29 @@
 
   <view class="sec-title">3 · 费用确认</view>
   <view class="card" wx:if="{{priceSummary}}">
-    <view class="kv"><text>单价 × 人数</text>
+    <view class="kv" bindtap="scrollToSec" data-target="#sec-contact"><text>单价 × 人数</text>
       <view style="display:flex;flex-direction:column;align-items:flex-end">
         <view style="display:flex;align-items:baseline;gap:8rpx">
           <text wx:if="{{priceSummary.showPromo}}" class="muted2" style="text-decoration:line-through;font-size:22rpx">¥{{priceSummary.originalUnit}}</text>
           <text>¥{{priceSummary.unit}} × {{qty}}</text>
         </view>
         <text wx:if="{{priceSummary.showPromo}}" class="muted2" style="font-size:22rpx;color:#1a9c6b">{{priceSummary.promoText}}</text>
+        <text class="bk-adjust-hint">调整人数 ›</text>
       </view></view>
     <view class="kv"><text>活动费用</text><text>¥{{priceSummary.goods}}</text></view>
-    <view class="bk-benefit">
+    <view class="bk-benefit" id="sec-freedom">
       <view class="bk-benefit-top"><view class="bk-fee-title">自由豆补贴</view><picker mode="selector" range="{{freedomOptions}}" range-key="label" bindchange="chooseFreedom" disabled="{{pricing}}"><view class="bk-benefit-picker"><text wx:if="{{pricing}}">试算中</text><text wx:elif="{{freedomRightId}}">更换</text><text wx:else>选择补贴</text><text class="bk-benefit-arrow">›</text></view></picker></view>
       <view wx:if="{{freedomRightId && freedomSelected}}" class="bk-benefit-detail"><view class="bk-benefit-copy"><view class="bk-benefit-rule"><text>满{{freedomSelected.thresholdText}}元</text><text>减{{freedomSelected.discountText}}元</text></view><view class="bk-fee-hint">有效期至 {{freedomSelected.validTo}}</view></view><view class="bk-benefit-amount"><text wx:if="{{pricing}}">—</text><text wx:else>−¥{{freedomDiscount}}</text></view></view>
       <view wx:else class="bk-fee-hint">{{freedomRows.length ? '可选择官方满减补贴' : '暂无适用的补贴'}}</view>
       <view class="bk-fee-hint" wx:if="{{freedomRightId}}">官方补贴可与旅豆抵扣同单使用，分别记账</view><view wx:if="{{freedomError}}" class="bk-benefit-error">{{freedomError}}</view>
     </view>
-    <view class="bk-bean-row"><view class="bk-bean-copy"><view class="bk-fee-title">旅豆抵扣</view><view class="bk-fee-hint">余额 {{beanBal}} 豆 · 最多抵 {{priceSummary.capYuan}} 元（按最终实付计算）</view></view><switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
+    <view class="bk-bean-row" id="sec-bean"><view class="bk-bean-copy"><view class="bk-fee-title">旅豆抵扣</view><view class="bk-fee-hint">余额 {{beanBal}} 豆 · 最多抵 {{priceSummary.capYuan}} 元（按最终实付计算）</view></view><switch checked="{{useBean}}" bindchange="toggleBean" color="#e87722" style="transform:scale(.8)" disabled="{{!beanBal}}" /></view>
     <view class="kv" wx:if="{{useBean && priceSummary.deduct !== '0.00'}}"><text>抵扣金额</text><text style="color:var(--green)">−¥{{priceSummary.deduct}}</text></view>
-    <view class="kv" wx:if="{{priceSummary.showInsRow}}"><text>出行意外险</text><text>¥{{priceSummary.insurance}}</text></view>
+    <view class="kv" wx:if="{{priceSummary.showInsRow}}" bindtap="scrollToSec" data-target="#sec-insurance"><text>出行意外险</text><view style="text-align:right"><text>¥{{priceSummary.insurance}}</text><view class="bk-adjust-hint">调整保险 ›</view></view></view>
+    <view class="kv bk-total-row"><text style="font-weight:600">应付合计</text><text style="font-weight:600">¥{{priceSummary.pay}}</text></view>
+    <view class="bk-calc-line">{{payCalcText}}</view>
+    <view class="bk-calc-line" wx:if="{{pricing}}">正在按最新选择试算…</view>
+    <view class="bk-calc-line bk-calc-err" wx:if="{{freedomError}}" bindtap="retryQuote">{{freedomError}} · 点此重试</view>
   </view>
   <view class="card" wx:if="{{p.bookingRules && p.bookingRules.refundRules.length}}">
     <view class="fee-h">退改规则</view>
@@ -92,7 +97,11 @@
   <view style="height:150rpx"></view>
 
   <view class="dt-bottom">
-    <view class="dt-bottom-price"><text class="muted2" style="font-size:22rpx;font-weight:400">预计实付 </text><text class="rmb">¥</text>{{priceSummary ? priceSummary.pay : '—'}}</view>
+    <view class="dt-bottom-price">
+      <view wx:if="{{payReason}}" class="dt-pay-reason">{{payReason}}</view>
+      <view><text class="muted2" style="font-size:22rpx;font-weight:400">预计实付 </text><text class="rmb">¥</text><text class="{{payPulse ? 'pay-pulse' : ''}}">{{priceSummary ? priceSummary.pay : '—'}}</text><text wx:if="{{pricing}}" class="dt-pricing">算价中…</text></view>
+      <text wx:if="{{freedomError}}" class="dt-pricing-err" bindtap="retryQuote">试算失败 · 重试</text>
+    </view>
     <view class="btn dt-cta {{submitting || !sessions.length ? 'off' : ''}}" bindtap="submit">{{submitting ? '正在提交…' : '提交订单并支付'}}</view>
   </view>
 </block>

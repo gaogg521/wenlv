@@ -21,9 +21,14 @@ async function reviewqueue() {
       ${q.items.map((it) => {
         // 本人判定优先按不可变 UID（旧数据无 uid 时回退名字快照）
         const mine = it.claimedUid != null ? (ME?.uid != null && Number(it.claimedUid) === Number(ME.uid)) : it.claimedBy === myName
+        // B3（498,564 小时异常修复）：submitted_at 为空（驳回回退置 NULL）时服务端返回 null——显示「待核对」，
+        // 不参与超时判定与 SLA 排序（服务端已把空值排最后）；正常超时项仍按时长标红定位。
+        const waitCell = it.waitingHours == null
+          ? '<span class="pill off" title="提交时间缺失（历史驳回回退数据），待核对">待核对</span>'
+          : (it.overdue ? '<span class="pill s70">' + it.waitingHours + 'h 超时</span>' : '<span class="pill ' + (it.waitingHours >= 24 ? 'warn' : 'off') + '">' + it.waitingHours + 'h</span>')
         return `<tr><td>${(q.kind === 'note' || q.kind === 'report') && !it.claimedBy ? `<input type="checkbox" class="rq-sel" data-kind="${q.kind}" data-id="${it.item_id}" aria-label="选择待办 ${it.item_id}">` : ''}</td>
         <td class="num">#${it.item_id}</td><td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.extra || '—')}</td>
-        <td>${it.overdue ? '<span class="pill s70">' + it.waitingHours + 'h 超时</span>' : '<span class="pill ' + (it.waitingHours >= 24 ? 'warn' : 'off') + '">' + it.waitingHours + 'h</span>'}</td>
+        <td>${waitCell}</td>
         <td>${it.claimedBy ? (mine ? '<span class="pill ok">本人处理中</span>' : '<span class="pill s40">' + esc(it.claimedBy.replace('admin:', '')) + '</span>') : '<span class="pill off">未认领</span>'}</td>
         <td><div class="td-actions">
           ${!it.claimedBy ? `<button class="btn primary sm" onclick="rqClaim('${q.kind}', ${it.item_id})">认领</button>` : ''}

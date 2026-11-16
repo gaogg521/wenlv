@@ -52,7 +52,9 @@ Page({
     if (this.data.editId || this._published) return
     const hasText = this.data.title || this.plainLenValue > 0 || this.data.topics.length
     const hasMedia = this.data.images.length || this.data.video
-    if (hasText || hasMedia) {
+    // C-01：仅做了攻略图（未插图/未写正文）也存草稿——恢复的是攻略图数据而非一篇笔记，发布门槛不变
+    const hasGuide = this.data.guideTitle || this.data.guideText
+    if (hasText || hasMedia || hasGuide) {
       this.saveLocalDraft()
       this.syncCloudDraft()
     }
@@ -62,7 +64,28 @@ Page({
   draftSnapshot() {
     return { title: this.data.title, bodyHtml: this.data.bodyHtml,
       topics: this.data.topics, relatedProductId: this.data.relatedProductId, relatedName: this.data.relatedName,
-      visibility: this.data.visibility, scenicId: this.data.scenicId, scenicName: this.data.scenicName, at: Date.now() }
+      visibility: this.data.visibility, scenicId: this.data.scenicId, scenicName: this.data.scenicName,
+      // C-01：攻略图继续编辑——文字/样式/配图路径一并入草稿（临时路径可能失效，恢复时校验并提示重选）
+      guideTitle: this.data.guideTitle, guideText: this.data.guideText, guideStyle: this.data.guideStyle,
+      guidePhoto: this.data.guidePhoto, at: Date.now() }
+  },
+  // C-01：攻略图配图有效性校验（临时文件可能被系统清理）——失效返回 false 并清引用
+  checkGuidePhoto(path) {
+    return new Promise((resolve) => {
+      if (!path) return resolve(false)
+      wx.getImageInfo({ src: path, success: () => resolve(true), fail: () => resolve(false) })
+    })
+  },
+  async restoreGuide(d) {
+    const gt = String(d.guideTitle || ''), gx = String(d.guideText || '')
+    if (!gt && !gx) return false
+    let photoOk = false
+    const photo = String(d.guidePhoto || '')
+    if (photo) photoOk = await this.checkGuidePhoto(photo)
+    this.setData({ guideTitle: gt, guideText: gx, guideStyle: Number(d.guideStyle) || 0,
+      guidePhoto: photoOk ? photo : '', guideStyles: this.data.guideStyles.map((st, i) => ({ ...st, selected: i === (Number(d.guideStyle) || 0) })) })
+    if (photo && !photoOk) wx.showToast({ title: '攻略图配图已失效，请重新选择', icon: 'none', duration: 2500 })
+    return true
   },
   saveLocalDraft() {
     try { wx.setStorageSync('xhs-compose-draft', this.draftSnapshot()) } catch (e) { /* 存储失败静默 */ }
@@ -70,7 +93,7 @@ Page({
   maybeRestoreDraft() {
     let d = null
     try { d = wx.getStorageSync('xhs-compose-draft') } catch (e) { d = null }
-    if (!d || (!d.title && !d.bodyHtml && !(d.topics || []).length)) return false
+    if (!d || (!d.title && !d.bodyHtml && !(d.topics || []).length && !d.guideTitle && !d.guideText)) return false
     wx.showModal({ title: '检测到未发布的草稿', content: '是否恢复上次编辑的文字？', confirmText: '恢复', cancelText: '不恢复',
       success: r => {
         if (r.confirm) {
@@ -83,6 +106,7 @@ Page({
             scenicId: d.scenicId || null, scenicName: d.scenicName || '',
             loaded: true, textMode: true, draftRestored: true })
           if (this.editor && this.pendingHtml) { this.editor.setContents({ html: this.pendingHtml }); this.pendingHtml = '' }
+          this.restoreGuide(d)
           this.refresh()
         } else {
           try { wx.removeStorageSync('xhs-compose-draft') } catch (e) { /* 忽略 */ }
@@ -98,6 +122,8 @@ Page({
     return { title: String(this.data.title || ''), blocks: [{ type: 'text', html: String(this.data.bodyHtml || '') }],
       topics: this.data.topics, visibility: this.data.visibility, scenicId: this.data.scenicId,
       relatedProductId: this.data.relatedProductId, coverKey: this.data.coverKey,
+      // C-01：攻略图数据随云草稿（photo 为本机临时路径，恢复时校验失效则提示重选）
+      guide: { title: this.data.guideTitle || '', text: this.data.guideText || '', style: Number(this.data.guideStyle) || 0, photo: this.data.guidePhoto || '' },
       images: this.data.images.filter(x => x.url).map(x => x.url), video: this.data.video && this.data.video.url ? this.data.video.url : null }
   },
   async syncCloudDraft() {
@@ -136,6 +162,7 @@ Page({
         images, video, coverIndex: Math.min(Number(content.coverIndex) || 0, Math.max(images.length - 1, 0)),
         loaded: true, textMode: !images.length && !video, bodyText: '', draftRestored: true })
       if (content.scenicId) this.lookupScenicName(content.scenicId)
+      if (content.guide && (content.guide.title || content.guide.text)) this.restoreGuide(content.guide)
       this.refresh()
     } catch (e) {
       wx.showToast({ title: e.msg || '云草稿加载失败', icon: 'none' })

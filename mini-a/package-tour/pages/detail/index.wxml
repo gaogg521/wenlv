@@ -105,6 +105,28 @@
     </view><text class="pl-link">›</text>
   </view>
 
+  <!-- A2 线路关联笔记（显式区分线路关联与同景区推荐，防重复） -->
+  <block wx:if="{{lineNotes.length}}">
+    <view class="sec-title">走过这条线路的笔记</view>
+    <view class="pl-notes">
+      <view class="pl-note" wx:for="{{lineNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
+        <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <view wx:else class="pl-note-cover pl-note-text"><text>{{item.excerpt}}</text></view>
+        <view class="pl-note-title">{{item.title}}</view>
+      </view>
+    </view>
+  </block>
+  <block wx:if="{{scenicNotes.length}}">
+    <view class="sec-title">同景区笔记</view>
+    <view class="pl-notes">
+      <view class="pl-note" wx:for="{{scenicNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
+        <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <view wx:else class="pl-note-cover pl-note-text"><text>{{item.excerpt}}</text></view>
+        <view class="pl-note-title">{{item.title}}</view>
+      </view>
+    </view>
+  </block>
+
   <!-- B02：套餐组成项（非套餐产品不渲染）；按人凭证项核销前可按项退 -->
   <block wx:if="{{pkgItems.length}}">
     <view class="sec-title">套餐包含</view>

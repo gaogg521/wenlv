@@ -3,7 +3,7 @@ const siteData = require('../../utils/site')
 const TAB_PAGES = ['home', 'tour-list', 'shop', 'bean', 'me'].map(p => '/pages/' + p + '/index')
 
 Page({
-  data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
+  data: { site: siteData.DEFAULT, loading: true, tours: [], greet: '', icons: ['🏮', '🧘', '🫖', '🏛️', '🚩'], banners: [], curBanner: 0, error: '', notes: [], notesLoading: true, notesError: '', themes: [{k:'script',n:'剧本探秘',sub:'走进故事现场',icon:'⌕'},{k:'yoga',n:'山野疗愈',sub:'把时间还给自己',icon:'◌'},{k:'family',n:'亲子时光',sub:'一起发现世界',icon:'☼'},{k:'sister',n:'好友出游',sub:'约一场好风景',icon:'✧'}] },  // 扫码/分享落地：scene=推广码 p* / 门店码 m*（官方 getUnlimitedQRCode 携带，32 字符内）
   onLoad(q) {
     const h = new Date().getHours()
     this.setData({ greet: h < 11 ? '早上好' : h < 18 ? '下午好' : '晚上好', themeEntries: siteData.DEFAULT.themes.map(t => ({ ...t, cover: api.coverFor(t) })) })
@@ -22,6 +22,8 @@ Page({
     this.checkConsent() // A-44：首次使用同意流程
     // 首次进入 onLoad→onShow 只请求一次；从其他页返回时，超过 60 秒才刷新，避免来回切 tab 反复请求
     if (!this.lastFetch || Date.now() - this.lastFetch > 60000) this.fetch()
+    // A1：作品区独立拉取（onLoad 已拉过且未失败时不重复）
+    if (!this._notesFetched || this.data.notesError) this.fetchNotes()
     // 从目的地页选了新城市回来：按新城市刷新轮播
     const hc = wx.getStorageSync('homeCity') || null
     if (this.bannerCity !== undefined && (hc ? hc.code : '') !== this.bannerCity) this.fetchBanners()
@@ -78,6 +80,21 @@ Page({
   },
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
   goDestinations() { wx.navigateTo({ url: '/pages/destination/index' }) },
+  // A1 首页旅行笔记作品区：与商品流/轮播独立加载——feed 失败或未登录都不影响首页其余内容
+  fetchNotes() {
+    this.setData({ notesLoading: true, notesError: '' })
+    api.request('/c/notes/feed?page=1&pageSize=4').then((d) => {
+      const notes = (d.items || []).slice(0, 4).map((x) => ({
+        id: x.id, title: x.title || '无标题笔记', cover: x.cover || '', video: !!x.hasVideo,
+        place: x.scenicName || x.productTitle || '', excerpt: x.excerpt || (x.title || '').slice(0, 30),
+      }))
+      this.setData({ notes, notesLoading: false, notesError: '' })
+    }).catch((e) => {
+      this.setData({ notes: [], notesLoading: false, notesError: e.msg === '未登录' ? '登录后可浏览旅行笔记' : (e.msg || '笔记加载失败') })
+    })
+  },
+  goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
+  goCompose() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
   async fetchBanners() {
     try {
       // 按当前城市取轮播：后台「轮播管理 · 投放城市」限定了城市的，只在对应城市展示；未限定的全部展示

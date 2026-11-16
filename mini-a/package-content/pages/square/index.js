@@ -19,14 +19,28 @@ Page({
   // 过滤头/空态文案全部预计算（wxml 只取值）
   applyFilter(topic, scenicId, scenicName) {
     const hasFilter = Boolean(topic || scenicId)
+    // 景区与话题可同时生效：过滤头两部分都展示
+    const parts = []
+    if (scenicId) parts.push('📍 ' + (scenicName || ('景区 #' + scenicId)))
+    if (topic) parts.push('#' + topic)
     this.setData({
       topic: topic || '', scenicId: scenicId || 0, scenicName: scenicName || '',
       hasFilter,
-      filterLabel: scenicId ? '📍 ' + (scenicName || ('景区 #' + scenicId)) : '#' + topic,
-      emptyText: hasFilter ? '这个话题还没有公开笔记' : '还没有公开笔记 · 抢先发一篇',
+      filterLabel: parts.join(' · '),
+      emptyText: hasFilter ? '这个范围还没有公开笔记' : '还没有公开笔记 · 抢先发一篇',
     })
   },
-  onShow() { if (!this.data.leftItems.length && !this.data.rightItems.length) this.fetch(true) },
+  onShow() {
+    // A3 返回保留浏览位置：从作品详情/发布器返回时恢复离开前的滚动位置
+    // （数据与筛选本来随页面实例保留；首次进入 _st 为空不触发）
+    if (this._st > 0 && (this.data.leftItems.length || this.data.rightItems.length) && this._returned) {
+      wx.pageScrollTo({ scrollTop: this._st, duration: 0 })
+      this._returned = false
+    }
+    if (!this.data.leftItems.length && !this.data.rightItems.length) this.fetch(true)
+  },
+  onPageScroll(e) { this._st = e.scrollTop },
+  onHide() { this._returned = true },
   retry() { this.fetch(true) },
   // bindtap 会把事件对象传进 reset 位——单独包一层，保证翻页语义正确
   more() { this.fetch(false) },

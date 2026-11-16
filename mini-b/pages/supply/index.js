@@ -1,26 +1,84 @@
 const api = require('../../utils/api')
-const { stockView } = require('../../utils/catalog-view')
+const { stockView, businessDay } = require('../../utils/catalog-view')
 Page({
-  data: { list: [], groups: [], loaded: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}] },
-  onShow() { this.fetch() },
+  data: { list: [], groups: [], loaded: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
+  onShow() {
+    // B2 工作台「临近截止」下钻预设：一次性消费（未来7天）
+    const preset = wx.getStorageSync('supplyPreset') || null
+    if (preset) { wx.removeStorageSync('supplyPreset'); this.setData({ rangeIndex: 1, range: 'week' }) }
+    this.fetch()
+  },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
-  fetch(done) {
+  // C-02 服务端分页：按日期窗/关键词分页拉取（首屏一页 60 条），本地仍用 stockView 做状态筛选与分组展示
+  dateWindow() {
+    const today = businessDay(), day = n => new Date(Date.parse(today + 'T00:00:00+08:00') + n * 86400000 + 8 * 3600000).toISOString().slice(0, 10)
+    if (this.data.range === 'week') return { from: today, to: day(6) }
+    if (this.data.range === 'month') return { from: today, to: day(29) }
+    if (this.data.range === 'past') return { from: '', to: day(-1) }
+    if (this.data.range === 'all') return { from: '', to: '' }
+    return { from: today, to: '' } // future
+  },
+  fetch(done, append = false) {
     if (typeof done !== 'function') done = undefined
     this.setData({ role: getApp().globalData.role || 0, error: '' })
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
-    api.request('/m/supply?history=1').then((l) => { this.setData({ list: l, loaded: true }); this.applyFilters(); done && done() }).catch(e => { this.setData({ loaded: true, list: [], error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
+    const page = append ? this.data.page + 1 : 1
+    const w = this.dateWindow()
+    const qs = ['paged=1', 'page=' + page, 'pageSize=60',
+      w.from ? 'from=' + w.from : '', w.to ? 'to=' + w.to : '',
+      'kw=' + encodeURIComponent(this.data.kw || '')].filter(Boolean).join('&')
+    api.request('/m/supply?' + qs).then((d) => {
+      const list = append ? this.data.list.concat(d.items || []) : (d.items || [])
+      this.setData({ list, page, total: d.total || list.length, hasMore: !!d.hasMore, loaded: true })
+      this.applyFilters(); done && done()
+    }).catch(e => { this.setData({ loaded: true, list: append ? this.data.list : [], hasMore: false, error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
   },
+  // 服务端翻页：追加下一页团期（请求量按页）
+  loadMoreSessions() { if (this.data.hasMore && !this._loadingMore) { this._loadingMore = true; this.fetch(() => { this._loadingMore = false }, true) } },
   applyFilters() {
     const view = stockView(this.data.list, this.data), limit = this.data.sessionLimit || 6
     view.groups = view.groups.map(g => Object.assign({}, g, { sessions: g.expanded ? g.sessions.slice(0, limit) : [], hasMore: g.expanded && g.sessions.length > limit }))
     this.setData(view)
   },
   moreSessions() { this.setData({ sessionLimit: (this.data.sessionLimit || 6) + 6 }); this.applyFilters() },
-  onSearch(e) { this.setData({ kw: e.detail.value }); this.applyFilters() },
+  onSearch(e) { this.setData({ kw: e.detail.value }); clearTimeout(this._kwT); this._kwT = setTimeout(() => this.fetch(), 300) },
   filterStatus(e) { this.setData({ status: e.currentTarget.dataset.k }); this.applyFilters() },
-  filterRange(e) { const i = Number(e.detail.value); this.setData({ rangeIndex: i, range: ['future','week','month','past','all'][i] }); this.applyFilters() },
-  resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.applyFilters() },
+  filterRange(e) { const i = Number(e.detail.value); this.setData({ rangeIndex: i, range: ['future','week','month','past','all'][i] }); this.fetch() },
+  resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.fetch() },
   toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },
+  // C-02 批量操作：对本商品当前筛选下的团期批量改价/调名额/停售；先展示影响范围再提交
+  batchProduct(e) {
+    if (this.data.role < 2) return
+    const key = e.currentTarget.dataset.key
+    const rows = this.data.list.filter(s => String(s.product_id) === String(key))
+    if (!rows.length) return
+    const g = this.data.groups.find(x => String(x.key) === String(key))
+    wx.showActionSheet({ itemList: ['批量改价', '批量调名额', '批量停售'], success: r => {
+      const act = ['price', 'adjust_quota', 'stop_sell'][r.tapIndex]
+      const titles = { price: '输入新价格（元），应用到所选团期', adjust_quota: '输入新名额总数，应用到所选团期', stop_sell: '' }
+      if (act === 'stop_sell') {
+        wx.showModal({ title: '批量停售确认', content: '将停售「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期，停售后游客无法报名', success: m => {
+          if (!m.confirm) return
+          this.batchSubmit(rows.map(s => s.id), act, null, rows.length)
+        } })
+        return
+      }
+      wx.showModal({ title: '批量' + (act === 'price' ? '改价' : '调名额'), editable: true, placeholderText: titles[act], success: m => {
+        if (!m.confirm || !m.content) return
+        const val = act === 'price' ? Math.round(Number(m.content) * 100) : Math.floor(Number(m.content))
+        if (!(val > 0)) return wx.showToast({ title: '数值无效', icon: 'none' })
+        wx.showModal({ title: '影响范围确认', content: '将把「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期' + (act === 'price' ? '价格改为 ¥' + m.content : '名额调整为 ' + m.content), success: c => {
+          if (c.confirm) this.batchSubmit(rows.map(s => s.id), act, val, rows.length)
+        } })
+      } })
+    } })
+  },
+  batchSubmit(ids, action, value, scope) {
+    api.request('/m/supply/batch', 'POST', { ids, action, value }).then(r => {
+      wx.showToast({ title: '影响 ' + scope + ' 个团期 · 生效 ' + (r.applied || 0) + ' 个', icon: 'none', duration: 2500 })
+      this.fetch()
+    }).catch(e => wx.showToast({ title: e.msg || '批量操作失败', icon: 'none' }))
+  },
   manageSession(e) {
     if (this.data.role < 2) return
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))

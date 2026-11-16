@@ -11,6 +11,20 @@ window.partnerDashPage = async function () {
     return
   }
   if (load !== window.__partnerDashLoad || location.hash.replace('#', '').split('?')[0] !== 'partnerdash') return
+  // C-04：超管只读预览——不冒充主体数据，明确告知查看口径
+  if (d.previewOnly) {
+    $('#app').innerHTML = `<div class="card">
+      <div class="card-head"><h2>主体方经营看板 · 只读预览</h2><span class="pill s40">预览</span></div>
+      <p class="td-sub" style="margin:-6px 0 12px">${esc(d.previewNote || '')}</p>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">订单（已支付后状态）</div><div class="kpi-value">0</div><div class="td-sub">按主体授权范围聚合 · 预览为全零</div></div>
+        <div class="kpi"><div class="kpi-label">退款（已成功）</div><div class="kpi-value">0</div><div class="td-sub">按结清时间</div></div>
+        <div class="kpi"><div class="kpi-label">结算单</div><div class="kpi-value">0</div><div class="td-sub">应付/已付按主体口径</div></div>
+      </div>
+      <p class="muted" style="margin-top:12px">真实经营数据请用商户/景区主体方账号登录查看（数据按主体行级隔离）。</p>
+    </div>`
+    return
+  }
   const fen = v => '¥' + (Number(v || 0) / 100).toFixed(2)
   const isMerchant = d.kind === 'merchant'
   const sub = `<span class="muted">${esc(d.subject.name)}（#${d.subject.id} · ${esc(d.subject.cityCode)}） · 近 ${d.windowDays} 天</span>`

@@ -61,7 +61,10 @@ export const adminReviewQueue = {
     for (const kind of KINDS) {
       const sqlAll = PENDING_SQL[kind] + citySql
       const total = Number((await one(`SELECT COUNT(*) n FROM (${sqlAll}) t`, cityArgs)).n)
-      const items = await q(sqlAll + ' ORDER BY waiting_since ASC LIMIT ?', cityArgs.length ? [...cityArgs, LIST_WINDOW] : [LIST_WINDOW])
+      // B3（498,564 小时异常根因）：submitted_at 可空（V35），驳回回退置 NULL（admin.mjs 驳回分支）；
+      // new Date(null) = epoch 0 → Date.now() 差值 ≈ 49.8 万小时。空值/非法值一律 waitingHours=null（前端显示「待核对」，
+      // 不参与 SLA 排序（SQL 中 NULL 排最后），正常超时项仍按时长定位。
+      const items = await q(sqlAll + ' ORDER BY waiting_since IS NULL, waiting_since ASC LIMIT ?', cityArgs.length ? [...cityArgs, LIST_WINDOW] : [LIST_WINDOW])
       const claims = await q(`SELECT rc.item_id, rc.claimed_by, rc.claimed_uid, rc.created_at FROM review_claim rc WHERE rc.queue_kind = ? AND rc.released_at IS NULL`, [kind])
       const claimMap = Object.fromEntries(claims.map((c) => [Number(c.item_id), c]))
       queues.push({
@@ -74,8 +77,10 @@ export const adminReviewQueue = {
           claimedBy: claimMap[Number(it.item_id)]?.claimed_by || null,
           claimedUid: claimMap[Number(it.item_id)]?.claimed_uid ?? null,
           claimedAt: claimMap[Number(it.item_id)]?.created_at || null,
-          waitingHours: Math.round((Date.now() - new Date(it.waiting_since).getTime()) / 3600000 * 10) / 10,
-        })).map((it) => ({ ...it, overdue: it.waitingHours >= 48 })),
+          waitingHours: it.waiting_since && Number.isFinite(new Date(String(it.waiting_since).replace(' ', 'T')).getTime()) && new Date(String(it.waiting_since).replace(' ', 'T')).getTime() > 0
+            ? Math.round((Date.now() - new Date(String(it.waiting_since).replace(' ', 'T')).getTime()) / 3600000 * 10) / 10
+            : null,
+        })).map((it) => ({ ...it, overdue: it.waitingHours != null && it.waitingHours >= 48 })),
       })
     }
     return { queues }
