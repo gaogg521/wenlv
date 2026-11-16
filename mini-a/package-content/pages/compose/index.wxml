@@ -5,12 +5,16 @@
     <view class="entry-tip">选几张照片，记录这次旅行</view>
     <view class="entry-card" bindtap="pickImages"><text class="e-ico">🖼</text><text class="e-name">图文</text><text class="e-sub">最多 9 张图片</text></view>
     <view class="entry-card" bindtap="pickVideo"><text class="e-ico">🎬</text><text class="e-name">视频</text><text class="e-sub">30 秒 · 8MB 内</text></view>
+    <view class="entry-card" bindtap="openGuide"><text class="e-name">做攻略图</text><text class="e-sub">选模板生成图片</text></view>
     <view class="entry-card" bindtap="skipMedia"><text class="e-ico">✏️</text><text class="e-name">纯文字</text><text class="e-sub">先写下想法</text></view>
   </view>
 
   <!-- 图集轮播（小红书同款：页码 / 删除 / 设为封面） -->
   <view wx:if="{{images.length}}" class="media-area">
-    <view class="media-stage">
+    <view wx:if="{{showGallery}}" class="sheet-mask gallery-mask" bindtap="closeGallery">
+      <view class="gallery-panel" catchtap="noop">
+        <button class="gallery-close" bindtap="closeGallery">关闭预览</button>
+        <view class="media-stage">
       <swiper class="media-swiper" current="{{current}}" bindchange="onSwiper">
         <swiper-item wx:for="{{images}}" wx:key="key">
           <view class="media-cell">
@@ -24,23 +28,30 @@
         </swiper-item>
       </swiper>
       <view wx:if="{{mediaLabel}}" class="media-page">{{mediaLabel}}</view>
+        </view>
+        <view class="media-actions">
+          <view class="m-act" bindtap="setCover">设为封面</view>
+          <view class="m-act" bindtap="toggleLive" data-i="{{current}}">▶ 实况</view>
+        </view>
+      </view>
     </view>
     <!-- 缩略图条（三期拖拽排序：长按拖动调整顺序，封面跟随） -->
     <scroll-view id="thumbStrip" class="thumb-strip" scroll-x enhanced show-scrollbar="{{false}}">
       <view class="thumb-row">
         <view wx:for="{{thumbs}}" wx:key="key"
-          class="thumb {{item.isDragging ? 'dragging' : ''}} {{item.isTarget ? 'target' : ''}}"
-          data-i="{{item.i}}" catchlongpress="thumbLongPress" catchtouchmove="thumbMove" catchtouchend="thumbEnd">
+          class="thumb thumb-photo {{item.isDragging ? 'dragging' : ''}} {{item.isTarget ? 'target' : ''}}"
+          data-i="{{item.i}}" bindtap="openGallery" catchlongpress="thumbLongPress" catchtouchmove="thumbMove" catchtouchend="thumbEnd">
           <image class="thumb-img" src="{{item.src}}" mode="aspectFill" />
+          <view wx:if="{{item.isCover}}" class="thumb-tag">封面</view>
+          <view wx:if="{{item.isLive}}" class="thumb-live">▶</view>
+          <view wx:if="{{item.uploading}}" class="thumb-state">上传中</view>
+          <view wx:elif="{{item.failed}}" class="thumb-state bad">失败</view>
           <view wx:if="{{item.isDragging}}" class="thumb-drag-tip">拖到目标位置</view>
         </view>
         <view wx:if="{{canAddMore}}" class="thumb thumb-add" bindtap="pickImages">＋</view>
       </view>
     </scroll-view>
-    <view class="media-actions">
-      <view class="m-act" bindtap="setCover">设为封面</view>
-      <view class="m-act" bindtap="toggleLive" data-i="{{current}}">▶ 实况</view>
-    </view>
+
   </view>
 
   <!-- 视频位 -->
@@ -60,9 +71,10 @@
   <!-- 第二步 · 编辑区 -->
   <view wx:if="{{hasMedia}}" class="form-area">
     <view class="title-row">
-      <input class="title-input" maxlength="20" value="{{title}}" bindinput="onTitle" placeholder="填写标题会有更多赞哦" />
+      <input class="title-input" maxlength="20" value="{{title}}" bindinput="onTitle" placeholder="添加标题" />
       <text class="title-count">{{titleLen}}/20</text>
     </view>
+    <view wx:if="{{confirmTitle}}" class="title-hint">已为你拟好标题，可修改后确认发布。</view>
     <view class="fmt-row">
       <view class="fmt-btn {{formats.bold ? 'on' : ''}}" catchtouchend="rtCmd" data-tag="b"><b>B</b></view>
       <view class="fmt-btn {{formats.italic ? 'on' : ''}}" catchtouchend="rtCmd" data-tag="i"><i>I</i></view>
@@ -90,6 +102,7 @@
       <text class="kv-k">📍 关联线路</text>
       <text class="kv-v">{{relatedName || '选填，让笔记被更多旅人看到'}} ›</text>
     </view>
+    <view wx:if="{{canAddMore}}" class="kv-line" bindtap="openGuide"><text class="kv-k">做攻略图</text><text class="kv-v">用文字和照片生成图片 ›</text></view>
     <view class="kv-line {{canIdeas ? '' : 'off'}}" bindtap="openIdeas">
       <text class="kv-k">✨ 写作建议</text>
       <text class="kv-v">{{canIdeas ? '看图帮你起标题、写正文' : '上传照片后可用'}} ›</text>
@@ -178,8 +191,29 @@
   </view>
 </view>
 
+<view wx:if="{{showGuide}}" class="sheet-mask" bindtap="closeGuide">
+  <view class="guide-sheet" catchtap="noop">
+    <view class="guide-header"><text class="sheet-title">做攻略图</text><button bindtap="closeGuide" disabled="{{guideBusy}}">关闭</button></view>
+    <scroll-view class="guide-content" scroll-y>
+      <input class="guide-input" placeholder="攻略标题（选填）" maxlength="20" value="{{guideTitle}}" data-field="guideTitle" bindinput="editGuide" disabled="{{guideBusy}}" />
+      <textarea class="guide-input guide-text" placeholder="每行写一个路线、景点或建议" maxlength="240" value="{{guideText}}" data-field="guideText" bindinput="editGuide" disabled="{{guideBusy}}" />
+      <view wx:if="{{guidePhoto}}" class="guide-photo-row"><image class="guide-photo" src="{{guidePhoto}}" mode="aspectFill" /><button bindtap="clearGuidePhoto" disabled="{{guideBusy}}">移除照片</button></view>
+      <button wx:else class="guide-photo-button" bindtap="pickGuidePhoto" disabled="{{guideBusy}}">＋ 添加照片</button>
+      <view class="guide-styles">
+        <button wx:for="{{guideStyles}}" wx:key="name" class="guide-style {{item.selected ? 'selected' : ''}}" style="background:{{item.background}};color:{{item.ink}}" data-index="{{index}}" bindtap="selectGuideStyle" disabled="{{guideBusy}}">{{item.name}}</button>
+      </view>
+      <image wx:if="{{guideImage}}" class="guide-preview" src="{{guideImage}}" mode="widthFix" />
+    </scroll-view>
+    <view class="guide-actions">
+      <button class="ve-btn" bindtap="generateGuide" disabled="{{guideBusy}}" loading="{{guideBusy}}">{{guideImage ? '重新生成' : '生成预览'}}</button>
+      <button class="ve-btn primary" bindtap="insertGuide" disabled="{{guideBusy || !guideImage}}">插入笔记</button>
+    </view>
+  </view>
+  <canvas class="guide-canvas" canvas-id="guideCard" style="width:720px;height:{{guideHeight}}px" />
+</view>
+
 <!-- 底部发布栏 -->
 <view class="bottom-bar">
   <text class="bar-hint">{{barHint}}</text>
-  <button class="pub-btn {{canPublish ? '' : 'off'}}" bindtap="publish" loading="{{busy}}" disabled="{{busy || !canPublish}}">{{editId ? '保存并提交审核' : '发布'}}</button>
+  <button class="pub-btn {{canPublish ? '' : 'off'}}" bindtap="publish" loading="{{busy}}" disabled="{{busy || !canPublish}}">{{publishLabel}}</button>
 </view>

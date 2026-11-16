@@ -135,3 +135,28 @@ page { background: #fff; }
 .vis-opts { display: flex; gap: 14rpx; }
 .vis-opt { font-size: 25rpx; color: #6b7280; background: #f3f4f6; border-radius: 999rpx; padding: 10rpx 30rpx; }
 .vis-opt.on { color: #fff; background: var(--brand, #e87722); font-weight: 600; }
+.gallery-mask { display: flex; align-items: center; justify-content: center; padding: 32rpx; box-sizing: border-box; }
+.gallery-panel { width: 100%; background: #fff; border-radius: 24rpx; padding: 16rpx; box-sizing: border-box; }
+.gallery-panel .media-swiper { height: 60vh; }
+.gallery-close { margin: 0 0 12rpx auto; padding: 0 20rpx; width: fit-content; font-size: 24rpx; }
+.thumb-tag, .thumb-live, .thumb-state { position: absolute; padding: 0 5rpx; background: rgba(17,24,39,.74); color: white; font-size: 17rpx; line-height: 25rpx; }
+.thumb-tag { top: 0; left: 0; }
+.thumb-live { top: 0; right: 0; }
+.thumb-state { right: 0; left: 0; bottom: 0; text-align: center; }
+.thumb-state.bad { background: #a93434; }
+.title-hint { padding: 6rpx 0 14rpx; color: #805126; font-size: 24rpx; }
+.guide-sheet { position: absolute; bottom: 0; left: 0; right: 0; padding: 24rpx 30rpx calc(24rpx + env(safe-area-inset-bottom)); border-radius: 28rpx 28rpx 0 0; background: #fff; }
+.guide-header, .guide-photo-row, .guide-styles, .guide-actions { display: flex; align-items: center; gap: 14rpx; }
+.guide-header { justify-content: space-between; }
+.guide-header button, .guide-photo-row button, .guide-photo-button { margin: 0; font-size: 24rpx; }
+.guide-content { max-height: 65vh; }
+.guide-input { box-sizing: border-box; width: 100%; margin: 12rpx 0; padding: 14rpx 18rpx; border-radius: 12rpx; background: #f5f7f6; font-size: 28rpx; min-height: 68rpx; }
+.guide-text { height: 180rpx; }
+.guide-styles { margin: 14rpx 0; }
+.guide-style { flex: 1; margin: 0; padding: 0 8rpx; font-size: 24rpx; border: 3rpx solid transparent; }
+.guide-style.selected { border-color: currentColor; font-weight: 600; }
+.guide-photo { width: 88rpx; height: 88rpx; border-radius: 12rpx; }
+.guide-preview { display: block; width: 100%; border-radius: 16rpx; }
+.guide-actions { padding-top: 16rpx; }
+.guide-actions button { flex: 1; margin: 0; }
+.guide-canvas { position: fixed; left: -10000px; top: 0; pointer-events: none; }

@@ -3,12 +3,16 @@
 // 三期新增：可见范围（公开/私密）；云草稿（本地即时存 + 云端防丢，发布成功双清）；素材长按拖拽排序；AI 排版建议（guide）落地
 // WXML 铁律：只做取值与单三元，全部逻辑在此预计算。
 const api = require('../../../utils/api')
+const { GUIDE_STYLES, renderGuide, suggestTitle } = require('./guide-card')
 
 const HOT_TOPICS = ['亲子出游', '周末遛娃', '小众路线', '露营日记', '美食探店', '古镇漫步', '山水风光', '人文历史']
 
 Page({
   data: {
-    title: '', titleLen: 0, bodyText: '', bodyHtml: '',
+    title: '', titleLen: 0, bodyText: '', bodyHtml: '', confirmTitle: false,
+    showGallery: false, showGuide: false, guideBusy: false, guideImage: '', guideHeight: 960,
+    guideTitle: '', guideText: '', guidePhoto: '', guideStyle: 0,
+    guideStyles: GUIDE_STYLES.map((style, index) => ({ ...style, selected: index === 0 })),
     topics: [], hotTopics: HOT_TOPICS, showTopicSheet: false,
     images: [], video: null, coverIndex: 0, current: 0,
     hasMedia: false, canAddMore: true, mediaLabel: '', coverKey: '',
@@ -18,7 +22,7 @@ Page({
     scenicId: null, scenicName: '', // 关联景区（三期话题聚合）
     editId: null, revision: null, textMode: false, loaded: false,
     uploadingCount: 0, hasFailed: false, barHint: '', canPublish: false, bodyLen: 0,
-    formats: {}, busy: false,
+    formats: {}, busy: false, publishLabel: '发布',
     // ✨ 写作建议（AI 看图成文）
     showIdeas: false, writingIntent: '', visionBusy: false, visionError: '', visionResult: null, canIdeas: false,
     // 本地草稿 + 云草稿（三期 V89）
@@ -34,12 +38,14 @@ Page({
     this.plainLenValue = 0 // 正文纯文本长度（editor 是唯一事实源，编辑回填也能正确计数）
     this.imageUploads = new Map() // src → /uploads 原始路径（预览渲染用）
     this.mediaAccess = new Map()  // /uploads 路径 → 带 ticket 的可读 URL（私密预览）
-    if (q && q.id) { this.setData({ editId: Number(q.id) }) }
+    if (q && q.id) { this.setData({ editId: Number(q.id), publishLabel: '保存并提交审核' }) }
+    this.startGuide = q && q.guide === '1'
     if (q && q.draftId) { this.cloudDraftId = Number(q.draftId) } // 从创作中心云草稿进入
   },
   onReady() {
     if (this.data.editId) this.loadForEdit()
     else if (this.cloudDraftId) this.loadCloudDraft(this.cloudDraftId)
+    else if (this.startGuide) this.openGuide()
     else if (!this.maybeRestoreDraft()) this.pickImages()
   },
   onHide() {
@@ -203,8 +209,9 @@ Page({
     const items = files.map(f => ({ key: 'm' + (++this.seq), kind: type, src: f.tempFilePath, uploading: true, failed: false, url: null, size: f.size || 0 }))
     if (type === 'video') this.setData({ video: items[0] })
     else this.setData({ images: this.data.images.concat(items) })
+    this.bump(items.length)
+    this.refresh()
     for (const it of items) {
-      this.bump(1)
       try { await this.uploadItem(it) } catch (e) { this.markFailed(it.key, e) }
       this.bump(-1)
     }
@@ -256,7 +263,7 @@ Page({
     let coverIndex = this.data.coverIndex
     if (idx < coverIndex) coverIndex--
     else if (idx === coverIndex) coverIndex = 0
-    this.setData({ images, coverIndex, current: Math.min(this.data.current, Math.max(images.length - 1, 0)) })
+    this.setData({ images, coverIndex, showGallery: this.data.showGallery && images.length > 0, current: Math.min(this.data.current, Math.max(images.length - 1, 0)) })
     this.refresh()
   },
   removeVideo() { this.setData({ video: null }); this.refresh() },
@@ -387,7 +394,13 @@ Page({
     } catch (err) { wx.showToast({ title: err.msg || '封面生成失败', icon: 'none' }) }
     finally { this.setData({ veBusy: false }) }
   },
-  onSwiper(e) { this.setData({ current: e.detail.current }) },
+  openGallery(e) {
+    if (this.data.dragging || Date.now() < (this.suppressThumbTapUntil || 0)) return
+    this.setData({ showGallery: true, current: Number(e.currentTarget.dataset.i) })
+    this.refresh()
+  },
+  closeGallery() { this.setData({ showGallery: false }) },
+  onSwiper(e) { this.setData({ current: e.detail.current }); this.refresh() },
   setCover() { this.setData({ coverIndex: this.data.current }); this.refresh() },
   previewCurrent(e) {
     const i = e.currentTarget.dataset.i
@@ -398,25 +411,27 @@ Page({
   buildThumbs() {
     const d = this.data
     return d.images.map((x, i) => ({ key: x.key, src: x.src, i,
-      isDragging: this.dragFrom >= 0 && i === this.dragFrom && this.dragging,
-      isTarget: this.dragTarget >= 0 && i === this.dragTarget && this.dragging && this.dragFrom !== this.dragTarget }))
+      isCover: i === d.coverIndex, isLive: d.livePhotos.some(p => p.photo === x.url), uploading: x.uploading, failed: x.failed,
+      isDragging: d.dragging && i === this.dragFrom,
+      isTarget: d.dragging && i === this.dragTarget && this.dragFrom !== this.dragTarget }))
   },
   thumbLongPress(e) {
     const i = Number(e.currentTarget.dataset.i)
     if (i < 0 || this.data.images.length < 2) return
     this.dragFrom = i
     this.dragTarget = i
-    this.setData({ dragging: true, dragIndex: i, dragOverIndex: i, thumbs: this.buildThumbs() })
+    this.setData({ dragging: true, dragIndex: i, dragOverIndex: i })
+    this.setData({ thumbs: this.buildThumbs() })
     wx.vibrateShort({ type: 'light', fail: () => {} })
   },
   thumbMove(e) {
     if (!this.data.dragging || this.dragFrom < 0) return
     const t = e.touches && e.touches[0]
     if (!t) return
-    this.createSelectorQuery().select('#thumbStrip').boundingClientRect(rect => {
-      if (!rect) return
-      const slot = rect.width / Math.max(this.data.images.length, 1)
-      const idx = Math.max(0, Math.min(this.data.images.length - 1, Math.floor((t.clientX - rect.left) / slot)))
+    this.createSelectorQuery().selectAll('.thumb-photo').boundingClientRect(rects => {
+      if (!this.data.dragging || !rects.length) return
+      const next = rects.findIndex(rect => t.clientX < rect.right)
+      const idx = next < 0 ? rects.length - 1 : next
       if (idx !== this.dragTarget) {
         this.dragTarget = idx
         this.setData({ dragOverIndex: idx, thumbs: this.buildThumbs() })
@@ -427,6 +442,7 @@ Page({
     if (!this.data.dragging || this.dragFrom < 0) { this.setData({ dragging: false, dragIndex: -1, dragOverIndex: -1 }); return }
     const from = this.dragFrom, to = this.dragTarget
     this.dragFrom = -1; this.dragTarget = -1
+    this.suppressThumbTapUntil = Date.now() + 250
     if (to >= 0 && to !== from && to < this.data.images.length) {
       const images = this.data.images.slice()
       const [moved] = images.splice(from, 1)
@@ -507,7 +523,8 @@ Page({
       const guideTopic = r.guide ? '路线攻略' : '旅行打卡'
       const topics = this.data.topics.includes(guideTopic) ? this.data.topics
         : (this.data.topics.length >= 5 ? this.data.topics : this.data.topics.concat(guideTopic))
-      this.setData({ title: r.title.slice(0, 20), titleLen: Math.min(r.title.length, 20), topics, showIdeas: false })
+      const title = this.data.title.trim() ? this.data.title : r.title.slice(0, 20)
+      this.setData({ title, titleLen: title.length, topics, showIdeas: false })
       this.refresh()
     }
     if (hasBody) {
@@ -515,11 +532,74 @@ Page({
     } else apply()
   },
 
+  /* ---------- 攻略图 ---------- */
+  openGuide() {
+    if (this.data.video || this.data.images.length >= 9) {
+      wx.showToast({ title: this.data.video ? '请先移除视频' : '请先腾出一个图片位置', icon: 'none' })
+      return
+    }
+    if (!this.data.guideTitle && !this.data.guideText) {
+      this.setData({ guideTitle: (this.data.title.trim() || this.data.scenicName).slice(0, 20), guideText: this.data.bodyText.trim().slice(0, 240) })
+    }
+    this.setData({ showGuide: true })
+  },
+  closeGuide() {
+    if (!this.data.guideBusy) this.setData({ showGuide: false })
+  },
+  editGuide(e) {
+    this.setData({ [e.currentTarget.dataset.field]: e.detail.value, guideImage: '' })
+  },
+  selectGuideStyle(e) {
+    const guideStyle = Number(e.currentTarget.dataset.index)
+    this.setData({ guideStyle, guideImage: '', guideStyles: GUIDE_STYLES.map((style, index) => ({ ...style, selected: index === guideStyle })) })
+  },
+  pickGuidePhoto() {
+    wx.chooseMedia({ count: 1, mediaType: ['image'], success: r => {
+      const photo = r.tempFiles[0]
+      if (photo) this.setData({ guidePhoto: photo.tempFilePath, guideImage: '' })
+    } })
+  },
+  clearGuidePhoto() { this.setData({ guidePhoto: '', guideImage: '' }) },
+  async generateGuide() {
+    const { guideTitle, guideText, guidePhoto, guideStyle, guideBusy } = this.data
+    if (guideBusy) return
+    if (!guideText.trim()) return wx.showToast({ title: '先写几条攻略要点', icon: 'none' })
+    this.setData({ guideBusy: true, guideImage: '' })
+    try {
+      const title = guideTitle.trim() || suggestTitle(guideText)
+      const preview = await renderGuide(this, { title, text: guideText, photo: guidePhoto, style: GUIDE_STYLES[guideStyle] })
+      this.setData({ guideImage: preview })
+    } catch (err) {
+      wx.showToast({ title: '攻略图生成失败，请重试', icon: 'none' })
+    } finally { this.setData({ guideBusy: false }) }
+  },
+  insertGuide() {
+    const { guideImage, guideBusy, guideText, images, video } = this.data
+    if (!guideImage || guideBusy || video || images.length >= 9) return
+    if (!this.plainLenValue && !this.data.bodyHtml) {
+      const html = guideText.trim().split(/\n+/).map(line => '<p>' + line.replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch])) + '</p>').join('')
+      this.plainLenValue = this.plainLen(html)
+      this.pendingHtml = html
+      if (this.editor) { this.editor.setContents({ html }); this.pendingHtml = '' }
+      this.setData({ bodyText: guideText.trim(), bodyHtml: html })
+    }
+    this.setData({ showGuide: false, guideImage: '' })
+    this.enqueue([{ tempFilePath: guideImage }], 'image')
+    this.refresh()
+  },
+
   /* ---------- 文字编辑 ---------- */
   onTitle(e) { this.setData({ title: e.detail.value, titleLen: e.detail.value.length }) },
   onEditorReady() {
-    this.createSelectorQuery().select('#bodyEditor').context(r => { this.editor = r.context }).exec()
-    if (this.pendingHtml) { const html = this.pendingHtml; this.pendingHtml = ''; this.editor.setContents({ html }); this.plainLenValue = this.plainLen(html); this.refresh() }
+    this.createSelectorQuery().select('#bodyEditor').context(r => {
+      this.editor = r.context
+      if (!this.editor || !this.pendingHtml) return
+      const html = this.pendingHtml
+      this.pendingHtml = ''
+      this.editor.setContents({ html })
+      this.plainLenValue = this.plainLen(html)
+      this.refresh()
+    }).exec()
   },
   onEditorStatus(e) { this.setData({ formats: e.detail }) },
   onEditorInput(e) {
@@ -606,13 +686,19 @@ Page({
   async publish() {
     if (this.data.busy) return
     if (this.data.uploadingCount > 0 || this.data.hasFailed) return wx.showToast({ title: this.data.barHint || '媒体未就绪', icon: 'none' })
-    const html = this.editor ? await new Promise(r => this.editor.getContents({ success: c => r(c.html), fail: () => r('') })) : ''
-    if (this.plainLen(html) < 4) return wx.showToast({ title: '至少写 4 个字', icon: 'none' })
-    const imageUrls = this.data.images.filter(x => x.url && !x.failed).map(x => x.url)
-    if (this.data.images.some(x => !x.url)) return wx.showToast({ title: '图片还在上传或已失败', icon: 'none' })
-    if (this.data.video && !this.data.video.url) return wx.showToast({ title: '视频还在上传或已失败', icon: 'none' })
     this.setData({ busy: true })
     try {
+      const content = this.editor ? await new Promise(r => this.editor.getContents({ success: r, fail: () => r(null) })) : null
+      const html = content?.html || this.data.bodyHtml
+      if (this.plainLen(html) < 4) return wx.showToast({ title: '至少写 4 个字', icon: 'none' })
+      const imageUrls = this.data.images.filter(x => x.url && !x.failed).map(x => x.url)
+      if (this.data.images.some(x => !x.url)) return wx.showToast({ title: '图片还在上传或已失败', icon: 'none' })
+      if (this.data.video && !this.data.video.url) return wx.showToast({ title: '视频还在上传或已失败', icon: 'none' })
+      if (!this.data.title.trim()) {
+        const title = suggestTitle(content?.text || this.data.bodyText, this.data.scenicName, this.data.topics[0])
+        this.setData({ title, titleLen: title.length, confirmTitle: true, publishLabel: this.data.editId ? '确认提交审核' : '确认发布' })
+        return
+      }
       await api.ensureLogin()
       const { editId, revision, title, topics, visibility, scenicId, relatedProductId } = this.data
       const coverItem = this.data.images[this.data.coverIndex]
