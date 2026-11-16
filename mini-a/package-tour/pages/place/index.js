@@ -23,4 +23,9 @@ Page({
   nav() { const d = this.data.d; place.openGeo(d.geo, d.short_name || d.name, d.address) },
   call() { place.call(this.data.d.service_phone) },
   goTour(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
+  // 三期收尾：景区详情 → 该景区的话题聚合（feed ?scenic=）
+  goScenicNotes() {
+    if (this.kind !== 'scenic') return
+    wx.navigateTo({ url: '/package-content/pages/square/index?scenic=' + this.id + '&scenicName=' + encodeURIComponent(this.data.d.short_name || this.data.d.name || '') })
+  },
 })

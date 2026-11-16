@@ -77,6 +77,15 @@ page { background: #fff; }
 .ab-share { flex-shrink: 0; min-width: 96rpx; height: 60rpx; line-height: 60rpx; padding: 0 20rpx; border-radius: 999rpx;
   background: #f5f6f7; color: #6b7280; font-size: 24rpx; }
 
+/* 实况播放（Codex 素材线） */
+.live-play { position: absolute; left: 14rpx; bottom: 14rpx; font-size: 22rpx; color: #fff;
+  background: rgba(0,0,0,.62); border-radius: 999rpx; padding: 6rpx 20rpx; }
+.live-mask { position: fixed; inset: 0; background: rgba(23,23,23,.93); z-index: 90;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 28rpx; }
+.live-video { width: 94%; height: 60vh; }
+.live-close { width: auto; margin: 0; padding: 0 40rpx; border-radius: 999rpx;
+  background: rgba(255,255,255,.14); color: #fff; font-size: 26rpx; }
+
 /* 话题可点 + 景区行（三期①） */
 .topic-tag { padding: 6rpx 14rpx; background: var(--brand-soft, #fdf1e3); border-radius: 10rpx; }
 .scenic-line { margin-top: 18rpx; font-size: 25rpx; color: #6b7280; }

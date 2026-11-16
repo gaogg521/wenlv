@@ -1,0 +1,2610 @@
+diff --git a/api/.env.example b/api/.env.example
+index 677e8f5..8251511 100644
+--- a/api/.env.example
++++ b/api/.env.example
+@@ -95,3 +95,8 @@ EVM_EXPLORER=
+ # ALERT_WEBHOOK_MODE: wecom=企业微信群机器人（默认） / raw=原始JSON（飞书等自行适配）
+ ALERT_WEBHOOK_URL=
+ ALERT_WEBHOOK_MODE=wecom
++
++# UGC vision writing. Set values in the API runtime environment only.
++# NOTE_VISION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
++# NOTE_VISION_MODEL=qwen3-vl-plus
++# NOTE_VISION_API_KEY=
+diff --git a/api/admin/app.css b/api/admin/app.css
+index e4292bb..d981f67 100644
+--- a/api/admin/app.css
++++ b/api/admin/app.css
+@@ -692,3 +692,17 @@ code.dk { background: rgba(80,130,255,.14); color: #8fd0ff; padding: 0 5px; }
+ .vpath li { margin: 3px 0; word-break: break-all; } .vpath em { font-style: normal; color: #7a837e; margin-right: 8px; }
+ .drawer .bd-expl { background: #f7f4ec; }
+ .chain-tip .tip-note { margin-top: 8px; font-size: 11.5px; line-height: 1.6; color: #f5d27a; }
++
++.review-drawer .rv-grid{grid-template-columns:minmax(0,1fr) minmax(230px,290px);gap:24px}
++.rv-note-head,.rv-note-section{padding:18px 20px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px}
++.rv-note-head .rv-title{margin:0 0 12px;overflow-wrap:anywhere}
++.rv-note-head .rv-meta{flex-wrap:wrap}
++.rv-note-section h3{font-size:15px;margin:0 0 12px}
++.rv-note-text{font-size:15px;line-height:1.8;overflow-wrap:anywhere}
++.rv-note-text img{max-width:100%;max-height:240px;object-fit:contain}
++.rv-note-media{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:12px}
++.rv-media{margin:0;min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#faf8f4}
++.rv-media a{display:block}
++.rv-media img,.rv-media video{display:block;width:100%;height:200px;object-fit:contain;background:#222}
++.rv-media figcaption{padding:8px 12px;font-size:12px;color:var(--sub,#625749)}
++@media(max-width:760px){.review-drawer .rv-grid{grid-template-columns:1fr}.rv-note-head,.rv-note-section{padding:14px}}
+diff --git a/api/admin/pages/content.js b/api/admin/pages/content.js
+index 12a206d..923c3a1 100644
+--- a/api/admin/pages/content.js
++++ b/api/admin/pages/content.js
+@@ -189,20 +189,28 @@ function reviewDrawer(title, bodyHtml, footHtml) {
+ const NOTE_ST = ['机审中', '人工审核', '已发布', '已驳回', '已下架']
+ function submissionHtml(n) {
+   if (!n) return `<div class="empty"><div class="e-ico">🗒</div>当前没有投稿（被驳回后作者尚未重新提交）</div>`
+-  return `<div class="rv-sub">
+-    <div class="rv-meta"><span class="pill ${n.status === 2 ? 'ok' : 'warn'}">${NOTE_ST[n.status] || '—'}</span>
+-      <span>${n.wordCount} 字</span><span>${n.imageCount} 张图</span><span>${esc(n.machineCheck)}</span>
+-      ${n.publishedAt ? `<span>发布于 ${esc(String(n.publishedAt).slice(0, 16).replace('T', ' '))}</span>` : ''}</div>
+-    <h2 class="rv-title">${esc(n.title || '（无题）')}</h2>
+-    ${n.blocks ? n.blocks.map(b => b.type === 'text'
+-      ? `<div class="rv-body rt-preview">${b.html}</div>`
+-      : b.type === 'image'
+-        ? `<div class="rv-imgs"><img src="${esc(b.url)}" alt="投稿图片" loading="lazy"></div>`
+-        : `<video controls preload="metadata" src="${esc(b.url)}" style="width:100%;max-height:420px"></video>`).join('') : `<div class="rv-body rt-preview">${n.html || esc(n.text) || '<span class="muted">（无正文）</span>'}</div>
+-    ${n.images.length ? `<div class="rv-h" style="margin-top:12px">图片一览（${n.images.length}，点击看原图）</div><div class="rv-imgs">${n.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="投稿图片" loading="lazy"></a>`).join('')}</div>` : ''}
+-    ${n.video ? `<video controls preload="metadata" src="${esc(n.video)}" style="width:100%;max-height:420px"></video>` : ''}`}
++  const blocks = n.blocks || []
++  const body = blocks.length ? blocks.filter(b => b.type === 'text').map(b => b.html).join('') : n.html || esc(n.text)
++  const images = [...new Set([n.cover, ...blocks.filter(b => b.type === 'image').map(b => b.url), ...n.images].filter(Boolean))]
++  const videos = [...new Set([n.video, ...blocks.filter(b => b.type === 'video').map(b => b.url)].filter(Boolean))]
++  const video = (url, label) => `<figure class="rv-media"><video controls playsinline preload="metadata" src="${esc(url)}"></video><figcaption>${label}</figcaption></figure>`
++  return `<article class="rv-sub">
++    <header class="rv-note-head">
++      <h2 class="rv-title">${esc(n.title || '（无题）')}</h2>
++      <div class="rv-meta"><span class="pill ${n.status === 2 ? 'ok' : 'warn'}">${NOTE_ST[n.status] || '—'}</span>
++        <span>${n.wordCount} 字</span><span>${n.imageCount} 张图</span><span>${esc(n.machineCheck)}</span>
++        ${n.publishedAt ? `<span>${esc(String(n.publishedAt).slice(0,16).replace('T',' '))}</span>` : ''}</div>
++    </header>
++    <section class="rv-note-section"><h3>正文</h3><div class="rv-note-text rt-preview">${body || '<span class="muted">（无正文）</span>'}</div></section>
++    ${images.length || videos.length || n.livePhotos?.length ? `<section class="rv-note-section"><h3>素材</h3>
++      <div class="rv-note-media">
++        ${images.map((url,i) => `<figure class="rv-media"><a href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="投稿图片 ${i+1}" loading="lazy"></a><figcaption>${url === n.cover ? '封面' : '图片 ' + (i+1)}</figcaption></figure>`).join('')}
++        ${videos.map((url,i) => video(url, videos.length > 1 ? '视频 ' + (i+1) : '视频')).join('')}
++        ${(n.livePhotos || []).map((p,i) => video(p.motion,'实况 ' + (i+1))).join('')}
++      </div>
++    </section>` : ''}
+     ${n.rejectReason ? `<p class="rv-reason">上次驳回原因：${esc(n.rejectReason)}</p>` : ''}
+-  </div>`
++  </article>`
+ }
+ function authorHtml(u, extra) {
+   if (!u) return ''
+diff --git a/api/package-lock.json b/api/package-lock.json
+index 40cbb01..99301a3 100644
+--- a/api/package-lock.json
++++ b/api/package-lock.json
+@@ -8,6 +8,7 @@
+       "name": "wanderlust-api",
+       "version": "1.0.0",
+       "dependencies": {
++        "busboy": "^1.6.0",
+         "mysql2": "^3.11.0"
+       },
+       "devDependencies": {
+@@ -775,6 +776,17 @@
+         "node": ">=0.4.0"
+       }
+     },
++    "node_modules/busboy": {
++      "version": "1.6.0",
++      "resolved": "https://registry.npmjs.org/busboy/-/busboy-1.6.0.tgz",
++      "integrity": "sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==",
++      "dependencies": {
++        "streamsearch": "^1.1.0"
++      },
++      "engines": {
++        "node": ">=10.16.0"
++      }
++    },
+     "node_modules/centra": {
+       "version": "2.7.0",
+       "resolved": "https://registry.npmjs.org/centra/-/centra-2.7.0.tgz",
+@@ -1262,6 +1274,14 @@
+         "url": "https://github.com/mysqljs/sql-escaper?sponsor=1"
+       }
+     },
++    "node_modules/streamsearch": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/streamsearch/-/streamsearch-1.1.0.tgz",
++      "integrity": "sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==",
++      "engines": {
++        "node": ">=10.0.0"
++      }
++    },
+     "node_modules/timm": {
+       "version": "1.7.1",
+       "resolved": "https://registry.npmjs.org/timm/-/timm-1.7.1.tgz",
+diff --git a/api/package.json b/api/package.json
+index 3440d3d..89432fa 100644
+--- a/api/package.json
++++ b/api/package.json
+@@ -28,6 +28,7 @@
+     "test:followup": "node test/scenic-followup.mjs"
+   },
+   "dependencies": {
++    "busboy": "^1.6.0",
+     "mysql2": "^3.11.0"
+   },
+   "devDependencies": {
+diff --git a/api/src/domain/media-review.mjs b/api/src/domain/media-review.mjs
+index 0cdfcc6..ac42c8c 100644
+--- a/api/src/domain/media-review.mjs
++++ b/api/src/domain/media-review.mjs
+@@ -6,7 +6,14 @@ export async function applyMediaReview(message) {
+   const trace = String(message.trace_id || '')
+   if (!trace) throw new Error('图片回执缺少任务标识')
+   const found = await one('SELECT note_id FROM content_media_check WHERE trace_id = ?', [trace])
+-  if (!found) throw new Error('图片回执任务尚未登记，请稍后重试')
++  if (!found) {
++    const comment = await one('SELECT id FROM content_note_comment WHERE media_trace=?', [trace])
++    if (!comment) throw new Error('媒体回执任务尚未登记，请稍后重试')
++    const pass = Number(message.errcode) === 0 && message.result?.suggest === 'pass'
++    return tx(async c => ({
++      accepted: Boolean(await c.upd('UPDATE content_note_comment SET media_state=? WHERE id=? AND media_state=0', [pass ? 1 : 2, comment.id])),
++    }))
++  }
+   return tx(async c => {
+     // 同一篇先锁笔记，所有回执采用相同锁序，避免多图并发死锁。
+     const note = await c.one('SELECT id, status, body FROM content_note WHERE id = ? FOR UPDATE', [found.note_id])
+diff --git a/api/src/domain/task-review.mjs b/api/src/domain/task-review.mjs
+index 924c10c..798fb41 100644
+--- a/api/src/domain/task-review.mjs
++++ b/api/src/domain/task-review.mjs
+@@ -30,6 +30,8 @@ export function noteView(note, img = (u) => u) {
+     id: Number(note.id), title: note.title || '', html: html.replace(/(<img[^>]+src=")([^"]+)"/gi, (_, a, u) => a + img(u) + '"'),
+     text, blocks: Array.isArray(body.blocks) ? body.blocks.map(b=>b.type==='text'?{type:b.type,html:sanitizeRich(b.html)}:{type:b.type,url:img(b.url)}) : null, images: images.map(img), video: body.video ? img(body.video) : null, revision: Number(note.revision || 1), wordCount: wordCount(text), imageCount: images.length,
+     status: Number(note.status), publishedAt: note.published_at || null, createdAt: note.created_at || null,
++    cover: body.cover ? img(body.cover) : null,
++    livePhotos: (body.livePhotos || []).map(p=>({ photo:img(p.photo), motion:img(p.motion) })),
+     likeCount: Number(note.like_count || 0), rejectReason: note.reject_reason || null,
+     machineCheck: note.sec_check_id === 'mock' ? '联调通道（未经真实机审）' : (note.sec_check_id ? '已过微信内容安全检测' : '—'),
+   }
+diff --git a/api/src/domain/wxapi.mjs b/api/src/domain/wxapi.mjs
+index d3f0ce1..73715f3 100644
+--- a/api/src/domain/wxapi.mjs
++++ b/api/src/domain/wxapi.mjs
+@@ -97,7 +97,7 @@ export async function sendSubscribeMessage(openid, templateId, data, page) {
+ }
+ 
+ /** 多媒体内容安全（mediaCheckAsync，异步回执）——P1 图片笔记审核 */
+-export async function mediaCheckAsync(mediaUrl, openid, scene = 2) {
++export async function mediaCheckAsync(mediaUrl, openid, scene = 2, mediaType = 2) {
+   if (demoIdentity(openid)) return { mock: true, traceId: 'mock-' + Date.now() }
+   if (!openid || String(openid).startsWith('mock-')) throw new Error('图片审核需要真实微信登录身份')
+   const url = new URL(mediaUrl)
+@@ -105,7 +105,7 @@ export async function mediaCheckAsync(mediaUrl, openid, scene = 2) {
+   const token = await accessToken()
+   if (!token) return { mock: true, traceId: 'mock-' + Date.now() }
+   const j = await post(base() + `/wxa/media_check_async?access_token=${token}`,
+-    { media_url: mediaUrl, media_type: 2, version: 2, scene, openid })
++    { media_url: mediaUrl, media_type: mediaType, version: 2, scene, openid })
+   if (Number(j.errcode) !== 0 || !j.trace_id) throw new Error('微信图片审核提交失败，错误码 ' + (j.errcode || 'missing_trace_id'))
+   return { mock: false, traceId: j.trace_id }
+ }
+diff --git a/api/src/index.mjs b/api/src/index.mjs
+index 7a3a57a..9522685 100644
+--- a/api/src/index.mjs
++++ b/api/src/index.mjs
+@@ -11,12 +11,13 @@ import { requireModule } from './routes/_shared.mjs'
+ import { hashPassword, initialAdminPassword, isProduction } from './auth.mjs'
+ import { isLive } from './domain/wxpay.mjs'
+ import { serveBadgeArt } from './domain/badge-art.mjs'
++import { noteMediaOwner, canReadNoteMedia } from './domain/note-media.mjs'
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url))
+ const PORT = Number(process.env.PORT || 8080)
+ 
+ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+-  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp4': 'video/mp4' }
++  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.mp3': 'audio/mpeg' }
+ 
+ async function bootstrap() {
+   // 预热凭据缓存：链适配器同步读取后台保存的加密凭据（见 infra/chain/conf.mjs）
+@@ -89,12 +90,20 @@ const server = http.createServer(async (req, res) => {
+     }
+   }
+   // 静态：/uploads → 用户上传文件（头像等；路径穿越已防护）
+-  if (req.method === 'GET' && pathname.startsWith('/uploads/')) {
++  if (['GET','HEAD'].includes(req.method) && pathname.startsWith('/uploads/')) {
+     const file = path.join(__dirname, '..', 'static', pathname)
++    const restricted = noteMediaOwner(path.basename(file)) !== null
++    if (restricted && pathname !== '/uploads/' + path.basename(file)) { res.writeHead(404); return res.end() }
++    if (/^(?:\.|ugc-edit-)/.test(path.basename(file))) { res.writeHead(404); return res.end() }
+     if (file.startsWith(path.join(__dirname, '..', 'static', 'uploads') + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
++      if (restricted) {
++        const allowed = await canReadNoteMedia(pathname,url.searchParams.get('media'),req).catch(() => false)
++        if (!allowed) { res.writeHead(404, {'Cache-Control':'no-store'}); return res.end() }
++      }
++      const cache = restricted ? 'private, no-store' : 'public, max-age=86400'
+       if (/^ugc-video-/.test(path.basename(file))) {
+         const size = fs.statSync(file).size
+-        const headers = {'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'public, max-age=86400'}
++        const headers = {'Content-Type':file.endsWith('.mov') ? 'video/quicktime' : 'video/mp4','Accept-Ranges':'bytes','Cache-Control':cache}
+         const range = req.headers.range
+         if (range) {
+           const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+@@ -105,13 +114,16 @@ const server = http.createServer(async (req, res) => {
+             return res.end()
+           }
+           res.writeHead(206,{...headers,'Content-Range':`bytes ${start}-${end}/${size}`,'Content-Length':end-start+1})
++          if (req.method === 'HEAD') return res.end()
+           return fs.createReadStream(file,{start,end}).pipe(res)
+         }
+         res.writeHead(200,{...headers,'Content-Length':size})
++        if (req.method === 'HEAD') return res.end()
+         return fs.createReadStream(file).pipe(res)
+       }
+-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' })
+-      return res.end(fs.readFileSync(file))
++      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache, 'Content-Length':fs.statSync(file).size })
++      if (req.method === 'HEAD') return res.end()
++      return fs.createReadStream(file).pipe(res)
+     }
+   }
+   // 静态：/badge-art/<勋章id>.svg → 服务端生成的勋章图形（公开，不含任何用户数据；?state=off 为未获得灰阶）
+@@ -140,12 +152,26 @@ const server = http.createServer(async (req, res) => {
+   }
+   if (!handler) return json(res, 1004, { message: '接口不存在: ' + req.method + ' ' + pathname }, 404)
+ 
++  if (req.method === 'POST' && pathname === '/c/upload/note-video' && /^multipart\/form-data\b/i.test(req.headers['content-type'] || '')) {
++    try {
++      const data = await handler({ headers: req.headers, stream: req })
++      return json(res, 0, data)
++    } catch (error) {
++      req.resume()
++      return json(res, error.code || 1001, { message: error.code ? error.message : '视频上传失败，请重试' })
++    }
++  }
++
+   const chunks = []
+   let size = 0
+   for await (const ch of req) {
+     size += ch.length
++    if (pathname === '/c/note-video/asset' && size > 3 * 1024 * 1024) return json(res,1001,{message:'素材超过 2 MB'},413)
++    if (req.method === 'POST' && /^\/c\/notes\/[^/]+\/comments$/.test(pathname) && size > 1024 * 1024) {
++      return json(res, 1001, { message: '评论附件过大' }, 413)
++    }
+     if (pathname === '/c/upload/note-video' && size > 12 * 1024 * 1024) {
+-      return json(res,1001,{message:'请选择 8 MB 以内的 MP4 视频'},413)
++      return json(res,1001,{message:'请使用新版创作中心上传大视频'},413)
+     }
+     chunks.push(ch)
+   }
+diff --git a/api/src/routes/admin-ops.mjs b/api/src/routes/admin-ops.mjs
+index 442ae62..90b2374 100644
+--- a/api/src/routes/admin-ops.mjs
++++ b/api/src/routes/admin-ops.mjs
+@@ -19,6 +19,7 @@ import * as vc from '../domain/vc.mjs'
+ import * as asset from '../domain/asset.mjs'
+ import * as badgeDomain from '../domain/badge.mjs'
+ import * as taskReview from '../domain/task-review.mjs'
++import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
+ import { findBanned, SUGGEST } from '../domain/wording.mjs'
+ import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
+ import * as chain from '../infra/chain.mjs'
+@@ -208,7 +209,7 @@ const adminEco = {
+     }
+     const product = n.related_product_id ? await one('SELECT id, title FROM tour_product WHERE id = ?', [n.related_product_id]) : null
+     const tasks = await q(`SELECT t.id,t.title,e.status FROM content_task_entry e JOIN content_task t ON t.id=e.task_id LEFT JOIN tour_product p ON p.id=t.product_id WHERE e.note_id=?${a.scopeCity?' AND p.city_code=?':''}`,a.scopeCity?[n.id,a.scopeCity]:[n.id])
+-    return { note: taskReview.noteView(n, (u) => apiImg(u, req)), author, product, tasks }
++    return { note: taskReview.noteView(n, (u) => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'), req)), author, product, tasks }
+   },
+   'POST /admin/content/:id/verdict': async (req) => {
+     const a = await requireAdmin(req, 'note.review')
+diff --git a/api/src/routes/admin.mjs b/api/src/routes/admin.mjs
+index 55bd238..9bb3d19 100644
+--- a/api/src/routes/admin.mjs
++++ b/api/src/routes/admin.mjs
+@@ -1,6 +1,7 @@
+ import { q, one, count, tx, BizError } from '../db.mjs'
+ import { cfg, cfgAll, cfgNum, cfgArr, loadConfig, configName } from '../config.mjs'
+ import { requireUser, jwtSign, code2Session, hashPassword, verifyPassword, isForbiddenPassword } from '../auth.mjs'
++import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
+ import * as order from '../domain/order.mjs'
+ import * as bean from '../domain/bean.mjs'
+ import * as pass from '../domain/pass.mjs'
+@@ -1476,7 +1477,7 @@ const admin = {
+   // 审核材料（按参与记录）：约稿要求 + 投稿全文与图片 + 自动核对 + 该参与者的历次审核
+   'GET /admin/task-entries/:id/review': async (req) => {
+     await requireAdmin(req, ['super', 'ops', 'review'])
+-    const pack = await taskReview.entryReviewPack(req.params.id, (u) => apiImg(u, req))
++    const pack = await taskReview.entryReviewPack(req.params.id, (u) => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'), req))
+     if (!pack) throw new BizError(1004, '参与记录不存在')
+     return pack
+   },
+diff --git a/api/src/routes/content-governance.mjs b/api/src/routes/content-governance.mjs
+index 53e69c7..873a7ec 100644
+--- a/api/src/routes/content-governance.mjs
++++ b/api/src/routes/content-governance.mjs
+@@ -3,6 +3,7 @@ import { requireUser } from '../auth.mjs'
+ import { requireAdmin,audit,apiImg } from './_shared.mjs'
+ import { findBanned } from '../domain/wording.mjs'
+ import { noteView } from '../domain/task-review.mjs'
++import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
+ function reasonOf(v) {
+   const s=String(v||'').trim()
+   if(s.length<4||s.length>300) throw new BizError(1001,'请填写 4 至 300 字的具体原因')
+@@ -49,7 +50,7 @@ export const contentGovernance={
+       const n=await locked(c,req.params.id)
+       const old=await c.one('SELECT id,status FROM content_report WHERE note_id=? AND user_id=?',[n.id,u.uid])
+       if(old)return {id:old.id,status:old.status,duplicate:true}
+-      if(Number(n.status)!==2)throw new BizError(1004,'笔记不存在或未发布')
++      if(Number(n.status)!==2 || n.visibility!=='public')throw new BizError(1004,'笔记不存在或未发布')
+       if(Number(n.user_id)===Number(u.uid))throw new BizError(1001,'不能举报自己的笔记')
+       const id=await c.ins('INSERT INTO content_report(note_id,user_id,city_code,reason) VALUES (?,?,?,?)',[n.id,u.uid,n.city_code||null,reason])
+       return {id,status:0}
+@@ -90,7 +91,8 @@ export const contentGovernance={
+     if(!row)throw new BizError(1004,'记录不存在')
+     scope(a,row.scope_city,row.city_code)
+     const snapshot=row.snapshot?(typeof row.snapshot==='string'?JSON.parse(row.snapshot):row.snapshot):null
+-    return {id:row.id,reason:row.reason,status:row.status,resolution:row.resolution,offlineReason:row.offline_reason||null,note:noteView({id:row.note_id,title:row.title,body:row.body,status:row.note_status},u=>apiImg(u,req)),snapshot:snapshot?noteView({id:row.note_id,...snapshot,status:4},u=>apiImg(u,req)):null}
++    const media = u => apiImg(noteMediaOwner(u) === null ? u : noteMediaTicket(u,900,'note-review'),req)
++    return {id:row.id,reason:row.reason,status:row.status,resolution:row.resolution,offlineReason:row.offline_reason||null,note:noteView({id:row.note_id,title:row.title,body:row.body,status:row.note_status},media),snapshot:snapshot?noteView({id:row.note_id,...snapshot,status:4},media):null}
+   },
+   'POST /admin/content-cases/reports/:id/verdict':async req=>{
+     const a=await staff(req),reason=reasonOf(req.body.reason),action=req.body.action
+diff --git a/api/src/routes/tourist.mjs b/api/src/routes/tourist.mjs
+index 0292e09..856db47 100644
+--- a/api/src/routes/tourist.mjs
++++ b/api/src/routes/tourist.mjs
+@@ -34,10 +34,18 @@ import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepa
+ import * as chain from '../infra/chain.mjs'
+ import * as wxapi from '../domain/wxapi.mjs'
+ import * as wxsec from '../infra/wxsec.mjs'
++import { noteCommentRoutes } from './note-comments.mjs'
++import { draftFromPhotos } from '../domain/note-vision.mjs'
++import { noteMediaOwner, noteMediaTicket, conflictingMediaVisibility } from '../domain/note-media.mjs'
+ import fs from 'node:fs'
+ import path from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ import crypto from 'node:crypto'
++import Busboy from 'busboy'
++import { pipeline } from 'node:stream/promises'
++import { execFile } from 'node:child_process'
++import { promisify } from 'node:util'
++import os from 'node:os'
+ import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
+ import { annotateSessions, activeRules, scopeMatch, unitPrice } from '../domain/discount.mjs'
+ import * as pkg from '../domain/package.mjs'
+@@ -58,11 +66,22 @@ async function saveNote(req, editing) {
+   const user = noteAuthor(req)
+   const { title, body, images, relatedProductId, video, revision, blocks: submittedBlocks } = req.body
+   const id = editing ? Number(req.params.id) : null
+-  if (editing) {
+-    const current = await one('SELECT status,revision FROM content_note WHERE id=? AND user_id=?', [id,user.uid])
+-    if (!current) throw new BizError(1004, '作品不存在')
+-    if (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision)) throw new BizError(2002, '作品状态已变化，请重新打开')
++  const current = editing ? await one('SELECT status,revision,visibility,scenic_id,body FROM content_note WHERE id=? AND user_id=?', [id,user.uid]) : null
++  if (editing && !current) throw new BizError(1004, '作品不存在')
++  if (current && (![2,3].includes(Number(current.status)) || Number(current.revision) !== Number(revision))) {
++    throw new BizError(2002, '作品状态已变化，请重新打开')
+   }
++  const previousBody = current ? readNoteBody(current.body) : {}
++  const visibility = req.body.visibility ?? current?.visibility ?? 'public'
++  if (!['public','private'].includes(visibility)) throw new BizError(1001, '可见范围无效')
++  const scenicId = req.body.scenicId === undefined ? current?.scenic_id ?? null : req.body.scenicId === null ? null : Number(req.body.scenicId)
++  if (req.body.scenicId !== undefined && scenicId !== null && (!Number.isSafeInteger(scenicId) || scenicId < 1 ||
++      !await one('SELECT id FROM scenic_spot WHERE id=? AND status=1', [scenicId]))) throw new BizError(1001, '请选择有效景区')
++  const rawTopics = req.body.topics ?? previousBody.topics ?? []
++  if (!Array.isArray(rawTopics) || rawTopics.length > 5 || rawTopics.some(t => typeof t !== 'string' || !/^[\p{L}\p{N}_-]{1,24}$/u.test(t.trim()))) {
++    throw new BizError(1001, '最多添加五个话题，每个限 24 个字')
++  }
++  const topics = [...new Set(rawTopics.map(t => t.trim().toLowerCase()))]
+   let blocks
+   if (submittedBlocks !== undefined) {
+     if (!Array.isArray(submittedBlocks) || !submittedBlocks.length || submittedBlocks.length > 40) {
+@@ -74,7 +93,7 @@ async function saveNote(req, editing) {
+         const html = sanitizeRich(block.html, 10000).replace(/<\/?(?:img|video|audio|source|picture|track)\b[^>]*>/gi,'')
+         if (plainText(html)) return {type:'text',html}
+       }
+-      if (['image','video'].includes(block?.type) && typeof block.url === 'string') return {type:block.type,url:block.url}
++      if (['image','video'].includes(block?.type) && typeof block.url === 'string') return {type:block.type,url:block.url,...(block.attachment === true ? {attachment:true} : {})}
+       throw new BizError(1001,'内容块格式无效')
+     })
+   }
+@@ -92,44 +111,241 @@ async function saveNote(req, editing) {
+   if (!text.replace(/<[^>]*>|&nbsp;|\s/g,'').length) throw new BizError(1001, '内容不能为空')
+   const videoUrl = articleVideo ? String(articleVideo) : null
+   if (videoUrl) {
+-    const file = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.]mp4$')
++    const file = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.](mp4|mov)$')
+     if (!file.test(videoUrl) || !fs.existsSync(path.join(noteUploadDir, path.basename(videoUrl)))) throw new BizError(1001, '请选择本人上传的视频')
+   }
+   const account = await one('SELECT mini_a_openid FROM user_account WHERE id=?', [user.uid])
+-  const sec = await wxsec.msgSecCheck((title || '') + ' ' + text, account?.mini_a_openid)
++  const sec = await wxsec.msgSecCheck([title || '', topics.join(' '), text].join(' '), account?.mini_a_openid)
+   const imgUrls = [...new Set([...(Array.isArray(articleImages) ? articleImages : []), ...inlineImages].map(String))].slice(0,9)
+   if (imgUrls.some(x => !/^\/uploads\/[a-z0-9_.-]+$/i.test(x))) throw new BizError(1001, '请选择站内上传的图片')
++  const cover = req.body.cover === undefined ? previousBody.cover || null : req.body.cover || null
++  if (cover && (typeof cover !== 'string' || (!imgUrls.includes(cover) &&
++      (!new RegExp('^/uploads/note_' + Number(user.uid) + '_[0-9]+[.](jpg|png|webp)$').test(cover) ||
++      !fs.existsSync(path.join(noteUploadDir, path.basename(cover))))))) throw new BizError(1001, '请选择笔记中的图片或本人上传的封面')
++  const livePhotos = req.body.livePhotos ?? previousBody.livePhotos ?? []
++  if (!Array.isArray(livePhotos) || livePhotos.length > 9 || new Set(livePhotos.map(p=>p?.photo)).size !== livePhotos.length ||
++      livePhotos.some(p => !imgUrls.includes(p?.photo) || typeof p.motion !== 'string' ||
++        !/^\/uploads\/ugc-video-.*\.(mp4|mov)$/.test(p.motion) || noteMediaOwner(p.motion) !== Number(user.uid) ||
++        !fs.existsSync(path.join(noteUploadDir,path.basename(p.motion))))) throw new BizError(1001,'实况照片需绑定正文图片及本人上传的短片')
++  if (visibility === 'private' && [...imgUrls, cover].some(p=>p && noteMediaOwner(p) === null)) {
++    throw new BizError(1001,'请重新上传旧版图片后再设为私密')
++  }
++  for (const {motion} of livePhotos) {
++    const probe = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
++      ['-v','error','-select_streams','v:0','-show_entries','stream=duration','-of','csv=p=0',path.join(noteUploadDir,path.basename(motion))],
++      { timeout:10000, windowsHide:true }).catch(()=>null)
++    const seconds = Number(probe?.stdout.trim())
++    if (!(seconds > 0 && seconds <= 3.1)) throw new BizError(1001,'实况动态片段需为 3 秒以内的视频')
++  }
+   const imgSec = []
+-  let status = editing || videoUrl || !sec.pass ? 1 : 2
+-  for (const url of imgUrls) {
+-    const check = await wxapi.mediaCheckAsync(apiImg(url,req), account?.mini_a_openid)
++  const manualReview = Boolean(editing || videoUrl || livePhotos.length)
++  let status = manualReview || !sec.pass ? 1 : 2
++  const originalImages = new Set([...(previousBody.images || []), previousBody.cover])
++  for (const url of new Set([...imgUrls, ...(cover ? [cover] : [])])) {
++    if (noteMediaOwner(url) !== Number(user.uid) && !originalImages.has(url)) throw new BizError(1001, '请选择本人上传的图片')
++    const check = await wxapi.mediaCheckAsync(apiImg(noteMediaTicket(url, 3600, 'note-review'),req), account?.mini_a_openid)
+     imgSec.push({ url, traceId: check.traceId, mock: check.mock })
+     if (!check.mock && sec.pass) status = 0
+   }
+-  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, manualReview: Boolean(editing || videoUrl), imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
++  const payload = JSON.stringify({ text, blocks, images: imgUrls, video: videoUrl, cover, topics, livePhotos, manualReview, imgSec, textCheck: { pass: sec.pass, mock: sec.mock } })
+   const saved = await tx(async c => {
+-    const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,status]
++    await c.one('SELECT id FROM user_account WHERE id=? FOR UPDATE',[user.uid])
++    for (const asset of new Set([...imgUrls,cover,videoUrl,...livePhotos.map(p=>p.motion)].filter(Boolean))) {
++      if (noteMediaOwner(asset) !== null && await conflictingMediaVisibility(c,asset,visibility,id)) {
++        throw new BizError(1001,'素材已用于不同可见范围的笔记，请重新上传一份')
++      }
++    }
++    const fields = [title || null,payload,status,sec.mock ? 'mock' : 'wx-sec',relatedProductId || null,visibility,scenicId,status]
+     let noteId = id
+     if (editing) {
+       await c.one('SELECT id FROM content_note WHERE id=? FOR UPDATE',[id])
+       if (await c.one('SELECT id FROM content_task_entry WHERE note_id=? AND status IN (2,3) LIMIT 1',[id])) throw new BizError(2002,'已提交约稿的作品暂不可编辑')
+-      const updated = await c.upd(`UPDATE content_note SET title=?,body=?,status=?,sec_check_id=?,related_product_id=?,
++      const updated = await c.upd(`UPDATE content_note SET title=?,body=?,status=?,sec_check_id=?,related_product_id=?,visibility=?,scenic_id=?,
+         published_at=IF(?=2,NOW(3),NULL),reject_reason=NULL,revision=revision+1 WHERE id=? AND user_id=? AND status IN (2,3) AND revision=?`,
+         [...fields,id,user.uid,Number(revision)])
+       if (updated !== 1) throw new BizError(2002, '作品状态已变化，请重新打开')
+       await c.upd("UPDATE review_claim SET released_at=NOW(3) WHERE queue_kind='note' AND item_id=? AND released_at IS NULL",[id])
+       await audit(c,'tourist:'+user.uid,'content','edit','note-'+id,null,{revision:Number(revision)+1,status})
+     } else {
+-      noteId = await c.ins(`INSERT INTO content_note(user_id,title,body,status,sec_check_id,related_product_id,published_at)
+-        VALUES (?,?,?,?,?,?,IF(?=2,NOW(3),NULL))`,[user.uid,...fields])
++      noteId = await c.ins(`INSERT INTO content_note(user_id,title,body,status,sec_check_id,related_product_id,visibility,scenic_id,published_at)
++        VALUES (?,?,?,?,?,?,?,?,IF(?=2,NOW(3),NULL))`,[user.uid,...fields])
+     }
+     for (const check of imgSec.filter(x => !x.mock)) await c.ins('INSERT INTO content_media_check(trace_id,note_id) VALUES (?,?)',[check.traceId,noteId])
++    if (!editing && req.body.draftId != null) {
++      const deleted = await c.upd('DELETE FROM content_note_draft WHERE id=? AND user_id=? AND revision=?',
++        [req.body.draftId,user.uid,req.body.draftRevision ?? 0])
++      if (deleted !== 1) throw new BizError(2002, '草稿已在其他设备修改，请重新打开后提交')
++    }
+     return noteId
+   })
+-  return {id:saved,status,secMock:sec.mock,imgChecked:imgSec.length,msg:status===2?'已发布':status===0?'图片机审中':'已提交人工审核'}
++  return {id:saved,status,visibility,secMock:sec.mock,imgChecked:imgSec.length,msg:status===2?'已发布':status===0?'图片机审中':'已提交人工审核'}
+ }
+ 
+-const noteUploadDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..','..','static','uploads')
++const __dirnameForTourist = path.dirname(fileURLToPath(import.meta.url))
++const noteUploadDir = path.join(__dirnameForTourist, '..','..','static','uploads')
++const NOTE_VIDEO_MAX = 80 * 1024 * 1024
++const runMedia = promisify(execFile)
++const activeMediaEdits = new Set()
++let recognizingNoteScenes = false
++
++async function editNoteVideo(req, still) {
++  const user = noteAuthor(req)
++  const { url, start, end, look = 'original', caption = '', captions = [], sticker = '', music = false,
++    customSticker = '', customMusic = '' } = req.body || {}
++  const looks = new Map([
++    ['original',''], ['warm','colorbalance=rs=.08:bs=-.08'],
++    ['mono','hue=s=0'], ['vivid','eq=saturation=1.35:contrast=1.06'],
++  ])
++  if (!looks.has(look)) throw new BizError(1001, '请选择有效滤镜')
++  const stickers = { scenic: '旅行打卡', walk: '慢慢走', guide: '路线攻略' }
++  const validText = text => typeof text === 'string' && text.length <= 36 && !/[\p{Cc}<>{}]/u.test(text)
++  if (!validText(caption) || !Array.isArray(captions) || captions.length > 12 ||
++      captions.some(c => !validText(c?.text) || !c.text.trim() || !Number.isFinite(c.start) || !Number.isFinite(c.end) ||
++        c.start < start || c.end > end || c.end <= c.start) ||
++      (sticker && !Object.hasOwn(stickers,sticker)) || typeof music !== 'boolean') throw new BizError(1001, '字幕或装饰无效')
++  const assets = []
++  for (const [value, extension] of [[customSticker,'png'],[customMusic,'mp3']]) {
++    if (value && (typeof value !== 'string' || !new RegExp('^ugc-edit-' + user.uid + '-[0-9a-f-]{36}[.]' + extension + '$').test(value))) {
++      throw new BizError(1001,'请选择本人上传的贴纸或音乐')
++    }
++    assets.push(value ? path.join(noteUploadDir,value) : '')
++  }
++  const owned = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.](mp4|mov)$')
++  if (typeof url !== 'string' || !owned.test(url)) throw new BizError(1001, '请选择本人上传的视频')
++  if (!Number.isFinite(start) || start < 0 || start > 86400 ||
++      (!still && (!Number.isFinite(end) || end > 86400 || end - start < 0.5))) {
++    throw new BizError(1001, '请选择有效的时间范围')
++  }
++  const source = path.join(noteUploadDir, path.basename(url))
++  if (!fs.existsSync(source)) throw new BizError(1004, '原视频不存在')
++  if (activeMediaEdits.has(user.uid) || activeMediaEdits.size >= 2) throw new BizError(1001, '视频正在处理，请稍后再试')
++  const filename = still ? `note_${user.uid}_${Date.now()}${crypto.randomInt(100000,999999)}.jpg` :
++    `ugc-video-${user.uid}-${crypto.randomUUID()}.mp4`
++  const output = path.join(noteUploadDir, filename)
++  const temporary = path.join(noteUploadDir, '.' + filename)
++  let scratch
++  activeMediaEdits.add(user.uid)
++  try {
++    const options = { timeout: 120000, windowsHide: true, maxBuffer: 128 * 1024 }
++    const duration = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
++      ['-v','error','-show_entries','format=duration','-of','csv=p=0',source], options)
++    const seconds = Number(duration.stdout.trim())
++    if (!(seconds > start) || (!still && end > seconds + 0.05)) throw new BizError(1001, '选取范围超出了视频时长')
++    const filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2',looks.get(look)].filter(Boolean)
++    if (!still && (caption.trim() || captions.length || sticker)) {
++      scratch = await fs.promises.mkdtemp(path.join(os.tmpdir(),'wenlv-video-'))
++      const assTime = seconds => {
++        const cs = Math.round(seconds * 100)
++        return Math.floor(cs / 360000) + ':' + String(Math.floor(cs / 6000) % 60).padStart(2,'0') + ':' +
++          String(Math.floor(cs / 100) % 60).padStart(2,'0') + '.' + String(cs % 100).padStart(2,'0')
++      }
++      const lines = captions.map(c=>`Dialogue: 0,${assTime(c.start-start)},${assTime(c.end-start)},Caption,,0,0,0,,${c.text.replace(/\\/g,'')}`)
++      const ass = `[Script Info]
++ScriptType: v4.00+
++PlayResX: 384
++PlayResY: 288
++[V4+ Styles]
++Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
++Style: Caption,sans-serif,18,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,2,18,18,24,1
++Style: Badge,sans-serif,16,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80274366,1,0,0,0,100,100,0,0,3,5,0,7,20,18,20,1
++[Events]
++Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
++${caption.trim() ? 'Dialogue: 0,0:00:00.00,24:00:00.00,Caption,,0,0,0,,'+caption.replace(/\\/g,'') : ''}
++${lines.join('\n')}
++${sticker ? 'Dialogue: 0,0:00:00.00,24:00:00.00,Badge,,0,0,0,,'+stickers[sticker] : ''}
++`
++      await fs.promises.writeFile(path.join(scratch,'labels.ass'),ass,'utf8')
++      filters.push('ass=labels.ass')
++    }
++    let audio = ['-map','0:a:0?']
++    let video = ['-map','0:v:0','-vf',filters.join(',')]
++    const extraInputs = []
++    const graph = []
++    const [imageFile,musicFile] = assets
++    if (!still && imageFile) {
++      extraInputs.push('-i',imageFile)
++      graph.push(`[0:v]${filters.join(',')}[base];[1:v]scale=180:180:force_original_aspect_ratio=decrease[badge];[base][badge]overlay=W-w-20:20[outv]`)
++      video = ['-map','[outv]']
++    }
++    if (!still && (music || musicFile)) {
++      const streams = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
++        ['-v','error','-select_streams','a:0','-show_entries','stream=index','-of','csv=p=0',source], options)
++      extraInputs.push('-stream_loop','-1','-i',musicFile || path.resolve(__dirnameForTourist, '../../video/audio/bgm.wav'))
++      const musicTrack = imageFile ? '[2:a]' : '[1:a]'
++      graph.push(streams.stdout.trim() ? musicTrack + 'volume=0.16[bg];[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]' : musicTrack+'volume=0.30[out]')
++      audio = ['-map','[out]']
++    }
++    const args = still ? ['-frames:v','1','-vf','scale=min(1080\\,iw):-2','-q:v','3','-update','1'] :
++      ['-t',String(end-start),...(graph.length ? ['-filter_complex_threads','1','-filter_complex',graph.join(';')] : []),
++        ...video,...audio,'-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p',
++        '-c:a','aac','-movflags','+faststart','-fs',String(NOTE_VIDEO_MAX)]
++    await runMedia(process.env.FFMPEG_PATH || 'ffmpeg',
++      ['-hide_banner','-loglevel','error','-nostdin','-ss',String(start),'-i',source,...extraInputs,...args,temporary], { ...options, cwd:scratch })
++    const size = (await fs.promises.stat(temporary)).size
++    if (size <= 0 || size >= (still ? 2 * 1024 * 1024 : NOTE_VIDEO_MAX)) throw new BizError(1001, '处理结果超出大小限制')
++    if (!still) {
++      const probe = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
++        ['-v','error','-show_entries','format=duration','-of','csv=p=0',temporary], options)
++      if (Number(probe.stdout) < end - start - 0.25) throw new BizError(1001, '成片不完整，请缩短选段重试')
++    }
++    await fs.promises.rename(temporary, output)
++    const url = '/uploads/' + filename
++    return { url, access: noteMediaTicket(url) }
++  } catch (error) {
++    if (error instanceof BizError) throw error
++    console.warn('[note-video] media processing failed:', error.code || error.name, String(error.stderr || '').split('\n').slice(0,2).join(' '))
++    throw new BizError(1001, '视频处理失败，请检查素材或稍后重试')
++  } finally {
++    activeMediaEdits.delete(user.uid)
++    await fs.promises.unlink(temporary).catch(() => {})
++    if (scratch) {
++      await fs.promises.unlink(path.join(scratch,'labels.ass')).catch(() => {})
++      await fs.promises.rmdir(scratch).catch(() => {})
++    }
++  }
++}
++
++function validateNoteVideo(header, size) {
++  if (header.length < 16 || size > NOTE_VIDEO_MAX || header.toString('ascii', 4, 8) !== 'ftyp' ||
++      header.readUInt32BE(0) < 16 || header.readUInt32BE(0) > size) {
++    throw new BizError(1001, '请选择 80 MB 以内的 MP4 或 MOV 视频')
++  }
++  return header.toString('ascii', 8, 12) === 'qt  ' ? 'mov' : 'mp4'
++}
++
++async function streamNoteVideo(req, base) {
++  const temp = path.join(noteUploadDir, '.' + base + '.part')
++  try {
++    const parser = Busboy({ headers: req.headers, limits: { files: 1, fields: 0, parts: 2, fileSize: NOTE_VIDEO_MAX + 1 } })
++    let write, invalid = false
++    await new Promise((resolve, reject) => {
++      parser.on('file', (field, stream) => {
++        if (field !== 'video') { invalid = true; stream.resume(); return }
++        stream.on('limit', () => { invalid = true })
++        write = pipeline(stream, fs.createWriteStream(temp, { flags: 'wx' }))
++        write.catch(reject)
++      })
++      for (const event of ['filesLimit', 'fieldsLimit', 'partsLimit']) parser.on(event, () => { invalid = true })
++      parser.once('error', reject)
++      parser.once('close', resolve)
++      req.stream.once('error', reject)
++      req.stream.pipe(parser)
++    })
++    await write
++    if (!write || invalid) throw new BizError(1001, '请选择一段 80 MB 以内的视频')
++    const fd = await fs.promises.open(temp, 'r')
++    let ext
++    try {
++      const header = Buffer.alloc(16)
++      const { bytesRead } = await fd.read(header)
++      ext = validateNoteVideo(header.subarray(0, bytesRead), (await fd.stat()).size)
++    } finally { await fd.close() }
++    const name = base + '.' + ext
++    await fs.promises.rename(temp, path.join(noteUploadDir, name))
++    const url = '/uploads/' + name
++    return { url, access: noteMediaTicket(url) }
++  } finally { await fs.promises.unlink(temp).catch(() => {}) }
++}
+ 
+ // ---------- /c 游客端 ----------
+ const c = {
+@@ -591,20 +807,20 @@ const c = {
+     fs.mkdirSync(dir, { recursive: true })
+     const name = `note_${u.uid}_${Date.now()}${crypto.randomInt(100000,999999)}.` + (ext === 'jpeg' ? 'jpg' : ext)
+     fs.writeFileSync(path.join(dir, name), buf)
+-    return { url: '/uploads/' + name }
++    const url = '/uploads/' + name
++    return { url, access: noteMediaTicket(url) }
+   },
+ 
+   'POST /c/upload/note-video': async req => {
+     const u = noteAuthor(req)
++    const base = 'ugc-video-' + u.uid + '-' + crypto.randomUUID()
++    await fs.promises.mkdir(noteUploadDir, { recursive: true })
++    if (req.stream) return streamNoteVideo(req, base)
+     const buf = Buffer.from(String(req.body?.data || ''),'base64')
+-    if (buf.length < 16 || buf.length > 8 * 1024 * 1024 || buf.toString('ascii',4,8) !== 'ftyp'
+-      || buf.readUInt32BE(0) < 16 || buf.readUInt32BE(0) > buf.length || buf.toString('ascii',8,12) === 'qt  ') {
+-      throw new BizError(1001,'请选择 8 MB 以内的 MP4 视频')
+-    }
+-    fs.mkdirSync(noteUploadDir,{recursive:true})
+-    const name = 'ugc-video-' + u.uid + '-' + crypto.randomUUID() + '.mp4'
+-    fs.writeFileSync(path.join(noteUploadDir,name),buf,{flag:'wx'})
+-    return {url:'/uploads/'+name}
++    const name = base + '.' + validateNoteVideo(buf, buf.length)
++    await fs.promises.writeFile(path.join(noteUploadDir,name),buf,{flag:'wx'})
++    const url = '/uploads/' + name
++    return { url, access: noteMediaTicket(url) }
+   },
+ 
+   // 旅行笔记广场（A-43）：仅已发布（status=2）笔记，分页，带封面/作者/点赞/关联线路
+@@ -613,12 +829,16 @@ const c = {
+     const u = requireUser(req)
+     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+     const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
++    const topic = String(req.query.topic || '').trim().toLowerCase().slice(0,24)
+     const rows = await q(`SELECT n.id, n.title, n.like_count, n.published_at, u.nickname author, p.title product_title,
+-        JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.images[0]')) cover,
++        COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.cover')), 'null'), JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.images[0]'))) cover,
++        s.name scenic_name,
+         JSON_TYPE(JSON_EXTRACT(n.body, '$.video')) = 'STRING' hasVideo
+       FROM content_note n JOIN user_account u ON u.id = n.user_id
+       LEFT JOIN tour_product p ON p.id = n.related_product_id
+-      WHERE n.status = 2 ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize])
++      LEFT JOIN scenic_spot s ON s.id=n.scenic_id AND s.status=1
++      WHERE n.status = 2 AND n.visibility='public' AND (?='' OR JSON_CONTAINS(JSON_EXTRACT(n.body,'$.topics'),JSON_QUOTE(?)))
++      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`, [topic, topic, pageSize, (page - 1) * pageSize])
+     const liked = rows.length ? await q(`SELECT note_id FROM content_note_likes WHERE user_id = ? AND note_id IN (${rows.map(() => '?').join(',')})`, [u.uid, ...rows.map((r) => r.id)]) : []
+     const likedSet = new Set(liked.map((x) => Number(x.note_id)))
+     return {
+@@ -635,7 +855,7 @@ const c = {
+   // 点赞（A-43）：一用户一笔记一赞，重复点赞给业务错误；取消可重赞
+   'POST /c/notes/:id/like': async (req) => {
+     const u = requireUser(req)
+-    const n = await one('SELECT id, status FROM content_note WHERE id = ?', [req.params.id])
++    const n = await one("SELECT id, status FROM content_note WHERE id = ? AND visibility='public'", [req.params.id])
+     if (!n || Number(n.status) !== 2) throw new BizError(1004, '笔记不存在或未发布')
+     try {
+       await tx(async (c) => {
+@@ -831,6 +1051,107 @@ const cPromo = {
+ 
+ // 用户发布笔记（msgSecCheck 机审前置 → 过=发布 / 可疑=人工队列）
+ const cNotes = {
++  ...noteCommentRoutes,
++  'POST /c/note-vision-draft': async req => {
++    const user = noteAuthor(req)
++    const { paths, scenicId, relatedProductId, topics, intent } = req.body || {}
++    if (!Array.isArray(paths) || !paths.length || paths.length > 3 ||
++        paths.some(p=>typeof p!=='string' || !p.startsWith('/uploads/note_') || noteMediaOwner(p)!==Number(user.uid))) {
++      throw new BizError(1001,'请选择 1 至 3 张本人上传的照片')
++    }
++    const scenic = scenicId ? await one('SELECT name FROM scenic_spot WHERE id=? AND status=1',[Number(scenicId)||0]) : null
++    const product = !scenic && relatedProductId ? await one('SELECT title FROM tour_product WHERE id=? AND status=1',[Number(relatedProductId)||0]) : null
++    const photos = []
++    for (const p of new Set(paths)) {
++      const ext=path.extname(p).slice(1)
++      const file=path.join(noteUploadDir,path.basename(p))
++      const stat=await fs.promises.stat(file).catch(()=>null)
++      if (!stat?.isFile() || stat.size>2*1024*1024) throw new BizError(1001,'照片已失效或过大，请重新选择')
++      photos.push('data:image/'+(ext==='jpg'?'jpeg':ext)+';base64,'+(await fs.promises.readFile(file)).toString('base64'))
++    }
++    return draftFromPhotos({uid:user.uid,photos,place:scenic?.name || product?.title || '',intent:typeof intent==='string'?intent.trim().slice(0,80):'',
++      topics:Array.isArray(topics)?topics.filter(t=>typeof t==='string').slice(0,5).map(t=>t.slice(0,24)):[]})
++  },
++  'POST /c/note-scenes': async req => {
++    const user = noteAuthor(req)
++    const { paths } = req.body || {}
++    if (!Array.isArray(paths) || paths.length < 1 || paths.length > 9 ||
++        paths.some(p=>typeof p!=='string' || !p.startsWith('/uploads/note_') || noteMediaOwner(p)!==Number(user.uid))) {
++      throw new BizError(1001,'请选择本人上传的照片')
++    }
++    if (recognizingNoteScenes) throw new BizError(1001,'正在识别其他照片，请稍后重试')
++    recognizingNoteScenes = true
++    try {
++      const files = paths.map(p=>path.join(noteUploadDir,path.basename(p)))
++      const script = path.resolve(__dirnameForTourist,'../../scripts/note-scenes.py')
++      const result = await runMedia(process.env.NOTE_SCENE_PYTHON || 'python',[script,...files],{timeout:90000,windowsHide:true})
++      return Object.fromEntries(paths.map((p,i)=>[p,JSON.parse(result.stdout)[i] || '']))
++    } catch (error) {
++      console.warn('[note-scenes]',error.code || error.name)
++      throw new BizError(1001,'自动识图暂不可用，可手动标记照片场景')
++    } finally { recognizingNoteScenes = false }
++  },
++  'POST /c/note-media/access': req => {
++    const u = noteAuthor(req)
++    const { paths } = req.body || {}
++    if (!Array.isArray(paths) || paths.length > 30 || paths.some(p => typeof p !== 'string' || !p.startsWith('/uploads/') || noteMediaOwner(p) !== Number(u.uid))) {
++      throw new BizError(1004, '素材不存在')
++    }
++    return Object.fromEntries(paths.map(p => [p,noteMediaTicket(p)]))
++  },
++  'POST /c/note-video/trim': req => editNoteVideo(req, false),
++  'POST /c/note-video/cover': req => editNoteVideo(req, true),
++  'POST /c/note-video/asset': async req => {
++    const user = noteAuthor(req)
++    const { kind, data } = req.body || {}
++    const buffer = Buffer.from(typeof data === 'string' ? data : '', 'base64')
++    const png = kind === 'sticker' && buffer.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))
++    const mp3 = kind === 'music' && (buffer.toString('ascii',0,3)==='ID3' || (buffer[0]===255 && (buffer[1]&224)===224))
++    if ((!png && !mp3) || buffer.length < 32 || buffer.length > 2*1024*1024) throw new BizError(1001,'请选择 2 MB 内的 PNG 贴纸或 MP3 音乐')
++    const asset = 'ugc-edit-' + user.uid + '-' + crypto.randomUUID() + (png ? '.png' : '.mp3')
++    await fs.promises.mkdir(noteUploadDir,{recursive:true})
++    await fs.promises.writeFile(path.join(noteUploadDir,asset),buffer,{flag:'wx'})
++    return { asset }
++  },
++  'GET /c/note-drafts': async req => {
++    const u = noteAuthor(req)
++    return q(`SELECT id,revision,updated_at,JSON_UNQUOTE(JSON_EXTRACT(body,'$.title')) title
++      FROM content_note_draft WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 30`, [u.uid])
++  },
++  'GET /c/note-drafts/:id': async req => {
++    const u = noteAuthor(req)
++    const row = await one('SELECT id,revision,body FROM content_note_draft WHERE id=? AND user_id=?', [req.params.id,u.uid])
++    if (!row) throw new BizError(1004, '草稿不存在')
++    return { id:row.id, revision:row.revision, content:readNoteBody(row.body) }
++  },
++  'POST /c/note-drafts': async req => {
++    const u = noteAuthor(req)
++    const { id, revision, content } = req.body || {}
++    const payload = JSON.stringify(content ?? null)
++    if (!Array.isArray(content?.blocks) || typeof content.title !== 'string' || payload.length > 230000) throw new BizError(1001, '草稿内容无效或过长')
++    return tx(async c => {
++      await c.one('SELECT id FROM user_account WHERE id=? FOR UPDATE', [u.uid])
++      if (id != null) {
++        const changed = await c.upd('UPDATE content_note_draft SET body=?,revision=revision+1 WHERE id=? AND user_id=? AND revision=?', [payload,id,u.uid,revision ?? 0])
++        if (!changed) throw new BizError(2002, '草稿已在其他设备修改，请重新打开')
++        return { id, revision:Number(revision)+1 }
++      }
++      const { n } = await c.one('SELECT COUNT(*) n FROM content_note_draft WHERE user_id=?', [u.uid])
++      if (Number(n) >= 30) throw new BizError(1001, '最多保存 30 篇草稿，请先清理')
++      return { id:await c.ins('INSERT INTO content_note_draft(user_id,body) VALUES(?,?)', [u.uid,payload]), revision:1 }
++    })
++  },
++  'DELETE /c/note-drafts/:id': async req => {
++    const u = noteAuthor(req)
++    const result = await q('DELETE FROM content_note_draft WHERE id=? AND user_id=? AND revision=?', [req.params.id,u.uid,req.body?.revision ?? 0])
++    if (!result.affectedRows) throw new BizError(2002, '草稿已变更，请刷新')
++    return { deleted:true }
++  },
++  'GET /c/note-scenics': async req => {
++    noteAuthor(req)
++    const kw = String(req.query.kw || '').trim().slice(0,40)
++    return q('SELECT id,name,city_code FROM scenic_spot WHERE status=1 AND LOCATE(?,name)>0 ORDER BY name,id LIMIT 30', [kw])
++  },
+   'GET /c/notes': async (req) => {
+     const u = requireUser(req)
+     if(u.end!=='c')throw new BizError(1003,'仅游客账号可查看作品')
+@@ -844,25 +1165,35 @@ const cNotes = {
+   'PUT /c/notes/:id': req => saveNote(req,true),
+   'GET /c/notes/:id/edit': async req => {
+     const u = noteAuthor(req)
+-    const n = await one(`SELECT n.title,n.body,n.revision,n.related_product_id,p.title related_name FROM content_note n
++    const n = await one(`SELECT n.title,n.body,n.revision,n.related_product_id,p.title related_name,n.visibility,s.id scenic_id,s.name scenic_name FROM content_note n
++      LEFT JOIN scenic_spot s ON s.id=n.scenic_id AND s.status=1
+       LEFT JOIN tour_product p ON p.id=n.related_product_id WHERE n.id=? AND n.user_id=? AND n.status IN (2,3)`,[req.params.id,u.uid])
+     if (!n) throw new BizError(1004, '作品不存在或暂不可编辑')
+     const body = readNoteBody(n.body)
+-    return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name}
++    const paths = [...(body.images || []),body.video,body.cover,...(body.livePhotos || []).map(p=>p.motion)].filter(p=>noteMediaOwner(p) !== null)
++    return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name,
++      cover:body.cover || '',topics:body.topics || [],visibility:n.visibility,scenicId:n.scenic_id,scenicName:n.scenic_name,
++      livePhotos:body.livePhotos || [], mediaAccess:Object.fromEntries(paths.map(p=>[p,noteMediaTicket(p)]))}
+   },
+   // 笔记详情独立页（P2）：仅已发布可见
+   'GET /c/notes/:id': async (req) => {
+     const user = requireUser(req)
+     const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.published_at, c.related_product_id,
+-      u.nickname author, p.title product_title
++      u.nickname author, p.title product_title,c.visibility,s.id scenic_id,s.name scenic_name
+       FROM content_note c JOIN user_account u ON u.id = c.user_id
+       LEFT JOIN tour_product p ON p.id = c.related_product_id
+-      WHERE c.id = ? AND c.status = 2`, [req.params.id])
++      LEFT JOIN scenic_spot s ON s.id=c.scenic_id AND s.status=1
++      WHERE c.id = ? AND c.status = 2 AND (c.visibility='public' OR c.user_id=?)`, [req.params.id,user.uid])
+     if (!n) throw new BizError(1004, '笔记不存在或未发布')
+     let body = n.body
+     try { body = typeof body === 'string' ? JSON.parse(body) : body } catch { body = { text: String(body) } }
+     const liked = await one('SELECT note_id FROM content_note_likes WHERE note_id = ? AND user_id = ?', [n.id, user.uid])
+-    return { ...n, liked: !!liked, likeCount: Number(n.like_count), body, text: (body && body.text) || '', images: (body && body.images) || [], video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
++    const assetUrl = p => apiImg(p, req)
++    const { body: raw, ...summary } = n
++    return { ...summary, liked: !!liked, likeCount: Number(n.like_count), text: body?.text || '', images: (body?.images || []).map(assetUrl),
++      cover: assetUrl(body?.cover || body?.images?.[0]), customCover: Boolean(body?.cover), topics: body?.topics || [],
++      livePhotos: (body?.livePhotos || []).map(p=>({ photo:assetUrl(p.photo), motion:assetUrl(p.motion) })),
++      video: assetUrl(body?.video), blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:assetUrl(b.url)}:b) : null }
+   },
+   // 约稿任务四态机（P2）：0待领取 1进行中 2审核中 3已完成
+   'GET /c/tasks': async (req) => {
+@@ -922,7 +1253,7 @@ const cNotes = {
+     const u = requireUser(req)
+     const { noteId } = req.body
+     await tx(async c => {
+-      const note = await c.one('SELECT id, user_id, status, body FROM content_note WHERE id = ? FOR UPDATE', [noteId])
++      const note = await c.one("SELECT id, user_id, status, body FROM content_note WHERE id = ? AND visibility='public' FOR UPDATE", [noteId])
+       if (!note || Number(note.user_id) !== Number(u.uid)) throw new BizError(1004, '笔记不存在')
+       if (Number(note.status) !== 2) throw new BizError(1001, '仅已发布的笔记可提交审核')
+       // A-16：任务状态与截止时间在提交时复检（此前只在领取时校验，截止后仍能提交）
+diff --git "a/docs/\344\270\244\345\260\217\347\250\213\345\272\217\351\200\220\351\241\265\344\270\216\347\234\237\346\234\272\351\252\214\346\224\266-20261113.md" "b/docs/\344\270\244\345\260\217\347\250\213\345\272\217\351\200\220\351\241\265\344\270\216\347\234\237\346\234\272\351\252\214\346\224\266-20261113.md"
+index edf6896..709e358 100644
+--- "a/docs/\344\270\244\345\260\217\347\250\213\345\272\217\351\200\220\351\241\265\344\270\216\347\234\237\346\234\272\351\252\214\346\224\266-20261113.md"
++++ "b/docs/\344\270\244\345\260\217\347\250\213\345\272\217\351\200\220\351\241\265\344\270\216\347\234\237\346\234\272\351\252\214\346\224\266-20261113.md"
+@@ -95,3 +95,52 @@
+ - 隔离版朱家角攻略 #142 正文 874 个汉字，5 张图片（其中两张为实拍视频截图）及一段 7.88 秒朱家角实拍。检查了模拟器预览、广场封面与视频标识、详情混排。视频移到上方两块后提交，待审期间公开列表及详情均隐藏，PC 审核通过后按新顺序恢复。随后用统一编辑器回填全文和全部媒体，预览、再提交并由 PC 审核通过。
+ - 模拟器已生成预览截图，点过详情播放器；未确认播放进度。最终统一编辑器手机光标插入、跨应用图文剪贴板、线上直链及真机播放仍待验。开发者工具已生成隔离预览码，当前 8080 未部署。
+ - 素材：[水道照片](https://commons.wikimedia.org/wiki/File:Zhujiajiao_canal_1.JPG)、[放生桥照片](https://commons.wikimedia.org/wiki/File:放生桥.jpg)、[水乡照片](https://commons.wikimedia.org/wiki/File:Shanghai-Zhujiajiao.JPG)、[LayG Traveller 朱家角实拍](https://www.pexels.com/video/charming-waterways-of-zhujiajiao-ancient-town-34058095/)。
++
++## UGC 发布页与笔记展示
++
++- 发布页增加可横滑的素材缩略条，正文保留统一富文本编辑。图文短帖支持头图轮播，视频主帖使用深色播放器，长攻略保留段落间的图文与视频顺序。
++- 微信开发者工具隔离库复验朱家角稿 #142，确认五张图片和一个视频、编辑区预览顺序及举报面板开关。截图由模拟器逐屏滚动拼接，手机真机待验。
++- [发布长图](UGC-展示验收-20261113/publish-long.png) · [朱家角攻略长图](UGC-展示验收-20261113/article-long.png) · [独立视频版式长图](UGC-展示验收-20261113/video-long.png)
++- [图文轮播长图](UGC-展示验收-20261113/gallery-long.png)使用朱家角稿的实图做模拟器展示样例；轮播页码更新已验。评论功能及真机播放本轮待验。
++
++## UGC 评论与回复
++
++- 图文评论接正文，底栏入口滚动定位；视频主帖从底部弹出评论，保留播放器。评论和回复支持作者标识、展开、点赞与本人删除。评论提交沿用微信文本安全检测。
++- 隔离库应用 V86。测试账号在朱家角攻略 #142 和视频 #108 各实际输入并发送 1 条评论、1 条回复，重新进入后展开已保存的回复。微信开发者工具重编译通过，视频在打开评论前、关闭评论后均收到播放进度。通用 `npm test` 通过。
++- [攻略与评论完整长屏](UGC-展示验收-20261113/comment-article-long.png) · [视频评论弹层](UGC-展示验收-20261113/video-comments.png)。真机预览包生成成功，手机操作及真实微信机审待验。8080 未部署。
++
++## UGC 图片评论与语音回复
++
++- 图文正文下方与视频评论弹层共用图片、录音、试听和发送。支持单张 JPG/PNG 或单段 MP3，可附文字，可作为主评论或回复。语音在视频详情播放时暂停视频。
++- V87 已在隔离库应用。测试账号在朱家角攻略 #142 和视频 #108 通过页面各发送一条实拍图片评论和一条真人录音回复，验证保存、图片放大与语音播放进度。模拟器自动化向编辑区提供本地测试文件，原生相册和麦克风采集待手机验收。
++- 隔离回执覆盖审核中、通过、驳回、重复回执和另一账号的可见性。真实微信媒体审核需要已配置的微信账号、可访问的公网 HTTPS 媒体地址及微信回执，隔离环境未接通。开发者工具重编译和 `npm test` 通过。真机预览码已生成并打开，8080 未部署。
++- 实拍照片取自 #142 原稿。录音为 M.O.X 真人上海话录音，转码为 MP3。[原录音与作者](https://commons.wikimedia.org/wiki/File:Shanghainese.ogg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
++- [图文完整长屏](UGC-展示验收-20261113/media-article-long.png) · [视频评论弹层](UGC-展示验收-20261113/media-video-sheet.png)
++
++## 视频发布与评论排版复验
++
++- 创作页独立提供拍摄、相册和 HTTPS 视频直链入口。相册与直链按 80 MB 文件上限校验，微信原生拍摄入口单段配置为 60 秒。MP4、MOV 流式落盘，旧 JSON 上传保留兼容。
++- 实测 80 MiB 上传及分段读取通过，超 1 字节拒绝。模拟器经小程序上传并预览 37 秒朱家角实拍剪辑，文件含 AAC 音轨（配上海话实录）；上一版朱家角视频源文件没有音轨。真机拍摄、播放声音及在线域名白名单待实测。
++- [新版发布页截图](UGC-展示验收-20261113/video80-compose.png)。预览使用隔离 API 8205，8080 未部署。
++
++## 发布页与提交反馈
++
++- 发布页改为素材、标题正文、关联线路、预览与发布的顺序。素材入口包含拍照、拍视频、从相册选照片或视频、导入直链。提交结果根据服务端状态显示「发布成功」或「已提交审核」，分别可打开笔记或查看我的作品。
++- 微信开发者工具重编译通过。以朱家角实拍图模拟相机返回，验证选择的是相机图片模式、真实上传、发布后打开已保存作品 #156。原生相机采集和审核结果提示的真机表现待扫码验证。
++- [发布页](UGC-展示验收-20261113/compose-clean.png) · [发布反馈](UGC-展示验收-20261113/compose-result.png)
++- 发布页撤掉重复的全文预览，保留素材缩略条及单素材查看，表情直接写入正文。模拟器测试 #157 使用朱家角实拍图，点击表情插入 📍，确认保存后的正文含表情、发布反馈及详情跳转。见[编辑页](UGC-展示验收-20261113/compose-emoji.png)和[发布反馈](UGC-展示验收-20261113/compose-emoji-result.png)。
++- 素材编辑和本机草稿已接入。[对标与验收清单](UGC发布能力对标与验收-20261113.md)。逻辑回归覆盖图片调序、裁剪结果上传、账号隔离、保存恢复、移除、待审反馈及提交后清理草稿。原生裁剪与发布页操作待真机，8080 未部署。
++- V88/V89 对标补齐：封面、景区、话题、可见范围、视频剪辑和云草稿箱。隔离库及模拟器已验，真机与剩余能力见[对标台账](UGC发布能力对标与验收-20261113.md)。
++- 朱家角 #163 私密媒体和创作工具已在隔离库与模拟器复验。详见[对标与验收](UGC发布能力对标与验收-20261113.md)。手机扫码待验。
++- 真机扫码确认：游客端创作中心可打开，图片缩略图下「添加动态片段」、视频缩略图下「剪辑与选帧」两个入口均正常。手机端实际拍摄、素材导入、成片合成与播放仍待实测。
++- 桌面游客端回归：修复 wanderlust/mini-a 线路详情分包模板的宣传视频与轮播标签。重编译后实际点「剧本探秘」进入 3 条线路列表，再从首页点「朱家角剧本游 · 江南谜案」打开详情。新版 UGC 隔离真机预览码已重新打开，等待手机拍照、录像和动态片段操作结果。
++- 真机全链续验：重新打开游客端预览码。隔离库 #163 的四类媒体由作者、另一游客账号与匿名分别复验，结果 200 / 404 / 404。尚未收到「朱家角真机验收」草稿或投稿，手机拍摄、编辑、提交及听音继续待验。
++- 真机反馈后修复：顶部添加素材只进缩略条，正文有明确标签与提示；主动插入正文仍可用。逻辑回归覆盖添加、草稿恢复与显式插入。新版预览隔离端口 8214，手机复验待扫码。
++- 真机投稿「朱家角真机验收」#164 进入隔离环境 8214，PC 内容审核队列可查，已通过测试审核。记录包含一张图和一段视频，为公开可见，未绑定实况片段。手机详情听音及该稿私密验证待实测。
++- 游客端阅读与发布复验：模拟器用朱家角实拍图模拟相机返回，图片留在素材栏。经发布按钮提交 #166 并打开详情，短图文仅展示一次图片，#142 保留长攻略混排。写作建议结合所选景区或线路、话题、作者标注的照片场景；当前无自动识图及一键套用排版。手机复验待办。
++- 自动识图及一键排版：隔离 API 8215 使用本地 CLIP，将朱家角实拍识别为「水岸与桥」。模拟器在创作页打开推荐、编辑预览、应用并点击发布，成功打开 #167 详情。景区和话题由自动化填入页面状态，相机回传使用真实图夹具。已重新编译并打开真机预览码。部署需 Python、PyTorch、Transformers、Pillow 和本地 CLIP 权重，NOTE_SCENE_MODEL 指向模型目录；未部署 8080。
++- 视觉语言模型文案已接入服务端配置及游客端入口，支持可编辑标题、正文、排版预览和切换。供应商请求结构和未配置提示已通过测试。KEY.txt 中尚无可确认归属的视觉服务配置，真实海边照片生成到发布详情待配置后验收。预览环境 8216。
++- 火山方舟视觉文案实测：沿用用户提供的方舟 Key，通过 doubao-seed-2-0-lite-260428 返回结构化文案。海边实拍配话题「海边散步」，模拟器操作生成、应用和发布 #171，详情实页确认一张图及浪花文案。本轮未关联景区，真机预览连隔离 API 8218。[详情长屏](UGC-展示验收-20261113/ark-detail-long.png)
++- Qwen 网关隔离环境 8219 真模验收：模型 qwen-3-8-max，真实海边图配「海边散步」及「想写看海时慢下来的感觉」。模拟器经新版意图卡生成、修改标题、应用、发布 #172 并打开详情。模型将近景浪尖和慢下来的主题结合，正文中个别第一人称动作仍需作者审阅。密钥仅注入运行进程。
++- 2026-11-14：真机扫码确认缩略图点按编辑及长按拖动均正常。隔离环境 Qwen 以海边照片、已选景区、海边散步话题和慢下来的表达意图生成，修改标题后应用并发布 #173，详情核对通过。未出现「蹲低」或虚构第一人称动作。
++- 8080 演示库备份于 %LOCALAPPDATA%/Wanderlust/Backups/8080-before-ugc-20261114-001224，已应用 V85–V89 并重启，健康接口正常。运行工作树 wenlv-live-8080-39cd2e7，验收稿 #173 保留在隔离库。
+diff --git a/mini-a/package-content/pages/create/index.js b/mini-a/package-content/pages/create/index.js
+index 43e4806..2df7ae4 100644
+--- a/mini-a/package-content/pages/create/index.js
++++ b/mini-a/package-content/pages/create/index.js
+@@ -1,13 +1,117 @@
+-// UGC 创作页：富文本编辑器（标题/粗体/斜体/列表/引用/换行）+ 实时预览
++// UGC 创作页：正文、素材、草稿与发布审核。
+ const api = require('../../../utils/api')
++const metadata = { cover: '', topics: [], scenicId: null, scenicName: '', visibility: 'public', livePhotos: [] }
+ 
+ Page({
+   data: {
+-    blockViews: [], notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
++    ...metadata,
++    mediaStrip: [], emojis: ['📍','📸','🚶','🚇','🚌','🗺️','🌿','🌅','☔','☀️','🍜','☕','🎫','⏰','✨','❤️','👍','😊','✅','💡'], notes: [], reports: [], loadError: '', appealNoteId: null, appealReason: '', appealBusy: false, appealMsg: '', tasks: { open: [], mine: [] },
+     title: '', bodyHtml: '', bodyText: '', relatedProductId: null, relatedName: '',
+-    pubMsg: '', editId: null, revision: null, busy: false, showPreview: false, formats: {},
++    publishResult: null, editId: null, revision: null, busy: false, formats: {}, selectedMedia: null,
++  },
++  async onShow() { await this.fetch(); this.fetchTasks(); this.refreshDraft(); this.refreshCloudDrafts() },
++
++  async refreshCloudDrafts() {
++    try {
++      await api.ensureLogin()
++      this.setData({ cloudDrafts: await api.request('/c/note-drafts'), cloudDraftError: '' })
++    } catch (e) { this.setData({ cloudDraftError: e.msg || '草稿加载失败' }) }
++  },
++  openCloudDrafts() {
++    this.setData({ showCloudDrafts: true })
++    this.refreshCloudDrafts()
++  },
++  closeCloudDrafts() { if (!this.data.busy) this.setData({ showCloudDrafts: false }) },
++  async deleteCloudDraft(e) {
++    const { id, revision } = e.currentTarget.dataset
++    wx.showModal({ title: '删除这篇草稿？', content: '删除后无法恢复。', success: async ({ confirm }) => {
++      if (!confirm) return
++      try {
++        await api.request('/c/note-drafts/' + id, 'DELETE', { revision })
++        if (this.data.draftId === id) this.setData({ draftId: null, draftRevision: null })
++        this.refreshCloudDrafts()
++      } catch (error) { wx.showToast({ title: error.msg || '删除失败', icon: 'none' }) }
++    } })
++  },
++  async restoreCloudDraft(e) {
++    if (this.data.busy || this.data.uploading || this.data.editId) return
++    this.setData({ busy: true })
++    try {
++      const current = this.readBlocks((await this.editorCall('getContents')).html)
++      if (current.length || this.data.title || this.data.cover || this.data.scenicId || this.data.topics.length) {
++        const result = await new Promise(resolve => wx.showModal({
++          title: '打开这篇草稿？', content: '当前未保存的修改将被替换。', success:resolve, fail:() => resolve({}),
++        }))
++        if (!result.confirm) return
++      }
++      const { id, revision, content } = await api.request('/c/note-drafts/' + e.currentTarget.dataset.id)
++      await this.loadPrivateEditorMedia(content.blocks, content.visibility)
++      await this.loadArticle(content.blocks)
++      this.activeDraftKey = null
++      this.showMediaStrip(content.blocks)
++      this.setData({ title:content.title, relatedProductId:content.relatedProductId ?? null, relatedName:content.relatedName || '',
++        draftId:id, draftRevision:revision, showCloudDrafts:false, ...this.noteMetadata(content) })
++    } catch (error) { wx.showToast({ title: error.msg || '打开失败', icon: 'none' }) }
++    finally { this.setData({ busy: false }) }
++  },
++
++  async draftKey() {
++    await api.ensureLogin()
++    const { id } = await api.request('/c/me')
++    if (!id) throw { msg: '请先登录再使用草稿' }
++    return 'ugc-draft-v1:' + id
++  },
++  async refreshDraft() {
++    try {
++      const key = await this.draftKey()
++      this.setData({ hasDraft: Boolean(wx.getStorageSync(key)) })
++    } catch (_) { this.setData({ hasDraft: false }) }
++  },
++  async saveDraft() {
++    if (this.data.busy || this.data.uploading || this.data.editId) return
++    this.setData({ busy: true })
++    try {
++      const { html } = await this.editorCall('getContents')
++      const blocks = this.readBlocks(html)
++      const { title, relatedProductId, relatedName } = this.data
++      if (!title.trim() && !blocks.length && !relatedProductId) {
++        return wx.showToast({ title: '写点内容或添加素材后再保存', icon: 'none' })
++      }
++      const { id, revision } = await api.request('/c/note-drafts', 'POST', {
++        id: this.data.draftId, revision: this.data.draftRevision,
++        content: { title, blocks, relatedProductId, relatedName, ...this.noteMetadata() },
++      })
++      this.setData({ draftId: id, draftRevision: revision })
++      this.refreshCloudDrafts()
++      wx.showToast({ title: '草稿已保存' })
++    } catch (error) { wx.showToast({ title: error.msg || '草稿保存失败，请重试', icon: 'none' }) }
++    finally { this.setData({ busy: false }) }
++  },
++  async restoreDraft() {
++    if (this.data.busy || this.data.uploading || this.data.editId) return
++    this.setData({ busy: true })
++    try {
++      const key = await this.draftKey()
++      const draft = wx.getStorageSync(key)
++      if (!draft) return this.setData({ hasDraft: false })
++      const current = this.readBlocks((await this.editorCall('getContents')).html)
++      if (this.data.title.trim() || current.length || this.data.relatedProductId) {
++        const result = await new Promise(resolve => wx.showModal({
++          title: '继续写已存草稿？', content: '编辑区当前的内容将被替换。',
++          success: resolve, fail: () => resolve({}),
++        }))
++        if (!result.confirm) return
++      }
++      const { title, blocks, relatedProductId, relatedName } = draft
++      await this.loadPrivateEditorMedia(blocks, draft.visibility)
++      await this.loadArticle(blocks)
++      this.activeDraftKey = key
++      this.showMediaStrip(blocks)
++      this.setData({ title, relatedProductId, relatedName, ...this.noteMetadata(draft) })
++      wx.showToast({ title: '已恢复草稿' })
++    } catch (error) { wx.showToast({ title: error.msg || '草稿恢复失败，请重试', icon: 'none' }) }
++    finally { this.setData({ busy: false }) }
+   },
+-  async onShow() { await this.fetch(); this.fetchTasks() },
+ 
+   async fetch() {
+     try {
+@@ -16,7 +120,7 @@ Page({
+       this.setData({loadError:'',notes:notes.map(n=>({...n,statusText:({0:'安全检测中',1:'人工审核中',2:'已发布',3:'未通过审核',4:'已下架'})[n.status]||'处理中',appealText:n.appeal_status==null?'':({0:'申诉复核中',1:'申诉通过，恢复展示',2:'申诉未通过，维持下架'})[n.appeal_status]})),reports:reports.map(r=>({...r,statusText:r.status===2&&r.note_status===2?'处理后经复核恢复展示':({0:'待处理',1:'举报不成立',2:'已处理下架'})[r.status]}))})
+     } catch (e) {
+       // A-18：失败必须给可重试的错误态（此前 loadError 从不赋值，重试按钮永远出不来）；不展示假数据
+-      this.setData({ loadError: e.msg || '加载失败，请检查网络后重试', blockViews: [], notes: [], reports: [] })
++      this.setData({ loadError: e.msg || '加载失败，请检查网络后重试', notes: [], reports: [] })
+     }
+   },
+   openAppeal(e) {this.setData({appealNoteId:e.currentTarget.dataset.id,appealReason:'',appealMsg:''})},
+@@ -61,12 +165,423 @@ Page({
+ 
+   goNote(e) { const n = this.data.notes.find(n => n.id === e.currentTarget.dataset.id); if (n && n.status !== 2) return wx.showToast({ title: n.statusText, icon: 'none' }); wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
+   onTitle(e) { this.setData({ title: e.detail.value }) },
++  openWritingIdeas() {
++    this.setData({showWritingIdeas:true,visionError:''})
++    this.refreshWritingIdeas()
++  },
++  changeWritingIntent(e) { this.setData({writingIntent:e.detail.value}) },
++  toggleWritingTemplates() { this.setData({showWritingTemplates:!this.data.showWritingTemplates}) },
++  async generateVisionDraft() {
++    if (this.data.visionBusy) return
++    const paths=this.data.mediaStrip.filter(b=>b.type==='image').slice(0,3).map(b=>b.url)
++    if (!paths.length) return wx.showToast({title:'请先添加照片',icon:'none'})
++    const {scenicId,relatedProductId,topics}=this.data
++    this.setData({visionBusy:true,visionError:''})
++    try {
++      const draft=await api.request('/c/note-vision-draft','POST',{paths,scenicId,relatedProductId,topics,intent:this.data.writingIntent || ''})
++      if (!this.data.showWritingIdeas) return
++      this.setData({writingPreview:draft})
++      this.refreshLayoutPreview()
++    } catch(e) { this.setData({visionError:e.msg || '生成失败，请重试'}) }
++    finally { this.setData({visionBusy:false}) }
++  },
++  changeVisionTitle(e) { this.setData({'writingPreview.title':e.detail.value}) },
++  switchWritingLayout() {
++    this.setData({'writingPreview.guide':!this.data.writingPreview.guide})
++    this.refreshLayoutPreview()
++  },
++  refreshWritingIdeas() {
++    const photoItems = this.data.mediaStrip.filter(x=>x.type==='image')
++    const photos = photoItems.length
++    const video = this.data.mediaStrip.some(x=>x.type==='video')
++    const place = this.data.scenicName || this.data.relatedName
++    const scenes = [...new Set(photoItems.map(item=>this.photoScenes?.[item.url]).filter(Boolean))]
++    const topic = this.data.topics.map(t=>'#'+t).join(' ')
++    const angle = scenes.length ? '从' + scenes.join('、') + '中选一个细节，写下你当时看到的景色。' : '选一张最能代表这次旅行的照片，写下画面里值得记住的细节。'
++    const theme = topic ? '\n\n围绕 ' + topic + '，补一句给同类游客的建议。' : ''
++    const opener = place ? '我在「' + place + '」的这次体验，最想记下的是：' : '这次我去了哪里？最想记下的一个瞬间是什么？'
++    this.setData({ writingIdeas: [
++      { title: video ? '给视频写一段开场' : '写一条打卡笔记', text: opener + '\n\n' + angle + theme },
++      { title: '按路线写一篇攻略', text: (place ? place + '游览路线\n\n' : '') + '怎么到达\n写下交通方式或入口。\n\n怎么逛\n' + angle + '\n\n出发前提醒\n写下你实际确认的时间、费用或注意事项。' + theme },
++    ], writingPhotos: photoItems.map(item=>({...item,scene:this.photoScenes?.[item.url] || ''})),
++      writingPlace:place || '',writingTopic:topic, writingLayout: scenes.length ? '封面突出' + scenes[0] + '。长攻略把照片放到对应的路线或体验段落。' : photos > 1 ? '选代表照片做封面，其他照片放在相关段落后。' :
++      video ? '让视频带读者进入现场，正文补充镜头之外的路线和建议。' : '一张图配一段体验。想详细写路线时，再把素材插进对应段落。' })
++  },
++  setWritingScene(e) {
++    const {url}=e.currentTarget.dataset
++    const scenes=['水岸与桥','街巷与建筑','山林与自然','餐饮与店铺','人物与活动','清除场景']
++    wx.showActionSheet({itemList:scenes,success:({tapIndex})=>{
++      this.photoScenes ||= {}
++      this.photoScenes[url] = tapIndex === scenes.length-1 ? '' : scenes[tapIndex]
++      this.refreshWritingIdeas()
++    }})
++  },
++  closeWritingIdeas() { this.setData({ showWritingIdeas:false }) },
++  async insertWritingIdea(e) {
++    const idea = this.data.writingIdeas[e.currentTarget.dataset.index]
++    if (!idea) return
++    this.setData({writingPreview:{text:idea.text,guide:Number(e.currentTarget.dataset.index)===1}})
++    this.refreshLayoutPreview()
++  },
++  changeWritingDraft(e) { this.setData({'writingPreview.text':e.detail.value}); this.refreshLayoutPreview() },
++  refreshLayoutPreview() {
++    const {text,guide}=this.data.writingPreview
++    const media=this.data.mediaStrip.filter(b=>b.attachment)
++    const sections=text.trim().split(/\n\s*\n/).filter(Boolean)
++    const layout=guide ? sections.flatMap((text,i)=>media[i]?[{text},media[i]]:[{text}]).concat(media.slice(sections.length)) :
++      [...media,...sections.map(text=>({text}))]
++    this.setData({writingLayoutBlocks:layout})
++  },
++  backWritingPreview() { this.setData({writingPreview:null}) },
++  async applyWritingPreview() {
++    const {text,guide,title}=this.data.writingPreview || {}
++    if (!text?.trim()) return
++    try {
++      const original=this.readBlocks((await this.editorCall('getContents')).html)
++      if (original.some(b=>b.type==='text')) {
++        const result=await new Promise(resolve=>wx.showModal({title:'应用排版？',content:'已有正文会保留在推荐正文下方。',success:resolve,fail:()=>resolve({})}))
++        if (!result.confirm) return
++      }
++      const escape=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
++      const copy=text.trim().split(/\n\s*\n/).map(s=>({type:'text',html:'<p>'+escape(s).replace(/\n/g,'<br>')+'</p>'}))
++      const attachments=original.filter(b=>b.attachment)
++      const existing=original.filter(b=>!b.attachment)
++      const arranged=guide ? copy.flatMap((b,i)=>i<attachments.length?[b,{...attachments[i],attachment:false}]:[b])
++        .concat(attachments.slice(copy.length).map(b=>({...b,attachment:false}))) : [...attachments,...copy]
++      const blocks=[...arranged,...existing]
++      await this.loadArticle(blocks)
++      this.showMediaStrip(blocks)
++      if (title?.trim()) this.setData({title:title.trim().slice(0,30)})
++      this.setData({writingPreview:null})
++      this.closeWritingIdeas()
++      wx.pageScrollTo({selector:'#bodyEditor',duration:200})
++    } catch (_) { wx.showToast({title:'正文尚未就绪，请重试',icon:'none'}) }
++  },
++  noteMetadata(source = this.data) {
++    const { cover = '', topics = [], scenicId = null, scenicName = '', visibility = 'public', livePhotos = [] } = source
++    return { cover, topics, scenicId, scenicName: scenicName || '', visibility, livePhotos }
++  },
++  mediaSource(url) { return api.img(this.mediaAccess?.[url] || url) },
++  rememberMedia({ url, access }) {
++    if (access) {
++      this.mediaAccess ||= {}
++      this.mediaAccess[url] = access
++    }
++    return url
++  },
++  changeVisibility() {
++    wx.showActionSheet({ itemList: ['公开可见', '仅自己查看笔记'], success: ({ tapIndex }) => {
++      this.setData({ visibility: tapIndex === 0 ? 'public' : 'private' })
++    } })
++  },
++  editTopics() {
++    wx.showModal({ title: '添加话题', editable: true, content: this.data.topics.join(' '),
++      placeholderText: '用空格分开，最多 5 个话题', success: ({ confirm, content }) => {
++        if (!confirm) return
++        const topics = [...new Set(content.trim().split(/[\s，,]+/).filter(Boolean).map(t => t.replace(/^#/, '').toLowerCase()))]
++        if (topics.length > 5 || topics.some(t => !/^[\p{L}\p{N}_-]{1,24}$/u.test(t))) {
++          return wx.showToast({ title: '最多 5 个话题，每个限 24 个字', icon: 'none' })
++        }
++        this.setData({ topics })
++      },
++    })
++  },
++  chooseScenic() {
++    this.setData({ showScenics: true, scenicKeyword: '', scenicRows: [] })
++    this.searchScenics()
++  },
++  onScenicKeyword(e) { this.setData({ scenicKeyword: e.detail.value }) },
++  async searchScenics() {
++    const keyword = this.data.scenicKeyword || ''
++    try {
++      await api.ensureLogin()
++      const scenicRows = await api.request('/c/note-scenics?kw=' + encodeURIComponent(keyword))
++      if (keyword === this.data.scenicKeyword) this.setData({ scenicRows, scenicError: '' })
++    } catch (e) { this.setData({ scenicError: e.msg || '无法加载景区' }) }
++  },
++  closeScenics() { this.setData({ showScenics: false }) },
++  selectScenic(e) {
++    const { id, name } = e.currentTarget.dataset
++    this.setData({ scenicId: id || null, scenicName: name || '', showScenics: false })
++  },
++  setMaterialCover() {
++    const item = this.data.mediaStrip[this.data.selectedMedia]
++    if (item?.type === 'image') this.setData({ cover: item.url, selectedMedia: null })
++  },
++  openVideoEditor() {
++    const item = this.data.mediaStrip[this.data.selectedMedia]
++    if (item?.type !== 'video') return
++    this.setData({ videoEdit: { src: item.src, start: 0, end: 0, duration: 0, frame: 0, look: 'original', captions: [], sticker: '', music: false,
++      customSticker:'', customMusic:'' } })
++  },
++  closeVideoEditor() { if (!this.data.uploading) this.setData({ videoEdit: null }) },
++  onVideoMetadata(e) {
++    const duration = Math.floor(Number(e.detail.duration) * 10) / 10
++    if (duration > 0 && !this.data.videoEdit?.duration) this.setData({ 'videoEdit.duration': duration, 'videoEdit.end': duration })
++  },
++  changeVideoTime(e) {
++    const field = e.currentTarget.dataset.field
++    this.setData({ ['videoEdit.' + field]: e.detail.value })
++    if (field === 'frame') wx.createVideoContext('materialEditorVideo').seek(e.detail.value)
++  },
++  changeVideoLook(e) {
++    this.setData({ 'videoEdit.look': e.currentTarget.dataset.look })
++  },
++  changeVideoSticker(e) { this.setData({ 'videoEdit.sticker': e.currentTarget.dataset.sticker }) },
++  changeVideoMusic(e) { this.setData({ 'videoEdit.music': e.detail.value }) },
++  addCaption() {
++    const {start,end,captions} = this.data.videoEdit
++    if (captions.length >= 12) return
++    this.setData({'videoEdit.captions':[...captions,{start,end,text:''}]})
++  },
++  changeCaption(e) {
++    const {index, field}=e.currentTarget.dataset
++    this.setData({['videoEdit.captions[' + index + '].' + field]:e.detail.value})
++  },
++  removeCaption(e) {
++    const {index}=e.currentTarget.dataset
++    this.setData({'videoEdit.captions':this.data.videoEdit.captions.filter((_,i)=>i!==index)})
++  },
++  async pickVideoAsset(e) {
++    const {kind}=e.currentTarget.dataset
++    if (this.data.uploading) return
++    const key = kind === 'sticker' ? 'customSticker' : 'customMusic'
++    if (this.data.videoEdit[key]) return this.setData({['videoEdit.'+key]:''})
++    this.setData({uploading:true})
++    try {
++      const file = await new Promise((resolve,reject)=>wx.chooseMessageFile({count:1,type:'file',
++        extension:[kind==='sticker'?'png':'mp3'],success:r=>resolve(r.tempFiles[0]),fail:reject}))
++      if (!file || file.size > 2*1024*1024) throw {msg:'请选择 2 MB 内的文件'}
++      await api.ensureLogin()
++      const data=wx.getFileSystemManager().readFileSync(file.path,'base64')
++      const {asset}=await api.request('/c/note-video/asset','POST',{kind,data})
++      this.setData({['videoEdit.'+key]:asset})
++    } catch (e) {
++      if (!String(e.errMsg).includes('cancel')) wx.showToast({title:e.msg || '文件导入失败',icon:'none'})
++    } finally { this.setData({uploading:false}) }
++  },
++  trimMaterialVideo() {
++    const { start, end, look, captions, sticker, music,customSticker,customMusic } = this.data.videoEdit
++    if (Number(end) - Number(start) < 0.5) return wx.showToast({ title: '至少保留半秒视频', icon: 'none' })
++    this.updateMaterial(async (blocks, index) => {
++      const { url, blockIndex } = this.data.mediaStrip[index]
++      const segments = captions.map(c=>({text:c.text,start:Number(c.start),end:Number(c.end)}))
++      const result = await api.request('/c/note-video/trim', 'POST', { url, start: Number(start), end: Number(end), look, captions:segments, sticker, music,customSticker,customMusic })
++      blocks[blockIndex] = { ...blocks[blockIndex], url: this.rememberMedia(result) }
++      this.setData({ videoEdit: null })
++      return index
++    })
++  },
++  async useVideoFrame() {
++    if (this.data.uploading || this.data.busy) return
++    const { url } = this.data.mediaStrip[this.data.selectedMedia]
++    this.setData({ uploading: true })
++    try {
++      const cover = this.rememberMedia(await api.request('/c/note-video/cover', 'POST', { url, start: Number(this.data.videoEdit.frame) }))
++      this.setData({ cover, videoEdit: null, selectedMedia: null })
++      wx.showToast({ title: '已设为封面' })
++    } catch (e) { wx.showToast({ title: e.msg || '封面生成失败', icon: 'none' }) }
++    finally { this.setData({ uploading: false }) }
++  },
++  chooseCover() {
++    wx.showActionSheet({ itemList: ['上传封面', '使用默认封面'], success: ({ tapIndex }) => {
++      if (tapIndex === 1) return this.setData({ cover: '' })
++      wx.chooseMedia({ count: 1, mediaType: ['image'], sourceType: ['album','camera'], sizeType: ['compressed'],
++        success: ({ tempFiles }) => this.uploadCover(tempFiles[0]),
++      })
++    } })
++  },
++  async uploadCover(file) {
++    if (this.data.busy || this.data.uploading) return
++    this.setData({ uploading: true })
++    try {
++      await api.ensureLogin()
++      const { url } = await this.uploadMaterial('image', file)
++      this.setData({ cover: url })
++    } catch (e) { wx.showToast({ title: e.msg || '封面上传失败', icon: 'none' }) }
++    finally { this.setData({ uploading: false }) }
++  },
+ 
+   onEditorReady() {
+     this.createSelectorQuery().select('#bodyEditor').context(r => { this.editor = r.context }).exec()
+   },
+   onEditorStatus(e) { this.setData({ formats: e.detail }) },
+-  onEditorInput(e) { this.setData({ bodyHtml: e.detail.html, bodyText: e.detail.text }) },
++  onEditorInput(e) {
++    this.setData({ bodyHtml: e.detail.html, bodyText: e.detail.text })
++    try { this.showMediaStrip(this.readBlocks(e.detail.html)) } catch (_) {}
++  },
++  showMediaStrip(blocks) {
++    this.setData({
++      mediaStrip: blocks.map((b, blockIndex) => ({ ...b, blockIndex })).filter(b => b.url)
++        .map((b, index) => ({ type: b.type, url: b.url, attachment:Boolean(b.attachment), src: this.mediaSource(b.url), blockIndex: b.blockIndex, number: index + 1 })),
++      articleLength: blocks.filter(b => b.type === 'text').map(b => b.html.replace(/<[^>]+>|&nbsp;|\s/g, '')).join('').length,
++    })
++  },
++  addMedia(e) {
++    if (this.data.uploading || this.data.busy) return
++    wx.showActionSheet({
++      itemList: ['拍照', '拍视频', '从相册选照片', '从相册选视频', '导入图片或视频链接'],
++      success: ({ tapIndex }) => {
++        this.inlineImport = Boolean(e?.currentTarget?.dataset?.inline)
++        const actions = [this.shootPhoto, this.shootVideo, this.pickImage, this.pickVideo, this.onlineMedia]
++        actions[tapIndex].call(this)
++      },
++    })
++  },
++  addInlineMedia() {
++    this.addMedia({ currentTarget: { dataset: { inline: true } } })
++  },
++  inspectMedia(e) {
++    if (Date.now() < (this.ignoreMediaTapUntil || 0)) return
++    if (this.data.busy || this.data.uploading) return
++    const index = e.currentTarget.dataset.index
++    const item = this.data.mediaStrip[index]
++    if (!item) return
++    this.setData({ selectedMedia: index, canEditPhoto: typeof wx.editImage === 'function' })
++  },
++  beginMediaDrag(e) {
++    if (this.data.busy || this.data.uploading || this.data.mediaStrip.length < 2) return
++    const index = Number(e.currentTarget.dataset.index)
++    const x = e.touches[0]?.clientX
++    if (x == null) return
++    this.mediaDrag = {index,x}
++    this.setData({dragMedia:index,dropMedia:index})
++  },
++  moveMediaDrag(e) {
++    if (!this.mediaDrag) return
++    const x=e.touches[0]?.clientX
++    if (x == null) return
++    const {index,x:start}=this.mediaDrag
++    const step=154*(wx.getWindowInfo().windowWidth/750)
++    const dropMedia=Math.max(0,Math.min(this.data.mediaStrip.length-1,index+Math.round((x-start)/step)))
++    if (dropMedia!==this.data.dropMedia) this.setData({dropMedia})
++  },
++  endMediaDrag() {
++    if (!this.mediaDrag) return
++    const {index}=this.mediaDrag
++    const target=this.data.dropMedia
++    this.cancelMediaDrag()
++    if (index===target) return
++    this.setData({selectedMedia:index})
++    this.updateMaterial(async blocks=>{
++      const slots=this.data.mediaStrip.map(x=>x.blockIndex)
++      const reordered=slots.map(i=>blocks[i])
++      reordered.splice(target,0,reordered.splice(index,1)[0])
++      slots.forEach((slot,i)=>{blocks[slot]={...reordered[i],attachment:blocks[slot].attachment}})
++      return null
++    })
++  },
++  cancelMediaDrag() {
++    if (!this.mediaDrag) return
++    this.mediaDrag=null
++    this.ignoreMediaTapUntil=Date.now()+300
++    this.setData({dragMedia:null,dropMedia:null})
++  },
++  closeMediaTools() { if (!this.data.uploading) this.setData({ selectedMedia: null }) },
++  previewMaterial() {
++    const item = this.data.mediaStrip[this.data.selectedMedia]
++    if (!item) return
++    if (item.type === 'image') wx.previewImage({
++      current: item.src, urls: this.data.mediaStrip.filter(b => b.type === 'image').map(b => b.src),
++    })
++    else this.setData({ videoPreview: item.src })
++  },
++  moveMaterial(e) {
++    const step = Number(e.currentTarget.dataset.step)
++    this.updateMaterial(async (blocks, index) => {
++      const items = this.data.mediaStrip
++      const next = index + step
++      if (!items[next]) return
++      const from = items[index].blockIndex
++      const to = items[next].blockIndex
++      const selected = blocks[from]
++      blocks[from] = { ...blocks[to], attachment: selected.attachment }
++      blocks[to] = { ...selected, attachment: blocks[to].attachment }
++      return next
++    })
++  },
++  removeMaterial() {
++    this.updateMaterial(async (blocks, index) => {
++      const [removed] = blocks.splice(this.data.mediaStrip[index].blockIndex, 1)
++      if (!blocks.some(b=>b.url===removed.url)) this.setData({ livePhotos: this.data.livePhotos.filter(p=>p.photo!==removed.url) })
++      return null
++    })
++  },
++  attachMotion() {
++    if (this.data.uploading || this.data.busy) return
++    const item = this.data.mediaStrip[this.data.selectedMedia]
++    if (item?.type !== 'image') return
++    wx.chooseMedia({ count:1, mediaType:['video'], sourceType:['album','camera'], sizeType:['original'], maxDuration:3,
++      success: async ({tempFiles}) => {
++        this.setData({ uploading:true })
++        try {
++          const file = tempFiles[0]
++          if (file.duration > 3.1) throw {msg:'请选择 3 秒以内的动态片段'}
++          await api.ensureLogin()
++          const {url} = await this.uploadMaterial('video',file)
++          const livePhotos = this.data.livePhotos.filter(p=>p.photo!==item.url)
++          this.setData({livePhotos:[...livePhotos,{photo:item.url,motion:url}]})
++          wx.showToast({title:'已添加动态片段'})
++        } catch (e) { wx.showToast({title:e.msg || '动态片段添加失败',icon:'none'}) }
++        finally { this.setData({uploading:false}) }
++      },
++    })
++  },
++  removeMotion() {
++    const item = this.data.mediaStrip[this.data.selectedMedia]
++    this.setData({ livePhotos: this.data.livePhotos.filter(p=>p.photo!==item?.url) })
++  },
++  replaceMaterial() {
++    this.updateMaterial(async (blocks, index) => {
++      const { type, blockIndex } = this.data.mediaStrip[index]
++      const result = await new Promise((resolve, reject) => wx.chooseMedia({
++        count: 1, mediaType: [type], sourceType: ['album', 'camera'],
++        sizeType: type === 'video' ? ['original'] : ['compressed'],
++        ...(type === 'video' ? { maxDuration: 60 } : {}), success: resolve, fail: reject,
++      }))
++      const replacement = await this.uploadMaterial(type, result.tempFiles[0])
++      this.setData({livePhotos:this.data.livePhotos.filter(p=>p.photo!==blocks[blockIndex].url)})
++      blocks[blockIndex] = { ...blocks[blockIndex], ...replacement }
++      return index
++    })
++  },
++  editPhoto() {
++    if (typeof wx.editImage !== 'function') return
++    this.updateMaterial(async (blocks, index) => {
++      const { type, blockIndex, src } = this.data.mediaStrip[index]
++      if (type !== 'image') return
++      const local = await new Promise((resolve, reject) => wx.getImageInfo({ src, success: resolve, fail: reject }))
++      const edited = await new Promise((resolve, reject) => wx.editImage({ src: local.path, success: resolve, fail: reject }))
++      const replacement = await this.uploadMaterial('image', edited)
++      this.setData({livePhotos:this.data.livePhotos.map(p=>p.photo===blocks[blockIndex].url?{...p,photo:replacement.url}:p)})
++      blocks[blockIndex] = { ...blocks[blockIndex], ...replacement }
++      return index
++    })
++  },
++  async updateMaterial(change) {
++    if (this.data.busy || this.data.uploading || this.data.selectedMedia == null) return
++    this.setData({ uploading: true })
++    try {
++      const blocks = this.readBlocks((await this.editorCall('getContents')).html)
++      this.showMediaStrip(blocks)
++      if (!this.data.mediaStrip[this.data.selectedMedia]) return this.setData({ selectedMedia: null })
++      const next = await change(blocks, this.data.selectedMedia)
++      if (next === undefined) return
++      await this.loadArticle(blocks)
++      this.showMediaStrip(blocks)
++      this.setData({ selectedMedia: next })
++    } catch (error) {
++      if (!String(error.errMsg).includes('cancel')) wx.showToast({ title: error.msg || '素材修改失败，请重试', icon: 'none' })
++    } finally { this.setData({ uploading: false }) }
++  },
++  closeVideoPreview() { this.setData({ videoPreview: '' }) },
++  toggleEmojis() { this.setData({ showEmojis: !this.data.showEmojis }) },
++  async insertEmoji(e) {
++    try {
++      await this.editorCall('insertText', { text: e.currentTarget.dataset.emoji })
++      this.setData({ showEmojis: false })
++    } catch (error) { wx.showToast({ title: error.msg || '表情插入失败，请重试', icon: 'none' }) }
++  },
+   rtCmd(e) {
+     if (!this.editor) return
+     const tag = e.currentTarget.dataset.tag
+@@ -94,31 +609,35 @@ Page({
+       at=match.index+match[0].length
+     }
+     addText(html.slice(at))
+-    return blocks
++    return [...(this.attachments || []), ...blocks]
+   },
+-  async togglePreview() {
+-    if (this.data.showPreview) return this.setData({showPreview:false})
+-    try {
+-      const {html}=await this.editorCall('getContents')
+-      const blocks=this.readBlocks(html)
+-      this.setData({blockViews:blocks.map(b=>b.url?{...b,src:api.img(b.url)}:b),showPreview:true})
+-    } catch(e) { wx.showToast({title:e.msg || '无法预览，请重试',icon:'none'}) }
+-  },
+-  loadArticle(blocks) {
++  async loadArticle(blocks) {
++    const missing = [...new Set(blocks.filter(b=>b.url && !this.mediaAccess?.[b.url]).map(b=>b.url))]
++    if (missing.length) {
++      const access = await api.request('/c/note-media/access','POST',{paths:missing}).catch(()=>({}))
++      this.mediaAccess = {...this.mediaAccess,...access}
++    }
+     this.imageUploads=new Map()
+     this.videoUploads=new Set()
+-    const html=blocks.map(b=>{
++    this.attachments = blocks.filter(b=>b.attachment)
++    const html=blocks.filter(b=>!b.attachment).map(b=>{
+       if (b.type==='text') return b.html
+       if (b.type==='video') {
+         this.videoUploads.add(b.url)
+         return '<p>【视频：'+b.url+'】</p>'
+       }
+-      const src=api.img(b.url)
++      const src=this.mediaSource(b.url)
+       this.imageUploads.set(src,b.url)
+       return '<p><img src="'+src.replace(/"/g,'&quot;')+'"></p>'
+     }).join('')
+     return this.editorCall('setContents',{html})
+   },
++  async loadPrivateEditorMedia(blocks, visibility) {
++    if (visibility !== 'private') return
++    const media = [...new Set(blocks.filter(b=>b.url).map(b=>b.url))]
++    const local = await Promise.all(media.map(async url=>[url,await api.downloadPrivateMedia(url)]))
++    this.mediaAccess = {...this.mediaAccess,...Object.fromEntries(local)}
++  },
+ 
+   async editNote(e) {
+     if (this.data.busy || this.data.uploading) return
+@@ -131,24 +650,29 @@ Page({
+     try {
+       if (!this.editor) throw { msg: '编辑器尚未就绪，请重试' }
+       const n = await api.request('/c/notes/' + id + '/edit')
++      this.mediaAccess = { ...this.mediaAccess, ...n.mediaAccess }
+       const blocks = n.blocks || [
+         ...(n.text ? [{type:'text',html:n.text}] : []),
+         ...(n.video ? [{type:'video',url:n.video}] : []),
+         ...n.images.map(url=>({type:'image',url}))
+       ]
++      await this.loadPrivateEditorMedia(blocks,n.visibility)
+       await this.loadArticle(blocks)
++      this.showMediaStrip(blocks)
+       this.setData({editId:id,revision:n.revision,title:n.title || '',bodyHtml:'',bodyText:'',
+-        relatedProductId:n.relatedProductId,relatedName:n.relatedName || '',pubMsg:'',showPreview:false})
++        relatedProductId:n.relatedProductId,relatedName:n.relatedName || '',showEmojis:false,draftId:null,draftRevision:null,...this.noteMetadata(n)})
+       wx.pageScrollTo({ scrollTop:0 })
+     } catch (e) { wx.showToast({ title:e.msg || '作品加载失败',icon:'none' }) }
+     finally { this.setData({ busy:false }) }
+   },
+   resetEditor() {
++    this.attachments = []
++    this.activeDraftKey = null
+     this.setData({ editId:null,revision:null,title:'',bodyHtml:'',bodyText:'',
+-      relatedProductId:null,relatedName:'',showPreview:false,formats:{} })
++      relatedProductId:null,relatedName:'',showEmojis:false,videoPreview:'',selectedMedia:null,formats:{},draftId:null,draftRevision:null,...metadata })
+     this.imageUploads=new Map()
+     this.videoUploads=new Set()
+-    this.setData({blockViews:[]})
++    this.setData({mediaStrip:[],articleLength:0})
+     if (this.editor) this.editor.clear()
+   },
+   cancelEdit() {
+@@ -162,24 +686,81 @@ Page({
+       const {html}=await this.editorCall('getContents')
+       const blocks=this.readBlocks(html)
+       if (blocks.filter(b=>b.type==='text').map(b=>b.html.replace(/<[^>]+>/g,'').trim()).join('').length < 4) {
+-        return wx.showToast({title:'至少写 4 个字',icon:'none'})
++        wx.pageScrollTo({selector:'#bodyEditor',duration:250})
++        return wx.showToast({title:'请在正文区写至少 4 个字',icon:'none'})
+       }
+       await api.ensureLogin()
+-      const {editId,revision,title,relatedProductId}=this.data
++      const {editId,revision,title,relatedProductId,draftId,draftRevision}=this.data
+       const r = await api.request(editId ? '/c/notes/'+editId : '/c/notes',editId ? 'PUT' : 'POST',
+-        {title,blocks,relatedProductId,revision})
++        {title,blocks,relatedProductId,revision,draftId,draftRevision,...this.noteMetadata()})
++      if (!editId && this.activeDraftKey) {
++        try {
++          wx.removeStorageSync(this.activeDraftKey)
++          this.setData({ hasDraft: false })
++        } catch (_) { this.refreshDraft() }
++      }
+       this.resetEditor()
+-      this.setData({ pubMsg:r.msg+(r.secMock && r.status===2?'（联调机审直通）':'') })
++      const status = Number(r.status)
++      this.setData({ publishResult: {
++        id: r.id,
++        published: status === 2,
++        title: status === 2 ? '发布成功' : '已提交审核',
++        detail: status === 2 ? (r.visibility === 'private' ? '笔记仅可从你的作品列表打开。' : '笔记已在旅行笔记广场展示。') :
++          status === 0 ? '图片正在进行安全检测，可在「我的作品」查看进度。' :
++            '审核通过后将在广场展示，可在「我的作品」查看进度。',
++      } })
+       await this.fetch()
++      this.refreshCloudDrafts()
+     } catch (e) { wx.showToast({ title:e.msg || '提交失败',icon:'none' }) }
+     finally { this.setData({busy:false}) }
+   },
+-  pickVideo() { this.pickMedia('video') },
+-  pickImage() { this.pickMedia('image') },
+-  pickMedia(type) {
++  pickVideo() { this.pickMedia('video', ['album']) },
++  shootVideo() { this.pickMedia('video', ['camera']) },
++  shootPhoto() { this.pickMedia('image', ['camera']) },
++  pickImage() { this.pickMedia('image', ['album']) },
++  closePublishResult() { this.setData({ publishResult: null }) },
++  openPublishedNote() {
++    const { id, published } = this.data.publishResult || {}
++    if (!id || !published) return
++    this.closePublishResult()
++    wx.navigateTo({ url: '/package-content/pages/note/index?id=' + id })
++  },
++  openMyWorks() {
++    this.closePublishResult()
++    wx.pageScrollTo({ selector: '#myWorks', duration: 240 })
++  },
++  async pickMedia(type, sourceType) {
+     if (this.data.uploading || this.data.busy) return
+-    wx.chooseMedia({count:1,mediaType:[type],sizeType:['compressed'],maxDuration:30,
+-      success:r=>this.insertMediaFiles(type,r.tempFiles)})
++    let count = 1
++    if (type === 'image' && sourceType[0] === 'album') {
++      try {
++        const blocks = this.readBlocks((await this.editorCall('getContents')).html)
++        count = 9 - blocks.filter(b => b.type === 'image').length
++        if (count < 1) return wx.showToast({ title: '每篇最多九张图片', icon: 'none' })
++      } catch (error) { return wx.showToast({ title: error.msg || '请重试', icon: 'none' }) }
++    }
++    wx.chooseMedia({count,mediaType:[type],sourceType,
++      sizeType:type==='video'?['original']:['compressed'], ...(type==='video'?{maxDuration:60}:{}),
++      success:r=>this.insertMediaFiles(type,r.tempFiles),
++      fail:e=>{ if (!String(e.errMsg).includes('cancel')) wx.showToast({title:'无法打开拍摄或相册，请检查微信权限',icon:'none'}) },
++    })
++  },
++  uploadVideo(filePath) {
++    return new Promise((resolve, reject) => {
++      const task = wx.uploadFile({
++        url: api.img('/c/upload/note-video'), filePath, name: 'video',
++        header: { Authorization: 'Bearer ' + getApp().globalData.token },
++        timeout: 300000,
++        success: ({data}) => {
++          let result
++          try { result = JSON.parse(data) } catch (_) {}
++          if (result?.code === 0) resolve(result.data)
++          else reject({ msg: result?.msg || '视频上传失败，请重试' })
++        },
++        fail: () => reject({ msg: '视频上传中断，请检查网络后重试' }),
++      })
++      task.onProgressUpdate(({progress}) => this.setData({uploadProgress: progress}))
++    }).finally(() => this.setData({uploadProgress: null}))
+   },
+   async insertMediaFiles(type, files) {
+     if (this.data.uploading || this.data.busy) return
+@@ -194,29 +775,43 @@ Page({
+     const blocks=this.readBlocks((await this.editorCall('getContents')).html)
+     const count=blocks.filter(b=>b.type===type).length
+     if (count >= (type==='video'?1:9)) throw {msg:type==='video'?'每篇最多一段视频':'每篇最多九张图片'}
+-    if (type==='video' && (f.size>8*1024*1024 || f.duration>30)) throw {msg:'请选择 30 秒、8 MB 内的视频'}
+-    const fs=wx.getFileSystemManager()
+-    const data=fs.readFileSync(f.tempFilePath,'base64')
+-    const sig=data.slice(0,8)
+-    const ext=sig.startsWith('iVBOR')?'png':sig.startsWith('UklGR')?'webp':'jpg'
+-    const up=await api.request('/c/upload/note-'+type,'POST',{data,ext})
+-    if (type==='video') {
++    const { url } = await this.uploadMaterial(type, f)
++    if (!this.inlineImport) {
++      this.attachments = [...(this.attachments || []), {type,url,attachment:true}]
++    } else if (type==='video') {
+       this.videoUploads ||= new Set()
+-      this.videoUploads.add(up.url)
+-      await this.editorCall('insertText',{text:'\n【视频：'+up.url+'】\n'})
++      this.videoUploads.add(url)
++      await this.editorCall('insertText',{text:'\n【视频：'+url+'】\n'})
+     } else {
+-      const src=api.img(up.url)
++      const src=this.mediaSource(url)
+       this.imageUploads ||= new Map()
+-      this.imageUploads.set(src,up.url)
++      this.imageUploads.set(src,url)
+       await this.editorCall('insertImage',{src,alt:'文章图片',width:'100%'})
+     }
++    this.showMediaStrip(this.readBlocks((await this.editorCall('getContents')).html))
++  },
++  async uploadMaterial(type, file) {
++    const fs = wx.getFileSystemManager()
++    const size = file.size ?? fs.statSync(file.tempFilePath).size
++    if (type === 'video') {
++      if (size > 80 * 1024 * 1024) throw { msg: '请选择 80 MB 以内的视频' }
++      const url = this.rememberMedia(await this.uploadVideo(file.tempFilePath))
++      return { type, url }
++    }
++    if (size > 2 * 1024 * 1024) throw { msg: '请选择 2 MB 以内的图片' }
++    const data = fs.readFileSync(file.tempFilePath, 'base64')
++    const ext = data.startsWith('iVBOR') ? 'png' : data.startsWith('UklGR') ? 'webp' : 'jpg'
++    const url = this.rememberMedia(await api.request('/c/upload/note-image', 'POST', { data, ext }))
++    return { type, url }
+   },
+   onlineMedia() {
+     if (this.data.busy || this.data.uploading) return
+-    wx.showActionSheet({itemList:['在线图片','在线 MP4 视频'],success:r=>{
+-      wx.showModal({title:'输入 HTTPS 媒体直链',editable:true,placeholderText:'https://…',success:v=>{
+-        if(v.confirm) this.importOnline(v.content.trim(),r.tapIndex===0?'image':'video')
+-      }})
++    wx.showActionSheet({itemList:['在线图片','在线 MP4 或 MOV'],success:r=>this.promptMediaLink(r.tapIndex===0?'image':'video')})
++  },
++  promptMediaLink(type) {
++    if (this.data.busy || this.data.uploading) return
++    wx.showModal({title:type==='video'?'粘贴 HTTPS 视频直链':'粘贴 HTTPS 图片直链',editable:true,placeholderText:'https://…',success:v=>{
++      if(v.confirm) this.importOnline(v.content.trim(),type)
+     }})
+   },
+   async importOnline(url,type) {
+@@ -235,7 +830,7 @@ Page({
+       else reject({msg:'媒体下载失败'})
+     },fail:reject}))
+     const stat=wx.getFileSystemManager().statSync(file)
+-    if(stat.size>(type==='video'?8:2)*1024*1024) throw {msg:'媒体文件超过大小限制'}
++    if(stat.size>(type==='video'?80:2)*1024*1024) throw {msg:type==='video'?'视频不能超过 80 MB':'图片不能超过 2 MB'}
+     await this.uploadAndInsert(type,{tempFilePath:file,size:stat.size})
+   },
+   async copyArticle() {
+diff --git a/mini-a/package-content/pages/create/index.wxml b/mini-a/package-content/pages/create/index.wxml
+index 1f3079d..918d5d9 100644
+--- a/mini-a/package-content/pages/create/index.wxml
++++ b/mini-a/package-content/pages/create/index.wxml
+@@ -1,11 +1,20 @@
+-<view class="hero">
+-  <view class="hi">创作中心</view>
+-  <view class="sub2">发布旅行笔记 · 内容过安全检测后展示 · 好内容获旅豆奖励</view>
+-</view>
+-<view class="card">
++<view class="card composer">
+   <view wx:if="{{editId}}" class="note">正在编辑作品 · 提交后将暂时撤下并重新审核</view>
+-  <input maxlength="30" value="{{title}}" bindinput="onTitle" placeholder="标题（选填）"
+-    style="border:1rpx solid var(--line);border-radius:16rpx;padding:16rpx 24rpx;margin-bottom:16rpx" />
++  <view wx:if="{{hasDraft && !editId}}" class="resume-draft" bindtap="restoreDraft">继续写本机草稿 ›</view>
++  <view wx:if="{{!editId}}" class="resume-draft" bindtap="openCloudDrafts">草稿箱{{cloudDrafts.length ? '（' + cloudDrafts.length + '）' : ''}} ›</view>
++  <scroll-view class="media-strip" scroll-x="{{dragMedia == null}}">
++    <view class="media-row">
++      <view class="media-tile {{dragMedia === index ? 'dragging-media' : ''}} {{dropMedia === index && dragMedia !== index ? 'media-drop' : ''}}" wx:for="{{mediaStrip}}" wx:key="index" bindtap="inspectMedia" bindlongpress="beginMediaDrag" bindtouchmove="moveMediaDrag" bindtouchend="endMediaDrag" bindtouchcancel="cancelMediaDrag" data-index="{{index}}">
++        <image wx:if="{{item.type === 'image'}}" src="{{item.src}}" mode="aspectFill" />
++        <text wx:else class="media-video">▶ 视频</text>
++        <text class="media-index">{{item.number}}</text><text class="media-edit-label">编辑</text>
++      </view>
++      <button class="media-tile media-add" bindtap="addMedia" disabled="{{busy || uploading}}"><text class="add-symbol">＋</text><text>添加素材</text></button>
++    </view>
++  </scroll-view>
++  <view wx:if="{{mediaStrip.length}}" class="media-order-hint">点按编辑<text wx:if="{{mediaStrip.length > 1}}"> · 长按拖动排序</text></view>
++  <view class="media-hint" wx:if="{{uploading}}">{{uploadProgress != null ? '视频上传 ' + uploadProgress + '%' : '正在导入素材…'}}</view>
++  <input class="composer-title" maxlength="30" value="{{title}}" bindinput="onTitle" placeholder="添加标题（选填）" />
+ 
+   <!-- 富文本编辑器：工具栏 + textarea + 预览 -->
+   <view class="rt-toolbar">
+@@ -16,32 +25,176 @@
+     <view class="rt-btn" catchtouchend="rtCmd" data-tag="ul">列表</view>
+     <view class="rt-btn" catchtouchend="rtCmd" data-tag="quote">引用</view>
+     <view class="rt-btn" catchtouchend="rtCmd" data-tag="br">换行</view>
+-    <button size="mini" bindtap="pickImage" disabled="{{busy || uploading}}">图片</button>
+-    <button size="mini" bindtap="pickVideo" disabled="{{busy || uploading}}">视频</button>
+-    <button size="mini" bindtap="onlineMedia" disabled="{{busy || uploading}}">媒体链接</button>
+-    <button size="mini" bindtap="copyArticle" disabled="{{busy || uploading}}">复制全文</button>
+-    <button size="mini" bindtap="pasteArticle" disabled="{{busy || uploading}}">粘贴</button>
+-    <view style="margin-left:auto;font-size:22rpx;color:var(--sub);align-self:center">{{bodyText.length}} 字</view>
+   </view>
+-  <editor id="bodyEditor" class="body-editor" placeholder="写下这次旅行最值得记住的瞬间…" bindready="onEditorReady" bindinput="onEditorInput" bindstatuschange="onEditorStatus" style="min-height:320rpx;border:1rpx solid var(--line);padding:24rpx;box-sizing:border-box;font-size:28rpx;line-height:1.8"></editor>
++  <view class="body-label">正文 <button class="writing-idea" bindtap="openWritingIdeas" disabled="{{busy || uploading}}">写作建议</button></view>
++  <editor id="bodyEditor" class="body-editor" placeholder="点这里写正文，例如路线、见闻或出游建议…" bindready="onEditorReady" bindinput="onEditorInput" bindstatuschange="onEditorStatus"></editor>
++  <view class="editor-tools">
++    <button bindtap="toggleEmojis" disabled="{{busy || uploading}}">☺ 表情</button>
++    <button bindtap="addInlineMedia" disabled="{{busy || uploading}}">插入到正文</button>
++    <button bindtap="copyArticle" disabled="{{busy || uploading}}">复制</button>
++    <button bindtap="pasteArticle" disabled="{{busy || uploading}}">粘贴</button>
++    <text>{{articleLength || 0}} 字</text>
++  </view>
+ 
+-  <view class="sub2">视频在编辑时显示为标记，预览时可播放。</view>
+-  <button class="btn ghost" bindtap="togglePreview" disabled="{{uploading || busy}}">{{showPreview ? '收起预览' : '预览文章'}}</button>
+-  <view wx:if="{{showPreview}}" class="ugc-preview">
+-    <view class="tour-title">{{title || '旅行笔记'}}</view>
+-    <block wx:for="{{blockViews}}" wx:key="index">
+-      <rich-text wx:if="{{item.type === 'text'}}" nodes="{{item.html}}" />
+-      <image wx:elif="{{item.type === 'image'}}" class="ugc-block-image" src="{{item.src}}" mode="widthFix" />
+-      <video wx:else class="ugc-block-video" src="{{item.src}}" controls />
+-    </block>
++  <view wx:if="{{showEmojis}}" class="emoji-picker">
++    <button wx:for="{{emojis}}" wx:key="*this" class="emoji-choice" data-emoji="{{item}}" bindtap="insertEmoji">{{item}}</button>
+   </view>
+   <view class="kv" style="display:flex;justify-content:space-between;align-items:center;padding:20rpx 0" bindtap="pickProduct">
+-    <text>关联线路</text><text class="v">{{relatedName || '选填，内容看板按线路归集'}} ›</text>
++    <text>关联线路</text><text class="v">{{relatedName || '选填'}} ›</text>
++  </view>
++  <view class="kv publish-option" bindtap="chooseCover"><text>封面</text><text class="v">{{cover ? '已设置' : '默认首图'}} ›</text></view>
++  <view class="kv publish-option" bindtap="chooseScenic"><text>景区地点</text><text class="v">{{scenicName || '选填'}} ›</text></view>
++  <view class="kv publish-option" bindtap="editTopics"><text>话题</text><text class="v">{{topics.length ? '已选 ' + topics.length + ' 个' : '选填'}} ›</text></view>
++  <view class="kv publish-option" bindtap="changeVisibility"><text>可见范围</text><text class="v">{{visibility === 'private' ? '仅自己查看' : '公开可见'}} ›</text></view>
++  <view class="composer-actions">
++    <button wx:if="{{!editId}}" class="btn ghost" bindtap="saveDraft" disabled="{{busy || uploading}}">存草稿</button>
++    <button wx:if="{{editId}}" class="btn ghost" bindtap="cancelEdit" disabled="{{busy || uploading}}">取消编辑</button>
++    <button id="publishNote" class="btn" bindtap="publish" loading="{{busy}}" disabled="{{busy || uploading}}">{{editId ? '保存并提交审核' : '发布笔记'}}</button>
++  </view>
++</view>
++<view wx:if="{{showWritingIdeas && !writingPreview}}" class="publish-mask">
++  <view class="publish-result writing-sheet">
++    <view class="publish-title">写一篇旅行笔记</view>
++    <scroll-view wx:if="{{writingPhotos.length}}" scroll-x class="writing-scenes">
++      <view class="writing-scene-row">
++        <view wx:for="{{writingPhotos}}" wx:key="url"><image src="{{item.src}}" mode="aspectFill" /></view>
++      </view>
++    </scroll-view>
++    <view wx:if="{{writingPlace || writingTopic}}" class="writing-context">{{writingPlace}} {{writingTopic}}</view>
++    <view class="intent-label">你想表达什么？</view>
++    <input class="intent-input" maxlength="80" value="{{writingIntent}}" bindinput="changeWritingIntent" placeholder="例如：写写看海时想慢下来的感觉" />
++    <view class="writing-layout">可留空。生成时会发送前 3 张照片、关联景区和话题给文案服务。</view>
++    <view wx:if="{{visionError}}" class="vision-error">{{visionError}}</view>
++    <button id="generateVisionDraft" class="btn" bindtap="generateVisionDraft" loading="{{visionBusy}}" disabled="{{visionBusy}}">生成文案</button>
++    <button class="writing-template-toggle" bindtap="toggleWritingTemplates">{{showWritingTemplates ? '收起写作提纲' : '使用写作提纲'}}</button>
++    <block wx:if="{{showWritingTemplates}}">
++      <view class="writing-option" wx:for="{{writingIdeas}}" wx:key="title">
++        <text>{{item.title}}</text><button data-index="{{index}}" bindtap="insertWritingIdea">预览</button>
++      </view>
++    </block>
++    <button class="btn ghost" bindtap="closeWritingIdeas">返回编辑</button>
++  </view>
++</view>
++<view wx:if="{{writingPreview}}" class="publish-mask">
++  <view class="publish-result writing-sheet">
++    <view class="publish-title">编辑推荐文案</view>
++    <input wx:if="{{writingPreview.title !== undefined}}" class="writing-preview-input vision-title" maxlength="30" value="{{writingPreview.title}}" bindinput="changeVisionTitle" placeholder="编辑标题" />
++    <view wx:if="{{writingPreview.reason}}" class="writing-layout">{{writingPreview.reason}}</view>
++    <view class="writing-layout">{{writingPreview.guide ? '攻略混排 · 图片依次穿插在段落后' : '打卡图文 · 素材在上，正文在下'}}</view>
++    <textarea class="writing-preview-input" maxlength="-1" value="{{writingPreview.text}}" bindinput="changeWritingDraft" />
++    <button class="btn ghost" bindtap="switchWritingLayout">切换为{{writingPreview.guide ? '打卡图文' : '攻略混排'}}</button>
++    <view class="writing-render">
++      <block wx:for="{{writingLayoutBlocks}}" wx:key="index">
++        <image wx:if="{{item.type === 'image'}}" src="{{item.src}}" mode="widthFix" />
++        <view wx:elif="{{item.type === 'video'}}" class="writing-render-video">▶ 视频</view>
++        <view wx:else>{{item.text}}</view>
++      </block>
++    </view>
++    <button id="applyWritingPreview" class="btn" bindtap="applyWritingPreview">应用到笔记</button>
++    <button class="btn ghost" bindtap="backWritingPreview">返回推荐</button>
++  </view>
++</view>
++<view wx:if="{{showCloudDrafts}}" class="publish-mask">
++  <view class="publish-result">
++    <view class="publish-title">草稿箱</view>
++    <scroll-view scroll-y class="scenic-results">
++      <view wx:if="{{cloudDraftError || !cloudDrafts.length}}" class="note">{{cloudDraftError || '还没有草稿'}}</view>
++      <view class="draft-row" wx:for="{{cloudDrafts}}" wx:key="id">
++        <view data-id="{{item.id}}" bindtap="restoreCloudDraft">{{item.title || '无标题草稿'}} ›</view>
++        <button data-id="{{item.id}}" data-revision="{{item.revision}}" bindtap="deleteCloudDraft">删除</button>
++      </view>
++    </scroll-view>
++    <button class="btn ghost" bindtap="closeCloudDrafts">关闭</button>
++  </view>
++</view>
++<view wx:if="{{showScenics}}" class="publish-mask">
++  <view class="publish-result">
++    <view class="publish-title">选择景区</view>
++    <view class="scenic-search"><input value="{{scenicKeyword}}" placeholder="输入景区名称" bindinput="onScenicKeyword" bindconfirm="searchScenics" confirm-type="search" /><button bindtap="searchScenics">搜索</button></view>
++    <scroll-view scroll-y class="scenic-results">
++      <view wx:if="{{scenicError || !scenicRows.length}}" class="note">{{scenicError || '没有匹配的景区'}}</view>
++      <view class="scenic-choice" wx:for="{{scenicRows}}" wx:key="id" data-id="{{item.id}}" data-name="{{item.name}}" bindtap="selectScenic">{{item.name}}</view>
++    </scroll-view>
++    <button class="btn ghost" bindtap="selectScenic">清除地点</button>
++    <button class="btn ghost" bindtap="closeScenics">取消</button>
++  </view>
++</view>
++<view wx:if="{{selectedMedia != null && !videoPreview && !videoEdit}}" class="publish-mask media-mask">
++  <view class="publish-result material-panel">
++    <view class="publish-title">编辑素材 {{selectedMedia + 1}} / {{mediaStrip.length}}</view>
++    <image wx:if="{{mediaStrip[selectedMedia].type === 'image'}}" class="material-photo" src="{{mediaStrip[selectedMedia].src}}" mode="aspectFit" />
++    <view class="material-actions">
++      <button bindtap="previewMaterial" disabled="{{uploading}}">{{mediaStrip[selectedMedia].type === 'image' ? '看大图' : '播放视频'}}</button>
++      <button wx:if="{{canEditPhoto && mediaStrip[selectedMedia].type === 'image'}}" bindtap="editPhoto" disabled="{{uploading}}">裁剪图片</button>
++      <button wx:if="{{mediaStrip[selectedMedia].type === 'image'}}" bindtap="setMaterialCover" disabled="{{uploading}}">设为封面</button>
++      <button wx:if="{{mediaStrip[selectedMedia].type === 'image'}}" bindtap="attachMotion" disabled="{{uploading}}">添加动态片段</button>
++      <button wx:if="{{mediaStrip[selectedMedia].type === 'image' && livePhotos.length}}" bindtap="removeMotion" disabled="{{uploading}}">移除动态</button>
++      <button wx:if="{{mediaStrip[selectedMedia].type === 'video'}}" bindtap="openVideoEditor" disabled="{{uploading}}">剪辑与选帧</button>
++      <button bindtap="replaceMaterial" disabled="{{uploading}}">替换</button>
++      <button bindtap="moveMaterial" data-step="-1" disabled="{{uploading || selectedMedia === 0}}">前移</button>
++      <button bindtap="moveMaterial" data-step="1" disabled="{{uploading || selectedMedia >= mediaStrip.length - 1}}">后移</button>
++      <button bindtap="removeMaterial" disabled="{{uploading}}">移除</button>
++    </view>
++    <view wx:if="{{uploading}}" class="media-hint">{{uploadProgress != null ? '正在上传 ' + uploadProgress + '%' : '正在处理素材…'}}</view>
++    <button class="btn ghost" bindtap="closeMediaTools" disabled="{{uploading}}">完成</button>
++  </view>
++</view>
++<view wx:if="{{videoEdit}}" class="publish-mask">
++  <view class="publish-result video-edit">
++    <view class="publish-title">剪辑与选帧</view>
++    <video id="materialEditorVideo" class="material-video" src="{{videoEdit.src}}" bindloadedmetadata="onVideoMetadata" controls />
++    <view class="video-times">
++      <label>起点（秒）<input type="digit" value="{{videoEdit.start}}" data-field="start" bindinput="changeVideoTime" /></label>
++      <label>终点（秒）<input type="digit" value="{{videoEdit.end}}" data-field="end" bindinput="changeVideoTime" /></label>
++    </view>
++    <view class="video-looks">
++      <button class="{{videoEdit.look === 'original' ? 'active' : ''}}" data-look="original" bindtap="changeVideoLook">原色</button>
++      <button class="{{videoEdit.look === 'warm' ? 'active' : ''}}" data-look="warm" bindtap="changeVideoLook">暖色</button>
++      <button class="{{videoEdit.look === 'mono' ? 'active' : ''}}" data-look="mono" bindtap="changeVideoLook">黑白</button>
++      <button class="{{videoEdit.look === 'vivid' ? 'active' : ''}}" data-look="vivid" bindtap="changeVideoLook">鲜明</button>
++    </view>
++    <view class="video-section-title">分段字幕 <button size="mini" bindtap="addCaption" disabled="{{videoEdit.captions.length >= 12 || uploading}}">＋ 添加</button></view>
++    <view wx:for="{{videoEdit.captions}}" wx:key="index" class="caption-segment">
++      <input placeholder="输入这一段的字幕" value="{{item.text}}" maxlength="36" data-index="{{index}}" data-field="text" bindinput="changeCaption" />
++      <view class="caption-times">
++        <input type="digit" value="{{item.start}}" placeholder="起点（秒）" data-index="{{index}}" data-field="start" bindinput="changeCaption" />
++        <text>至</text><input type="digit" value="{{item.end}}" placeholder="终点（秒）" data-index="{{index}}" data-field="end" bindinput="changeCaption" />
++        <button size="mini" data-index="{{index}}" bindtap="removeCaption">删除</button>
++      </view>
++    </view>
++    <view class="video-looks">
++      <button class="{{!videoEdit.sticker ? 'active' : ''}}" data-sticker="" bindtap="changeVideoSticker">无贴纸</button>
++      <button class="{{videoEdit.sticker === 'scenic' ? 'active' : ''}}" data-sticker="scenic" bindtap="changeVideoSticker">旅行打卡</button>
++      <button class="{{videoEdit.sticker === 'walk' ? 'active' : ''}}" data-sticker="walk" bindtap="changeVideoSticker">慢慢走</button>
++      <button class="{{videoEdit.sticker === 'guide' ? 'active' : ''}}" data-sticker="guide" bindtap="changeVideoSticker">路线攻略</button>
++    </view>
++    <view class="video-music"><text>添加背景音乐</text><switch checked="{{videoEdit.music}}" bindchange="changeVideoMusic" /></view>
++    <view class="video-looks">
++      <button data-kind="sticker" bindtap="pickVideoAsset" disabled="{{uploading}}">{{videoEdit.customSticker ? '移除自定义贴纸' : '导入 PNG 贴纸'}}</button>
++      <button data-kind="music" bindtap="pickVideoAsset" disabled="{{uploading}}">{{videoEdit.customMusic ? '移除自定义配乐' : '导入 MP3 配乐'}}</button>
++    </view>
++    <button class="btn" bindtap="trimMaterialVideo" loading="{{uploading}}" disabled="{{!videoEdit.duration || uploading}}">保留选段</button>
++    <view class="video-frame">封面位置 {{videoEdit.frame}} 秒</view>
++    <slider min="0" max="{{videoEdit.duration > 0.1 ? videoEdit.duration - 0.1 : 0.1}}" step="0.1" value="{{videoEdit.frame}}" data-field="frame" bindchange="changeVideoTime" />
++    <button class="btn ghost" bindtap="useVideoFrame" disabled="{{!videoEdit.duration || uploading}}">使用此帧作封面</button>
++    <button class="btn ghost" bindtap="closeVideoEditor" disabled="{{uploading}}">返回素材</button>
++  </view>
++</view>
++<view wx:if="{{videoPreview}}" class="publish-mask">
++  <view class="publish-result">
++    <video class="material-video" src="{{videoPreview}}" controls muted="{{false}}" />
++    <button class="btn ghost" bindtap="closeVideoPreview">返回编辑</button>
++  </view>
++</view>
++<view wx:if="{{publishResult}}" class="publish-mask">
++  <view class="publish-result">
++    <view class="publish-mark">{{publishResult.published ? '✓' : '…'}}</view>
++    <view class="publish-title">{{publishResult.title}}</view>
++    <view class="publish-detail">{{publishResult.detail}}</view>
++    <button class="btn" wx:if="{{publishResult.published}}" bindtap="openPublishedNote">查看笔记</button>
++    <button class="btn" wx:else bindtap="openMyWorks">查看我的作品</button>
++    <button class="btn ghost" bindtap="closePublishResult">继续创作</button>
+   </view>
+-  <button class="btn" bindtap="publish" loading="{{busy}}" disabled="{{busy || uploading}}">{{editId ? '保存并提交审核' : '发布'}}</button>
+-  <button wx:if="{{editId}}" class="btn ghost" bindtap="cancelEdit" disabled="{{busy || uploading}}">取消编辑</button>
+-  <view class="btn ghost" bindtap="goSquare" style="margin-top:12rpx">🏮 旅行笔记广场 · 看看大家去了哪</view>
+-  <view class="note" wx:if="{{pubMsg}}">{{pubMsg}}</view>
+ </view>
+ 
+ <view class="sec-title">约稿任务</view>
+@@ -65,7 +218,7 @@
+ </view>
+ <view class="note" wx:if="{{!tasks.open.length && !tasks.mine.length}}">暂无约稿任务 · 发布优质笔记有机会被约稿</view>
+ 
+-<view class="sec-title">我的作品（{{notes.length}}）</view>
++<view id="myWorks" class="sec-title">我的作品（{{notes.length}}）</view>
+ <view class="note" wx:if="{{loadError}}">{{loadError}}<button bindtap="fetch">重新加载</button></view>
+ <view class="card" wx:if="{{notes.length}}">
+   <block wx:for="{{notes}}" wx:key="id">
+diff --git a/mini-a/package-content/pages/create/index.wxss b/mini-a/package-content/pages/create/index.wxss
+index e8a9175..bb4ae06 100644
+--- a/mini-a/package-content/pages/create/index.wxss
++++ b/mini-a/package-content/pages/create/index.wxss
+@@ -11,3 +11,96 @@
+ .ugc-preview rich-text{display:block;margin:12rpx 0;word-break:break-word}
+ 
+ .rt-toolbar{flex-wrap:wrap}.rt-toolbar button{margin:0;padding:0 12rpx}
++
++.composer{background:#fff}
++.media-strip{width:100%;margin-bottom:20rpx}
++.media-row{display:inline-flex;gap:12rpx;align-items:center;padding:4rpx 0}
++.media-tile{flex:none;position:relative;width:124rpx;height:124rpx;border-radius:16rpx;overflow:hidden;background:#272322}
++.media-tile image{width:100%;height:100%;display:block}
++.media-video{display:block;text-align:center;line-height:124rpx;color:white;font-size:23rpx}
++.media-index{position:absolute;right:0;top:0;background:rgba(0,0,0,.63);color:white;font-size:20rpx;padding:3rpx 10rpx;border-bottom-left-radius:10rpx}
++.media-add{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5rpx;margin:0;padding:0;background:#f6f2ec;color:#4d4037;font-size:34rpx;line-height:1}
++.media-add text{font-size:20rpx}
++.composer-title{font-size:36rpx;font-weight:600;padding:18rpx 0;margin-bottom:12rpx}
++.composer-actions{display:flex;gap:16rpx;margin-top:12rpx}
++.composer-actions .btn{flex:2;margin:0}
++.composer-actions .ghost{flex:1}
++
++.composer-head{display:flex;align-items:center;justify-content:space-between;gap:16rpx;font-weight:700;font-size:36rpx;margin-bottom:22rpx}
++.composer-square,.media-hint{font-weight:400;font-size:23rpx;color:#706862}
++.source-row,.editor-tools{display:flex;align-items:center;gap:12rpx;flex-wrap:wrap}
++.source-row button,.editor-tools button{flex:none;width:auto;margin:0;padding:0 18rpx;font-size:24rpx;line-height:2.5;border-radius:12rpx;background:#f7f2eb;color:#69442f}
++.source-row button:first-child{background:#fff0e7;color:#9b3b21}
++.media-hint{margin:10rpx 0 24rpx}
++.editor-tools{padding:12rpx 0;border-bottom:1rpx solid #ece7df}
++.editor-tools text{margin-left:auto;color:#706862;font-size:22rpx}
++
++.composer.card{margin:0;padding:28rpx 30rpx 34rpx;border:0;border-radius:0;box-shadow:none}
++.composer .media-strip{margin-bottom:22rpx}
++.composer .media-add{flex:0 0 142rpx;width:142rpx;height:142rpx;margin:0;padding:0;border:1rpx dashed #dfd7cf;border-radius:18rpx;background:#f8f6f3}
++.composer .media-add::after{border:0}
++.composer .media-add .add-symbol{font-size:48rpx;line-height:1.1;color:#8b7160}
++.composer .media-tile{width:142rpx;height:142rpx}
++.composer .media-video{line-height:142rpx}
++.composer .composer-title{margin:0;padding:18rpx 0;font-size:38rpx;line-height:1.4}
++.composer .rt-toolbar{background:#fff;border:0;padding:4rpx 0;gap:8rpx}
++.composer .rt-btn{padding:6rpx 11rpx;color:#695e55}
++.composer .body-editor{min-height:300rpx;width:100%;box-sizing:border-box;padding:18rpx 0;font-size:29rpx;line-height:1.75}
++.composer .editor-tools button{background:#f7f5f2;color:#56483e}
++.composer .composer-actions{margin-top:16rpx}
++.composer .composer-actions .btn{min-height:82rpx}
++.publish-mask{position:fixed;inset:0;z-index:20;background:rgba(26,20,16,.44);display:flex;align-items:center;justify-content:center;padding:42rpx}
++.publish-result{width:100%;max-width:590rpx;box-sizing:border-box;padding:38rpx 34rpx 28rpx;border-radius:28rpx;background:#fff;text-align:center}
++.publish-mark{width:76rpx;height:76rpx;margin:0 auto 16rpx;border-radius:50%;background:#fff0e7;color:#a84324;line-height:76rpx;font-size:42rpx}
++.publish-title{font-size:38rpx;font-weight:700}
++.publish-detail{font-size:27rpx;color:#6c6159;line-height:1.55;margin:14rpx 0 24rpx}
++.publish-result .btn{margin:10rpx 0}
++
++.emoji-picker{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8rpx;padding:14rpx 0}
++.emoji-picker .emoji-choice{width:100%;margin:0;padding:0;font-size:34rpx;line-height:2;background:#f8f5f0;border-radius:12rpx}
++.emoji-choice::after{border:0}
++.material-video{width:100%;display:block}
++
++.resume-draft{padding:12rpx 0 18rpx;font-size:25rpx;color:#934422}
++
++.material-panel .publish-title{font-size:32rpx;margin-bottom:16rpx}
++.material-photo{display:block;width:100%;height:280rpx;background:#f7f5f2;border-radius:14rpx}
++.material-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12rpx;margin:20rpx 0}
++.material-actions button{width:100%;margin:0;padding:0;font-size:24rpx;line-height:2.8;background:#f7f3ef;color:#594438}
++.material-actions button[disabled]{color:#a8a29e}
++.material-actions button::after{border:0}
++.publish-option{padding:18rpx 0}
++.scenic-search,.topic-search{display:flex;align-items:center;gap:14rpx}
++.scenic-search input,.topic-search input{flex:1;min-width:0;text-align:left}
++.scenic-search button,.topic-search button{margin:0;width:auto;font-size:24rpx}
++.scenic-results{height:33vh;text-align:left;margin:14rpx 0}
++.scenic-choice{padding:20rpx 0;border-bottom:1rpx solid #eee5da}
++.video-edit{max-height:88vh;overflow-y:auto}
++.video-edit video{height:240rpx;margin:12rpx 0}
++.video-times{display:flex;gap:18rpx;text-align:left}
++.video-times label{flex:1;font-size:24rpx;color:#625244}
++.video-times input{padding:10rpx;background:#f7f3ef;border-radius:10rpx}
++.video-frame{text-align:left;margin-top:12rpx;font-size:24rpx}
++.draft-row{display:flex;align-items:center;justify-content:space-between;gap:12rpx;padding:12rpx 0;border-bottom:1rpx solid #eee5da}.draft-row view{flex:1;min-width:0;overflow-wrap:anywhere}.draft-row button{margin:0;width:auto;font-size:23rpx}
++.video-looks{display:flex;flex-wrap:wrap;gap:8rpx;margin-top:12rpx}.video-looks button{width:auto;margin:0;padding:0 15rpx;font-size:23rpx}.video-looks button.active{color:#9b3b21;background:#fff0e7}
++.video-caption{margin:14rpx 0 0;padding:14rpx;background:#f7f3ef;border-radius:10rpx;text-align:left;font-size:25rpx}.video-music{display:flex;align-items:center;justify-content:space-between;margin-top:12rpx;font-size:25rpx}
++.video-section-title{display:flex;align-items:center;justify-content:space-between;margin:18rpx 0 10rpx;font-weight:600;font-size:25rpx}.video-section-title button,.caption-times button{width:auto;margin:0;font-size:22rpx}
++.caption-segment{margin:8rpx 0;padding:12rpx;border-radius:12rpx;background:#f8f4ef;text-align:left}.caption-segment input{min-width:0;font-size:24rpx;padding:8rpx}.caption-times{display:flex;gap:6rpx;align-items:center}.caption-times input{flex:1;background:white}
++.body-label{display:flex;justify-content:space-between;padding:18rpx 0 4rpx;font-size:28rpx;font-weight:600}.body-label text{color:#776e66;font-size:22rpx;font-weight:400}.composer .body-editor{background:#faf8f5;border-radius:14rpx;padding:18rpx;min-height:240rpx}
++.body-label .writing-idea,.writing-option button{margin:0;width:auto;padding:0 15rpx;font-size:23rpx;line-height:2.5;border-radius:20rpx;color:#8b4428;background:#f7eee7}
++.writing-sheet{text-align:left}.writing-layout{color:#6f6156;font-size:25rpx;line-height:1.55;margin:12rpx 0}
++.writing-option{display:flex;justify-content:space-between;align-items:center;gap:12rpx;padding:16rpx 0;border-top:1rpx solid #eee5dd;font-size:26rpx}
++.writing-sheet{max-height:82vh;overflow-y:auto}.writing-scene-row{display:inline-flex;gap:12rpx}.writing-scene-row view{width:124rpx;text-align:center;font-size:20rpx;color:#83533a}.writing-scene-row image{width:124rpx;height:96rpx;border-radius:10rpx;display:block}.writing-sample{font-size:22rpx;color:#716359;white-space:pre-line;margin-top:6rpx}.writing-option button{flex:none}
++.writing-preview-input{width:100%;min-height:280rpx;box-sizing:border-box;padding:16rpx;background:#faf7f2;border-radius:12rpx;font-size:26rpx;line-height:1.55}
++.writing-render{margin:16rpx 0;padding:16rpx;border:1rpx solid #eee2d8;border-radius:12rpx;white-space:pre-line;font-size:24rpx;line-height:1.65}.writing-render image{display:block;width:100%;margin:10rpx 0;border-radius:8rpx}.writing-render-video{background:#26211e;color:white;padding:20rpx;border-radius:8rpx}
++.writing-preview-input.vision-title{min-height:0;height:76rpx;margin:12rpx 0}
++.writing-sheet{padding:32rpx 28rpx;background:#fffefa}
++.writing-sheet .publish-title{font-size:36rpx;letter-spacing:.5rpx;margin-bottom:18rpx}
++.writing-sheet .writing-scene-row image{width:124rpx;height:106rpx;border-radius:14rpx}
++.writing-context{display:inline-block;margin:12rpx 0;padding:7rpx 14rpx;border-radius:18rpx;background:#f5ebe2;color:#8c4e2e;font-size:22rpx}
++.intent-label{font-size:27rpx;font-weight:600;margin:18rpx 0 10rpx}
++.intent-input{box-sizing:border-box;width:100%;height:78rpx;padding:0 18rpx;border-radius:14rpx;background:#f6f1eb;font-size:24rpx}
++.writing-sheet .btn{width:100%;margin:14rpx 0 0}
++.writing-template-toggle{width:auto;margin:12rpx auto 0;background:transparent;color:#765948;font-size:23rpx}.writing-template-toggle::after{border:0}
++.vision-error{color:#9d3625;font-size:23rpx;padding:8rpx 0}
++.media-edit-label{position:absolute;bottom:7rpx;left:7rpx;padding:3rpx 9rpx;border-radius:10rpx;background:#211a16c9;color:white;font-size:20rpx}.media-order-hint{font-size:22rpx;color:#786557;margin:-10rpx 0 12rpx}.media-tile.dragging-media{opacity:.5}.media-tile.media-drop{outline:3rpx solid #a94d25;outline-offset:-3rpx}
+diff --git a/mini-a/package-content/pages/note/index.js b/mini-a/package-content/pages/note/index.js
+index 5ddd550..95f9071 100644
+--- a/mini-a/package-content/pages/note/index.js
++++ b/mini-a/package-content/pages/note/index.js
+@@ -3,15 +3,195 @@ const api = require('../../../utils/api')
+ Page({
+   data: { n: null, loadTxt: '加载中…', reporting: false, reportReason: '', reportMsg: '', reportBusy: false },
+   onLoad(q) { this.id = q.id },
++  commentPath() { return '/c/notes/' + this.id + '/comments' },
++  async loadComments(append = false) {
++    try {
++      const before = append ? this.data.commentNext : 0
++      const { items, total, next } = await api.request(this.commentPath() + '?before=' + (before || 0))
++      this.setData({ comments: append ? this.data.comments.concat(items) : items, commentTotal: total, commentNext: next, commentError: '' })
++    } catch (e) { this.setData({ commentError: e.msg || '评论加载失败' }) }
++  },
++  retryComments() { this.loadComments() },
++  moreComments() { this.loadComments(true) },
++  async fetchReplies(id, append = false) {
++    const thread = this.data.threads?.[id]
++    const before = append ? thread?.next : 0
++    const { items, next } = await api.request(this.commentPath() + '?root=' + id + '&before=' + (before || 0))
++    this.setData({ ['threads.' + id]: { items: append ? thread.items.concat(items) : items, next } })
++  },
++  async showReplies(e) {
++    try {
++      const id = e.currentTarget.dataset.id
++      await this.fetchReplies(id, Boolean(this.data.threads?.[id]?.next))
++    } catch (e) { wx.showToast({ title: e.msg || '回复加载失败', icon: 'none' }) }
++  },
++  openComments() {
++    if (this.data.n.featuredVideo) this.setData({ commentsOpen: true })
++    else wx.pageScrollTo({ selector: '#noteComments', duration: 220 })
++  },
++  closeComments() { this.setData({ commentsOpen: false, commentFocus: false }) },
++  selectCommentImage() {
++    wx.chooseMedia({ count: 1, mediaType: ['image'], sizeType: ['compressed'], success: ({ tempFiles }) => {
++      const path = tempFiles[0]?.tempFilePath
++      if (path) this.setData({ commentMedia: { kind: 'image', path } })
++    } })
++  },
++  clearCommentMedia() { this.setData({ commentMedia: null }) },
++  recordComment() {
++    if (this.data.commentBusy) return
++    if (this.data.recording) return this.recorder.stop()
++    if (!this.recorder) {
++      this.recorder = wx.getRecorderManager()
++      this.recordStarted = () => this.setData({ recording: true })
++      this.recordStopped = ({ tempFilePath, duration }) => {
++        this.setData({ recording: false })
++        if (duration >= 500 && tempFilePath) this.setData({ commentMedia: { kind: 'audio', path: tempFilePath } })
++        else wx.showToast({ title: '请录制至少半秒', icon: 'none' })
++      }
++      this.recordFailed = () => {
++        this.setData({ recording: false })
++        wx.showToast({ title: '录音失败，请检查麦克风权限', icon: 'none' })
++      }
++      this.recorder.onStart(this.recordStarted)
++      this.recorder.onStop(this.recordStopped)
++      this.recorder.onError(this.recordFailed)
++    }
++    this.recorder.start({ duration: 30000, format: 'mp3', sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000 })
++  },
++  viewCommentImage(e) {
++    const url = e.currentTarget.dataset.url
++    wx.previewImage({ current: url, urls: [url] })
++  },
++  playCommentAudio(e) {
++    const url = e.currentTarget.dataset.url
++    if (!url) return
++    if (this.data.playingAudio === url) return this.commentPlayer.stop()
++    if (!this.commentPlayer) {
++      this.commentPlayer = wx.createInnerAudioContext()
++      const clear = () => this.setData({ playingAudio: '' })
++      this.commentPlayer.onEnded(clear)
++      this.commentPlayer.onStop(clear)
++      this.commentPlayer.onError(() => {
++        clear()
++        wx.showToast({ title: '语音播放失败', icon: 'none' })
++      })
++    }
++    if (this.data.n?.featuredVideo) wx.createVideoContext('noteFeaturedVideo').pause()
++    this.commentPlayer.src = url
++    this.setData({ playingAudio: url })
++    this.commentPlayer.play()
++  },
++  onHide() { this.commentPlayer?.stop(); if (this.data.recording) this.recorder.stop() },
++  onUnload() {
++    this.onHide()
++    this.commentPlayer?.destroy()
++    this.recorder?.offStart?.(this.recordStarted)
++    this.recorder?.offStop?.(this.recordStopped)
++    this.recorder?.offError?.(this.recordFailed)
++  },
++  noteVideoProgress(e) { this.videoTime = e.detail.currentTime },
++  editComment(e) { this.setData({ commentText: e.detail.value }) },
++  replyComment(e) { this.setData({ replyTarget: e.currentTarget.dataset.row, commentFocus: true }) },
++  cancelReply() { this.setData({ replyTarget: null, commentFocus: false }) },
++  blurComment() { this.setData({ commentFocus: false }) },
++  async sendComment() {
++    const body = this.data.commentText?.trim()
++    const attachment = this.data.commentMedia
++    if ((!body && !attachment) || this.data.commentBusy || this.data.recording) return
++    this.setData({ commentBusy: true })
++    try {
++      let media
++      if (attachment) {
++        const fs = wx.getFileSystemManager()
++        if (fs.statSync(attachment.path).size > 700 * 1024) throw { msg: '附件超过 700 KB，请重新选择' }
++        media = { kind: attachment.kind, data: fs.readFileSync(attachment.path, 'base64') }
++      }
++      const { rootId, pending } = await api.request(this.commentPath(), 'POST', { body: body || '', media, replyTo: this.data.replyTarget?.id || 0 })
++      this.setData({ commentText: '', commentMedia: null, replyTarget: null, commentFocus: false })
++      await this.loadComments()
++      if (rootId) await this.fetchReplies(rootId).catch(() => {})
++      wx.showToast({ title: pending ? '已提交审核' : '已发送' })
++    } catch (e) { wx.showToast({ title: e.msg || '发送失败，请重试', icon: 'none' }) }
++    finally { this.setData({ commentBusy: false }) }
++  },
++  async likeComment(e) {
++    const { row, root } = e.currentTarget.dataset
++    try {
++      await api.request(this.commentPath() + '/' + row.id + '/like', 'PUT', { liked: !row.liked })
++      if (root) await this.fetchReplies(root)
++      else await this.loadComments()
++    } catch (e) { wx.showToast({ title: e.msg || '操作失败', icon: 'none' }) }
++  },
++  deleteComment(e) {
++    const { id, root } = e.currentTarget.dataset
++    wx.showModal({ title: '删除这条评论？', content: root ? '删除后无法恢复' : '该评论下的回复也会隐藏', success: async ({ confirm }) => {
++      if (!confirm) return
++      try {
++        await api.request(this.commentPath() + '/' + id, 'DELETE')
++        if (root) await this.fetchReplies(root)
++        if (this.data.replyTarget?.id === id) this.cancelReply()
++        await this.loadComments()
++      } catch (e) { wx.showToast({ title: e.msg || '删除失败', icon: 'none' }) }
++    } })
++  },
+   onShow() { if(this.id)this.fetch() },
+   async fetch() {
+     try {
+       await api.ensureLogin()
+       const n = await api.request('/c/notes/' + this.id)
+-      this.setData({ liked: n.liked, likeCount: n.likeCount, n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '', images: (n.images || []).map(api.img) } })
++      if (n.visibility === 'private') {
++        const images = [...new Set([...n.images,n.cover,...(n.blocks || []).filter(b=>b.type==='image').map(b=>b.url)].filter(Boolean))]
++        const paths = Object.fromEntries(await Promise.all(images.map(async url=>[url,await api.downloadPrivateMedia(url)])))
++        n.images = n.images.map(url=>paths[url])
++        n.cover = paths[n.cover]
++        n.blocks = n.blocks?.map(b=>b.type==='image'?{...b,url:paths[b.url]}:b)
++        n.livePhotos = n.livePhotos.map(p=>({...p,photo:paths[p.photo]}))
++      }
++      const blocks = n.blocks?.map(b => b.url ? { ...b, url: api.img(b.url) } : b)
++      const articlePhotos = blocks ? blocks.filter(b => b.type === 'image').map(b => b.url) : (n.images || []).map(api.img)
++      const photos = [...new Set([n.customCover ? n.cover : '', ...articlePhotos].filter(Boolean))]
++      const motions = Object.fromEntries((n.livePhotos || []).map(p=>[p.photo,p.motion]))
++      const media = blocks?.filter(b => b.type !== 'text')
++      const hasInlineMedia = blocks?.some((b, i) => b.url && !b.attachment && blocks.slice(0,i).some(x=>x.type==='text'))
++      const featuredVideo = blocks ? (!hasInlineMedia && media.length === 1 && media[0].type === 'video' ? media[0].url : '') : n.video
++      const gallery = !featuredVideo && photos.length > 0 && (!blocks || !hasInlineMedia && media.every(b=>b.type==='image'))
++      const seen = new Set()
++      const articleBlocks = blocks?.filter(b=>{
++        if (!b.url) return true
++        if (seen.has(b.url) || (gallery && b.type==='image') || b.url===featuredVideo) return false
++        seen.add(b.url)
++        return true
++      }).map(b=>({...b,motion:motions[b.url]}))
++      this.setData({ liked: n.liked, likeCount: n.likeCount, galleryIndex: 0, n: {
++        ...n, blocks: articleBlocks || null, photos,
++        galleryPhotos: photos.map(url=>({url,motion:motions[url]})), gallery, featuredVideo: featuredVideo ? api.img(featuredVideo) : '',
++        when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '',
++      } })
++      if (n.visibility !== 'private') this.loadComments()
+     } catch (e) { this.setData({ n: null, loadTxt: e.msg || '内容暂未加载，请重试' }) }
+   },
+-  previewImage(e) { const urls=this.data.n.images; wx.previewImage({urls,current:e.currentTarget.dataset.url || urls[e.currentTarget.dataset.i]}) },
++  galleryChange(e) { this.setData({ galleryIndex: e.detail.current }) },
++  async protectedVideo(e) {
++    const url = e.currentTarget.dataset.url
++    if (this.data.privateLoading) return
++    this.setData({ privateLoading: true })
++    try { this.setData({ livePlayer: await api.downloadPrivateMedia(url), playerLabel:'关闭视频' }) }
++    catch (_) { wx.showToast({title:'视频加载失败，请重试',icon:'none'}) }
++    finally { this.setData({ privateLoading: false }) }
++  },
++  playLive(e) {
++    if (this.data.n.visibility === 'private') return this.protectedVideo(e)
++    this.setData({ livePlayer: e.currentTarget.dataset.url, playerLabel:'关闭实况' })
++  },
++  closeLive() { this.setData({ livePlayer: '' }) },
++  goScenic() { wx.navigateTo({ url: '/package-tour/pages/place/index?kind=scenic&id=' + this.data.n.scenic_id }) },
++  goTopic(e) { wx.navigateTo({ url: '/package-content/pages/square/index?topic=' + encodeURIComponent(e.currentTarget.dataset.topic) }) },
++  previewImage(e) { wx.previewImage({ urls: this.data.n.photos, current: e.currentTarget.dataset.url }) },
++  onShareAppMessage() {
++    if (this.data.n?.visibility === 'private') return { title: '旅行笔记', path: '/package-content/pages/square/index' }
++    return { title: this.data.n?.title || '旅行笔记', path: '/package-content/pages/note/index?id=' + this.id,
++      ...(this.data.n?.cover ? { imageUrl: this.data.n.cover } : {}) }
++  },
+   async toggleLike() {
+     try {
+       const r = await api.request('/c/notes/' + this.id + '/like', this.data.liked ? 'DELETE' : 'POST')
+@@ -19,6 +199,7 @@ Page({
+     } catch (e) { wx.showToast({ title: e.msg || '操作失败', icon: 'none' }) }
+   },
+   toggleReport() { this.setData({reporting:!this.data.reporting,reportMsg:''}) },
++  keepReportOpen() {},
+   onReportReason(e) { this.setData({reportReason:e.detail.value}) },
+   async submitReport() {
+     if(this.data.reportBusy)return
+diff --git a/mini-a/package-content/pages/note/index.wxml b/mini-a/package-content/pages/note/index.wxml
+index 4b195be..fe12fb8 100644
+--- a/mini-a/package-content/pages/note/index.wxml
++++ b/mini-a/package-content/pages/note/index.wxml
+@@ -1,30 +1,122 @@
+-<view wx:if="{{n}}">
+-  <view class="hero">
+-    <view class="hi" style="font-size:40rpx">{{n.title || '旅行笔记'}}</view>
+-    <view class="sub2">{{n.author}} · {{n.when}}<text wx:if="{{n.product_title}}"> · 关联「{{n.product_title}}」</text></view>
++<template name="commentRow">
++  <view class="comment-row">
++    <view class="comment-author">{{row.author || '旅友'}} <text wx:if="{{row.byAuthor}}" class="author-tag">作者</text></view>
++    <view class="comment-body"><text wx:if="{{row.replyAuthor}}" class="reply-to">回复 {{row.replyAuthor}}　</text>{{row.body}}</view>
++    <image wx:if="{{row.mediaUrl && row.media_kind === 'image'}}" class="comment-photo" src="{{row.mediaUrl}}" mode="aspectFill" bindtap="viewCommentImage" data-url="{{row.mediaUrl}}" />
++    <button wx:if="{{row.mediaUrl && row.media_kind === 'audio'}}" class="comment-audio" bindtap="playCommentAudio" data-url="{{row.mediaUrl}}">{{playingAudio === row.mediaUrl ? '■ 停止语音' : '▶ 播放语音'}}</button>
++    <view wx:if="{{row.media_state !== 1}}" class="comment-state">{{row.media_state === 0 ? '媒体审核中' : '媒体未通过审核'}}</view>
++    <view class="comment-meta">
++      <text>{{row.created_at}}</text>
++      <button wx:if="{{row.media_state === 1}}" bindtap="replyComment" data-row="{{row}}">回复</button>
++      <button wx:if="{{row.media_state === 1}}" bindtap="likeComment" data-row="{{row}}" data-root="{{root}}">{{row.liked ? '♥' : '♡'}} {{row.likes}}</button>
++      <button wx:if="{{row.mine}}" bindtap="deleteComment" data-id="{{row.id}}" data-root="{{root}}">删除</button>
++    </view>
++  </view>
++</template>
++<template name="commentList">
++  <view wx:if="{{commentError}}" class="comment-state">{{commentError}} <button bindtap="retryComments">重试</button></view>
++  <view wx:elif="{{!comments.length}}" class="comment-state">还没有评论，聊聊这趟旅行吧</view>
++  <block wx:for="{{comments}}" wx:key="id">
++    <template is="commentRow" data="{{row: item, playingAudio}}" />
++    <view wx:if="{{item.replies}}" class="comment-thread">
++      <template wx:for="{{threads[item.id].items}}" wx:for-item="reply" wx:key="id" is="commentRow" data="{{row: reply, root: item.id, playingAudio}}" />
++      <button wx:if="{{!threads[item.id] || threads[item.id].next}}" class="more-replies" bindtap="showReplies" data-id="{{item.id}}">{{threads[item.id] ? '加载更多回复' : '展开 ' + item.replies + ' 条回复'}}</button>
++    </view>
++  </block>
++  <button wx:if="{{commentNext}}" class="more-replies" bindtap="moreComments">加载更多评论</button>
++</template>
++<template name="commentInput">
++  <view class="comment-compose">
++    <view wx:if="{{replyTarget}}" class="reply-label">回复 {{replyTarget.author}} <button bindtap="cancelReply">取消</button></view>
++    <view class="comment-entry">
++      <input class="comment-input" placeholder="说说你的想法…" maxlength="500" value="{{commentText}}" focus="{{commentFocus}}" bindinput="editComment" bindblur="blurComment" />
++      <button class="comment-send" bindtap="sendComment" loading="{{commentBusy}}" disabled="{{(!commentText && !commentMedia) || commentBusy || recording}}">发送</button>
++    </view>
++    <view class="comment-tools">
++      <button class="comment-add-photo" bindtap="selectCommentImage" disabled="{{commentBusy || recording}}">图片</button>
++      <button class="comment-record" bindtap="recordComment" disabled="{{commentBusy}}">{{recording ? '停止录音' : '录制语音'}}</button>
++    </view>
++    <view wx:if="{{commentMedia}}" class="comment-attachment">
++      <image wx:if="{{commentMedia.kind === 'image'}}" class="comment-photo" src="{{commentMedia.path}}" mode="aspectFill" />
++      <button wx:else class="comment-audio" bindtap="playCommentAudio" data-url="{{commentMedia.path}}">{{playingAudio === commentMedia.path ? '停止试听' : '试听录音'}}</button>
++      <button bindtap="clearCommentMedia" disabled="{{commentBusy || recording}}">移除</button>
++    </view>
++  </view>
++</template>
++<view wx:if="{{n}}" class="reading">
++  <view class="byline">
++    <view class="byline-author">{{n.author || '旅行创作者'}}</view>
++    <button wx:if="{{n.visibility !== 'private'}}" class="share" open-type="share">分享</button>
++    <text wx:else class="related">仅自己查看</text>
++  </view>
++  <view wx:if="{{n.featuredVideo}}" class="video-stage">
++    <button wx:if="{{n.visibility === 'private'}}" bindtap="protectedVideo" data-url="{{n.featuredVideo}}" loading="{{privateLoading}}">播放私密视频</button>
++    <video wx:else id="noteFeaturedVideo" src="{{n.featuredVideo}}" poster="{{n.cover}}" controls muted="{{false}}" object-fit="contain" bindtimeupdate="noteVideoProgress" />
++  </view>
++  <view wx:if="{{n.gallery && n.photos.length}}" class="gallery">
++    <swiper bindchange="galleryChange">
++      <swiper-item wx:for="{{n.galleryPhotos}}" wx:key="url">
++        <image src="{{item.url}}" mode="aspectFit" data-url="{{item.url}}" bindtap="previewImage" />
++        <button wx:if="{{item.motion}}" class="live-photo-button" data-url="{{item.motion}}" bindtap="playLive">▶ 实况</button>
++      </swiper-item>
++    </swiper>
++    <text wx:if="{{n.photos.length > 1}}" class="photo-count">{{galleryIndex + 1}} / {{n.photos.length}}</text>
+   </view>
+-  <view class="card">
++  <view class="article">
++    <view class="article-title">{{n.title || '旅行笔记'}}</view>
+     <block wx:if="{{n.blocks}}">
+       <block wx:for="{{n.blocks}}" wx:key="index">
+         <rich-text wx:if="{{item.type === 'text'}}" class="article-block" nodes="{{item.html}}" />
+-        <image wx:elif="{{item.type === 'image'}}" class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
+-        <video wx:else class="article-block" src="{{item.url}}" controls />
++        <view wx:elif="{{item.type === 'image' && !n.gallery}}" class="article-photo-wrap">
++          <image class="article-block article-photo" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
++          <button wx:if="{{item.motion}}" class="live-photo-button" data-url="{{item.motion}}" bindtap="playLive">▶ 实况</button>
++        </view>
++        <block wx:elif="{{item.type === 'video' && !n.featuredVideo}}">
++          <button wx:if="{{n.visibility === 'private'}}" class="article-block" bindtap="protectedVideo" data-url="{{item.url}}" loading="{{privateLoading}}">播放私密视频</button>
++          <video wx:else class="article-block" src="{{item.url}}" controls muted="{{false}}" object-fit="contain" />
++        </block>
+       </block>
+     </block>
+-    <block wx:else>
+-    <rich-text nodes="{{n.html}}" style="font-size:28rpx;line-height:1.8;color:#16232e"></rich-text>
+-    <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
+-    <image wx:for="{{n.images}}" wx:key="*this" src="{{item}}" mode="widthFix" style="width:100%;margin-top:12rpx" data-i="{{index}}" bindtap="previewImage" />
+-    </block>
+-    <view wx:if="{{n.like_count}}" style="margin-top:12rpx;color:var(--brand)">👍 {{n.like_count}} 人觉得有用</view>
+-    <button class="report-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
+-    <button class="report-toggle" bindtap="toggleReport">举报此笔记</button>
+-    <view wx:if="{{reporting}}">
++    <rich-text wx:else class="article-block" nodes="{{n.html}}" />
++    <view class="article-meta">
++      <text wx:if="{{n.product_title}}" class="related">{{n.product_title}}</text>
++      <text wx:if="{{n.scenic_id}}" class="related" bindtap="goScenic">📍 {{n.scenic_name}} ›</text>
++      <text wx:for="{{n.topics}}" wx:key="*this" class="related" data-topic="{{item}}" bindtap="goTopic">#{{item}}</text>
++      <text>{{n.when}}</text>
++    </view>
++    <view class="note" wx:if="{{reportMsg && !reporting}}">{{reportMsg}}</view>
++  </view>
++  <view wx:if="{{!n.featuredVideo && n.visibility !== 'private'}}" id="noteComments" class="comments-inline">
++    <view class="comments-title">评论 {{commentTotal || 0}}</view>
++    <template is="commentInput" data="{{replyTarget, commentText, commentFocus, commentBusy, commentMedia, recording, playingAudio}}" />
++    <template is="commentList" data="{{comments, threads, commentNext, commentError, playingAudio}}" />
++  </view>
++  <view wx:if="{{n.visibility !== 'private'}}" class="reading-actions">
++    <button class="report-toggle" bindtap="toggleReport">举报</button>
++    <button class="comment-toggle" bindtap="openComments">评论 {{commentTotal || 0}}</button>
++    <button class="like-toggle" bindtap="toggleLike">{{liked ? "♥ 已赞" : "♡ 点赞"}} {{likeCount}}</button>
++  </view>
++  <view wx:if="{{commentsOpen}}" class="sheet-mask comment-mask" bindtap="closeComments">
++    <view class="comment-sheet" catchtap="keepReportOpen">
++      <view class="sheet-heading"><text class="comments-title">评论 {{commentTotal || 0}}</text><button bindtap="closeComments">关闭</button></view>
++      <scroll-view scroll-y class="comment-scroll">
++        <template is="commentList" data="{{comments, threads, commentNext, commentError, playingAudio}}" />
++      </scroll-view>
++      <template is="commentInput" data="{{replyTarget, commentText, commentFocus, commentBusy, commentMedia, recording, playingAudio}}" />
++    </view>
++  </view>
++  <view wx:if="{{reporting}}" class="sheet-mask" bindtap="toggleReport">
++    <view class="report-sheet" catchtap="keepReportOpen">
++      <view class="sheet-heading"><text>举报笔记</text><button bindtap="toggleReport">关闭</button></view>
+       <textarea class="report-reason" value="{{reportReason}}" bindinput="onReportReason" maxlength="300" placeholder="请描述违规内容或事实依据（4—300 字）"></textarea>
+-      <button class="report-submit" bindtap="submitReport" loading="{{reportBusy}}" disabled="{{reportBusy}}">提交举报</button>
++      <view class="note" wx:if="{{reportMsg}}">{{reportMsg}}</view>
++      <button class="btn" bindtap="submitReport" loading="{{reportBusy}}" disabled="{{reportBusy}}">提交举报</button>
+     </view>
+-    <view class="note" wx:if="{{reportMsg}}">{{reportMsg}}</view>
+   </view>
+ </view>
+-<view wx:else class="empty">{{loadTxt}}</view>
++<view wx:if="{{livePlayer}}" class="live-mask">
++  <video src="{{livePlayer}}" autoplay controls object-fit="contain" />
++  <button bindtap="closeLive">{{playerLabel}}</button>
++</view>
++<view wx:if="{{!n}}" class="empty">{{loadTxt}}</view>
+ <button wx:if="{{!n}}" bindtap="fetch">重新加载</button>
+diff --git a/mini-a/package-content/pages/note/index.wxss b/mini-a/package-content/pages/note/index.wxss
+index c9324f7..c859a8c 100644
+--- a/mini-a/package-content/pages/note/index.wxss
++++ b/mini-a/package-content/pages/note/index.wxss
+@@ -1,6 +1,70 @@
+-/* 复用全局样式（app.wxss），仅补间距 */
+-.card view { word-break: break-all; }
+-.report-toggle,.report-submit { margin-top:24rpx;font-size:26rpx; }
+-.report-reason { width:100%;min-height:160rpx;margin-top:20rpx;border:1rpx solid #ddd;padding:16rpx;box-sizing:border-box; }
++.reading{background:#fff;color:#16232e;min-height:100vh;padding-bottom:calc(105rpx + env(safe-area-inset-bottom))}
++.byline,.sheet-heading{display:flex;align-items:center;justify-content:space-between;gap:24rpx;padding:18rpx 30rpx}
++.byline-author{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:29rpx;font-weight:600}
++.reading button{margin:0;font-size:26rpx}
++.share,.report-toggle,.sheet-heading button{background:#f4f2ee;color:#453f38}
++.gallery,.video-stage{position:relative;background:#121212}
++.gallery swiper{height:620rpx;background:#f4f2ee}
++.gallery image{width:100%;height:100%}
++.photo-count{position:absolute;right:24rpx;bottom:22rpx;padding:6rpx 16rpx;border-radius:30rpx;background:rgba(0,0,0,.62);color:white;font-size:22rpx}
++.video-stage video{width:100%;height:62vh;display:block}
++.article{padding:30rpx}
++.article-title{font-size:40rpx;line-height:1.35;font-weight:700;overflow-wrap:anywhere;margin-bottom:22rpx}
++.article-block{display:block;width:100%;margin:20rpx 0;word-break:break-word;font-size:30rpx;line-height:1.85}
++.article-photo{border-radius:14rpx}
++.article-meta{display:flex;flex-wrap:wrap;align-items:center;gap:16rpx;color:#625b52;font-size:23rpx}
++.related{background:#f5f1ea;padding:8rpx 14rpx;border-radius:12rpx}
++.reading-actions{position:fixed;z-index:3;bottom:0;left:0;right:0;display:flex;justify-content:space-between;gap:20rpx;padding:12rpx 30rpx calc(12rpx + env(safe-area-inset-bottom));border-top:1rpx solid #ece7df;background:#fff}
++.like-toggle{background:#fff0e7;color:#963b1d}
++.sheet-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:4;display:flex;align-items:flex-end}
++.report-sheet{box-sizing:border-box;width:100%;background:#fff;border-radius:28rpx 28rpx 0 0;padding:10rpx 24rpx calc(24rpx + env(safe-area-inset-bottom))}
++.sheet-heading{padding:10rpx 0}
++.report-reason{width:100%;min-height:160rpx;margin:14rpx 0;border:1rpx solid #ddd;padding:16rpx;box-sizing:border-box}
+ 
+-.article-block{display:block;width:100%;margin:14rpx 0;word-break:break-word;line-height:1.8}
++.comments-inline{padding:26rpx 30rpx;border-top:1rpx solid #ece7df}
++.comments-title{font-size:32rpx;font-weight:700}
++.comment-toggle,.more-replies{background:#f4f2ee;color:#453f38}
++.comment-row{padding:20rpx 0;border-bottom:1rpx solid #f3efea}
++.comment-author,.comment-meta,.comment-state,.reply-to,.reply-label{font-size:23rpx;color:#706862}
++.author-tag{background:#fff0e7;color:#963b1d;padding:3rpx 9rpx;border-radius:10rpx}
++.comment-body{font-size:29rpx;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:8rpx 0}
++.comment-meta,.comment-entry,.reply-label{display:flex;align-items:center;gap:14rpx}
++.comment-meta button,.reply-label button{font-size:22rpx;line-height:2;padding:0 10rpx;background:#f5f2ee;color:#544943}
++.comment-thread{padding-left:25rpx;border-left:2rpx solid #f3eee7}
++.more-replies{display:inline-block;margin:10rpx 0!important;font-size:23rpx!important}
++.comment-compose{padding:16rpx 0}
++.comment-input{background:#f4f2ee;border-radius:32rpx;flex:1;min-width:0;padding:14rpx 20rpx;font-size:27rpx}
++.comment-send{background:#a84324;color:white}
++.comment-state{padding:28rpx 0}
++.comment-sheet{width:100%;box-sizing:border-box;background:#fff;border-radius:28rpx 28rpx 0 0;padding:8rpx 26rpx env(safe-area-inset-bottom)}
++.comment-sheet .sheet-heading{padding:12rpx 0}
++.comment-scroll{height:42vh}
++
++.comment-photo{display:block;width:180rpx;height:142rpx;border-radius:16rpx;margin:10rpx 0;background:#f4f2ee}
++.comment-tools,.comment-attachment{display:flex;align-items:center;gap:12rpx;margin-top:10rpx}
++.comment-tools button,.comment-attachment button,.reading .comment-audio{background:#f4f2ee;color:#594338;font-size:24rpx;line-height:2.4;padding:0 17rpx}
++.reading .comment-audio{display:inline-block;margin:8rpx 0}
++.comment-sheet{max-height:86vh;display:flex;flex-direction:column}
++.comment-sheet .comment-scroll{flex:0 1 42vh;min-height:100rpx}
++
++.reading .comment-meta button,.reading .comment-tools button,.reading .reply-label button,.reading .more-replies{flex:none;width:auto;min-width:0;margin:0;padding:0 12rpx;background:transparent;color:#6b5144;font-weight:500}
++.comment-meta{gap:8rpx;flex-wrap:wrap}
++.comment-meta text{white-space:nowrap;margin-right:10rpx}
++.reading .comment-send{flex:none;width:auto;padding:0 25rpx;border-radius:32rpx}
++.comment-tools{justify-content:flex-start}
++.reading .comment-tools button{background:#f8f3ec;border-radius:24rpx}
++.reading .more-replies{margin-top:8rpx!important}
++.note-cover{display:block;width:100%}
++.article-photo-wrap{position:relative}.reading .live-photo-button{position:absolute;top:14rpx;left:14rpx;background:#171717b3;color:white;font-size:23rpx;line-height:2;padding:0 14rpx;border-radius:22rpx}
++.live-mask{position:fixed;inset:0;background:#171717ed;z-index:30;display:flex;flex-direction:column;justify-content:center;gap:28rpx;align-items:center}.live-mask video{width:94%}.live-mask button{width:auto}
++.reading{background:#fffefa}
++.reading .byline{padding:16rpx 30rpx;border-bottom:1rpx solid #f0e8df}
++.reading .byline .share{width:auto;padding:0 24rpx;border-radius:22rpx}
++.reading .gallery swiper{height:92vw;max-height:62vh;background:#f3eee7}
++.reading .video-stage video{height:49vh;background:#131311}
++.reading .article{padding:30rpx 32rpx 25rpx}
++.reading .article-title{margin-bottom:24rpx;line-height:1.25;font-size:43rpx}
++.reading .article-block{line-height:1.85;margin:20rpx 0}
++.reading .article-photo{border-radius:12rpx}
++.reading .article-meta{margin-top:24rpx}
++.reading .reading-actions button{width:auto;min-width:0;flex:1;border-radius:24rpx}
+diff --git a/mini-a/package-content/pages/square/index.js b/mini-a/package-content/pages/square/index.js
+index 9d0da4d..542580f 100644
+--- a/mini-a/package-content/pages/square/index.js
++++ b/mini-a/package-content/pages/square/index.js
+@@ -2,12 +2,21 @@
+ const api = require('../../../utils/api')
+ Page({
+   data: { items: [], page: 1, pageSize: 20, loading: true, error: '', demo: false, hasMore: false },
++  onLoad(q) { this.setData({ topic: q.topic || '', topicInput: q.topic || '' }) },
++  onTopicInput(e) { this.setData({ topicInput: e.detail.value }) },
++  searchTopic() {
++    this.setData({ topic: (this.data.topicInput || '').trim().replace(/^#/, ''), items: [] })
++    this.fetch(true)
++  },
++  loadMore() { this.fetch(false) },
+   onShow() { if (!this.data.items.length) this.fetch(true) },
+   retry() { this.fetch(true) },
+   fetch(reset) {
+     const page = reset ? 1 : this.data.page + 1
+     this.setData({ loading: true, error: '' })
+-    api.request('/c/notes/feed?page=' + page + '&pageSize=' + this.data.pageSize).then((d) => {
++    const topic = this.data.topic || ''
++    api.ensureLogin().then(() => api.request('/c/notes/feed?page=' + page + '&pageSize=' + this.data.pageSize + '&topic=' + encodeURIComponent(topic))).then((d) => {
++      if (topic !== (this.data.topic || '')) return
+       const items = reset ? d.items : this.data.items.concat(d.items)
+       this.setData({ items, page, loading: false, hasMore: d.items.length >= d.pageSize, demo: false })
+     }).catch((e) => {
+diff --git a/mini-a/package-content/pages/square/index.wxml b/mini-a/package-content/pages/square/index.wxml
+index f37d346..f3515a4 100644
+--- a/mini-a/package-content/pages/square/index.wxml
++++ b/mini-a/package-content/pages/square/index.wxml
+@@ -1,4 +1,5 @@
+ <view class="hero"><view class="hi">旅行笔记广场</view><view class="sub2">看看大家去了哪 · 点赞支持创作者</view></view>
++<view class="card topic-search"><input placeholder="搜索话题，如 朱家角" value="{{topicInput}}" maxlength="25" bindinput="onTopicInput" bindconfirm="searchTopic" confirm-type="search" /><button bindtap="searchTopic">搜索话题</button></view>
+ <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
+ <view class="card" wx:if="{{items.length}}">
+   <view class="feed-item" wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
+@@ -7,14 +8,15 @@
+     <view style="flex:1;min-width:0">
+       <view class="feed-title">{{item.title || '无标题笔记'}}<text wx:if="{{item.hasVideo}}" class="tag">视频</text></view>
+       <view class="sub2">{{item.author}} · {{item.when}}{{item.productTitle ? ' · ' + item.productTitle : ''}}</view>
++      <view wx:if="{{item.scenic_name}}" class="sub2">📍 {{item.scenic_name}}</view>
+       <view class="feed-actions">
+         <text catchtap="like" data-id="{{item.id}}" data-liked="{{item.liked}}" style="{{item.liked ? 'color:#e87722' : ''}}">{{item.liked ? '♥' : '♡'}} {{item.likeCount}}</text>
+         <text style="color:var(--sub,#8a919c)">举报请进详情 ›</text>
+       </view>
+     </view>
+   </view>
+-  <view wx:if="{{hasMore}}" class="btn ghost" bindtap="fetch">加载更多</view>
++  <view wx:if="{{hasMore}}" class="btn ghost" bindtap="loadMore">加载更多</view>
+ </view>
+-<view wx:elif="{{!loading && !error}}" class="empty"><view class="e-ico">🏮</view>还没有公开笔记 · 抢先发一篇</view>
++<view wx:elif="{{!loading && !error}}" class="empty">{{topic ? '这个话题还没有公开笔记' : '还没有公开笔记 · 抢先发一篇'}}</view>
+ <view class="note">内容均通过平台安全检测 · 发现违规可在笔记详情页举报</view>
+ <view class="btn" bindtap="goCreate" style="margin:16rpx 32rpx">去发布我的笔记</view>
+diff --git a/mini-a/package-content/pages/square/index.wxss b/mini-a/package-content/pages/square/index.wxss
+index 29fddb1..92760f5 100644
+--- a/mini-a/package-content/pages/square/index.wxss
++++ b/mini-a/package-content/pages/square/index.wxss
+@@ -3,3 +3,4 @@
+ .feed-ph { display: flex; align-items: center; justify-content: center; font-size: 52rpx; }
+ .feed-title { font-size: 28rpx; font-weight: 700; }
+ .feed-actions { display: flex; gap: 24rpx; margin-top: 10rpx; font-size: 24rpx; }
++.topic-search{display:flex;align-items:center;gap:14rpx}.topic-search input{flex:1;min-width:0}.topic-search button{width:auto;margin:0;font-size:24rpx}
+diff --git a/mini-a/utils/api.js b/mini-a/utils/api.js
+index 2969294..c8c89ad 100644
+--- a/mini-a/utils/api.js
++++ b/mini-a/utils/api.js
+@@ -151,7 +151,15 @@ async function getReviews(productId) { return await request('/c/tours/' + produc
+ async function postReview(orderNo, rating, content) { return await request('/c/orders/' + orderNo + '/review', 'POST', { rating, content }) }
+ function img(url) {
+   if (!url) return ''
+-  return /^https?:\/\//.test(url) ? url : g().apiBase + url
++  return /^(?:https?|wxfile|file):\/\//.test(url) ? url : g().apiBase + url
++}
++
++function downloadPrivateMedia(path) {
++  return new Promise((resolve, reject) => wx.downloadFile({
++    url: img(path), header: { Authorization: 'Bearer ' + (g().token || '') },
++    success: r => r.statusCode === 200 ? resolve(r.tempFilePath) : reject({msg:'私密素材无法读取'}),
++    fail: reject,
++  }))
+ }
+ 
+ function productImages(product) {
+@@ -179,6 +187,7 @@ function coverFor(product) {
+ }
+ 
+ module.exports = {
++  downloadPrivateMedia,
+   request, login, ensureLogin, getTours, getTourDetail, getBean,
+   createOrder, pay, getOrders, getOrder, getPassCode, getMe, refund, refundQuote,
+   getPhoneNumber, getPromoQrcode, getNotifyTemplates, getReviews, postReview, img, coverFor, productImages, businessImage, photoFor, isIllustration, isReferencePhoto, FALLBACK, demoAllowed,

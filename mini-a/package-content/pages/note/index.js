@@ -14,6 +14,7 @@ Page({
     pendingAudio: null,          // {kind:'audio', path} 待发送的语音评论（临时文件）
     recording: false, playingAudio: '',
     liked: false, likeCount: 0, current: 0, mediaLabel: '', hasGallery: false,
+    livePlayer: '', playerLabel: '',
   },
   onLoad(q) { this.id = q.id; this.cursor = null },
   onShow() { if (this.id) { this.fetch(); this.fetchComments(true) } },
@@ -35,6 +36,12 @@ Page({
         if (n.video) n.video = local[n.video] || ''
         if (Array.isArray(n.blocks)) n.blocks = n.blocks.map(b => b.type === 'image' && local[b.url] ? { ...b, url: local[b.url] } : b)
       }
+      // 实况映射（photo 原始路径 → motion 完整 URL）：按原始路径索引，与 imagesFull 一一对应
+      const motionByImg = {}
+      for (const p of (n.livePhotos || [])) {
+        const idx = (n.images || []).indexOf(p.photo)
+        if (idx >= 0) motionByImg[idx] = api.img(p.motion)
+      }
       const imgs = (n.images || []).map(api.img)
       const blocks = Array.isArray(n.blocks)
         ? n.blocks.map(b => b.type === 'text' ? { ...b, isText: true } : { ...b, isText: false })
@@ -42,7 +49,8 @@ Page({
       this.setData({
         liked: n.liked, likeCount: n.likeCount,
         n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '',
-          imagesFull: imgs, blocksReady: blocks, topicsReady: n.topics || [], isPrivate: n.visibility === 'private' },
+          imagesFull: imgs.map((u, i) => ({ url: u, motion: motionByImg[i] || '' })),
+          blocksReady: blocks, topicsReady: n.topics || [], isPrivate: n.visibility === 'private' },
         hasGallery: imgs.length > 0,
         mediaLabel: imgs.length ? '1/' + imgs.length : '',
       })
@@ -52,7 +60,16 @@ Page({
     const label = (e.detail.current + 1) + '/' + (this.data.n ? this.data.n.imagesFull.length : 0)
     this.setData({ current: e.detail.current, mediaLabel: label })
   },
-  previewImage(e) { const urls = this.data.n.imagesFull; wx.previewImage({ urls, current: urls[e.currentTarget.dataset.i] || urls[0] }) },
+  previewImage(e) {
+    const urls = this.data.n.imagesFull.map(x => x.url)
+    wx.previewImage({ urls, current: urls[e.currentTarget.dataset.i] || urls[0] })
+  },
+  playLive(e) {
+    const motion = e.currentTarget.dataset.motion
+    if (!motion) return
+    this.setData({ livePlayer: motion, playerLabel: '关闭实况' })
+  },
+  closeLive() { this.setData({ livePlayer: '' }) },
   previewCommentImage(e) { wx.previewImage({ urls: [e.currentTarget.dataset.url] }) },
 
   /* ---------- 话题/景区聚合跳转（三期①） ---------- */

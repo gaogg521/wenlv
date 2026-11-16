@@ -47,7 +47,8 @@ for (let i = 0; i < 60; i++) {
 const results = []
 for (const pg of pages) {
   try {
-    const page = await mini.reLaunch(pg)
+    // devtools 3.17.5 起 reLaunch 要求绝对路径（不带 / 抛非 Error 对象）
+    const page = await mini.reLaunch(pg.startsWith('/') ? pg : '/' + pg)
     await new Promise((r) => setTimeout(r, 1800))
     const cur = page.path
     const name = pg.replace(/[\/?=&]/g, '_').replace(/^_/, '') || 'home' // 带参数的路径在 Windows 上不能直接当文件名

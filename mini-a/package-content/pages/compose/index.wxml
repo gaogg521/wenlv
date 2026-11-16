@@ -16,6 +16,7 @@
           <view class="media-cell">
             <image class="media-img" src="{{item.src}}" mode="aspectFit" data-i="{{index}}" bindtap="previewCurrent" />
             <view wx:if="{{item.isCover}}" class="cover-badge">封面</view>
+            <view wx:if="{{item.isLive}}" class="live-badge" catchtap="toggleLive" data-i="{{index}}">▶ 实况 · 点击移除</view>
             <view wx:if="{{item.uploading}}" class="media-flag">上传中…</view>
             <view wx:elif="{{item.failed}}" class="media-flag bad" catchtap="retryItem" data-key="{{item.key}}">上传失败 · 点重试</view>
             <view class="media-del" catchtap="removeImage" data-key="{{item.key}}">✕</view>
@@ -38,6 +39,7 @@
     </scroll-view>
     <view class="media-actions">
       <view class="m-act" bindtap="setCover">设为封面</view>
+      <view class="m-act" bindtap="toggleLive" data-i="{{current}}">▶ 实况</view>
     </view>
   </view>
 
@@ -49,7 +51,10 @@
       <view wx:elif="{{video.failed}}" class="media-flag bad" catchtap="retryItem" data-key="{{video.key}}">上传失败 · 点重试</view>
       <view class="media-del" catchtap="removeVideo">✕</view>
     </view>
-    <view class="media-actions"><view class="m-act" bindtap="pickVideo">换一个视频</view></view>
+    <view class="media-actions">
+      <view class="m-act" bindtap="openVideoEdit">✂️ 剪辑</view>
+      <view class="m-act" bindtap="pickVideo">换一个视频</view>
+    </view>
   </view>
 
   <!-- 第二步 · 编辑区 -->
@@ -109,6 +114,55 @@
       <view class="ir-guide">排版建议：{{visionResult.guideLabel}}<text class="ir-guide-sub">{{visionResult.guide ? '（按路线顺序组织图片）' : '（重点呈现画面氛围）'}}</text></view>
       <view wx:if="{{visionResult.reason}}" class="ir-reason">写作角度：{{visionResult.reason}}</view>
       <button class="ir-apply" bindtap="applyIdea">应用到笔记</button>
+    </view>
+  </view>
+</view>
+
+<!-- ✂️ 视频剪辑面板（Codex 素材线） -->
+<view wx:if="{{videoEdit}}" class="sheet-mask" bindtap="closeVideoEdit">
+  <view class="ve-sheet" catchtap="noop">
+    <view class="sheet-title">✂️ 视频剪辑</view>
+    <video class="ve-video" src="{{videoEdit.src}}" controls object-fit="contain" bindloadedmetadata="onVeMeta"></video>
+    <view class="ve-row"><text class="ve-k">保留 {{videoEdit.start}}s – {{videoEdit.end}}s / 共 {{videoEdit.duration}}s</text></view>
+    <view class="ve-row"><text class="ve-k">起点</text><slider class="ve-slider" min="0" max="{{videoEdit.duration}}" step="0.1" value="{{videoEdit.start}}" block-size="20" bindchange="changeVeTime" data-field="start" /></view>
+    <view class="ve-row"><text class="ve-k">终点</text><slider class="ve-slider" min="0" max="{{videoEdit.duration}}" step="0.1" value="{{videoEdit.end}}" block-size="20" bindchange="changeVeTime" data-field="end" /></view>
+    <view class="ve-row"><text class="ve-k">封面帧</text><slider class="ve-slider" min="0" max="{{videoEdit.duration}}" step="0.1" value="{{videoEdit.frame}}" block-size="20" bindchange="changeVeTime" data-field="frame" /></view>
+    <view class="ve-row"><text class="ve-k">滤镜</text>
+      <view class="ve-opts">
+        <view class="ve-opt {{videoEdit.look === 'original' ? 'on' : ''}}" bindtap="changeVeLook" data-look="original">原图</view>
+        <view class="ve-opt {{videoEdit.look === 'warm' ? 'on' : ''}}" bindtap="changeVeLook" data-look="warm">暖调</view>
+        <view class="ve-opt {{videoEdit.look === 'mono' ? 'on' : ''}}" bindtap="changeVeLook" data-look="mono">黑白</view>
+        <view class="ve-opt {{videoEdit.look === 'vivid' ? 'on' : ''}}" bindtap="changeVeLook" data-look="vivid">鲜艳</view>
+      </view>
+    </view>
+    <view class="ve-row"><text class="ve-k">角标</text>
+      <view class="ve-opts">
+        <view class="ve-opt {{videoEdit.sticker === '' ? 'on' : ''}}" bindtap="changeVeSticker" data-sticker="">无</view>
+        <view class="ve-opt {{videoEdit.sticker === 'scenic' ? 'on' : ''}}" bindtap="changeVeSticker" data-sticker="scenic">旅行打卡</view>
+        <view class="ve-opt {{videoEdit.sticker === 'walk' ? 'on' : ''}}" bindtap="changeVeSticker" data-sticker="walk">慢慢走</view>
+        <view class="ve-opt {{videoEdit.sticker === 'guide' ? 'on' : ''}}" bindtap="changeVeSticker" data-sticker="guide">路线攻略</view>
+      </view>
+    </view>
+    <view class="ve-row"><text class="ve-k">全程字幕</text><input class="ve-input" value="{{videoEdit.caption}}" bindinput="onVeCaption" maxlength="36" placeholder="如：外滩漫步（≤36字）" /></view>
+    <view class="ve-row"><text class="ve-k">配乐</text>
+      <view class="ve-opts">
+        <switch checked="{{videoEdit.music}}" bindchange="changeVeMusic" />
+        <text class="ve-sub">内置 BGM</text>
+        <view class="ve-opt {{videoEdit.hasMusicAsset ? 'on' : ''}}" bindtap="pickVeAsset" data-kind="music">{{videoEdit.hasMusicAsset ? '✓ 自定义音乐' : '+ 自定义音乐'}}</view>
+        <view class="ve-opt {{videoEdit.hasStickerAsset ? 'on' : ''}}" bindtap="pickVeAsset" data-kind="sticker">{{videoEdit.hasStickerAsset ? '✓ 自定义贴纸' : '+ 自定义贴纸'}}</view>
+      </view>
+    </view>
+    <view class="ve-row" wx:if="{{videoEdit.captions.length}}">
+      <view class="ve-cap" wx:for="{{videoEdit.captions}}" wx:key="i">
+        <input class="ve-input ve-cap-text" value="{{item.text}}" bindinput="changeVeCaption" data-i="{{item.i}}" data-field="text" maxlength="36" placeholder="分段字幕 {{item.i}}" />
+        <text class="ve-cap-del" catchtap="removeVeCaption" data-i="{{item.i}}">✕</text>
+      </view>
+      <view wx:if="{{videoEdit.captions.length < 12}}" class="ve-add-cap" bindtap="addVeCaption">＋ 按当前区间加分段字幕</view>
+    </view>
+    <view wx:if="{{videoEdit.veError}}" class="ve-error">{{videoEdit.veError}}</view>
+    <view class="ve-actions">
+      <button class="ve-btn" bindtap="useVeFrame" disabled="{{veBusy}}">封面帧</button>
+      <button class="ve-btn primary" bindtap="applyVeTrim" loading="{{veBusy}}" disabled="{{veBusy}}">生成剪辑</button>
     </view>
   </view>
 </view>

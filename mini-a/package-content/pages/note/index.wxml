@@ -2,8 +2,9 @@
   <!-- 图集轮播（小红书式：全宽 + 页码） -->
   <view wx:if="{{hasGallery}}" class="gallery">
     <swiper class="gallery-swiper" current="{{current}}" bindchange="onSwiper">
-      <swiper-item wx:for="{{n.imagesFull}}" wx:key="*this">
-        <image class="gallery-img" src="{{item}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
+      <swiper-item wx:for="{{n.imagesFull}}" wx:key="url">
+        <image class="gallery-img" src="{{item.url}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
+        <view wx:if="{{item.motion}}" class="live-play" catchtap="playLive" data-motion="{{item.motion}}">▶ 实况</view>
       </swiper-item>
     </swiper>
     <view wx:if="{{mediaLabel}}" class="gallery-page">{{mediaLabel}}</view>
@@ -121,6 +122,12 @@
 </view>
 <view wx:else class="empty">{{loadTxt}}</view>
 <button wx:if="{{!n}}" bindtap="fetch">重新加载</button>
+
+<!-- 实况播放浮层 -->
+<view wx:if="{{livePlayer}}" class="live-mask">
+  <video class="live-video" src="{{livePlayer}}" autoplay controls object-fit="contain" />
+  <button class="live-close" bindtap="closeLive">{{playerLabel}}</button>
+</view>
 
 <!-- 底部操作栏（图片/语音评论 / 输入 / 点赞 / 分享） -->
 <view wx:if="{{n}}" class="action-bar">

@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import os from 'node:os'
 import { legalVersions, legalDocuments, requireProductionLegal } from '../domain/legal.mjs'
 import { annotateSessions, activeRules, scopeMatch, unitPrice } from '../domain/discount.mjs'
 import * as pkg from '../domain/package.mjs'
@@ -200,6 +201,121 @@ async function saveNote(req, editing) {
 
 const noteUploadDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..','..','static','uploads')
 const runMedia = promisify(execFile)
+const NOTE_VIDEO_MAX = 80 * 1024 * 1024
+const activeMediaEdits = new Set()
+
+// 视频剪辑（三期收尾·Codex 素材线）：裁剪/滤镜/贴纸/字幕/BGM/封面帧 —— ffmpeg 服务端出片
+// 输出限本人命名（ugc-video-<uid>-*），ugc-edit-* 素材由 index.mjs 静态服务 404 挡外链
+async function editNoteVideo(req, still) {
+  const user = noteAuthor(req)
+  const { url, start, end, look = 'original', caption = '', captions = [], sticker = '', music = false,
+    customSticker = '', customMusic = '' } = req.body || {}
+  const looks = new Map([
+    ['original',''], ['warm','colorbalance=rs=.08:bs=-.08'],
+    ['mono','hue=s=0'], ['vivid','eq=saturation=1.35:contrast=1.06'],
+  ])
+  if (!looks.has(look)) throw new BizError(1001, '请选择有效滤镜')
+  const stickers = { scenic: '旅行打卡', walk: '慢慢走', guide: '路线攻略' }
+  const validText = text => typeof text === 'string' && text.length <= 36 && !/[\p{Cc}<>{}]/u.test(text)
+  if (!validText(caption) || !Array.isArray(captions) || captions.length > 12 ||
+      captions.some(c => !validText(c?.text) || !c.text.trim() || !Number.isFinite(c.start) || !Number.isFinite(c.end) ||
+        c.start < start || c.end > end || c.end <= c.start) ||
+      (sticker && !Object.hasOwn(stickers,sticker)) || typeof music !== 'boolean') throw new BizError(1001, '字幕或装饰无效')
+  const assets = []
+  for (const [value, extension] of [[customSticker,'png'],[customMusic,'mp3']]) {
+    if (value && (typeof value !== 'string' || !new RegExp('^ugc-edit-' + user.uid + '-[0-9a-f-]{36}[.]' + extension + '$').test(value))) {
+      throw new BizError(1001,'请选择本人上传的贴纸或音乐')
+    }
+    assets.push(value ? path.join(noteUploadDir,value) : '')
+  }
+  const owned = new RegExp('^/uploads/ugc-video-' + Number(user.uid) + '-[0-9a-f-]{36}[.](mp4|mov)$')
+  if (typeof url !== 'string' || !owned.test(url)) throw new BizError(1001, '请选择本人上传的视频')
+  if (!Number.isFinite(start) || start < 0 || start > 86400 ||
+      (!still && (!Number.isFinite(end) || end > 86400 || end - start < 0.5))) {
+    throw new BizError(1001, '请选择有效的时间范围')
+  }
+  const source = path.join(noteUploadDir, path.basename(url))
+  if (!fs.existsSync(source)) throw new BizError(1004, '原视频不存在')
+  if (activeMediaEdits.has(user.uid) || activeMediaEdits.size >= 2) throw new BizError(1001, '视频正在处理，请稍后再试')
+  const filename = still ? `note_${user.uid}_${Date.now()}${crypto.randomInt(100000,999999)}.jpg` :
+    `ugc-video-${user.uid}-${crypto.randomUUID()}.mp4`
+  const output = path.join(noteUploadDir, filename)
+  const temporary = path.join(noteUploadDir, '.' + filename)
+  let scratch
+  activeMediaEdits.add(user.uid)
+  try {
+    const options = { timeout: 120000, windowsHide: true, maxBuffer: 128 * 1024 }
+    const duration = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
+      ['-v','error','-show_entries','format=duration','-of','csv=p=0',source], options)
+    const seconds = Number(duration.stdout.trim())
+    if (!(seconds > start) || (!still && end > seconds + 0.05)) throw new BizError(1001, '选取范围超出了视频时长')
+    const filters = ['scale=trunc(iw/2)*2:trunc(ih/2)*2',looks.get(look)].filter(Boolean)
+    if (!still && (caption.trim() || captions.length || sticker)) {
+      scratch = await fs.promises.mkdtemp(path.join(os.tmpdir(),'wenlv-video-'))
+      const assTime = seconds => {
+        const cs = Math.round(seconds * 100)
+        return Math.floor(cs / 360000) + ':' + String(Math.floor(cs / 6000) % 60).padStart(2,'0') + ':' +
+          String(Math.floor(cs / 100) % 60).padStart(2,'0') + '.' + String(cs % 100).padStart(2,'0')
+      }
+      const lines = captions.map(c=>'Dialogue: 0,' + assTime(c.start-start) + ',' + assTime(c.end-start) + ',Caption,,0,0,0,,' + c.text.replace(/\\/g,''))
+      const ass = '[Script Info]\nScriptType: v4.00+\nPlayResX: 384\nPlayResY: 288\n[V4+ Styles]\n' +
+        'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n' +
+        'Style: Caption,sans-serif,18,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,2,18,18,24,1\n' +
+        'Style: Badge,sans-serif,16,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80274366,1,0,0,0,100,100,0,0,3,5,0,7,20,18,20,1\n' +
+        '[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
+        (caption.trim() ? 'Dialogue: 0,0:00:00.00,24:00:00.00,Caption,,0,0,0,,' + caption.replace(/\\/g,'') + '\n' : '') +
+        lines.join('\n') + '\n' +
+        (sticker ? 'Dialogue: 0,0:00:00.00,24:00:00.00,Badge,,0,0,0,,' + stickers[sticker] + '\n' : '')
+      await fs.promises.writeFile(path.join(scratch,'labels.ass'),ass,'utf8')
+      filters.push('ass=labels.ass')
+    }
+    let audio = ['-map','0:a:0?']
+    let video = ['-map','0:v:0','-vf',filters.join(',')]
+    const extraInputs = []
+    const graph = []
+    const imageFile = assets[0], musicFile = assets[1]
+    if (!still && imageFile) {
+      extraInputs.push('-i',imageFile)
+      graph.push('[0:v]' + filters.join(',') + '[base];[1:v]scale=180:180:force_original_aspect_ratio=decrease[badge];[base][badge]overlay=W-w-20:20[outv]')
+      video = ['-map','[outv]']
+    }
+    if (!still && (music || musicFile)) {
+      const streams = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
+        ['-v','error','-select_streams','a:0','-show_entries','stream=index','-of','csv=p=0',source], options)
+      extraInputs.push('-stream_loop','-1','-i',musicFile || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../video/audio/bgm.wav'))
+      const musicTrack = imageFile ? '[2:a]' : '[1:a]'
+      graph.push(streams.stdout.trim() ? musicTrack + 'volume=0.16[bg];[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]' : musicTrack+'volume=0.30[out]')
+      audio = ['-map','[out]']
+    }
+    const args = still ? ['-frames:v','1','-vf','scale=min(1080\\,iw):-2','-q:v','3','-update','1'] :
+      ['-t',String(end-start),...(graph.length ? ['-filter_complex_threads','1','-filter_complex',graph.join(';')] : []),
+        ...video,...audio,'-c:v','libx264','-preset','veryfast','-pix_fmt','yuv420p',
+        '-c:a','aac','-movflags','+faststart','-fs',String(NOTE_VIDEO_MAX)]
+    await runMedia(process.env.FFMPEG_PATH || 'ffmpeg',
+      ['-hide_banner','-loglevel','error','-nostdin','-ss',String(start),'-i',source,...extraInputs,...args,temporary], { ...options, cwd:scratch })
+    const size = (await fs.promises.stat(temporary)).size
+    if (size <= 0 || size >= (still ? 2 * 1024 * 1024 : NOTE_VIDEO_MAX)) throw new BizError(1001, '处理结果超出大小限制')
+    if (!still) {
+      const probe = await runMedia(process.env.FFPROBE_PATH || 'ffprobe',
+        ['-v','error','-show_entries','format=duration','-of','csv=p=0',temporary], options)
+      if (Number(probe.stdout) < end - start - 0.25) throw new BizError(1001, '成片不完整，请缩短选段重试')
+    }
+    await fs.promises.rename(temporary, output)
+    const outUrl = '/uploads/' + filename
+    return { url: outUrl, access: noteMediaTicket(outUrl) }
+  } catch (error) {
+    if (error instanceof BizError) throw error
+    console.warn('[note-video] media processing failed:', error.code || error.name, String(error.stderr || '').split('\n').slice(0,2).join(' '))
+    throw new BizError(1001, '视频处理失败，请检查素材或稍后重试')
+  } finally {
+    activeMediaEdits.delete(user.uid)
+    await fs.promises.unlink(temporary).catch(() => {})
+    if (scratch) {
+      await fs.promises.unlink(path.join(scratch,'labels.ass')).catch(() => {})
+      await fs.promises.rmdir(scratch).catch(() => {})
+    }
+  }
+}
 
 // ---------- /c 游客端 ----------
 const c = {
@@ -1002,6 +1118,20 @@ const cNotes = {
     if (!result.affectedRows) throw new BizError(2002, '草稿已变更，请刷新')
     return { deleted:true }
   },
+  'POST /c/note-video/trim': req => editNoteVideo(req, false),
+  'POST /c/note-video/cover': req => editNoteVideo(req, true),
+  'POST /c/note-video/asset': async req => {
+    const user = noteAuthor(req)
+    const { kind, data } = req.body || {}
+    const buffer = Buffer.from(typeof data === 'string' ? data : '', 'base64')
+    const png = kind === 'sticker' && buffer.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex'))
+    const mp3 = kind === 'music' && (buffer.toString('ascii',0,3)==='ID3' || (buffer[0]===255 && (buffer[1]&224)===224))
+    if ((!png && !mp3) || buffer.length < 32 || buffer.length > 2*1024*1024) throw new BizError(1001,'请选择 2 MB 内的 PNG 贴纸或 MP3 音乐')
+    const asset = 'ugc-edit-' + user.uid + '-' + crypto.randomUUID() + (png ? '.png' : '.mp3')
+    await fs.promises.mkdir(noteUploadDir,{recursive:true})
+    await fs.promises.writeFile(path.join(noteUploadDir,asset),buffer,{flag:'wx'})
+    return { asset }
+  },
   // 景区选择器（三期话题聚合）：compose 关联景区 → feed 可按景区聚合
   'GET /c/note-scenics': async req => {
     noteAuthor(req)
@@ -1021,7 +1151,7 @@ const cNotes = {
     return {title:n.title,text:body.text || '',blocks:body.blocks || null,images:body.images || [],video:body.video || null,
       topics:Array.isArray(body.topics) ? body.topics : [],coverIndex:body.cover ? Math.max((body.images || []).indexOf(body.cover), 0) : Number(body.coverIndex) || 0,
       revision:n.revision,relatedProductId:n.related_product_id,relatedName:n.related_name,
-      visibility:n.visibility,scenicId:n.scenic_id,scenicName:n.scenic_name,livePhotos:body.livePhotos || [],
+      visibility:n.visibility,scenicId:n.scenic_id,scenicName:n.scenic_name,livePhotos:body.livePhotos || [],cover:body.cover || null,
       mediaAccess:Object.fromEntries(paths.map(p=>[p,noteMediaTicket(p)]))}
   },
   // 笔记详情独立页（P2）：仅已发布可见；私密笔记（V88）仅作者本人可打开
@@ -1041,6 +1171,8 @@ const cNotes = {
     return { ...n, liked: !!liked, likeCount: Number(n.like_count), commentCount: Number(n.comment_count), body,
       text: (body && body.text) || '', images: (body && body.images) || [],
       topics: Array.isArray(body?.topics) ? body.topics : [],
+      livePhotos: (Array.isArray(body?.livePhotos) ? body.livePhotos : []).map(p=>({ photo: apiImg(p.photo, req), motion: apiImg(p.motion, req) })),
+      customCover: Boolean(body?.cover),
       authorAvatar: n.avatar_url ? apiImg(n.avatar_url, req) : null,
       video: body?.video ? apiImg(body.video, req) : null, blocks: Array.isArray(body?.blocks) ? body.blocks.map(b=>b.url?{...b,url:apiImg(b.url,req)}:b) : null }
   },

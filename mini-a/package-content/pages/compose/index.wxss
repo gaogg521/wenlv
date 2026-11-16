@@ -107,6 +107,30 @@ page { background: #fff; }
 .thumb-drag-tip { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 18rpx;
   color: #fff; background: rgba(0,0,0,.55); padding: 2rpx 0; }
 
+/* 视频剪辑面板 + 实况（Codex 素材线） */
+.live-badge { position: absolute; left: 14rpx; top: 14rpx; font-size: 20rpx; color: #fff;
+  background: rgba(0,0,0,.6); border-radius: 999rpx; padding: 4rpx 14rpx; }
+.ve-sheet { width: 100%; max-height: 88vh; overflow-y: auto; box-sizing: border-box;
+  background: #fff; border-radius: 28rpx 28rpx 0 0; padding: 24rpx 30rpx calc(30rpx + env(safe-area-inset-bottom)); }
+.ve-video { width: 100%; height: 340rpx; background: #111; border-radius: 14rpx; }
+.ve-row { display: flex; align-items: center; gap: 16rpx; margin: 18rpx 0; flex-wrap: wrap; }
+.ve-k { flex-shrink: 0; width: 130rpx; font-size: 25rpx; color: #1f2937; }
+.ve-slider { flex: 1; min-width: 0; margin: 0; }
+.ve-opts { display: flex; flex-wrap: wrap; gap: 12rpx; flex: 1; min-width: 0; align-items: center; }
+.ve-opt { font-size: 23rpx; color: #6b7280; background: #f3f4f6; border-radius: 999rpx; padding: 8rpx 22rpx; }
+.ve-opt.on { color: #fff; background: var(--brand, #e87722); font-weight: 600; }
+.ve-sub { font-size: 23rpx; color: #6b7280; }
+.ve-input { flex: 1; min-width: 0; background: #f3f4f6; border-radius: 12rpx; padding: 12rpx 20rpx; font-size: 25rpx; }
+.ve-cap { display: flex; align-items: center; gap: 12rpx; width: 100%; margin: 6rpx 0; }
+.ve-cap-text { flex: 1; min-width: 0; }
+.ve-cap-del { flex-shrink: 0; color: #9ca3af; font-size: 28rpx; padding: 0 10rpx; }
+.ve-add-cap { width: 100%; text-align: center; font-size: 23rpx; color: var(--brand, #e87722); padding: 8rpx 0; }
+.ve-error { font-size: 24rpx; color: #dc2626; margin: 10rpx 0; }
+.ve-actions { display: flex; gap: 20rpx; margin-top: 20rpx; }
+.ve-btn { flex: 1; min-width: 0; height: 76rpx; line-height: 76rpx; border-radius: 999rpx;
+  background: #f3f4f6; color: #374151; font-size: 27rpx; }
+.ve-btn.primary { background: var(--brand, #e87722); color: #fff; font-weight: 600; }
+
 /* 三期：可见范围 / 关联景区 */
 .vis-opts { display: flex; gap: 14rpx; }
 .vis-opt { font-size: 25rpx; color: #6b7280; background: #f3f4f6; border-radius: 999rpx; padding: 10rpx 30rpx; }

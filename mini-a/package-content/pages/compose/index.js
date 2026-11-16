@@ -25,6 +25,8 @@ Page({
     draftRestored: false, cloudDraftId: null, cloudDraftRevision: null, cloudSavedAt: '',
     // 拖拽排序（三期）：thumb 条状态
     thumbs: [], dragging: false, dragIndex: -1, dragOverIndex: -1,
+    // 视频剪辑（Codex 素材线）+ 实况照片
+    videoEdit: null, veBusy: false, livePhotos: [], coverUrl: '',
   },
 
   onLoad(q) {
@@ -248,7 +250,9 @@ Page({
     const key = e.currentTarget.dataset.key
     const idx = this.data.images.findIndex(x => x.key === key)
     if (idx < 0) return
+    const removedUrl = this.data.images[idx].url
     const images = this.data.images.filter(x => x.key !== key)
+    if (removedUrl) this.setData({ livePhotos: this.data.livePhotos.filter(p => p.photo !== removedUrl) })
     let coverIndex = this.data.coverIndex
     if (idx < coverIndex) coverIndex--
     else if (idx === coverIndex) coverIndex = 0
@@ -256,6 +260,133 @@ Page({
     this.refresh()
   },
   removeVideo() { this.setData({ video: null }); this.refresh() },
+
+  /* ---------- 实况照片（Codex 素材线）：为图片绑定 ≤3s 动态片段 ---------- */
+  toggleLive(e) {
+    if (this.data.veBusy || this.data.busy) return
+    const item = this.data.images[e.currentTarget.dataset.i]
+    if (!item || !item.url) return
+    const hit = this.data.livePhotos.find(p => p.photo === item.url)
+    if (hit) {
+      this.setData({ livePhotos: this.data.livePhotos.filter(p => p.photo !== item.url) })
+      wx.showToast({ title: '已移除实况', icon: 'none' })
+      this.refresh()
+      return
+    }
+    wx.chooseMedia({ count: 1, mediaType: ['video'], sourceType: ['album', 'camera'], maxDuration: 3,
+      success: async r => {
+        const f = r.tempFiles[0]
+        if (!f) return
+        if ((f.duration || 0) > 3.1) return wx.showToast({ title: '请选 3 秒以内的动态片段', icon: 'none' })
+        this.setData({ veBusy: true })
+        try {
+          await api.ensureLogin()
+          const fs = wx.getFileSystemManager()
+          const data = fs.readFileSync(f.tempFilePath, 'base64')
+          const up = await api.request('/c/upload/note-video', 'POST', { data, ext: 'mp4' })
+          if (up.access) this.mediaAccess.set(up.url, up.access)
+          const livePhotos = this.data.livePhotos.filter(p => p.photo !== item.url)
+          this.setData({ livePhotos: livePhotos.concat([{ photo: item.url, motion: up.url }]) })
+          wx.showToast({ title: '已添加实况' })
+          this.refresh()
+        } catch (err) { wx.showToast({ title: err.msg || '动态片段添加失败', icon: 'none' }) }
+        finally { this.setData({ veBusy: false }) }
+      } })
+  },
+
+  /* ---------- 视频剪辑（Codex 素材线）：裁剪/滤镜/贴纸/字幕/BGM/封面帧 ---------- */
+  openVideoEdit() {
+    const v = this.data.video
+    if (!v || !v.url || v.uploading || v.failed) return wx.showToast({ title: '视频就绪后可剪辑', icon: 'none' })
+    this.setData({ videoEdit: { src: v.src, start: 0, end: 0, duration: 0, frame: 0,
+      look: 'original', sticker: '', music: false, caption: '', captions: [],
+      customSticker: '', customMusic: '', hasStickerAsset: false, hasMusicAsset: false, veError: '' } })
+  },
+  closeVideoEdit() { if (!this.data.veBusy) this.setData({ videoEdit: null }) },
+  onVeMeta(e) {
+    const duration = Math.floor(Number(e.detail.duration) * 10) / 10
+    if (duration > 0 && this.data.videoEdit && !this.data.videoEdit.duration) {
+      this.setData({ 'videoEdit.duration': duration, 'videoEdit.end': duration })
+    }
+  },
+  changeVeTime(e) { this.setData({ ['videoEdit.' + e.currentTarget.dataset.field]: e.detail.value }) },
+  changeVeLook(e) { this.setData({ 'videoEdit.look': e.currentTarget.dataset.look }) },
+  changeVeSticker(e) { this.setData({ 'videoEdit.sticker': e.currentTarget.dataset.sticker }) },
+  changeVeMusic(e) { this.setData({ 'videoEdit.music': e.detail.value }) },
+  onVeCaption(e) { this.setData({ 'videoEdit.caption': e.detail.value }) },
+  addVeCaption() {
+    const ve = this.data.videoEdit
+    if (!ve || ve.captions.length >= 12) return
+    this.setData({ 'videoEdit.captions': ve.captions.concat([{ i: ve.captions.length + 1, start: ve.start, end: Math.min(ve.end, ve.start + 3), text: '' }]) })
+  },
+  changeVeCaption(e) {
+    const { i, field } = e.currentTarget.dataset
+    const captions = this.data.videoEdit.captions.map(c => Number(c.i) === Number(i) ? { ...c, [field]: field === 'text' ? e.detail.value : e.detail.value } : c)
+    this.setData({ 'videoEdit.captions': captions })
+  },
+  removeVeCaption(e) {
+    const i = e.currentTarget.dataset.i
+    this.setData({ 'videoEdit.captions': this.data.videoEdit.captions.filter(c => Number(c.i) !== Number(i)).map((c, k) => ({ ...c, i: k + 1 })) })
+  },
+  // 自定义贴纸/音乐：从聊天文件导入（真机路径；automator 不可驱动，服务端已有校验）
+  pickVeAsset(e) {
+    const kind = e.currentTarget.dataset.kind
+    const key = kind === 'sticker' ? 'customSticker' : 'customMusic'
+    const flag = kind === 'sticker' ? 'hasStickerAsset' : 'hasMusicAsset'
+    const ve = this.data.videoEdit
+    if (!ve) return
+    if (ve[key]) { this.setData({ ['videoEdit.' + key]: '', ['videoEdit.' + flag]: false }); return }
+    wx.chooseMessageFile({ count: 1, type: 'file', extension: [kind === 'sticker' ? 'png' : 'mp3'],
+      success: async r => {
+        const f = r.tempFiles[0]
+        if (!f) return
+        if (f.size > 2 * 1024 * 1024) return wx.showToast({ title: '请选择 2 MB 内的文件', icon: 'none' })
+        this.setData({ veBusy: true })
+        try {
+          await api.ensureLogin()
+          const data = wx.getFileSystemManager().readFileSync(f.path, 'base64')
+          const { asset } = await api.request('/c/note-video/asset', 'POST', { kind, data })
+          this.setData({ ['videoEdit.' + key]: asset, ['videoEdit.' + flag]: true })
+        } catch (err) { wx.showToast({ title: err.msg || '文件导入失败', icon: 'none' }) }
+        finally { this.setData({ veBusy: false }) }
+      } })
+  },
+  async applyVeTrim() {
+    const ve = this.data.videoEdit
+    const v = this.data.video
+    if (!ve || !v || this.data.veBusy) return
+    if (Number(ve.end) - Number(ve.start) < 0.5) return wx.showToast({ title: '至少保留半秒视频', icon: 'none' })
+    if ((ve.caption && !ve.caption.trim() && ve.captions.some(c => !c.text.trim())) || ve.captions.some(c => !c.text.trim())) {
+      return wx.showToast({ title: '字幕内容不能为空', icon: 'none' })
+    }
+    this.setData({ veBusy: true, 'videoEdit.veError': '' })
+    try {
+      await api.ensureLogin()
+      const r = await api.request('/c/note-video/trim', 'POST', { url: v.url, start: Number(ve.start), end: Number(ve.end),
+        look: ve.look, caption: ve.caption || '', captions: ve.captions.map(c => ({ text: c.text, start: Number(c.start), end: Number(c.end) })),
+        sticker: ve.sticker, music: ve.music, customSticker: ve.customSticker, customMusic: ve.customMusic })
+      if (r.access) this.mediaAccess.set(r.url, r.access)
+      this.setData({ video: { ...v, key: v.key, kind: 'video', src: this.accessUrl(r.url), url: r.url, uploading: false, failed: false }, videoEdit: null })
+      wx.showToast({ title: '剪辑完成' })
+      this.refresh()
+    } catch (err) {
+      this.setData({ 'videoEdit.veError': err.msg || '视频处理失败，请重试' })
+    } finally { this.setData({ veBusy: false }) }
+  },
+  async useVeFrame() {
+    const ve = this.data.videoEdit
+    const v = this.data.video
+    if (!ve || !v || this.data.veBusy) return
+    this.setData({ veBusy: true })
+    try {
+      await api.ensureLogin()
+      const r = await api.request('/c/note-video/cover', 'POST', { url: v.url, start: Number(ve.frame) })
+      if (r.access) this.mediaAccess.set(r.url, r.access)
+      this.setData({ coverUrl: r.url, videoEdit: null })
+      wx.showToast({ title: '已设为封面' })
+    } catch (err) { wx.showToast({ title: err.msg || '封面生成失败', icon: 'none' }) }
+    finally { this.setData({ veBusy: false }) }
+  },
   onSwiper(e) { this.setData({ current: e.detail.current }) },
   setCover() { this.setData({ coverIndex: this.data.current }); this.refresh() },
   previewCurrent(e) {
@@ -319,9 +450,11 @@ Page({
     const cover = d.images[d.coverIndex]
     const coverKey = cover ? cover.key : ''
     // isCover 预计算进 item：wxml 不做等值比较（分包 WXML 铁律）
-    const images = d.images.some(x => x.isCover !== (x.key === coverKey))
-      ? d.images.map(x => x.isCover === (x.key === coverKey) ? x : { ...x, isCover: x.key === coverKey })
-      : d.images
+    const liveSet = new Set(d.livePhotos.map(p => p.photo))
+    const base = d.images.map(x => ({ ...x, isLive: liveSet.has(x.url) }))
+    const images = base.some(x => x.isCover !== (x.key === coverKey))
+      ? base.map(x => x.isCover === (x.key === coverKey) ? x : { ...x, isCover: x.key === coverKey })
+      : base
     const imgs = images
     const canPublish = this.plainLenValue >= 4 && d.uploadingCount === 0 && !d.hasFailed
       && (d.editId !== null || d.textMode || imgs.length > 0 || !!d.video)
@@ -460,6 +593,7 @@ Page({
         visibility: n.visibility === 'private' ? 'private' : 'public',
         visPublicOn: n.visibility !== 'private', visPrivateOn: n.visibility === 'private',
         scenicId: n.scenicId || null, scenicName: n.scenicName || '',
+        livePhotos: Array.isArray(n.livePhotos) ? n.livePhotos : [], coverUrl: n.cover || '',
         relatedProductId: n.relatedProductId, relatedName: n.relatedName || '', loaded: true, bodyText: '' })
       this.refresh()
     } catch (e) {
@@ -484,7 +618,9 @@ Page({
       const coverItem = this.data.images[this.data.coverIndex]
       const blocks = [{ type: 'text', html }]
       const payload = { title: title.trim(), blocks, images: imageUrls, video: this.data.video ? this.data.video.url : null,
-        topics, visibility, scenicId, relatedProductId, cover: coverItem && coverItem.url ? coverItem.url : null }
+        topics, visibility, scenicId, relatedProductId,
+        cover: this.data.coverUrl || (coverItem && coverItem.url ? coverItem.url : null),
+        livePhotos: this.data.livePhotos }
       if (this.data.cloudDraftId != null && !editId) { payload.draftId = this.data.cloudDraftId; payload.draftRevision = this.data.cloudDraftRevision }
       let r
       try {
