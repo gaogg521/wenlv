@@ -146,6 +146,7 @@ Page({
     const v = String(e.detail.value || '').replace(/[^0-9]/g, '').slice(0, 11)
     this.setData({ contactPhone: v, phoneTicket: '' })
   },
+  showBookingFees() { wx.pageScrollTo({ selector: '#booking-fees', duration: 240 }) },
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.submitting) return

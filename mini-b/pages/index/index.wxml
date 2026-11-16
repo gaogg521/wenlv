@@ -12,6 +12,16 @@
     <button class="welcome-button" bindtap="goLogin">登录 / 绑定门店　→</button>
   </view>
   <block wx:else>
+    <view class="shift-panel">
+      <view class="shift-heading"><text>门店履约</text><text>本店</text></view>
+      <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
+      <view wx:if="{{wb}}" class="shift-actions">
+        <button bindtap="goVerify"><text>当前待核销</text><text class="shift-count">{{wb.pendingVerify}}</text></button>
+        <button wx:if="{{role >= 2}}" bindtap="goOrders"><text>门店订单</text><text>查看 ›</text></button>
+        <button wx:else bindtap="goRecords"><text>我的核销记录</text><text>查看 ›</text></button>
+      </view>
+      <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
+    </view>
     <view class="overview" wx:if="{{wb}}">
       <view class="overview-head"><text>{{periodLabel}}经营</text><text class="overview-caption">仅本店数据</text></view>
       <view class="overview-money" wx:if="{{role >= 2}}"><text class="currency">¥</text>{{wb.todayGmv}}<text class="money-label">所选期间流水</text></view>
@@ -19,14 +29,12 @@
       <view class="overview-bottom">
         <view bindtap="goOrders" wx:if="{{role >= 2}}"><text class="metric-value">{{wb.todayOrders}}</text><text class="metric-label">期间订单</text></view>
         <view bindtap="goRecords" wx:else><text class="metric-value">{{wb.myVerified}}</text><text class="metric-label">核销记录</text></view>
-        <view bindtap="goVerify"><text class="metric-value">{{wb.pendingVerify}}</text><text class="metric-label">当前待核销凭证</text></view>
         <view class="honor-link" bindtap="goHonor"><text>{{wb.level.name || '经营荣誉'}}</text><text class="metric-label">查看门店成长　↗</text></view>
       </view>
     </view>
     <view class="loading-panel" wx:elif="{{loading}}">正在更新本店经营数据…</view>
     <view class="error-panel" wx:else><view>{{err}}</view><button bindtap="retry">重新加载</button></view>
-    <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
-    <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
+
     <view class="section-heading services-heading"><text>门店日常</text><text class="section-note">把接待安排得井井有条</text></view>
     <view class="service-grid">
       <button class="service-order" wx:if="{{role >= 2}}" bindtap="goOrders"><view class="service-icon">☰</view><view>门店订单</view><text>跟进预约与游客安排</text><view class="service-arrow">↗</view></button>

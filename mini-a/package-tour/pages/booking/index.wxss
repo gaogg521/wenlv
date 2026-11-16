@@ -14,7 +14,7 @@ page { padding-bottom: 160rpx; }
 .bk-benefit-rule{display:flex;flex-wrap:wrap;gap:4rpx 8rpx;font-size:28rpx;font-weight:600;color:#385b45;line-height:1.6}
 .bk-benefit-rule text{white-space:nowrap}
 .bk-benefit-amount{font-size:32rpx;font-weight:600;line-height:1.6;color:#2f7d5b;white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
-.bk-fee-hint{font-size:22rpx;color:#8a948a;line-height:1.7;margin-top:8rpx;white-space:normal;word-break:normal}
+.bk-fee-hint{font-size:22rpx;color:#5c665a;line-height:1.7;margin-top:8rpx;white-space:normal;word-break:normal}
 .bk-benefit-error{font-size:24rpx;color:#b95338;line-height:1.6;margin-top:12rpx}
 .bk-bean-row{display:flex;align-items:center;justify-content:space-between;gap:20rpx;padding:22rpx 0;border-bottom:1rpx solid var(--line)}
 .bk-bean-copy{flex:1;min-width:0}.bk-bean-row switch{flex-shrink:0}
@@ -25,3 +25,13 @@ page { padding-bottom: 160rpx; }
 .bk-phone-input { flex: 1; min-width: 0; width: 0; height: 72rpx; padding: 0 16rpx; box-sizing: border-box; border: 1rpx solid var(--line); border-radius: 12rpx; }
 .bk-phone-controls .phone-btn { flex: none; width: auto; min-height: 64rpx; padding: 0 18rpx; line-height: 64rpx; white-space: nowrap; }
 .bk-phone-hint { display: block; margin-top: 10rpx; color: var(--sub); font-size: 22rpx; }
+page { padding-bottom: calc(270rpx + env(safe-area-inset-bottom)); }
+.bk-pay-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; padding: 14rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); background: #fffdf9; border-top: 1rpx solid #ebdfd2; box-shadow: 0 -12rpx 32rpx rgba(65,37,16,.08); color: #423329; }
+.bk-pay-summary { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; }
+.bk-pay-total { display: flex; align-items: baseline; gap: 12rpx; font-size: 25rpx; }
+.bk-pay-number { font-size: 43rpx; color: #8f3713; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bk-pay-details { flex: none; margin: 0; min-height: 80rpx; padding: 0 12rpx; font-size: 25rpx; background: transparent; color: #784527; }
+.bk-pay-details::after, .bk-pay-submit::after { border: 0; }
+.bk-pay-lines { display: flex; flex-wrap: wrap; gap: 6rpx 18rpx; min-height: 34rpx; font-size: 23rpx; line-height: 1.45; color: #55493f; margin-bottom: 10rpx; }
+.bk-pay-submit { width: 100%; min-height: 88rpx; line-height: 88rpx; background: #b64a16; color: #fff; font-size: 29rpx; font-weight: 650; border-radius: 16rpx; }
+.bk-pay-submit[disabled] { background: #f0e7df; color: #69584a; }

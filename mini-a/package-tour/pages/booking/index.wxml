@@ -56,7 +56,7 @@
   </view>
 
   <view class="sec-title">3 · 费用确认</view>
-  <view class="card" wx:if="{{priceSummary}}">
+  <view class="card" id="booking-fees" wx:if="{{priceSummary}}">
     <view class="kv"><text>单价 × 人数</text>
       <view style="display:flex;flex-direction:column;align-items:flex-end">
         <view style="display:flex;align-items:baseline;gap:8rpx">
@@ -89,10 +89,18 @@
       <text style="color:var(--brand,#e87722)" data-type="terms" bindtap="goDoc">《服务条款》</text>与
       <text style="color:var(--brand,#e87722)" data-type="privacy" bindtap="goDoc">《隐私政策》</text>，同意将出行信息用于订单与保险投保。</view>
   </view>
-  <view style="height:150rpx"></view>
-
-  <view class="dt-bottom">
-    <view class="dt-bottom-price"><text class="muted2" style="font-size:22rpx;font-weight:400">预计实付 </text><text class="rmb">¥</text>{{priceSummary ? priceSummary.pay : '—'}}</view>
-    <view class="btn dt-cta {{submitting || !sessions.length ? 'off' : ''}}" bindtap="submit">{{submitting ? '正在提交…' : '提交订单并支付'}}</view>
+  <view class="bk-pay-bar">
+    <view class="bk-pay-summary">
+      <view class="bk-pay-total"><text>预计实付</text><text class="bk-pay-number">{{priceSummary && !pricing ? '¥' + priceSummary.pay : '—'}}</text></view>
+      <button class="bk-pay-details" bindtap="showBookingFees" disabled="{{!priceSummary}}">费用明细 ›</button>
+    </view>
+    <view class="bk-pay-lines" wx:if="{{priceSummary && !pricing}}">
+      <text>活动价 ¥{{priceSummary.goods}}</text>
+      <text wx:if="{{freedomRightId && freedomDiscount !== '0.00'}}">自由豆减 ¥{{freedomDiscount}}</text>
+      <text wx:if="{{useBean && priceSummary.deduct !== '0.00'}}">旅豆抵 ¥{{priceSummary.deduct}}</text>
+      <text wx:if="{{priceSummary.showInsRow}}">保险 ¥{{priceSummary.insurance}}</text>
+    </view>
+    <view class="bk-pay-lines" wx:elif="{{pricing}}">正在重新试算费用…</view>
+    <button class="bk-pay-submit dt-cta" disabled="{{submitting || pricing || !sessions.length}}" bindtap="submit">{{submitting ? '正在提交…' : '提交订单并支付'}}</button>
   </view>
 </block>

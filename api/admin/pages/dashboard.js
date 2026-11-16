@@ -168,7 +168,7 @@ function dxHero(k, c) {
     <div class="dx-hero-top">
       <div><div class="dx-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${esc(c.cityTag)}口径</div>
         <h2>${c.hello}</h2>
-        <p>${c.todoTotal ? `此刻有 <b>${c.todoTotal}</b> 项待办${k.alerts ? `、<b>${k.alerts}</b> 条风控告警` : ''}，` : '待办已全部处理完毕，'}<a href="#" onclick="document.getElementById('dxLive').scrollIntoView({behavior:'smooth',block:'start'});return false">查看实时事项 ↓</a></p></div>
+        <p>${c.todoTotal ? `此刻有 <b>${c.todoTotal}</b> 项待办${k.alerts ? `、<b>${k.alerts}</b> 条风控告警` : ''}，` : '待办已全部处理完毕，'}<a href="#" onclick="document.getElementById('dxLive').scrollIntoView({behavior:'smooth',block:'start'});return false">查看实时事项 ↑</a></p></div>
       <div class="dx-range-box">
         <div class="dx-range" role="group" aria-label="统计周期">
           ${DX_RANGES.map(([v, l]) => `<button class="dx-chip${k.range === v ? ' on' : ''}" aria-pressed="${k.range === v}" onclick="dxSetRange('${v}')">${l}</button>`).join('')}
@@ -197,7 +197,7 @@ function dxLive(k, ins) {
   const first = todos.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的
   const pool = k.globalScope ? parseFloat(k.budgetUsage) : NaN
   return `<section class="dx-card" id="dxLive">
-    <div class="dx-hd"><h3>此刻待处理</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">当下的存量，不随统计周期变化</span>
+    <div class="dx-hd"><h3>今日工作台</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">实时待办，不随统计周期变化</span>
       <span class="dx-right">${first ? `<button class="pill s10 dx-pill-go" title="跳到第一个有待办的队列：${first[1]}" onclick="go('${first[0]}')">共 ${total} 项待办 · 去处理 →</button>` : `<span class="pill s50">${P ? '待办已清空' : '待办数据暂不可用'}</span>`}</span></div>
     <div class="dx-live-grid">
       ${todos.map(([key, l, ic, n, verb]) => `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`).join('')}
@@ -235,7 +235,7 @@ function dxTrendCard(k, c) {
 function dxTopCard(k, ins, c) {
   const tours = ins ? ins.topTours : [], maxG = Math.max(...tours.map((t) => Number(t.gmv)), 1), total = Number(k.gmv) * 100
   const medal = ['#d9a21b', '#9aa3ab', '#c27b43']
-  return `<section class="dx-card"><div class="dx-hd"><h3>热门主题游 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数</span></div>
+  return `<section class="dx-card"><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数</span></div>
     ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
         <span class="nm" title="${esc(t.title)}">${esc(t.title)}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
         <span class="trk"><i style="width:${Math.max((Number(t.gmv) / maxG) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单${total ? ' · 占 ' + ((Number(t.gmv) / total) * 100).toFixed(0) + '%' : ''}</span></li>`).join('')}</ol>`
@@ -326,8 +326,8 @@ async function dash() {
     window.__dxPer = { from: k.from, to: k.to } // 下钻用：把当前周期带到明细页
     window.__dxTours = ins ? ins.topTours : []
     app.innerHTML = `<div class="dx">
-      ${dxHero(k, c)}
       ${dxLive(k, ins)}
+      ${dxHero(k, c)}
       <div class="dx-zone"><h2>经营分析</h2><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">以下模块统一按上方所选周期统计，标有周期标签的卡片同步变化</span></div>
       ${dxKpis(k, ins, c)}
       <div class="dx-row r-main">${dxTrendCard(k, c)}${dxTopCard(k, ins, c)}</div>
