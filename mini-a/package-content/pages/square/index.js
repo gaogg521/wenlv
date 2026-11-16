@@ -2,6 +2,10 @@
 // 三期①话题聚合：?topic= / ?scenic= 进页即过滤；搜索框可改话题；卡片话题可点再聚合
 // WXML 铁律：左右两列与点赞态全部在 JS 预计算，wxml 只做取值与单三元
 const api = require('../../../utils/api')
+
+function decodeFilterParam(value = '') {
+  try { return decodeURIComponent(value) } catch { return value }
+}
 Page({
   data: {
     leftItems: [], rightItems: [], page: 1, pageSize: 20, loading: true, error: '', demo: false, hasMore: false,
@@ -9,7 +13,7 @@ Page({
   },
   onLoad(q) {
     // 详情页话题/景区可点跳转进来的聚合视图
-    this.applyFilter(q.topic || '', Number(q.scenic) || 0, q.scenicName || '')
+    this.applyFilter(decodeFilterParam(q.topic), Number(q.scenic) || 0, decodeFilterParam(q.scenicName))
     this.setData({ topicInput: this.data.topic })
   },
   // 过滤头/空态文案全部预计算（wxml 只取值）
