@@ -51,4 +51,13 @@ const n = load('package-content/pages/note/index.js', { request: async (...a) =>
 n.onLoad({ id: '123' })
 await n.toggleLike()
 assert.equal(likes[0][0], '/c/notes/123/like')
-console.log('booking 保险计价、授权顺序、协议跳转、详情点赞行为通过')
+const threaded = load('package-content/pages/note/index.js', {
+  ensureLogin: async () => {},
+  request: async () => ({ total: 2, items: [{ id: 1, author: '读者', body: '主评论', replies: 1 }] }),
+}, wx)
+threaded.onLoad({ id: '123' })
+await threaded.fetchComments(true)
+assert.equal(threaded.data.commentTotal, 2)
+assert.equal(threaded.data.comments[0].replies.length, 0)
+assert.equal(threaded.data.comments[0].showExpandMore, true)
+console.log('booking 保险计价、授权顺序、旅行笔记点赞及楼内回复加载通过')

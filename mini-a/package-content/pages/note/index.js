@@ -129,7 +129,7 @@ Page({
       audioOn: this.data.playingAudio === r.mediaUrl,
       mediaPending: !!r.media_kind && mediaState !== 1,
       mediaStateText: mediaState === 0 ? '媒体审核中，通过后展示' : '媒体未通过审核',
-      replies: r.replies || [] }
+      replies: Array.isArray(r.replies) ? r.replies : [] }
   },
   // 一级评论楼层附加态：展开区/展开更多按钮显隐全预计算
   decorateRoot(r) {
