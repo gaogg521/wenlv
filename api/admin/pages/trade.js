@@ -545,16 +545,34 @@ async function saveShopStock(pid, previous) {
 /* ============ 商户 ============ */
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const [rows, info, mlv] = await Promise.all([api('GET', '/admin/merchants'), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
+  // P-08：筛选状态（关键词/类目/等级/状态/城市），服务端过滤
+  const MF = window.__mfil || (window.__mfil = { kw: '', kind: '', level: '', status: '', city: '' })
+  const pq = new URLSearchParams()
+  if (MF.kw) pq.set('kw', MF.kw)
+  if (MF.kind) pq.set('kind', MF.kind)
+  if (MF.level) pq.set('level', MF.level)
+  if (MF.status !== '' && MF.status != null) pq.set('status', MF.status)
+  if (MF.city) pq.set('cityCode', MF.city)
+  const [rows, info, mlv] = await Promise.all([api('GET', '/admin/merchants' + (pq.toString() ? '?' + pq.toString() : '')), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
   const lvName = (n) => ((mlv.find((l) => l.lv === Number(n)) || {}).name) || ('Lv' + n)
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0">${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}<span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
+    <div class="row" style="margin-top:0;flex-wrap:wrap">
+      ${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}
+      <input id="mfilKw" type="search" placeholder="搜商户名 / 商户号" value="${esc(MF.kw)}" style="max-width:200px">
+      <select id="mfilKind" onchange="window.__mfil={...window.__mfil,kind:this.value};merchants()"><option value="">全部类目</option>${Object.entries(MERCHANT_KIND).map(([k, n]) => `<option value="${k}" ${MF.kind === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="mfilLevel" onchange="window.__mfil={...window.__mfil,level:this.value};merchants()"><option value="">全部等级</option>${mlv.map((l) => `<option value="${l.lv}" ${String(MF.level) === String(l.lv) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
+      <select id="mfilStatus" onchange="window.__mfil={...window.__mfil,status:this.value};merchants()"><option value="">全部状态</option><option value="1" ${MF.status === '1' ? 'selected' : ''}>生效</option><option value="0" ${MF.status === '0' ? 'selected' : ''}>进件中</option></select>
+      <select id="mfilCity" onchange="window.__mfil={...window.__mfil,city:this.value};merchants()"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${MF.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span>
+    </div>
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
-      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>评分 ${Number(m.score) > 0 ? Number(m.score).toFixed(1) : '—'}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('筛选条件下暂无商户：清一下筛选再试')}
   </div>`
+  const kwEl = document.getElementById('mfilKw')
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__mfil = { ...window.__mfil, kw: kwEl.value.trim() }; merchants() }, 400) } }
 }
 async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
 

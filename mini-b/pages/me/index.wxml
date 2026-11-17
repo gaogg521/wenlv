@@ -37,6 +37,7 @@
     <view class="row" bindtap="chooseStore"><text>切换授权门店</text><text class="v">当前门店与岗位 ›</text></view>
     <view class="row" bindtap="goHonor"><text>经营等级与荣誉</text><text class="v">等级 · 权益 · 徽章 ›</text></view>
     <view class="row" bindtap="goReviews"><text>游客评价与回复</text><text class="v">评价列表 · 回复 ›</text></view>
+    <view class="row" bindtap="askNotify"><text>到单提醒</text><text class="v">新订单 · 退款 · 结算 ›</text></view>
     <view class="row" wx:if="{{miniAAppId}}" bindtap="openTouristApp"><text>打开游客端</text><text class="v">逛线路 · 写笔记 ›</text></view>
     <view class="row" bindtap="goCredentials"><text>我的可信凭证</text><text class="v">勋章记录 ›</text></view>
     <view class="row" wx:if="{{role >= 2}}" bindtap="goSettle"><text>对账结算单</text><text class="v">›</text></view>

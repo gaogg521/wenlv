@@ -343,7 +343,8 @@ async function dash() {
       api('GET', '/admin/dash/kpi?' + qs),
       api('GET', '/admin/dash/insights?' + qs).catch(() => null),
       api('GET', '/admin/orders?sort=recent').catch(() => []),
-      ['super', 'ops', 'city_partner'].includes(ME?.role)
+      // P-09：未接入的数据卡只对有「集成中心」权限的角色显示/取数
+      ((typeof ADMIN_CAPABILITIES !== 'undefined' && (ADMIN_CAPABILITIES.modules || []).includes('integrations')))
         ? api('GET', '/admin/wxdata/visit-trend?days=' + wxDays).catch(() => ({ mock: true, list: [] }))
         : Promise.resolve({ unavailable: true, list: [] }),
     ])
@@ -365,7 +366,7 @@ async function dash() {
       <div class="dx-zone"><h2>经营分析</h2><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">以下模块统一按上方所选周期统计，标有周期标签的卡片同步变化</span></div>
       ${dxKpis(k, ins, c)}
       <div class="dx-row r-main">${dxTrendCard(k, c)}${dxTopCard(k, ins, c)}</div>
-      <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${dxMiniCard(wxd, c)}</div>
+      <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${(typeof ADMIN_CAPABILITIES !== 'undefined' && (ADMIN_CAPABILITIES.modules || []).includes('integrations')) ? dxMiniCard(wxd, c) : ''}</div>
       ${dxOrdersCard(orders.slice(0, 8))}
       <div class="dx-zone"><span class="muted">经营测算与示范案例已移到独立页</span>
         <button class="btn ghost sm" onclick="go('scenario')">打开经营测算 →</button>

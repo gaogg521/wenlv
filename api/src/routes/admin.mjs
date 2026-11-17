@@ -1052,8 +1052,20 @@ const admin = {
   'GET /admin/merchants': async (req) => {
     const a = await requireAdmin(req); const sc = scopeFilter(a)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    // P-08：列表筛选（关键词/类目/等级/状态/城市），与商户列表页下拉同一套
+    const condsM = [], argsM = []
+    const kwM = String(req.query.kw || '').trim()
+    if (kwM) { condsM.push('(name LIKE ? OR merchant_no LIKE ?)'); argsM.push('%' + kwM + '%', '%' + kwM + '%') }
+    const kindM = String(req.query.kind || '').trim()
+    if (kindM) { condsM.push('kind = ?'); argsM.push(kindM) }
+    const levelM = Number(req.query.level || 0)
+    if (levelM) { condsM.push('level = ?'); argsM.push(levelM) }
+    if (['0', '1'].includes(String(req.query.status))) { condsM.push('status = ?'); argsM.push(Number(req.query.status)) }
+    const cityM = String(req.query.cityCode || '').trim()
+    if (cityM) { condsM.push('city_code = ?'); argsM.push(cityM) }
+    const whereM = condsM.length ? ' AND ' + condsM.join(' AND ') : ''
     // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
-    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + ' ORDER BY id', sc.params))
+    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + whereM + ' ORDER BY id', [...sc.params, ...argsM]))
       .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
   },
   // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====

@@ -12,7 +12,13 @@ Page({
   data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
     this.setData({ demoAvailable: api.canDemoLogin() })
-    if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null })).catch(() => {})
+    if (getApp().globalData.token) {
+      api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null })).catch(() => {})
+      // X-05：商户侧订阅模板预取（requestSubscribeMessage 必须在手势栈内同步调用）
+      api.request('/m/notify/templates').then((t) => {
+        this.notifyIds = [t.newOrder, t.refundApply, t.settlementPending].filter(Boolean).slice(0, 3)
+      }).catch(() => { this.notifyIds = [] })
+    }
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
     if (app.globalData.token) this.fetchApplications()
     if (this.data.merchant && this.data.role >= 2) this.fetchInvite()
@@ -94,6 +100,15 @@ Page({
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
   goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
+  // X-05：到单提醒订阅（模板在 onShow 预取，手势内同步调用 requestSubscribeMessage；未配置跳过）
+  askNotify() {
+    const ids = this.notifyIds || []
+    if (!ids.length) return wx.showToast({ title: '到单提醒尚未开通', icon: 'none' })
+    wx.requestSubscribeMessage({ tmplIds: ids, complete: (r) => {
+      const ok = ids.some((id) => r[id] === 'accept')
+      wx.showToast({ title: ok ? '已订阅到单提醒' : '未订阅', icon: ok ? 'success' : 'none' })
+    } })
+  },
   // R-04：回到游客端（WX_A_APPID 未配置时入口不渲染；跳转能力依赖正式 AppID，记交验单外部条件）
   openTouristApp() {
     const appId = this.data.miniAAppId

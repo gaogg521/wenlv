@@ -540,6 +540,16 @@ const mSite = {
     return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '',
       miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null }
   },
+
+  // X-05：商户侧订阅模板 ID（新订单/退款申请/结算待确认；未配置返回 null，前端跳过且不报错）
+  'GET /m/notify/templates': async (req) => {
+    requireUser(req)
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const s = await getSecrets(['WX_TMPL_NEW_ORDER', 'WX_TMPL_REFUND_APPLY', 'WX_TMPL_SETTLE_PENDING'])
+    return { newOrder: s.WX_TMPL_NEW_ORDER || process.env.WX_TMPL_NEW_ORDER || null,
+      refundApply: s.WX_TMPL_REFUND_APPLY || process.env.WX_TMPL_REFUND_APPLY || null,
+      settlementPending: s.WX_TMPL_SETTLE_PENDING || process.env.WX_TMPL_SETTLE_PENDING || null }
+  },
 }
 
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------

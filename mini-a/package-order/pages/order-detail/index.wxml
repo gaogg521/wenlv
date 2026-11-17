@@ -15,6 +15,7 @@
     <view class="kv" wx:if="{{o.trip.vehicle}}"><text>交通安排</text><text class="v">{{o.trip.vehicle}}</text></view>
     <view class="kv" wx:if="{{o.trip.leader_name}}" bindtap="callLeader"><text>领队</text><text class="v pl-link">{{o.trip.leader_name}}{{o.trip.leader_phone ? ' · 拨打 ›' : ''}}</text></view>
     <view class="muted2" wx:if="{{o.trip.note}}">{{o.trip.note}}</view>
+    <view wx:if="{{o.status === 30}}" class="btn ghost sm" style="margin-top:12rpx" bindtap="askDepartRemind">订阅出行前一天提醒</view>
   </view>
   <view class="card place-card" wx:if="{{o.merchantContact && o.merchantContact.name}}">
     <image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />

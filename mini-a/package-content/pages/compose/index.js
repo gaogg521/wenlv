@@ -35,6 +35,7 @@ Page({
 
   onLoad(q) {
     this.seq = 0
+    this.loadNotifyTemplates()
     this.plainLenValue = 0 // 正文纯文本长度（editor 是唯一事实源，编辑回填也能正确计数）
     this.imageUploads = new Map() // src → /uploads 原始路径（预览渲染用）
     this.mediaAccess = new Map()  // /uploads 路径 → 带 ticket 的可读 URL（私密预览）
@@ -715,9 +716,18 @@ Page({
   },
 
   /* ---------- 发布 ---------- */
+  // X-05：模板预取（发布手势内同步请求「笔记审核结果」订阅；未配置跳过）
+  async loadNotifyTemplates() {
+    try { const t = await api.getNotifyTemplates(); this.noteReviewId = t.noteReview || null } catch (e) { this.noteReviewId = null }
+  },
+  askNoteReview() {
+    if (!this.noteReviewId) return
+    wx.requestSubscribeMessage({ tmplIds: [this.noteReviewId], complete: () => {} })
+  },
   async publish() {
     if (this.data.busy) return
     if (this.data.uploadingCount > 0 || this.data.hasFailed) return wx.showToast({ title: this.data.barHint || '媒体未就绪', icon: 'none' })
+    this.askNoteReview() // 发布手势内同步请求订阅（审核结果触达）
     this.setData({ busy: true })
     try {
       const content = this.editor ? await new Promise(r => this.editor.getContents({ success: r, fail: () => r(null) })) : null
