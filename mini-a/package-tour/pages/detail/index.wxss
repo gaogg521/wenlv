@@ -1,3 +1,5 @@
+.dt-cover { position: relative; }
+.g-count { position: absolute; right: 24rpx; bottom: 24rpx; padding: 4rpx 12rpx; border-radius: 20rpx; background: rgba(0,0,0,.56); color: #fff; font-size: 20rpx; pointer-events: none; }
 .dt-detail-bar { gap: 16rpx; }
 .dt-detail-bar .dt-share { flex: none; width: auto; min-width: 0; padding: 0 12rpx; }
 .dt-detail-bar .dt-bottom-price { flex: 1; min-width: 0; white-space: nowrap; font-size:38rpx; font-variant-numeric: tabular-nums; }
