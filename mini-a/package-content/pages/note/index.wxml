@@ -1,3 +1,6 @@
+<view wx:if="{{showSquareBack}}" class="note-back-row">
+  <button class="note-back" bindtap="goBack" aria-label="返回广场">‹ 返回广场</button>
+</view>
 <view wx:if="{{n}}" class="detail {{replyTarget ? 'detail-reply' : ''}} {{pendingImage || pendingAudio ? 'detail-attachment' : ''}}">
   <!-- 图集轮播（小红书式：全宽 + 页码） -->
   <view wx:if="{{hasGallery}}" class="note-gallery">
