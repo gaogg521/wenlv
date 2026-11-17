@@ -7,7 +7,7 @@
 // - readonly/sre/dev 原来因缺省放行泄露全部 50 个菜单（缺陷），改为显式默认集合（D-01 决策，见进度台账）；
 // - 未知角色默认拒绝（空集合）。
 export const MODULE_GROUPS = [
-  ['经营总览', [['partnerdash', '主体方经营', 'dash'], ['dash', '经营概览', 'dash']]],
+  ['经营总览', [['partnerdash', '主体方经营', 'dash'], ['dash', '经营概览', 'dash'], ['scenario', '经营测算', 'budgets']]],
   ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
@@ -34,7 +34,7 @@ export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 
  * - 未知角色：空集合（默认拒绝，不再缺省放行全菜单）。
  */
 export const ROLE_DEFAULT_MODULES = {
-  ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
+  ops: ['users', 'dash', 'scenario', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
   finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
   review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases', 'comments'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],

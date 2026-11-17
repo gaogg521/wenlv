@@ -82,6 +82,8 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/audit-logs', 'audit', 'view'],
   // X-05：消息下发记录挂在系统治理（system 模块）
   ['GET', '/admin/notify-logs', 'system', 'view'],
+  // R-01：进入/退出主体代看（审计写入端点）
+  ['POST', '/admin/partner-dash/view-as', 'partnerdash', 'view-as'],
   // 提现审批（资金敏感：查看与裁决同一模块，动作另有 ADMIN_ACTIONS 细粒度）
   ['GET', '/admin/withdrawals', 'withdrawals', 'view'],
   ['POST', '/admin/withdrawals/:id/verdict', 'withdrawals', 'manage'],

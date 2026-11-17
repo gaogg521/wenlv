@@ -154,6 +154,16 @@ async function orderFiltersOf(req, a) {
     if (!sub.scenicId) addCond('1 = 0')
     else addCond('o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)', sub.scenicId)
   }
+  // R-01：超管只读代看主体——与主体方登录同一套行级条件（写操作已在网关拒绝）
+  const vat = String(req.query.viewAsType || '').trim()
+  if (vat) {
+    if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+    const vi = Number(req.query.viewAsId || 0)
+    if (!['merchant', 'scenic'].includes(vat) || !vi) throw new BizError(1001, '代看主体参数无效')
+    if (vat === 'merchant') addCond('o.merchant_id = ?', vi)
+    else addCond('o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)', vi)
+    filters.viewAs = vat + ':' + vi
+  }
   const filters = {}
   const cityCode = String(req.query.cityCode || '').trim()
   if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
@@ -438,6 +448,20 @@ const admin = {
     // 旅豆使用率是累计存量（累计抵扣 ÷ 累计发放），不随周期；仅总部可见
     const beanFlow = sc ? null : await bean.flow()
     const nCreated = Number(created.c) || 0, nPaid = Number(created.paid) || 0, nVerified = Number(created.verified) || 0
+    // R-02：城市合伙人首页「我的收益」——本城结算应付/已付（与合伙人中心对账同口径：剔除混入外城订单/退改费的结算单）
+    let revenue = null
+    if (a.role === 'city_partner' && sc) {
+      const cityFrom = `FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE m.city_code = ?
+        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.settlement_id = s.id AND o.city_code <> ?)
+        AND NOT EXISTS (SELECT 1 FROM refunds r JOIN orders o ON o.id = r.order_id WHERE r.settlement_id = s.id AND o.city_code <> ?)`
+      const rev = await one(`SELECT COUNT(*) settleCount, COALESCE(SUM(s.amt_fulfill + s.fee_merchant), 0) payable,
+        COALESCE(SUM(IF(s.status = 3, s.amt_fulfill + s.fee_merchant, 0)), 0) paid ${cityFrom}`, [sc, sc, sc])
+      const cityGmv = await one(`SELECT COUNT(*) orders, COALESCE(SUM(o.amount_pay), 0) gmv FROM orders o
+        WHERE o.city_code = ? AND o.status IN (20,30,40,50) AND ${per.between('o.paid_at')}`, [sc])
+      revenue = { city: sc, cityCn: (entities.DICT.city.find(([k]) => k === String(sc)) || [])[1] || sc,
+        settleCount: Number(rev.settleCount) || 0, payableFen: Number(rev.payable) || 0, paidFen: Number(rev.paid) || 0,
+        orders: Number(cityGmv.orders) || 0, gmvFen: Number(cityGmv.gmv) || 0, merchantsPending: Number(pendingMerchants.c) || 0 }
+    }
     return {
       period: { range: per.range, label: per.label, from: per.from, to: per.to, days: per.days },
       pending: {
@@ -449,6 +473,7 @@ const admin = {
       },
       topTours,
       statusMix: statusMix.map((r) => ({ status: Number(r.s), count: Number(r.c) })),
+      revenue,
       funnel: {
         created: nCreated, paid: nPaid, verified: nVerified,
         payRate: pct1(nPaid, nCreated),
@@ -760,6 +785,14 @@ const admin = {
     } else if (a.role === 'scenic_partner') {
       if (!sub.scenicId) return []
       subSql = ' AND p.scenic_id = ?'; subParams = [sub.scenicId]
+    }
+    // R-01：超管只读代看主体——商品列表同一套行级过滤（写操作已在网关拒绝）
+    const vatP = String(req.query.viewAsType || '').trim()
+    if (vatP) {
+      if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+      const viP = Number(req.query.viewAsId || 0)
+      if (!['merchant', 'scenic'].includes(vatP) || !viP) throw new BizError(1001, '代看主体参数无效')
+      subSql += vatP === 'merchant' ? ' AND p.merchant_id = ?' : ' AND p.scenic_id = ?'; subParams.push(viP)
     }
     return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
       FROM tour_product p
@@ -1186,6 +1219,15 @@ const admin = {
       // V82/Codex复验 R2 二次修复：按授权结算行决定账单可见性——只显示包含本景区订单行的结算单；
       // 订单数按本景区行复算；调整按本景区行且未冲抵过滤；整单 order_count/五口径/成本不下发
       return promo.scenicSettlementRows(sub.scenicId)
+    }
+    // R-01：超管只读代看主体——结算列表同一套行级过滤（写操作已在网关拒绝）
+    const vatS = String(req.query.viewAsType || '').trim()
+    if (vatS) {
+      if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+      const viS = Number(req.query.viewAsId || 0)
+      if (!['merchant', 'scenic'].includes(vatS) || !viS) throw new BizError(1001, '代看主体参数无效')
+      subSql += vatS === 'merchant' ? ' AND s.merchant_id = ?' : ' AND s.merchant_id IN (SELECT merchant_id FROM tour_product WHERE scenic_id = ?)'
+      subParams.push(viS)
     }
     // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
     const rows = await q(`SELECT s.*, m.name merchant_name,

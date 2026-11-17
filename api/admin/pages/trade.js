@@ -149,14 +149,17 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
+  // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；带视角参数的写操作网关拒绝）
+  const vq = new URLSearchParams(location.hash.split('?')[1] || '')
+  const vqs = vq.get('viewAsType') ? '?viewAsType=' + encodeURIComponent(vq.get('viewAsType')) + '&viewAsId=' + encodeURIComponent(vq.get('viewAsId') || '') : ''
+  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + vqs), api('GET', '/admin/merchants'),
     ADMIN_CAPABILITIES.modules.includes('suppliers') ? api('GET', '/admin/suppliers').catch(() => []) : Promise.resolve([]), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}${adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : '<span class="muted">当前角色仅查看，商品维护需运营权限</span>'}</div>
+    <div class="card-head"><h2>商品与团期${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('products', '商品 CSV')}${!vqs && adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : `<span class="muted">${vqs ? '只读代看模式下不能修改商品' : '当前角色仅查看，商品维护需运营权限'}</span>`}</div>
     <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
     <div class="row" style="margin:10px 0 0">
       <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
@@ -531,12 +534,15 @@ async function addMerchant() { return entityEditor('merchant', null, { onSaved: 
 /* ============ 结算 ============ */
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const rows = await api('GET', '/admin/settlements')
+  // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；写按钮一并隐藏）
+  const vqS = new URLSearchParams(location.hash.split('?')[1] || '')
+  const vqs = vqS.get('viewAsType') ? '?viewAsType=' + encodeURIComponent(vqS.get('viewAsType')) + '&viewAsId=' + encodeURIComponent(vqS.get('viewAsId') || '') : ''
+  const rows = await api('GET', '/admin/settlements' + vqs)
   const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#7c3aed', '#64748b']
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
-      ${adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>'}</div>
+    <div class="card-head"><h2>商户周结算${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('settlements', '结算 CSV')}
+      ${vqs ? '<span class="muted">只读代看模式下不能办理结算</span>' : (adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>')}</div>
     <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
       退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
     ${rows.length && rows[0].scenic_net_fen != null ? `<table><thead><tr><th>周期</th><th>商户</th><th>状态</th><th>本景区行净额</th><th>本景区口径履约应付</th><th>待冲抵调整</th></tr></thead><tbody>
@@ -550,7 +556,7 @@ async function settlements() {
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
-          ${s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
+          ${!vqs && s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${!vqs && s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${!vqs && s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
       ${Number(s.total_amount) > 0 ? `<div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>` : '<p class="muted" style="margin:0">本期无完成订单，仅计入退改手续费</p>'}
       ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}

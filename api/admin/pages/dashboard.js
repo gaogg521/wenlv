@@ -191,20 +191,32 @@ function dxHero(k, c) {
 
 function dxLive(k, ins) {
   const P = ins ? ins.pending : null, v = (x) => (P ? x : '—')
+  // R-02：待办按账号有效模块集合渲染——没有该模块的科目显示「不在本角色范围」且不可点；有模块且为零才是「已清空」
+  const mods = (typeof ADMIN_CAPABILITIES !== 'undefined' && ADMIN_CAPABILITIES.modules) || []
+  const hasM = (m) => mods.includes(m)
   const todos = [['merchants', '商户进件', 'store', P && P.merchants, '去审批'], ['withdrawals', '提现待审', 'wallet', P && P.withdrawals, '去复核'],
     ['conflicts', '核销异常', 'alert', P && P.conflicts, '去处理'], ['content', '内容待审', 'doc', P && P.notes, '去审核'], ['tasks', '约稿待审', 'pen', P && P.tasks, '去处理']]
-  const total = P ? todos.reduce((s, t) => s + t[3], 0) : 0
-  const first = todos.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的
+    .map(([key, l, ic, n, verb]) => [key, l, ic, n, verb, hasM(key)])
+  const inScope = todos.filter((t) => t[5])
+  const total = P ? inScope.reduce((s, t) => s + t[3], 0) : 0
+  const first = inScope.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的（仅数有模块的科目）
   const pool = k.globalScope ? parseFloat(k.budgetUsage) : NaN
+  // R-02：城市合伙人首屏「我的收益」——本城结算应付/已付（与合伙人中心对账同口径）+ 本城推荐商户进件进度
+  const revenue = ins && ins.revenue ? `<span class="dx-sep"></span>
+    <button class="dx-stat blue has" onclick="go('partners')"><span class="dx-todo-l"><i>💰</i>本城结算收益（${esc(ins.revenue.cityCn)}）</span><b>${fen(ins.revenue.payableFen)}</b>
+      <span class="dx-todo-go">应付 · 已付 ${fen(ins.revenue.paidFen)} · 本期 ${ins.revenue.orders} 单 · 商户进件中 ${ins.revenue.merchantsPending} → 查看明细</span></button>` : ''
   return `<section class="dx-card" id="dxLive">
     <div class="dx-hd"><h3>此刻待处理</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">当下的存量，不随统计周期变化</span>
       <span class="dx-right">${first ? `<button class="pill s10 dx-pill-go" title="跳到第一个有待办的队列：${first[1]}" onclick="go('${first[0]}')">共 ${total} 项待办 · 去处理 →</button>` : `<span class="pill s50">${P ? '待办已清空' : '待办数据暂不可用'}</span>`}</span></div>
     <div class="dx-live-grid">
-      ${todos.map(([key, l, ic, n, verb]) => `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`).join('')}
+      ${todos.map(([key, l, ic, n, verb, ok]) => ok
+        ? `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`
+        : `<button class="dx-todo" disabled title="当前角色没有这条职责线"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>—</b><span class="dx-todo-go">不在本角色范围</span></button>`).join('')}
       <span class="dx-sep"></span>
       <button class="dx-stat red${k.alerts ? ' has' : ''}" onclick="go('risk')"><span class="dx-todo-l"><i>${DX_ICON.alert}</i>待处理告警</span><b>${k.globalScope ? k.alerts : '—'}</b><span class="dx-todo-go">${k.globalScope ? (k.alerts ? '去处置 →' : '一切正常') : '不在本角色范围'}</span></button>
       <button class="dx-stat gold" onclick="go('budgets')"><span class="dx-todo-l"><i>${DX_ICON.bean}</i>旅豆预算池水位</span><b>${k.globalScope ? esc(k.budgetUsage) : '—'}</b>
         ${isNaN(pool) ? '' : `<span class="dx-meter"><i style="width:${Math.min(Math.max(pool, 0.6), 100)}%"></i></span>`}<span class="dx-todo-go">${k.globalScope ? '累计已发放 ÷ 批次总额' : '不在本角色范围'}</span></button>
+      ${revenue}
     </div></section>`
 }
 
@@ -339,9 +351,10 @@ async function dash() {
       <div class="dx-row r-main">${dxTrendCard(k, c)}${dxTopCard(k, ins, c)}</div>
       <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${dxMiniCard(wxd, c)}</div>
       ${dxOrdersCard(orders.slice(0, 8))}
-      ${operatingScenarioPanel()}
+      <div class="dx-zone"><span class="muted">经营测算与示范案例已移到独立页</span>
+        <button class="btn ghost sm" onclick="go('scenario')">打开经营测算 →</button>
+        <span class="dx-hint">招商讲解工具（示例假设），与真实结算互不混淆</span></div>
     </div>`
-    void mountOperatingScenario(app)
   } catch (e) {
     if (seq !== window.__dashSeq) return
     console.error('dash error:', e.message)
