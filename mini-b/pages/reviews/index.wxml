@@ -1,0 +1,22 @@
+<merchant-nav id="merchant-navigation" title="游客评价" />
+<view class="page-heading"><view class="page-eyebrow">GUEST REVIEWS</view><view class="page-title">游客的声音</view><view class="page-caption">认真回复每一条评价，被平台审核通过后游客可以看到</view></view>
+<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
+<view wx:elif="{{loading}}" class="skeleton" style="height:240rpx"></view>
+<block wx:else>
+  <view class="chips-bar">
+    <view wx:for="{{replyFilters}}" wx:key="k" class="chip {{replyStatus === item.k ? 'on' : ''}}" bindtap="filterReply" data-k="{{item.k}}">{{item.n}}</view>
+    <view wx:for="{{ratingFilters}}" wx:key="v" class="chip {{rating === item.v ? 'on' : ''}}" bindtap="filterRating" data-v="{{item.v}}">{{item.n}}</view>
+  </view>
+  <view wx:if="{{items.length}}" class="review-list">
+    <view wx:for="{{items}}" wx:key="id" class="card review-card">
+      <view class="rv-head"><text class="rv-stars">{{item.stars}}</text><text class="rv-state">{{item.replyStateText}}</text></view>
+      <view class="rv-content">{{item.content}}</view>
+      <view class="rv-meta">{{item.product_title}} · {{item.nickname}} · {{item.created_at}}<text wx:if="{{item.order_no}}" class="rv-no">单号 {{item.order_no}}</text></view>
+      <view wx:if="{{item.reply}}" class="rv-reply {{item.reply_status === 2 ? 'off' : ''}}"><text class="rv-reply-tag">本店回复{{item.reply_status === 2 ? '（被下架）' : item.reply_status === 0 ? '（待审核）' : ''}}</text>{{item.reply}}</view>
+      <view class="btn ghost sm" bindtap="reply" data-id="{{item.id}}">{{item.reply ? '修改回复' : '回复'}}</view>
+    </view>
+    <view wx:if="{{hasMore}}" class="btn ghost" bindtap="loadMore">加载更多</view>
+    <view wx:else class="list-end">共 {{total}} 条评价</view>
+  </view>
+  <view wx:else class="card"><view class="empty"><view class="e-ico">💬</view>暂无符合条件的评价<view class="note">游客完成行程后可以评价本店商品</view></view></view>
+</block>

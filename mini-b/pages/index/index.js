@@ -46,6 +46,7 @@ Page({
   selectDate(e) { this.setData({customDate:e.detail.value}); this.onShow() },
   toggleNotice() { this.setData({ noticeExpanded: !this.data.noticeExpanded }) },
   goLogin() { wx.switchTab({ url: '/pages/me/index' }) },
+  goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
   goVerify() {
     if (!getApp().globalData.token) return this.goLogin()
     wx.navigateTo({ url: '/pages/verify/index' })

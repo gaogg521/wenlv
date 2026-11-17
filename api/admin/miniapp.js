@@ -53,6 +53,8 @@
     { end: '商户端', path: 'pages/records/index', name: '核销记录', items: [['核销流水', [['订单', 'orders'], ['审计日志', 'audit']]]] },
     { end: '商户端', path: 'pages/orders/index', name: '订单', items: [['门店订单、历史日期筛选与翻页', [['订单', 'orders']]]] },
     { end: '商户端', path: 'pages/order-detail/index', name: '订单详情', items: [['订单与凭证', [['订单', 'orders']]]] },
+    { end: '商户端', path: 'pages/reviews/index', name: '游客评价与回复', items: [
+      ['评价列表与筛选、本店回复（提交后由平台内容审核把关，通过后游客可见）', [['内容审核 · 评价管理', 'content']]]] },
     { end: '商户端', path: 'pages/supply/index', name: '供给 / 库存', items: [['按商品分组、搜索与历史日期筛选的团期余位', [['商品与团期', 'products']]]] },
     { end: '商户端', path: 'pages/settlement/index', name: '结算', items: [['周结算单、确认、异议、回单', [['结算', 'settlements'], ['协议变更', 'agreements']]], ['退改手续费分成比例', [['参数中心 · settlement.refund_fee_merchant_pct', 'config'], ['商户资料 · 结算账户', 'merchants']]]] },
     { end: '商户端', path: 'pages/proof/index', name: '记录复核', items: [['复核结果里的类型、名称、日期、封存状态', [['存证总览 → 存证检索（后台查同一条记录）', 'web3dash']]], ['记录编号对应的勋章名称', [['徽章管理', 'badges']]]] },

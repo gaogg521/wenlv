@@ -93,6 +93,7 @@ Page({
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
+  goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
   // 门店码：官方 getUnlimitedQRCode，游客扫码带商户归因进入首页
   async storeQrcode() {
     try {

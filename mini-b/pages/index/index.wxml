@@ -51,7 +51,7 @@
       <scroll-view scroll-x><view class="trend-chart" style="width:{{chartWidth}}rpx"><view wx:for="{{bars}}" wx:key="d" class="trend-day"><view class="trend-column"><view style="height:{{item.hp}}%"></view></view><text>{{item.dLabel}}</text></view></view></scroll-view>
     </view>
     <view class="announcement" wx:if="{{notice}}"><view class="announcement-kicker">商户资讯 · PLATFORM NEWS</view><view class="section-heading"><text>平台公告</text><text class="notice-toggle" bindtap="toggleNotice">{{noticeExpanded ? '收起 −' : '阅读全文 ↗'}}</text></view><view class="notice-body {{noticeExpanded ? 'expanded' : ''}}"><rich-text nodes="{{notice}}"></rich-text></view></view>
-    <view class="review-panel" wx:if="{{stats && stats.latestReview}}"><view class="section-heading"><text>游客的声音</text><text class="review-rating">{{stats.latestReview.rating}} ★</text></view><view class="review-copy">{{stats.latestReview.content}}</view><text class="review-author">{{stats.latestReview.nickname}}</text></view>
+    <view class="review-panel" wx:if="{{stats && stats.latestReview}}" bindtap="goReviews"><view class="section-heading"><text>游客的声音</text><text class="review-rating">{{stats.latestReview.rating}} ★ · 全部评价 ›</text></view><view class="review-copy">{{stats.latestReview.content}}</view><text class="review-author">{{stats.latestReview.nickname}}</text></view>
   </block>
   <view class="growth-links" wx:if="{{merchant}}"><view bindtap="goHonor"><text>◇　等级与勋章</text><text>查看成长　↗</text></view><view bindtap="goCredentials"><text>✓　可信凭证</text><text>查看记录　↗</text></view></view>
   <view class="workbench-footer">向往的自由 · 用心经营每一次相遇</view>

@@ -365,11 +365,16 @@ const c = {
   'GET /c/notify/templates': async (req) => {
     requireUser(req)
     // A-41：补出「未成团取消通知」模板——此前从未请求过订阅授权，取消了也发不出
+    // X-05：场景化模板 ID 一次下发（出行提醒/退款结果/笔记审核），未配置返回 null，前端跳过且不报错
     const { getSecrets } = await import('../infra/secrets.mjs')
-    const s = await getSecrets(['WX_TMPL_PAY_OK', 'WX_TMPL_GROUP_CANCEL'])
+    const s = await getSecrets(['WX_TMPL_PAY_OK', 'WX_TMPL_GROUP_CANCEL', 'WX_TMPL_DEPART_REMIND', 'WX_TMPL_REFUND_DONE', 'WX_TMPL_NOTE_REVIEW'])
+    const env = (k) => s[k] || process.env[k] || null
     return {
-      payOk: s.WX_TMPL_PAY_OK || process.env.WX_TMPL_PAY_OK || null,
-      groupCancel: s.WX_TMPL_GROUP_CANCEL || process.env.WX_TMPL_GROUP_CANCEL || null,
+      payOk: env('WX_TMPL_PAY_OK'),
+      groupCancel: env('WX_TMPL_GROUP_CANCEL'),
+      departRemind: env('WX_TMPL_DEPART_REMIND'),
+      refundDone: env('WX_TMPL_REFUND_DONE'),
+      noteReview: env('WX_TMPL_NOTE_REVIEW'),
     }
   },
 
@@ -512,9 +517,11 @@ const c = {
       tours: tours.map((t) => ({ ...t, priceLabel: fen2yuan(t.price_from) })) }
   },
 
-  // 评价列表（公开；仅展示态）
+  // 评价列表（公开；仅展示态）。X-04：商户回复经平台审核（reply_status=1）后随评价下发
   'GET /c/tours/:id/reviews': async (req) => {
-    const rows = await q(`SELECT r.rating, r.content, r.created_at, u.nickname
+    const rows = await q(`SELECT r.rating, r.content, r.created_at, u.nickname,
+      CASE WHEN r.reply_status = 1 THEN r.reply END AS reply,
+      CASE WHEN r.reply_status = 1 THEN DATE_FORMAT(r.reply_at, '%Y-%m-%d %H:%i') END AS reply_at
       FROM review r JOIN user_account u ON u.id = r.user_id
       WHERE r.product_id = ? AND r.status = 1 ORDER BY r.id DESC LIMIT 20`, [req.params.id])
     const agg = await one(`SELECT COALESCE(AVG(rating),0) avg_rating, COUNT(*) count FROM review WHERE product_id = ? AND status = 1`, [req.params.id])
@@ -629,6 +636,9 @@ const c = {
     const events = (await q('SELECT from_st, to_st, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id]))
       .map((e) => ({ text: `${ORDER_TIMELINE_TEXT[Number(e.from_st)] || '订单'} → ${ORDER_TIMELINE_TEXT[Number(e.to_st)] || '处理中'}`, at: String(e.created_at).slice(0, 19) }))
     const reviewed = !!(await one('SELECT id FROM review WHERE order_id = ?', [o.id]))
+    // X-04：本人评价与商户回复（回复仅审核通过后可见）
+    const myRev = await one(`SELECT rating, content, CASE WHEN reply_status = 1 THEN reply END AS reply,
+      CASE WHEN reply_status = 1 THEN DATE_FORMAT(reply_at, '%Y-%m-%d %H:%i') END AS reply_at FROM review WHERE order_id = ?`, [o.id])
     const canRebook = Number(o.status) === 70 && o.close_reason === 'group_cancel' &&
       !(await one('SELECT id FROM orders WHERE rebook_of = ?', [o.order_no]))
     // 改签候选：同频道、同价（单价×数量=原 goods）、报名中、余量足够
@@ -654,7 +664,7 @@ const c = {
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
     // X-01：statusText 统一由服务端字典下发；statusSceneText 供支付结果页场景文案
     pub.statusText = orderStatusText(o.status, 'c')
-    return { ...pub, statusSceneText: orderStatusText(o.status, 'scene'), freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, stockOrder: !!sRow && sRow.depart_date == null, merchantContact,
+    return { ...pub, statusSceneText: orderStatusText(o.status, 'scene'), freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, myReview: myRev ? { rating: Number(myRev.rating), content: myRev.content, reply: myRev.reply || null, replyAt: myRev.reply_at || null } : null, canRebook, rebookOptions, refundInfo, trip, stockOrder: !!sRow && sRow.depart_date == null, merchantContact,
       orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), benefit: (i.benefit_desc ? i.benefit_desc : '') + (i.benefit_rules ? '；' + i.benefit_rules : ''), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
   },
 

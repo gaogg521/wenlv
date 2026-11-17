@@ -162,6 +162,29 @@ export async function tickExpireVouchers() {
   return done.length
 }
 
+/** X-05 出行前一天提醒：明日出发、状态 20/30 的订单逐单发送（按 notify_log 去重，幂等可重跑）。
+ *  模板 WX_TMPL_DEPART_REMIND 未配置时每单记 skipped（下发记录可查，不报错）。 */
+export async function tickDepartRemind() {
+  const rows = await q(`SELECT o.order_no, o.user_id, o.merchant_id, p.title
+    FROM orders o JOIN tour_session s ON s.id = o.session_id JOIN tour_product p ON p.id = o.product_id
+    WHERE o.status IN (20, 30) AND s.depart_date = DATE_ADD(CURDATE(), INTERVAL 1 DAY) LIMIT 200`)
+  const { sendScene } = await import('./domain/notify.mjs')
+  let sent = 0
+  for (const r of rows) {
+    try {
+      const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [r.user_id])
+      const dup = await one('SELECT id FROM notify_log WHERE scene = ? AND biz_ref = ? AND openid = ? LIMIT 1', ['depart_reminder', r.order_no, u && u.mini_a_openid])
+      if (dup) continue
+      const out = await sendScene({ scene: 'depart_reminder', openid: u && u.mini_a_openid, bizRef: r.order_no,
+        data: { thing1: { value: String(r.title || '您的行程').slice(0, 20) }, thing2: { value: '明天出发，请留意集合时间' } },
+        page: 'package-order/pages/order-detail/index?no=' + r.order_no })
+      if (!out.skipped) sent++
+    } catch (e) { console.error('[job:depart-remind]', r.order_no, e.message) }
+  }
+  if (rows.length) console.log('[job:depart-remind]', rows.length, 'orders', sent, 'sent')
+  return rows.length
+}
+
 /** 豆过期（滚动 expire_months 个月 FIFO）：回收超期豆（负向分录 biz=6）。
  *  A-02 修复：旧实现用原发放分录的 tx_no 比对过期分录（tx_no 永远不同 → 每分钟重复扣），
  *  也没有按 FIFO 扣除已消费部分（已花掉的旧豆会被再扣一次）。
@@ -253,7 +276,7 @@ async function tickRiskNotify() {
 async function main() {
   await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00')
-  let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = ''
+  let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = '', lastDepartRemind = ''
   for (;;) {
     const now = new Date()
     const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
@@ -275,6 +298,8 @@ async function main() {
       if (hhmm >= '03:10' && lastBeanDay !== now.toDateString()) { lastBeanDay = now.toDateString(); await tickBeanDayClose() }
       if (hhmm >= '04:00' && lastReconcile !== now.toDateString()) { lastReconcile = now.toDateString(); await tickAttestReconcile() }
       if (hhmm >= '01:00' && now.getDay() === 1 && lastSettlement !== now.toDateString()) { lastSettlement = now.toDateString(); await tickSettlement() }
+      // X-05：出行前一天提醒（每日 08:00 后跑一次；notify_log 去重，重复执行安全）
+      if (hhmm >= '08:00' && lastDepartRemind !== now.toDateString()) { lastDepartRemind = now.toDateString(); await tickDepartRemind() }
     } catch (e) { console.error('[jobs:err]', e.message) }
     await sleep(60_000)
   }

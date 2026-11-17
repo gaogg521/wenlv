@@ -169,6 +169,14 @@ export const adminReviewQueue = {
             const attestDomain = await import('../domain/attest.mjs')
             await attestDomain.attest('content_review', 'note-' + id, { noteId: id, result: 'pass', cityCode: cityRow?.city || null, batch: true }, c)
           })
+          // X-05：批量通过同样触达作者（未配模板记 skipped）
+          ;(async () => { try {
+            const { sendScene } = await import('../domain/notify.mjs')
+            const nr = await one(`SELECT n.user_id, u.mini_a_openid FROM content_note n JOIN user_account u ON u.id = n.user_id WHERE n.id = ?`, [id])
+            await sendScene({ scene: 'note_review', openid: nr && nr.mini_a_openid, bizRef: 'note-' + id,
+              data: { thing1: { value: '你的笔记已通过审核' }, thing2: { value: '已发布，去看看' } },
+              page: 'package-content/pages/create/index' })
+          } catch (e) { console.error('[notify:noteReview]', id, e.message) } })()
           results.push({ id, ok: true })
         } else {
           await tx(async (c) => {

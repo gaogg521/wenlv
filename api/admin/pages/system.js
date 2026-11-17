@@ -182,7 +182,33 @@ async function system() {
     <div class="row" style="margin-top:0"><input id="logkw" placeholder="输入订单号 / 操作人 / passId" style="width:320px">
       <button class="btn primary sm" onclick="searchLogs()">检索</button></div>
     <div id="logout2" class="muted">一次输入同时检索订单状态机事件、后台审计与核销流水</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>消息下发记录</h3><span class="muted">订阅消息触达留痕（X-05）· 最近 200 条</span></div>
+    <div class="cfg-tabs" id="notifyTabs"></div>
+    <div id="notifyLogsBox" class="muted">加载中…</div>
   </div>`
+  notifyLogsLoad()
+}
+
+// X-05：消息下发记录查看（sent 已送达 / mock 联调模拟 / skipped 未配置模板 / failed 失败）
+async function notifyLogsLoad(result) {
+  window.__notifyQ = window.__notifyQ || { result: '' }
+  if (result !== undefined) window.__notifyQ.result = result
+  const Q = window.__notifyQ
+  const SCENE_CN = { pay_ok: '支付成功', group_cancel: '未成团取消', depart_reminder: '出行前一天', refund_done: '退款到账', note_review: '笔记审核', new_order: '商户新订单', refund_apply: '商户退款申请', settlement_pending: '结算待确认' }
+  const RESULT_CN = { sent: '已下发', mock: '联调模拟', skipped: '未配置模板', failed: '失败' }
+  try {
+    const d = await api('GET', '/admin/notify-logs' + (Q.result ? '?result=' + Q.result : ''))
+    document.getElementById('notifyTabs').innerHTML = [['', '全部'], ...['sent', 'mock', 'skipped', 'failed'].map((k) => [k, RESULT_CN[k]])].map(([v, n]) =>
+      `<button type="button" class="cfg-tab ${String(Q.result) === String(v) ? 'on' : ''}" onclick="notifyLogsLoad('${v}')">${n}</button>`).join('')
+    document.getElementById('notifyLogsBox').innerHTML = d.rows.length ? `<table><thead><tr><th>时间</th><th>场景</th><th>对象</th><th>关联业务</th><th>模板</th><th>结果</th></tr></thead><tbody>
+      ${d.rows.map((r) => `<tr><td class="td-sub num">${esc(String(r.created_at).slice(5, 19))}</td>
+        <td>${esc(SCENE_CN[r.scene] || r.scene)}</td><td>${r.target === 'merchant' ? '商户' : '游客'}</td>
+        <td class="td-sub">${esc(r.biz_ref || '—')}</td><td class="td-sub">${esc(r.template_id ? r.template_id.slice(0, 12) + '…' : '—')}</td>
+        <td>${r.result === 'sent' ? '<span class="pill ok">已下发</span>' : r.result === 'mock' ? '<span class="pill warn">联调模拟</span>' : r.result === 'skipped' ? '<span class="pill off">未配置模板</span>' : '<span class="pill s70">失败</span>'}${r.error ? `<div class="td-sub">${esc(r.error)}</div>` : ''}</td></tr>`).join('')}</tbody></table>`
+      : emptyBox('暂无下发记录——用户动作触发订阅场景后，这里会记录每一次触达（含联调模拟与未配置模板的跳过）')
+  } catch (e) { document.getElementById('notifyLogsBox').textContent = e.message }
 }
 async function runJob(name, thenPage) {
   try {

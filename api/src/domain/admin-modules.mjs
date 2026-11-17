@@ -80,6 +80,8 @@ export const ROUTE_MODULES = [
   ['POST', '/admin/risk-cases/:id/:action', 'cases', 'manage'],
   // 审计日志（finance/risk 默认可见；模块授权可扩展/收回）
   ['GET', '/admin/audit-logs', 'audit', 'view'],
+  // X-05：消息下发记录挂在系统治理（system 模块）
+  ['GET', '/admin/notify-logs', 'system', 'view'],
   // 提现审批（资金敏感：查看与裁决同一模块，动作另有 ADMIN_ACTIONS 细粒度）
   ['GET', '/admin/withdrawals', 'withdrawals', 'view'],
   ['POST', '/admin/withdrawals/:id/verdict', 'withdrawals', 'manage'],

@@ -27,6 +27,7 @@ import * as taskReview from '../domain/task-review.mjs'
 import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
 import { orderStatusText, dictsForClient } from '../domain/dict.mjs'
+import * as notifyDomain from '../domain/notify.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -881,7 +882,7 @@ const admin = {
     await requireAdmin(req, ['super', 'ops', 'finance'])
     const kind = String(req.query.kind || '').trim()
     const refId = Number(req.query.refId || 0)
-    if (!['product', 'merchant'].includes(kind) || !refId) throw new BizError(1001, '请指定 kind（product/merchant）与 refId')
+    if (!['product', 'merchant', 'session'].includes(kind) || !refId) throw new BizError(1001, '请指定 kind（product/merchant/session）与 refId')
     const rows = await q('SELECT id, kind, ref_id refId, version_no versionNo, snapshot, changed_by changedBy, reason, created_at createdAt FROM master_data_version WHERE kind = ? AND ref_id = ? ORDER BY version_no DESC LIMIT 100', [kind, refId])
     return { kind, refId, rows }
   },
@@ -1016,8 +1017,8 @@ const admin = {
       if (String(row.city_code ?? '') !== String(a.scopeCity)) throw new BizError(1003, '仅可查看本城主体资料')
     }
     const values = entities.readValues(req.params.kind, row)
-    // R-01：乐观锁版本随详情下发，编辑器保存时带回（期间被人改过 → 2002）
-    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values), version: row.updated_version != null ? Number(row.updated_version) : undefined }
+    // R-01：乐观锁版本随详情下发，编辑器保存时带回（期间被人改过 → 2002）；X-03：团期走 version 列
+    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values), version: row.updated_version != null ? Number(row.updated_version) : (row.version != null ? Number(row.version) : undefined) }
   },
   // 列表页用：一次取回某类实体全部的扩展资料完整度（不返回资料本身）
   'GET /admin/entities/:kind': async (req) => {
@@ -1315,6 +1316,20 @@ const admin = {
     await requireAdmin(req, ['super', 'ops'])
     const { bizRef } = req.query
     return await q(bizRef ? 'SELECT * FROM attest_event WHERE biz_ref = ?' : 'SELECT * FROM attest_event ORDER BY id DESC LIMIT 50', bizRef ? [bizRef] : [])
+  },
+
+  // ===== X-05 消息下发记录：MOCK / 真实下发 / 跳过（未配模板）/ 失败 全部留痕可查 =====
+  'GET /admin/notify-logs': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const conds = [], args = [], filters = {}
+    const scene = String(req.query.scene || '').trim()
+    if (scene) { conds.push('scene = ?'); args.push(scene); filters.scene = scene }
+    const result = String(req.query.result || '').trim()
+    if (['sent', 'mock', 'skipped', 'failed'].includes(result)) { conds.push('result = ?'); args.push(result); filters.result = result }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const rows = await q(`SELECT id, scene, target, openid, template_id, biz_ref, mock, result, error,
+      DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') created_at FROM notify_log ${W} ORDER BY id DESC LIMIT 200`, args)
+    return { rows, filters, scenes: Object.keys(notifyDomain.SCENES) }
   },
 
   // 开发联调：触发支付回调（MOCK 通道）；生产由 /callback/wxpay 真实回调
