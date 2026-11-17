@@ -610,13 +610,27 @@ const c = {
   },
 
   // X-01：三端统一状态文案——订单行带 statusText（游客视角），小程序不再自建状态表
+  // A-02：reviewed 标记供「待评价」筛选与快捷入口计数同口径
   'GET /c/orders': async (req) => requireUser(req) && (await q(
-    `SELECT o.order_no, o.status, o.amount_pay, o.qty, o.created_at, p.title, p.days_desc
+    `SELECT o.order_no, o.status, o.amount_pay, o.qty, o.created_at, p.title, p.days_desc,
+      EXISTS(SELECT 1 FROM review rw WHERE rw.order_id = o.id) AS reviewed
      FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`, [requireUser(req).uid]))
-    .map((o) => ({ ...o, statusText: orderStatusText(o.status, 'c') })),
+    .map((o) => ({ ...o, statusText: orderStatusText(o.status, 'c'), reviewed: !!Number(o.reviewed) })),
 
   // X-02：三端统一字典（城市/品类/订单状态文案）。公开只读、无内部字段，小程序启动时拉取缓存。
   'GET /c/dicts': async () => dictsForClient(),
+
+  // A-02：订单快捷入口计数（待付款 / 待出行 / 待评价 / 退款售后）——数量与订单列表一致
+  'GET /c/orders/summary': async (req) => {
+    const u = requireUser(req)
+    const r = await one(`SELECT
+      COALESCE(SUM(o.status = 10), 0) waitPay,
+      COALESCE(SUM(o.status = 30), 0) waitTravel,
+      COALESCE(SUM(o.status = 50 AND NOT EXISTS (SELECT 1 FROM review rw WHERE rw.order_id = o.id)), 0) waitReview,
+      COALESCE(SUM(o.status IN (60, 70)), 0) refunding
+      FROM orders o WHERE o.user_id = ?`, [u.uid])
+    return { waitPay: Number(r.waitPay) || 0, waitTravel: Number(r.waitTravel) || 0, waitReview: Number(r.waitReview) || 0, refunding: Number(r.refunding) || 0 }
+  },
 
   'GET /c/orders/:no': async (req) => {
     const u = requireUser(req)
@@ -754,12 +768,19 @@ const c = {
   'GET /c/me': async (req) => {
     const u = requireUser(req)
     const acc = await one('SELECT * FROM user_account WHERE id = ?', [u.uid])
+    // R-04：门店员工身份 + 商户端跳转 AppID（WX_B_APPID 未配置时前端隐藏入口；外部条件记交验单）
+    const staff = await one(`SELECT s.merchant_id, s.role, m.name merchant_name FROM merchant_staff s
+      JOIN merchant m ON m.id = s.merchant_id WHERE s.user_id = ? AND s.status = 1 ORDER BY s.id LIMIT 1`, [u.uid])
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const sec = await getSecrets(['WX_B_APPID']).catch(() => ({}))
     return {
       id: acc.id, nickname: acc.nickname, avatarUrl: acc.avatar_url, memberLevel: acc.member_level, growth: acc.growth_value,
       level: withLevelArt(await member.progress(u.uid), req),
       levelThresholds: (await member.levels()).map((l) => l.min),
       bean: await bean.balance(u.uid),
       passes: await count('SELECT COUNT(*) c FROM travel_pass WHERE user_id = ?', [u.uid]),
+      merchantStaff: staff ? { merchantId: Number(staff.merchant_id), merchantName: staff.merchant_name, role: Number(staff.role) } : null,
+      miniBAppId: sec.WX_B_APPID || process.env.WX_B_APPID || null,
     }
   },
 

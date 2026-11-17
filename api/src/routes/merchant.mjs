@@ -534,7 +534,11 @@ const mSite = {
   'GET /m/site': async (req) => {
     const row = await one('SELECT * FROM site_config WHERE id = 1')
     const v = row ? entities.readValues('site', row) : {}
-    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '' }
+    // R-04：游客端 AppID 随站点配置下发（未配置为 null，商户端「打开游客端」入口隐藏）
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const sec = await getSecrets(['WX_A_APPID']).catch(() => ({}))
+    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '',
+      miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null }
   },
 }
 

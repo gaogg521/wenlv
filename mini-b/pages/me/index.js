@@ -12,7 +12,7 @@ Page({
   data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
   onShow() {
     this.setData({ demoAvailable: api.canDemoLogin() })
-    if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
+    if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null })).catch(() => {})
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
     if (app.globalData.token) this.fetchApplications()
     if (this.data.merchant && this.data.role >= 2) this.fetchInvite()
@@ -94,6 +94,12 @@ Page({
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
   goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
+  // R-04：回到游客端（WX_A_APPID 未配置时入口不渲染；跳转能力依赖正式 AppID，记交验单外部条件）
+  openTouristApp() {
+    const appId = this.data.miniAAppId
+    if (!appId) return
+    wx.navigateToMiniProgram({ appId, path: 'pages/home/index', fail: () => wx.showToast({ title: '打开游客端失败，请确认已安装', icon: 'none' }) })
+  },
   // 门店码：官方 getUnlimitedQRCode，游客扫码带商户归因进入首页
   async storeQrcode() {
     try {
@@ -104,7 +110,8 @@ Page({
           success: () => wx.previewImage({ urls: [path] }),
           fail: () => this.setData({ qr: 'data:image/png;base64,' + r.image }) })
       } else {
-        wx.showModal({ title: 'MOCK 模式', content: '需在管理后台「集成中心」配置微信小程序凭据后生成真实门店码（scene=' + r.scene + '）', showCancel: false })
+        // B-04：对商户只说业务话术；技术细节（scene/集成中心配置）留在后台日志
+        wx.showModal({ title: '门店码', content: '门店码暂未开通，请联系平台开通后使用。', showCancel: false })
       }
     } catch (e) { wx.showToast({ title: e.msg || '生成失败', icon: 'none' }) }
   },

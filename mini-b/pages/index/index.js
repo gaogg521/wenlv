@@ -47,6 +47,15 @@ Page({
   toggleNotice() { this.setData({ noticeExpanded: !this.data.noticeExpanded }) },
   goLogin() { wx.switchTab({ url: '/pages/me/index' }) },
   goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
+  // B-01：工作台首屏一键切换门店/岗位（api.switchStore 后 reLaunch，订单/库存/结算各页 onShow 自动刷新到新门店）
+  async chooseStore() {
+    try {
+      const stores = await api.request('/m/auth/stores')
+      if (!stores.length) return wx.showToast({ title: '当前账号仅绑定一家门店', icon: 'none' })
+      const choice = await new Promise(resolve => wx.showActionSheet({ itemList: stores.map(s => s.name + ' · ' + ['', '核销员', '店长', '老板'][s.role]), success: r => resolve(r.tapIndex), fail: () => resolve(null) }))
+      if (choice !== null) await api.switchStore(stores[choice].id)
+    } catch (e) { wx.showToast({ title: e.msg || '切换失败', icon: 'none' }) }
+  },
   goVerify() {
     if (!getApp().globalData.token) return this.goLogin()
     wx.navigateTo({ url: '/pages/verify/index' })

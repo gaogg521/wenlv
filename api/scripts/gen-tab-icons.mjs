@@ -90,7 +90,7 @@ function render(shape, color, size = 81) {
 
 const jobs = [
   ['mini-a', [['home', 'home'], ['tour', 'tour-list'], ['shop', 'shop'], ['bean', 'bean'], ['me', 'me']], '#8a919c', '#e87722'],
-  ['mini-b', [['grid', 'index'], ['list', 'orders'], ['box', 'supply'], ['me', 'me']], '#8a919c', '#7b5aa6'],
+  ['mini-b', [['grid', 'index'], ['list', 'orders'], ['box', 'supply'], ['me', 'me']], '#8a919c', '#ad603d'],
 ]
 const root = path.resolve(import.meta.dirname, '..', '..')
 for (const [app, icons, off, on] of jobs) {
