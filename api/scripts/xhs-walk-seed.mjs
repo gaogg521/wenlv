@@ -1,6 +1,8 @@
 // 小红书化走查种子：演示库造 2 位游客 + 3 篇带话题/封面图笔记 + 点赞 + 评论
 // 用法：node scripts/xhs-walk-seed.mjs  （对 8080 演示库直跑，mock 登录全 mock 机审）
 import fs from 'node:fs'
+import path from 'node:path'
+const root = path.resolve(import.meta.dirname, '../..')
 
 const BASE = process.env.API_BASE || 'http://127.0.0.1:8080'
 const call = async (m, p, b, t) => (await fetch(BASE + p, { method: m, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b ? JSON.stringify(b) : undefined })).json()
@@ -14,9 +16,9 @@ const upload = async (token, file) => {
 
 const STAMP = 'XHSW' + Date.now().toString(36)
 const IMGS = [
-  'C:/Users/allenzhao/Desktop/文旅项目/wanderlust/mini-a/assets/photos/water-town.jpg',
-  'C:/Users/allenzhao/Desktop/文旅项目/wanderlust/mini-a/assets/photos/zongzi.jpg',
-  'C:/Users/allenzhao/Desktop/文旅项目/wanderlust/mini-a/assets/scenes/lake.png',
+  path.join(root, 'mini-a/assets/photos/water-town.jpg'),
+  path.join(root, 'mini-a/assets/photos/zongzi.jpg'),
+  path.join(root, 'brand-logo/mini-a-reference/scenes/lake.png'),
 ]
 
 const author = ok(await call('POST', '/c/auth/login', { code: 'mock-xhs-walk-author-' + STAMP }))
