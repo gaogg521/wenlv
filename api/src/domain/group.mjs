@@ -12,7 +12,7 @@ import { bookingOpen, bookingOpenSql, bookingNow } from './booking-window.mjs'
 export async function cancelDueSessions() {
   const hours = await cfgNum('order.group_cancel_hours')
   const due = await q(`SELECT s.*, p.title FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-    WHERE s.status = 1 AND s.depart_date < DATE_ADD(NOW(), INTERVAL ? HOUR) AND s.booked < s.min_go`, [hours])
+    WHERE p.cat <> 'shop' AND s.status = 1 AND s.depart_date < DATE_ADD(NOW(), INTERVAL ? HOUR) AND s.booked < s.min_go`, [hours])
   const done = []
   for (const s of due) {
     const ok = await tx(async (c) => {
@@ -67,13 +67,13 @@ export async function rebook({ userId, orderNo, sessionId }) {
   if (Number(old.status) !== order.ST.REFUNDED || old.close_reason !== 'group_cancel')
     throw new BizError(2002, '仅未成团取消的订单可免费改签')
 
-  const s = await one(`SELECT s.*, p.channel FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?`, [sessionId])
+  const s = await one(`SELECT s.*, p.channel FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.cat <> 'shop'`, [sessionId])
   const oldS = await one('SELECT channel FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [old.session_id])
   if (!s || Number(s.status) !== 1) throw new BizError(2001, '目标团期不可报名')
   if (!bookingOpen(s.profile)) throw new BizError(2001, '目标团期报名已截止')
   if (oldS && s.channel !== oldS.channel) throw new BizError(1001, '仅可改签同频道团期')
   if (Number(s.price_adult) * Number(old.qty) !== Number(old.amount_goods)) throw new BizError(1001, '仅可免费改签同价团期')
-  if (String(s.depart_date).slice(0, 10) < bizDay())
+  if (!s.depart_date || String(s.depart_date).slice(0, 10) < bizDay())
     throw new BizError(1001, '仅可改签到未出发的团期') // A-01：目标团期必须未出发（按业务时区，禁用 UTC 口径）
 
   const suffix = String(Date.now() % 100000000).padStart(8, '0') + String(Math.floor(Math.random() * 90) + 10)

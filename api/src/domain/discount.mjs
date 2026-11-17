@@ -10,9 +10,9 @@ import { findBanned } from './wording.mjs'
  *  A-07 取较低兜底（早鸟价被改高于现价时游客不多付）；A-34 按业务时区切日。
  *  order.priceForSession 委托至此，保证折扣叠加与展示同源。 */
 export function earlyInfo(s, today = bizDay()) {
-  const days = Math.floor((new Date(String(s.depart_date).slice(0, 10) + 'T00:00:00') - new Date(String(today) + 'T00:00:00')) / 86400000)
+  const days = s.depart_date == null ? null : Math.floor((new Date(String(s.depart_date).slice(0, 10) + 'T00:00:00') - new Date(String(today) + 'T00:00:00')) / 86400000)
   const original = Number(s.price_adult)
-  const eligible = s.early_price != null && s.early_days != null && days >= Number(s.early_days)
+  const eligible = s.early_price != null && s.early_days != null && days != null && days >= Number(s.early_days)
   const earlyUnit = eligible ? Math.min(Number(s.early_price), original) : null
   return { days, originalFen: original, eligible, earlyUnitFen: earlyUnit }
 }

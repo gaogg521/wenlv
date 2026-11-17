@@ -498,10 +498,10 @@ const admin = {
     if(await one('SELECT order_no FROM freedom_order WHERE order_no=?',[o.order_no]))throw new BizError(2002,'自由豆补贴订单暂不支持改期调价，请按原退改规则退款后重新预订')
     if (![20, 30].includes(Number(o.status))) throw new BizError(2002, '仅「已支付 / 已确认」订单可改期；已核销、退款中或已完成的订单请走对应流程')
     if (await one('SELECT id FROM order_reschedule WHERE order_id = ? AND status IN (0, 1)', [o.id])) throw new BizError(2002, '该订单已有在途改期申请，请先处理')
-    const to = await one('SELECT s.*, p.title product_title FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [Number(toSessionId)])
+    const to = await one('SELECT s.*, p.title product_title FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND s.depart_date IS NOT NULL', [Number(toSessionId)])
     if (!to || Number(to.product_id) !== Number(o.product_id) || Number(to.status) !== 1) throw new BizError(1001, '目标团期无效或不可报名')
     if (Number(to.id) === Number(o.session_id)) throw new BizError(1001, '目标团期与当前团期相同')
-    const from = await one('SELECT * FROM tour_session WHERE id = ?', [o.session_id])
+    const from = await one('SELECT * FROM tour_session WHERE id = ? AND depart_date IS NOT NULL', [o.session_id])
     if (!from) throw new BizError(1004, '原团期不存在')
     if (Number(to.booked) + Number(o.qty) > Number(to.quota)) throw new BizError(2001, '目标团期名额不足（剩 ' + (Number(to.quota) - Number(to.booked)) + '）')
     const priceDiff = (Number(to.price_adult) - Number(from.price_adult)) * Number(o.qty)
@@ -928,8 +928,11 @@ const admin = {
       if (!p) throw new BizError(1004, '商品不存在')
       const rich = typeof p.rich_desc === 'string' ? JSON.parse(p.rich_desc || '{}') : (p.rich_desc || {})
       const issues=[]
-      if (!rich.intro || !p.meeting_point || !p.safety_note) issues.push('行程介绍、集合地点与安全告知')
-      if (!(await count('SELECT COUNT(*) c FROM tour_session WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked', [p.id]))) issues.push('可报名的未来团期')
+      const stock = p.cat === 'shop' && await one('SELECT quota, booked, status FROM tour_session WHERE stock_product_id=?', [p.id])
+      if (stock ? !rich.intro : !rich.intro || !p.meeting_point || !p.safety_note) issues.push(stock ? '商品介绍' : '行程介绍、集合地点与安全告知')
+      if (stock) {
+        if (Number(stock.status) !== 1 || stock.quota <= stock.booked) issues.push('可售库存')
+      } else if (!(await count('SELECT COUNT(*) c FROM tour_session WHERE product_id=? AND status=1 AND depart_date>=CURDATE() AND quota>booked', [p.id]))) issues.push('可报名的未来时段')
       if (issues.length) throw new BizError(1001, '发布前请补齐：' + issues.join('；'))
     }
     const before = await one('SELECT status, price_from FROM tour_product WHERE id = ?', [req.params.id])
@@ -942,11 +945,29 @@ const admin = {
   },
   'GET /admin/products/:id/sessions': async (req) => {
     const a = await requireAdmin(req)
-    const p = await one('SELECT id, title, price_from, city_code FROM tour_product WHERE id = ?', [req.params.id])
+    const p = await one('SELECT id, title, price_from, city_code, cat, merchant_id FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(p.city_code)) throw new BizError(1003, '仅可查看本城商品团期')
-    const sessions = await q('SELECT id, depart_date, quota, booked, min_go, price_adult, early_price, status FROM tour_session WHERE product_id = ? ORDER BY depart_date DESC', [p.id])
-    return { title: p.title, priceFrom: Number(p.price_from), sessions }
+    if (a.role === 'merchant_partner' && Number(subjectScope(a).merchantId) !== Number(p.merchant_id)) throw new BizError(1003, '仅可查看本店商品')
+    const stock = p.cat === 'shop' ? await one('SELECT quota - booked available FROM tour_session WHERE stock_product_id = ?', [p.id]) : null
+    const sessions = stock ? [] : await q('SELECT id, depart_date, quota, booked, min_go, price_adult, early_price, status FROM tour_session WHERE product_id = ? AND depart_date IS NOT NULL ORDER BY depart_date DESC', [p.id])
+    return { title: p.title, cat: p.cat, priceFrom: Number(p.price_from), sessions, stock }
+  },
+  'PUT /admin/products/:id/stock': async (req) => {
+    const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    const { available, previous } = req.body
+    if (!Number.isInteger(available) || available < 0 || available > 1000000) throw new BizError(1001, '库存须为 0–1000000 的整数')
+    return tx(async (c) => {
+      const p = await c.one('SELECT cat, merchant_id, city_code, price_from FROM tour_product WHERE id=? FOR UPDATE', [req.params.id])
+      if (p?.cat !== 'shop') throw new BizError(1001, '仅商城商品支持直接购买库存')
+      if ((a.scopeCity && String(a.scopeCity) !== String(p.city_code)) ||
+        (a.role === 'merchant_partner' && Number(subjectScope(a).merchantId) !== Number(p.merchant_id))) throw new BizError(1003, '无此商品管理权限')
+      const current = await c.one('SELECT id, quota-booked available FROM tour_session WHERE stock_product_id=? FOR UPDATE', [req.params.id])
+      if ((current ? Number(current.available) : null) !== previous) throw new BizError(1001, '库存已变化，请重新打开后再保存')
+      if (current) await c.q('UPDATE tour_session SET quota=booked+?, status=1 WHERE id=?', [available, current.id])
+      else await c.ins('INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult) VALUES (?,NULL,?,1,?)', [req.params.id, available, p.price_from])
+      return { available }
+    })
   },
   'POST /admin/sessions': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
@@ -955,11 +976,15 @@ const admin = {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate || '') || !Number.isInteger(Number(quota)) || Number(quota) < 1 || !Number.isInteger(Number(priceAdult)) || Number(priceAdult) < 1) throw new BizError(1001, '请填写有效日期、正整数名额和价格')
     if (Number.isNaN(Date.parse(departDate)) || departDate < new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })) throw new BizError(1001, '出发日期不可早于今天')
     if (earlyPrice && (Number(earlyPrice) >= Number(priceAdult))) throw new BizError(1001, '早鸟价须低于成人价')
-    if (!(await one('SELECT id FROM tour_product WHERE id=?',[productId]))) throw new BizError(1004, '商品不存在')
-    const id = await tx(async (c) => c.ins(
-      'INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, early_price, early_days) VALUES (?,?,?,?,?,?,?)',
-      [Number(productId), departDate, Number(quota), Number(minGo || 10), Number(priceAdult),
-        Number(earlyPrice) || null, earlyPrice ? Number(earlyDays || 7) : null]))
+    const id = await tx(async (c) => {
+      const product = await c.one('SELECT cat, city_code FROM tour_product WHERE id=? FOR UPDATE', [productId])
+      if (!product) throw new BizError(1004, '商品不存在')
+      if (a.scopeCity && String(a.scopeCity) !== String(product.city_code)) throw new BizError(1003, '无此商品管理权限')
+      if (await c.one('SELECT id FROM tour_session WHERE stock_product_id = ?', [productId])) throw new BizError(1001, '普通商品使用库存，无需新增时段')
+      return c.ins('INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, early_price, early_days) VALUES (?,?,?,?,?,?,?)',
+        [Number(productId), departDate, Number(quota), product.cat === 'shop' ? 1 : Number(minGo || 10), Number(priceAdult),
+          Number(earlyPrice) || null, earlyPrice ? Number(earlyDays || 7) : null])
+    })
     return { id }
   },
 

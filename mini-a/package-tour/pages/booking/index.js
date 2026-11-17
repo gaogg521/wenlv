@@ -9,20 +9,19 @@ Page({
       wx.setStorageSync('promoScene', decodeURIComponent(q.scene))
     }
     api.getTourDetail(q.id).then((d) => {
-      const withFallbackSessions = (d.sessions || []).map((s) => ({ ...s, seatsText: s.left_seats > 0 ? '余' + s.left_seats : '已满' }))
+      const withFallbackSessions = (d.sessions || []).map((s) => ({ ...s, slotLabel: [s.depart_date, d.cat === 'shop' && s.info?.gather_time].filter(Boolean).join(' '), seatsText: s.left_seats > 0 ? '余' + s.left_seats : '已满' }))
       const rich = typeof d.rich_desc === 'string' ? JSON.parse(d.rich_desc || '{}') : (d.rich_desc || {})
       const images = api.productImages(d)
       const gallery = images.length ? images.map(api.img) : [api.coverFor(d)]
       this.setData({ illustrated: !images.length })
-      const sv = this.sessView(withFallbackSessions[0])
       // 默认选中第一个还有名额的团期
       const firstOpen = Math.max(0, withFallbackSessions.findIndex((x) => Number(x.left_seats) > 0))
       // A-42：分包 wxml 只做取值——保险相关在 JS 预计算（复杂表达式会静默炸分包编译）
-      d.hasInsurance = Number(d.insurance_fee) > 0 && d.insuranceAvailable !== false
+      d.hasInsurance = !d.purchase && Number(d.insurance_fee) > 0 && d.insuranceAvailable !== false
       d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
       // B02：套餐组成项（预订页展示包含内容；空数组=非套餐）
       d.pkgItems = (d.packageItems || []).map((i) => ({ name: i.name, qtyText: '×' + i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefit: (i.benefitDesc ? i.benefitDesc : '') + (i.benefitRules ? '；' + i.benefitRules : '') }))
-      this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !(d.sessions && d.sessions.length),
+      this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !d.purchase && !withFallbackSessions.length,
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv }, () => this.updatePrice())
     }).catch(e => this.setData({ error: e.msg || '线路加载失败，请重试', loading: false }))
@@ -30,6 +29,8 @@ Page({
     // 推广服务商本人：分享自动带自己的归因 scene（好友下单即归因）
     api.request('/c/promote/scene').then((s) => { if (s.promoter) this.myScene = s.scene }).catch(() => {})
   },
+  selectedInventory() { return this.data.p?.purchase || this.data.sessions[this.data.sel] },
+  purchaseSelection(s) { return this.data.p.purchase ? { productId: this.pid } : { sessionId: s.id } },
   fetchReviews() {
     api.getReviews(this.pid).then((rv) => this.setData({ rv })).catch(() => {})
   },
@@ -51,7 +52,7 @@ Page({
     if (discountYuan > 0) reasons.push('自由豆已减 ¥' + discountYuan)
     if (deductYuan > 0) reasons.push('旅豆已抵 ¥' + deductYuan)
     const payReason = reasons.slice(0, 2).join(' · ')
-    const parts = ['活动费 ¥' + goodsYuan]
+    const parts = [this.data.p.purchase ? '商品 ¥' + goodsYuan : '活动费 ¥' + goodsYuan]
     if (discountYuan > 0) parts.push('− 自由豆 ¥' + discountYuan)
     if (deductYuan > 0) parts.push('− 旅豆 ¥' + deductYuan)
     if (hasIns && insYuan > 0) parts.push('+ 保险 ¥' + insYuan)
@@ -70,7 +71,7 @@ Page({
   },
   // 本地估算（登录试算前的即时反馈）：s.priceNow 已是详情接口按早鸟/折扣同源注价的有效单价
   updatePrice() {
-    const s = this.data.sessions[this.data.sel]
+    const s = this.selectedInventory()
     if (!s) return
     const goods = Number(s.priceNow || s.price_adult) * this.data.qty
     const beans = this.data.useBean ? Math.min(Number(this.data.beanBal) || 0, this.beanCap(goods, 0)) : 0
@@ -106,7 +107,7 @@ Page({
     this.setData({pricing:true,freedomError:'',quoted:null})
     try{await api.ensureLogin()
       const beanWanted=this.data.useBean?Math.min(Number(this.data.beanBal)||0,this.beanCap(Number(s.priceNow||s.price_adult)*this.data.qty,0)):0
-      const d=await api.request('/c/freedom/quote','POST',{sessionId:s.id,qty:this.data.qty,insurance:this.data.buyInsurance,rightId:rightId||undefined,beanDeduct:beanWanted})
+      const d=await api.request('/c/freedom/quote','POST',{...this.purchaseSelection(s),qty:this.data.qty,insurance:this.data.buyInsurance,rightId:rightId||undefined,beanDeduct:beanWanted})
       if(seq!==this.priceSeq)return
       const money=v=>(Number(v)/100).toFixed(2).replace(/\.00$/,'')
       const rows=d.rows.map(x=>({...x,thresholdText:money(x.threshold),discountText:money(x.discount),validTo:String(x.to||'').slice(0,10),label:'满'+money(x.threshold)+'元减'+money(x.discount)+'元 · '+(x.reason||('有效期至'+String(x.to||'').slice(0,10)))}))
@@ -115,13 +116,13 @@ Page({
       const quoted={goods:(d.goods/100).toFixed(2),deduct:(d.beanDeduct/100).toFixed(2),pay:(d.cashPay/100).toFixed(2),insurance:(d.insurance/100).toFixed(2),
         capYuan:(d.beanCapBeans/10).toFixed(2),discount:(d.discount/100).toFixed(2),beanDeductCount:Math.max(0,Math.round(Number(d.beanDeductCount)||0))}
       // B1：试算回包（权威口径）刷新底栏优惠原因与明细算式
-      const s2=this.data.sessions[this.data.sel]
+      const s2=this.selectedInventory()
       const promoActive=s2&&s2.promo&&Number(s2.priceNow)<Number(s2.promo.originalFen)
       const reasons=[]
       if(promoActive)reasons.push('活动价 ¥'+quoted.goods)
       if(Number(d.discount)>0)reasons.push('自由豆已减 ¥'+quoted.discount)
       if(Number(d.beanDeduct)>0)reasons.push('旅豆已抵 ¥'+quoted.deduct)
-      const calc=['活动费 ¥'+quoted.goods]
+      const calc=[this.data.p.purchase ? '商品 ¥'+quoted.goods : '活动费 ¥'+quoted.goods]
       if(Number(d.discount)>0)calc.push('− 自由豆 ¥'+quoted.discount)
       if(Number(d.beanDeduct)>0)calc.push('− 旅豆 ¥'+quoted.deduct)
       if(Number(d.insurance)>0)calc.push('+ 保险 ¥'+quoted.insurance)
@@ -165,9 +166,9 @@ Page({
     if (s && Number(s.left_seats) <= 0) return wx.showToast({ title: '该团期已满，请选择其他日期', icon: 'none' })
     this.setData({ sel: Number(e.currentTarget.dataset.i), qty: 1, selView: this.sessView(this.data.sessions[Number(e.currentTarget.dataset.i)]) }, () => this.updatePrice()) },
   addQty() {
-    const s = this.data.sessions[this.data.sel]
+    const s = this.selectedInventory()
     const cap = Math.min(9, s && s.left_seats ? Number(s.left_seats) : 9)
-    if (this.data.qty >= cap) return wx.showToast({ title: s && s.left_seats ? '已达该团期剩余名额（' + cap + '）' : '单单最多 9 人', icon: 'none' })
+    if (this.data.qty >= cap) return wx.showToast({ title: this.data.p.purchase ? '已达可购买数量（' + cap + '）' : '已达可预约人数（' + cap + '）', icon: 'none' })
     this.setData({ qty: this.data.qty + 1 }, () => this.updatePrice())
   },
   subQty() {
@@ -197,7 +198,7 @@ Page({
     this.setData({ contactPhone: v, phoneTicket: '' })
   },
   async submit() {
-    const s = this.data.sessions[this.data.sel]
+    const s = this.selectedInventory()
     if (this.data.submitting) return
     if (this.data.pricing || this.data.freedomError || !this.data.quoted) {
       return wx.showToast({ title: this.data.freedomError || '请等待最新价格试算', icon: 'none' })
@@ -205,7 +206,7 @@ Page({
     const { quoted, qty, buyInsurance, freedomRightId } = this.data
     const priceSeq = this.priceSeq
     if (!this.data.agree) return wx.showToast({ title: '请先阅读并同意服务条款与隐私政策', icon: 'none' })
-    if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
+    if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: this.data.p.purchase ? '当前库存不足' : '当前时段名额不足，请选择其他日期', icon: 'none' })
     if (!String(this.data.contactName || '').trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
     // A-08：一键获取（有 phoneTicket）或手输 11 位手机号，二者其一即可下单
     if (!this.data.phoneTicket && !/^1[3-9]\d{9}$/.test(this.data.contactPhone || '')) return wx.showToast({ title: '请填写 11 位有效手机号', icon: 'none' })
@@ -216,7 +217,7 @@ Page({
       await api.request('/c/consent', 'POST', { scene: 'terms', granted: true, version: this.data.legalVersions?.terms })
       // 提交与当前选择一致的服务端试算结果。
       if (this.priceSeq !== priceSeq) throw { msg: '价格已变化，请重新确认后提交' }
-      const r = await api.createOrder({ sessionId: s.id, qty, beanDeduct: quoted.beanDeductCount,
+      const r = await api.createOrder({ ...this.purchaseSelection(s), qty, beanDeduct: quoted.beanDeductCount,
         freedomRightId: freedomRightId || undefined,
         expectedGoodsFen: Math.round(Number(quoted.goods) * 100),
         insurance: buyInsurance,

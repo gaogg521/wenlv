@@ -3,7 +3,7 @@
 <view class="hero">
   <view class="hi">{{site.shop_title}}</view>
   <view class="sub2">{{site.shop_caption}}</view>
-  <view class="hero-chip"><view class="dot"></view>选择日期预约，到店出示凭证领取</view>
+  <view class="hero-chip"><view class="dot"></view>商城好物随时买 · 到店体验可预约</view>
 </view>
 <view style="height:12rpx"></view>
 <view class="tour-item fade-up" wx:for="{{items}}" wx:key="id">
@@ -13,7 +13,7 @@
     <view class="tour-desc">{{item.subtitle || item.days_desc || ""}}</view>
     <view style="display:flex;align-items:center;gap:16rpx">
       <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.priceText}}</view>
-      <view class="btn sm" bindtap="buy" data-id="{{item.id}}">预约领取</view>
+      <view class="btn sm" bindtap="buy" data-id="{{item.id}}">{{item.buyLabel || '查看详情'}}</view>
     </view>
   </view>
 </view>

@@ -129,9 +129,11 @@ const S = {
       if (!ctx.creating && v.quota != null && ctx.row && v.quota < Number(ctx.row.booked)) return { quota: `已报名 ${ctx.row.booked} 人，名额不能少于已报名人数` }
     },
     async create(c, v, ctx) {
-      if (!(await one('SELECT id FROM tour_product WHERE id = ?', [ctx.parentId]))) throw new BizError(1004, '商品不存在')
+      const product = await c.one('SELECT id, cat FROM tour_product WHERE id = ? FOR UPDATE', [ctx.parentId])
+      if (!product) throw new BizError(1004, '商品不存在')
+      if (await c.one('SELECT id FROM tour_session WHERE stock_product_id = ?', [ctx.parentId])) throw new BizError(1001, '普通商品使用库存，无需新增时段')
       return c.ins('INSERT INTO tour_session (product_id, depart_date, quota, min_go, price_adult, status) VALUES (?,?,?,?,?,1)',
-        [ctx.parentId, v.depart_date, v.quota, v.min_go || 10, v.price_adult])
+        [ctx.parentId, v.depart_date, v.quota, product.cat === 'shop' ? 1 : v.min_go || 10, v.price_adult])
     },
   },
 

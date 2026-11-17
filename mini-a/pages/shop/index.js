@@ -9,7 +9,7 @@ Page({
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
       // D01：商城同样使用列表同源注价（priceNow 已含早鸟/折扣，无优惠时等于原价）
-      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); const price = t.priceNow != null ? Number(t.priceNow) : Number(t.price || t.price_from); return { ...t, price, priceText: (price / 100).toFixed(2).replace(/\.?0+$/, ''), cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
+      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); const price = t.priceNow != null ? Number(t.priceNow) : Number(t.price || t.price_from); return { ...t, buyLabel: t.stock == null ? '预约体验' : Number(t.stock) > 0 ? '立即购买' : '查看商品', price, priceText: (price / 100).toFixed(2).replace(/\.?0+$/, ''), cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {

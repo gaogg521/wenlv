@@ -39,6 +39,7 @@ export function daysBetween(from, to) {
 export function quote({ policy, amountPayFen, departDate, today = bizDay() }) {
   const tiers = Array.isArray(policy) ? policy : parsePolicy(policy)
   const amt = Math.max(0, Math.round(Number(amountPayFen) || 0))
+  if (departDate === null) return { allowed: true, daysToDepart: null, rate: 0, feeFen: 0, refundFen: amt, tier: null, reason: null }
   const daysToDepart = daysBetween(today, departDate)
   const hit = tiers.find((t) => daysToDepart >= t.days)
   if (!hit) {

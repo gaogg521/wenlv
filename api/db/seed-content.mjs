@@ -56,7 +56,7 @@ export async function seedContent({ verbose = true } = {}) {
       `INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, status, rich_desc)
        VALUES ('main',?,?,?,?,?,?,?,?,1,?)`,
       [city, cat, title, intro, days, price, gift, merchIds[mi], JSON.stringify({ intro, includes: ['示例：行程/费用包含/退改规则可在此编辑'] })]))
-    const dates = cat === 'shop'
+    const dates = cat === 'shop' && days === '实物' ? [null] : cat === 'shop'
       ? [new Date(Date.now() + 86400000).toISOString().slice(0, 10)]
       : futureDates(3)
     for (const d of dates) {

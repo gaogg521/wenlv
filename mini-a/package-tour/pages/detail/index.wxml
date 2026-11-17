@@ -26,13 +26,15 @@
       <text wx:if="{{extra.ageRange}}">{{extra.ageRange}}</text>
     </view>
     <view class="dt-price-row">
-      <view><text class="tour-price" style="font-size:44rpx"><text class="rmb">¥</text>{{p.priceLabel}}</text><text class="muted2"> 起/人</text></view>
+      <view><text class="tour-price" style="font-size:44rpx"><text class="rmb">¥</text>{{displayPrice}}</text><text class="muted2">{{p.purchase ? ' /件' : ' 起/人'}}</text></view>
       <text class="muted2" wx:if="{{p.beanGift}}">完成后约得 {{p.beanGift}} 旅豆（按实付计算，旅豆抵扣部分不计）</text>
     </view>
   </view>
 
   <!-- 近期团期：不用进下一页就知道哪天能去 -->
-  <view class="sec-title">近期团期 <text class="more" wx:if="{{sessions.length}}" bindtap="goBooking">全部 {{sessions.length}} 个 ›</text></view>
+  <view class="card" wx:if="{{p.purchase}}"><view class="muted2">{{p.purchase.left_seats > 0 ? '有库存，可直接购买' : '暂时售罄'}}</view></view>
+  <block wx:else>
+  <view class="sec-title">{{p.cat === 'shop' ? '可预约时段' : '近期团期'}} <text class="more" wx:if="{{sessions.length}}" bindtap="goBooking">全部 {{sessions.length}} 个 ›</text></view>
   <view class="card" wx:if="{{sessPreview.length}}">
     <view class="sess-row" wx:for="{{sessPreview}}" wx:key="id" bindtap="goBooking">
       <view><view class="sess-date">{{item.date}}</view><view class="muted2">{{item.state}}</view></view>
@@ -46,7 +48,8 @@
       </view>
     </view>
   </view>
-  <view class="card" wx:else><view class="muted2">近期暂无可预订团期，可先收藏分享，稍后再来看看。</view></view>
+  <view class="card" wx:else><view class="muted2">{{p.cat === 'shop' ? '近期暂无可预约时段' : '近期暂无可预订团期'}}</view></view>
+  </block>
 
   <view class="sec-title" wx:if="{{rich.highlights.length || rich.intro}}">玩法介绍</view>
   <view class="card" wx:if="{{rich.highlights.length || rich.intro}}">
@@ -177,7 +180,7 @@
   <!-- 底部常驻预订栏：滚动到任何位置都能下单 -->
   <view class="dt-bottom dt-detail-bar">
     <button class="dt-share" open-type="share">分享</button>
-    <view class="dt-bottom-price"><text class="rmb">¥</text>{{p.priceLabel}}<text class="dt-price-suffix">起</text></view>
-    <view class="btn dt-cta {{sessions.length ? '' : 'off'}}" bindtap="goBooking">{{sessions.length ? '选择日期' : '暂无团期'}}</view>
+    <view class="dt-bottom-price"><text class="rmb">¥</text>{{displayPrice}}<text class="dt-price-suffix">{{p.purchase ? '/件' : '起'}}</text></view>
+    <view class="btn dt-cta {{canOrder ? '' : 'off'}}" bindtap="goBooking">{{orderLabel}}</view>
   </view>
 </block>
