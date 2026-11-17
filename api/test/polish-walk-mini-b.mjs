@@ -87,7 +87,7 @@ await t('B2 异常待处理下钻：退款筛选生效', async () => {
   const p2 = await waitPage('pages/orders/index')
   await new Promise(r => setTimeout(r, 2000))
   const status = await p2.data('status')
-  if (status !== 'refund') throw new Error('退款筛选未生效：' + status)
+  if (status !== 'refund_pending') throw new Error('退款筛选未生效：' + status)
   await shot(mini, 'b2-orders-refund')
 })
 await t('B2 临近截止下钻：库存页切到「未来7天」', async () => {
@@ -99,6 +99,7 @@ await t('B2 临近截止下钻：库存页切到「未来7天」', async () => {
   const p2 = await waitPage('pages/supply/index')
   await new Promise(r => setTimeout(r, 2500))
   const range = await p2.data('range')
+  if ((await p2.data('status')) !== 'open') throw new Error('可售预设未生效')
   if (range !== 'week') throw new Error('未来7天预设未生效：' + range)
   await shot(mini, 'b2-supply-week')
 })

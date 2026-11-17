@@ -80,6 +80,8 @@ await t('B1 试算失败：断网态给出失败反馈（明细与底栏），�
   await new Promise(r => setTimeout(r, 2500))
   const err1 = await pg.data('freedomError')
   if (!err1) throw new Error('断网后 freedomError 未置位')
+  if (await pg.data('quoted')) throw new Error('试算失败仍保留旧报价')
+  if (!(await (await pg.$('.dt-cta')).attribute('class')).includes('off')) throw new Error('试算失败仍可提交')
   await shot(mini, 'b1-quote-failure')
   // 恢复通道 → 重试成功
   await mini.evaluate(() => { getApp().globalData.apiBase = 'http://127.0.0.1:18251' })

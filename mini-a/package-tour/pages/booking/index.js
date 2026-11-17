@@ -103,7 +103,7 @@ Page({
   // 服务端试算（权威）：有效商品价→自由豆门槛与满减→旅豆实付锚定→现金应付，全部以本结果覆盖本地估算
   async quoteFreedom(s){
     const seq=this.priceSeq=(this.priceSeq||0)+1,rightId=this.data.freedomRightId
-    this.setData({pricing:true,freedomError:''})
+    this.setData({pricing:true,freedomError:'',quoted:null})
     try{await api.ensureLogin()
       const beanWanted=this.data.useBean?Math.min(Number(this.data.beanBal)||0,this.beanCap(Number(s.priceNow||s.price_adult)*this.data.qty,0)):0
       const d=await api.request('/c/freedom/quote','POST',{sessionId:s.id,qty:this.data.qty,insurance:this.data.buyInsurance,rightId:rightId||undefined,beanDeduct:beanWanted})
@@ -199,7 +199,11 @@ Page({
   async submit() {
     const s = this.data.sessions[this.data.sel]
     if (this.data.submitting) return
-    if(this.data.freedomRightId&&(this.data.pricing||this.data.freedomError))return wx.showToast({title:this.data.freedomError||'请等待补贴试算',icon:'none'})
+    if (this.data.pricing || this.data.freedomError || !this.data.quoted) {
+      return wx.showToast({ title: this.data.freedomError || '请等待最新价格试算', icon: 'none' })
+    }
+    const { quoted, qty, buyInsurance, freedomRightId } = this.data
+    const priceSeq = this.priceSeq
     if (!this.data.agree) return wx.showToast({ title: '请先阅读并同意服务条款与隐私政策', icon: 'none' })
     if (!s || Number(s.left_seats) < this.data.qty) return wx.showToast({ title: '当前团期名额不足，请选择其他日期', icon: 'none' })
     if (!String(this.data.contactName || '').trim()) return wx.showToast({ title: '请填写联系人姓名', icon: 'none' })
@@ -210,15 +214,12 @@ Page({
       await api.ensureLogin()
       await api.request('/c/consent', 'POST', { scene: 'privacy', granted: true, version: this.data.legalVersions?.privacy })
       await api.request('/c/consent', 'POST', { scene: 'terms', granted: true, version: this.data.legalVersions?.terms })
-      // 旅豆抵扣：优先用服务端试算回包的整豆数 beanDeductCount（已按余额+实付锚定上限收敛）；
-      // 无试算结果时本地估算。修复1：不再从展示金额（元）反推豆数。
-      const want = this.data.quoted && this.data.quoted.beanDeductCount != null
-        ? this.data.quoted.beanDeductCount
-        : (this.data.useBean ? Math.min(this.data.beanBal || 0, this.beanCap(Number(s.priceNow || s.price_adult) * this.data.qty, 0)) : 0)
-      const r = await api.createOrder({ sessionId: s.id, qty: this.data.qty, beanDeduct: want,
-        freedomRightId:this.data.freedomRightId||undefined,
-        expectedGoodsFen: this.data.quoted ? Math.round(Number(this.data.quoted.goods) * 100) : Math.round(Number(s.priceNow || s.price_adult) * this.data.qty),
-        insurance: this.data.buyInsurance,
+      // 提交与当前选择一致的服务端试算结果。
+      if (this.priceSeq !== priceSeq) throw { msg: '价格已变化，请重新确认后提交' }
+      const r = await api.createOrder({ sessionId: s.id, qty, beanDeduct: quoted.beanDeductCount,
+        freedomRightId: freedomRightId || undefined,
+        expectedGoodsFen: Math.round(Number(quoted.goods) * 100),
+        insurance: buyInsurance,
         promoScene: (!Number(wx.getStorageSync('promoProductId'))||Number(wx.getStorageSync('promoProductId'))===Number(this.pid))?(wx.getStorageSync('promoScene')||undefined):undefined,
         contactName: this.data.contactName,
         phoneTicket: this.data.phoneTicket || undefined,

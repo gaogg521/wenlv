@@ -34,7 +34,7 @@
   <view wx:else class="notes-body">
     <view class="note-card" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
       <view class="note-cover-box">
-        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load binderror="onNoteCoverError" data-id="{{item.id}}" />
         <view wx:else class="note-cover note-cover-text"><text>{{item.excerpt}}</text></view>
         <view wx:if="{{item.video}}" class="note-flag">▶ 视频</view>
       </view>

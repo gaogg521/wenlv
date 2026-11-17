@@ -245,7 +245,7 @@ async function reviewEntry(id) {
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）/ 通过备注（选填）"></textarea>
     <div class="rv-actions"><button class="btn danger" onclick="entryVerdict(${id}, false, 0, ${p.task.id})">驳回，退回修改</button>
       <button class="btn primary" id="rvPass" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id})">通过并发放 ${r.reward_beans} 旅豆</button>
-      <button class="btn ghost" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id}, true)">通过并下一条 ›</button></div>` : ''
+      <button class="btn ghost" id="rvPassNext" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id}, true)">通过并下一条 ›</button></div>` : ''
   reviewDrawer(`${live ? '审核投稿' : '投稿与审核记录'} · ${esc(p.task.title)}`, `<div class="rv-grid"><div>${submissionHtml(p.submission)}</div><div>${right}</div></div>`, foot)
   rvSync()
 }
@@ -254,6 +254,8 @@ function rvSync() {
   const boxes = [...document.querySelectorAll('[data-rule]')]
   const left = boxes.filter((b) => !b.checked).length
   pass.disabled = left > 0
+  const next = $('#rvPassNext')
+  if (next) next.disabled = pass.disabled
   pass.title = left ? `还有 ${left} 条审核标准未确认` : ''
 }
 async function entryVerdict(id, pass, fails = 0, taskId, next) {
@@ -264,6 +266,7 @@ async function entryVerdict(id, pass, fails = 0, taskId, next) {
   try {
     const r = await api('POST', '/admin/task-entries/' + id + '/verdict', { pass, reason, rules })
     toast(pass ? `已通过，发放 ${r.rewarded} 旅豆${r.cashReward ? '；现金加奖已进入待打款' : ''}` : '已驳回，退回作者修改')
+    if (await rqFinish('task_entry', id, next)) return
     if (!next) { await tasks(); taskEntries(taskId); return }
     // B3 连续办理：保留列表位置，自动打开本任务下一条待审投稿
     closeModal()
@@ -297,6 +300,7 @@ async function noteVerdict(id, pass, revision, next) {
   try {
     await api('POST', `/admin/content/${id}/verdict`, { pass, reason, revision })
     toast(pass ? '已通过并发布' : '已驳回，作者可看到原因')
+    if (await rqFinish('note', id, next)) return
     if (!next) { closeModal(); content(); return }
     // B3 连续办理：保留筛选/页码与滚动位置，自动打开本页下一条待办
     closeModal()

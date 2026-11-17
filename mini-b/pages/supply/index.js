@@ -5,7 +5,7 @@ Page({
   onShow() {
     // B2 工作台「临近截止」下钻预设：一次性消费（未来7天）
     const preset = wx.getStorageSync('supplyPreset') || null
-    if (preset) { wx.removeStorageSync('supplyPreset'); this.setData({ rangeIndex: 1, range: 'week' }) }
+    if (preset) { wx.removeStorageSync('supplyPreset'); this.setData({ rangeIndex: 1, range: 'week', status: preset.status || 'all', kw: '' }) }
     this.fetch()
   },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
@@ -22,16 +22,18 @@ Page({
     if (typeof done !== 'function') done = undefined
     this.setData({ role: getApp().globalData.role || 0, error: '' })
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
+    const requestId = this._requestId = (this._requestId || 0) + 1
     const page = append ? this.data.page + 1 : 1
     const w = this.dateWindow()
     const qs = ['paged=1', 'page=' + page, 'pageSize=60',
       w.from ? 'from=' + w.from : '', w.to ? 'to=' + w.to : '',
-      'kw=' + encodeURIComponent(this.data.kw || '')].filter(Boolean).join('&')
+      'status=' + this.data.status, 'kw=' + encodeURIComponent(this.data.kw || '')].filter(Boolean).join('&')
     api.request('/m/supply?' + qs).then((d) => {
+      if (requestId !== this._requestId) { if (done) done(); return }
       const list = append ? this.data.list.concat(d.items || []) : (d.items || [])
       this.setData({ list, page, total: d.total || list.length, hasMore: !!d.hasMore, loaded: true })
       this.applyFilters(); done && done()
-    }).catch(e => { this.setData({ loaded: true, list: append ? this.data.list : [], hasMore: false, error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
+    }).catch(e => { if (requestId !== this._requestId) { if (done) done(); return }; this.setData({ loaded: true, list: append ? this.data.list : [], hasMore: false, error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
   },
   // 服务端翻页：追加下一页团期（请求量按页）
   loadMoreSessions() { if (this.data.hasMore && !this._loadingMore) { this._loadingMore = true; this.fetch(() => { this._loadingMore = false }, true) } },
@@ -42,7 +44,7 @@ Page({
   },
   moreSessions() { this.setData({ sessionLimit: (this.data.sessionLimit || 6) + 6 }); this.applyFilters() },
   onSearch(e) { this.setData({ kw: e.detail.value }); clearTimeout(this._kwT); this._kwT = setTimeout(() => this.fetch(), 300) },
-  filterStatus(e) { this.setData({ status: e.currentTarget.dataset.k }); this.applyFilters() },
+  filterStatus(e) { this.setData({ status: e.currentTarget.dataset.k }); this.fetch() },
   filterRange(e) { const i = Number(e.detail.value); this.setData({ rangeIndex: i, range: ['future','week','month','past','all'][i] }); this.fetch() },
   resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.fetch() },
   toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },

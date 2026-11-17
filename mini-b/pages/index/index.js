@@ -39,8 +39,8 @@ Page({
     const k = e.currentTarget.dataset.k
     if (k === 'verify') return this.goVerify()
     if (k === 'arrivals') { wx.setStorageSync('ordersPreset', { status: 'waiting', depart: this.data.today }); wx.showToast({ title: '已按今日出发筛选', icon: 'none' }); return this.goOrders() }
-    if (k === 'abnormal') { wx.setStorageSync('ordersPreset', { status: 'refund' }); return this.goOrders() }
-    if (k === 'closing') { wx.setStorageSync('supplyPreset', { rangeIndex: 1 }); wx.showToast({ title: '已按未来7天筛选', icon: 'none' }); return this.goSupply() }
+    if (k === 'abnormal') { wx.setStorageSync('ordersPreset', { status: 'refund_pending' }); return this.goOrders() }
+    if (k === 'closing') { wx.setStorageSync('supplyPreset', { rangeIndex: 1, status: 'open' }); wx.showToast({ title: '已按未来7天筛选', icon: 'none' }); return this.goSupply() }
   },
   filterPeriod(e) { this.setData({periodIndex:Number(e.detail.value)}); this.onShow() },
   selectDate(e) { this.setData({customDate:e.detail.value}); this.onShow() },

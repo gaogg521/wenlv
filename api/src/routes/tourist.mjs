@@ -835,7 +835,7 @@ const c = {
           productTitle: r.product_title || null, scenicName: r.scenic_name || null,
           topics: cardTopics,
           // 无封面卡片用正文摘录兜底（A1 文字卡）：去空白/标记符，截 60 字
-          excerpt: String(r.body_text || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+          excerpt: plainText(r.body_text).replace(/\s+/g, ' ').slice(0, 60),
           when: String(r.published_at || '').slice(0, 10),
         }
       }),

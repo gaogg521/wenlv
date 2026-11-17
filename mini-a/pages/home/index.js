@@ -93,6 +93,10 @@ Page({
       this.setData({ notes: [], notesLoading: false, notesError: e.msg === '未登录' ? '登录后可浏览旅行笔记' : (e.msg || '笔记加载失败') })
     })
   },
+  onNoteCoverError(e) {
+    const id = Number(e.currentTarget.dataset.id)
+    this.setData({ notes: this.data.notes.map(note => note.id === id ? { ...note, cover: '' } : note) })
+  },
   goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   goCompose() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
   async fetchBanners() {

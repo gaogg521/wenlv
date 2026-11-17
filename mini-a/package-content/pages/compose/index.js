@@ -45,8 +45,10 @@ Page({
   onReady() {
     if (this.data.editId) this.loadForEdit()
     else if (this.cloudDraftId) this.loadCloudDraft(this.cloudDraftId)
-    else if (this.startGuide) this.openGuide()
-    else if (!this.maybeRestoreDraft()) this.pickImages()
+    else if (!this.maybeRestoreDraft()) {
+      if (this.startGuide) this.openGuide()
+      else this.pickImages()
+    }
   },
   onHide() {
     if (this.data.editId || this._published) return
@@ -79,11 +81,12 @@ Page({
   async restoreGuide(d) {
     const gt = String(d.guideTitle || ''), gx = String(d.guideText || '')
     if (!gt && !gx) return false
+    const style = this.data.guideStyles[Number(d.guideStyle)] ? Number(d.guideStyle) : 0
     let photoOk = false
     const photo = String(d.guidePhoto || '')
     if (photo) photoOk = await this.checkGuidePhoto(photo)
-    this.setData({ guideTitle: gt, guideText: gx, guideStyle: Number(d.guideStyle) || 0,
-      guidePhoto: photoOk ? photo : '', guideStyles: this.data.guideStyles.map((st, i) => ({ ...st, selected: i === (Number(d.guideStyle) || 0) })) })
+    this.setData({ guideTitle: gt, guideText: gx, guideStyle: style, guideImage: '',
+      guidePhoto: photoOk ? photo : '', guideStyles: this.data.guideStyles.map((st, i) => ({ ...st, selected: i === style })) })
     if (photo && !photoOk) wx.showToast({ title: '攻略图配图已失效，请重新选择', icon: 'none', duration: 2500 })
     return true
   },
@@ -106,11 +109,12 @@ Page({
             scenicId: d.scenicId || null, scenicName: d.scenicName || '',
             loaded: true, textMode: true, draftRestored: true })
           if (this.editor && this.pendingHtml) { this.editor.setContents({ html: this.pendingHtml }); this.pendingHtml = '' }
-          this.restoreGuide(d)
+          this.restoreGuide(d).then(restored => { if (restored && this.startGuide) this.openGuide() })
           this.refresh()
         } else {
           try { wx.removeStorageSync('xhs-compose-draft') } catch (e) { /* 忽略 */ }
-          this.pickImages()
+          if (this.startGuide) this.openGuide()
+          else if (!this.data.images.length && !this.data.video) this.pickImages()
         }
       } })
     return true
@@ -162,7 +166,8 @@ Page({
         images, video, coverIndex: Math.min(Number(content.coverIndex) || 0, Math.max(images.length - 1, 0)),
         loaded: true, textMode: !images.length && !video, bodyText: '', draftRestored: true })
       if (content.scenicId) this.lookupScenicName(content.scenicId)
-      if (content.guide && (content.guide.title || content.guide.text)) this.restoreGuide(content.guide)
+      const guide = content.guide
+      if (guide) await this.restoreGuide({ guideTitle: guide.title, guideText: guide.text, guideStyle: guide.style, guidePhoto: guide.photo })
       this.refresh()
     } catch (e) {
       wx.showToast({ title: e.msg || '云草稿加载失败', icon: 'none' })

@@ -85,7 +85,7 @@ const m = {
     const arrivals = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM orders o JOIN tour_session s ON s.id = o.session_id
       WHERE o.merchant_id = ? AND o.status IN (20,30) AND s.depart_date = CURDATE()`, [mid]) : 0
     const closing = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE p.merchant_id = ? AND s.status = 1 AND s.depart_date >= CURDATE() AND s.depart_date < CURDATE() + INTERVAL 7 DAY`, [mid]) : 0
+      WHERE p.merchant_id = ? AND s.status = 1 AND s.quota > s.booked AND s.depart_date >= CURDATE() AND s.depart_date < CURDATE() + INTERVAL 7 DAY`, [mid]) : 0
     const abnormal = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM orders o WHERE o.merchant_id = ? AND o.status = 60`, [mid]) : 0
     return { period, demo: process.env.NODE_ENV !== 'production' && !wxpay.isLive(), todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND created_at>=? AND created_at<DATE_ADD(?,INTERVAL 1 DAY)',[mid,u.uid,period.from,period.to]),
       todos: { arrivals: Number(arrivals), verify: pending, closing: Number(closing), abnormal: Number(abnormal) },
@@ -228,7 +228,7 @@ const m = {
     const u = requireUser(req)
     const range = merchantRange(req.query), paging = merchantPaging(req.query)
     const kw = String(req.query.kw || '').trim().slice(0,100), state = String(req.query.state || 'all')
-    const states = { all:'', waiting:'AND o.status IN (20,30)', done:'AND o.status IN (40,50)', refund:'AND o.status IN (60,70)' }
+    const states = { all:'', waiting:'AND o.status IN (20,30)', done:'AND o.status IN (40,50)', refund:'AND o.status IN (60,70)', refund_pending:'AND o.status=60' }
     if (!Object.prototype.hasOwnProperty.call(states,state)) throw new BizError(1001,'订单状态筛选无效')
     // B2 今日待办下钻：depart=出发日（YYYY-MM-DD），与工作台「待接待」口径一致
     const depart = String(req.query.depart || '').trim()
@@ -236,7 +236,7 @@ const m = {
     // A-01：rebook 标记 = 免费改签单（实收 ¥0，改签成本商户承担），商户端要能一眼认出
     const rows = await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name, s.depart_date, (o.rebook_of IS NOT NULL) AS rebook
       FROM orders o JOIN tour_product p ON p.id = o.product_id
-      JOIN tour_session s ON s.id=o.session_id
+      LEFT JOIN tour_session s ON s.id=o.session_id
       WHERE o.merchant_id = ? AND o.status >= 20 ${states[state]}
       ${range ? 'AND o.paid_at >= ? AND o.paid_at < DATE_ADD(?,INTERVAL 1 DAY)' : ''}
       ${depart ? 'AND s.depart_date = ?' : ''}
@@ -270,7 +270,7 @@ const m = {
     if (req.query.history !== '1' && !paged) where.push('s.depart_date >= CURDATE() - INTERVAL 7 DAY')
     if (req.query.from && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)) { where.push('s.depart_date >= ?'); args.push(req.query.from) }
     if (req.query.to && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) { where.push('s.depart_date <= ?'); args.push(req.query.to) }
-    if (req.query.status === 'open') where.push('s.status = 1 AND s.depart_date >= CURDATE()')
+    if (req.query.status === 'open') where.push('s.status = 1 AND s.quota > s.booked AND s.depart_date >= CURDATE()')
     else if (req.query.status === 'closed') where.push('(s.status >= 3 OR s.depart_date < CURDATE())')
     else if (req.query.status === 'tight') where.push('s.status = 1 AND s.depart_date >= CURDATE() AND (s.quota - s.booked) BETWEEN 1 AND 2')
     const kw = String(req.query.kw || '').trim().slice(0, 60)

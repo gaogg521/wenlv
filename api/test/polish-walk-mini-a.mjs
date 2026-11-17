@@ -8,6 +8,7 @@ const outDir = '../automator-shots-polish'
 fs.mkdirSync(outDir, { recursive: true })
 const BASE = 'http://127.0.0.1:18251'
 const SCENIC_ID = process.env.WALK_SCENIC || '24'
+const BOOK_PRODUCT = process.env.WALK_BOOK_PRODUCT || '61'
 let pass = 0, fail = 0
 const t = async (name, fn) => {
   try { await fn(); pass++; console.log('  ✓', name) } catch (e) { fail++; console.log('  ✗', name, '\n    ', e.message); process.exitCode = 1 }
@@ -155,7 +156,7 @@ await t('A3 空结果态：冷门话题给出明确空态文案', async () => {
 
 // ---------- B1 预订底栏实付解释 ----------
 await t('B1 预订页底栏：预计实付 + 优惠原因（旅豆/自由豆）同屏', async () => {
-  await mini.reLaunch('/package-tour/pages/booking/index?id=69')
+  await mini.reLaunch('/package-tour/pages/booking/index?id=' + BOOK_PRODUCT)
   const pg = await waitPage('booking/index')
   await new Promise(r => setTimeout(r, 3000))
   const pay = await pg.data('priceSummary')
@@ -175,11 +176,13 @@ await t('B1 切换保险：金额同步刷新且明细算式更新（含 +保险
 })
 await t('B1 优惠原因行：旅豆抵扣开启时底栏出现「旅豆已抵」', async () => {
   // 静默登录用户每次运行可能不同——按当前登录用户直接预置旅豆账户，再重进预订页让 onLoad 拉到余额
-  const { execSync } = await import('node:child_process')
+  const { assertIsolatedDb } = await import('./_guard.mjs')
+  assertIsolatedDb('polish-walk-mini-a 助记夹具')
+  const { q, closeDb } = await import('../src/db.mjs')
   const uid = await mini.evaluate(() => getApp().globalData.user && getApp().globalData.user.id)
   if (!uid) throw new Error('未登录态，无 user id')
-  execSync(`mysql -uroot -proot wanderlust_qa_polish_20261117 -e "INSERT IGNORE INTO bean_account (user_id, balance) VALUES (${Number(uid)}, 3000); UPDATE bean_account SET balance = 3000 WHERE user_id = ${Number(uid)}"`, { stdio: 'ignore' })
-  await mini.reLaunch('/package-tour/pages/booking/index?id=69')
+  try { await q('UPDATE bean_account SET balance=3000 WHERE user_id=?', [uid]) } finally { await closeDb() }
+  await mini.reLaunch('/package-tour/pages/booking/index?id=' + BOOK_PRODUCT)
   const pg = await waitPage('booking/index')
   await new Promise(r => setTimeout(r, 3000))
   const bal = await pg.data('beanBal')

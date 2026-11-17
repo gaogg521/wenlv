@@ -2,14 +2,14 @@ const api = require('../../utils/api')
 const { orderView, money } = require('../../utils/catalog-view')
 const { day, periodQuery } = require('../../utils/period')
 Page({
-  data: { orders: [], visibleOrders: [], loaded: false, kw: '', status: 'all', page: 1, presetDepart: '', periodIndex: 0, periodNames: ['全部历史','今日','近7天','近30天','指定日期'], customDate: day(), today: day(), filters: [{k:'all',n:'全部'},{k:'waiting',n:'待接待'},{k:'done',n:'已核销/完成'},{k:'refund',n:'退款'}] },
+  data: { orders: [], visibleOrders: [], loaded: false, kw: '', status: 'all', page: 1, presetDepart: '', periodIndex: 0, periodNames: ['全部历史','今日','近7天','近30天','指定日期'], customDate: day(), today: day(), filters: [{k:'all',n:'全部'},{k:'waiting',n:'待接待'},{k:'done',n:'已核销/完成'},{k:'refund',n:'退款'},{k:'refund_pending',n:'退款中'}] },
   retry() { this.fetch() },
   onShow() {
     // B2 工作台「待接待/异常待处理」下钻预设：一次性消费（depart=今日出发 / status=refund）
     const preset = wx.getStorageSync('ordersPreset') || null
     if (preset) {
       wx.removeStorageSync('ordersPreset')
-      this.setData({ status: preset.status || 'all', presetDepart: preset.depart || '' })
+      this.setData({ status: preset.status || 'all', presetDepart: preset.depart || '', periodIndex: 0, kw: '' })
     } else if (this._consumed) {
       this.setData({ presetDepart: '' })
     }

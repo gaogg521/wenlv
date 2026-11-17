@@ -102,6 +102,6 @@
       <view><text class="muted2" style="font-size:22rpx;font-weight:400">预计实付 </text><text class="rmb">¥</text><text class="{{payPulse ? 'pay-pulse' : ''}}">{{priceSummary ? priceSummary.pay : '—'}}</text><text wx:if="{{pricing}}" class="dt-pricing">算价中…</text></view>
       <text wx:if="{{freedomError}}" class="dt-pricing-err" bindtap="retryQuote">试算失败 · 重试</text>
     </view>
-    <view class="btn dt-cta {{submitting || !sessions.length ? 'off' : ''}}" bindtap="submit">{{submitting ? '正在提交…' : '提交订单并支付'}}</view>
+    <button class="btn dt-cta {{submitting || pricing || !quoted || !sessions.length ? 'off' : ''}}" bindtap="submit" disabled="{{submitting || pricing || !quoted || !sessions.length}}">{{submitting ? '正在提交…' : '提交订单并支付'}}</button>
   </view>
 </block>
