@@ -5,7 +5,7 @@
   const descriptions = {
   partnerdash: '本主体授权范围内的经营摘要（订单/退款/结算应付与已付），口径与各源账一致。',
     scenario: '经营测算与示范案例（招商讲解工具，示例假设，与真实结算互不混淆）。',
-    reviewqueue: '四类审核待办统一聚合与认领协调；判定走各队列原接口，超 48h 标红。', fund: '四条资金线待办全景：待办金额、异常标记与下钻；登记已付≠外部到账。', cases: '风险案件闭环：研判→处理→补材料/协查→复核→关闭，处置引用冻结/解冻。', entitlements: '人工权益调整：申请→他人复核→账本执行，无直接改余额接口。', tickets: '售后工单队列：发起、认领、转派、等待、办结、关闭与重开，时间线不可改写。', taskcash: '核对已通过投稿的现金奖励，线下实际支付后登记真实打款流水。',
+    reviewqueue: '四类审核待办统一聚合与认领协调；完成判定后认领自动释放，超 48 小时标红。', fund: '四条资金线待办全景：待办金额、异常标记与下钻；登记已付≠外部到账。', cases: '风险案件闭环：研判→处理→补材料/协查→复核→关闭，处置引用冻结/解冻。', entitlements: '人工权益调整：申请 → 他人复核 → 账本执行；余额只能走调整流程，不能直接改数。', tickets: '售后工单队列：发起、认领、转派、等待、办结、关闭与重开，时间线不可改写。', taskcash: '核对已通过投稿的现金奖励，线下实际支付后登记真实打款流水。',
     contentcases: '处理旅行笔记举报，复核作者下架申诉并反馈结果。',
     comments: '管理笔记评论区：隐藏违规评论或恢复误隐藏评论，计数与小程序同步。',
     partnerperf: '按合伙人角色查看累计业绩排行，核对计佣、提现及来源结算明细。',
@@ -139,12 +139,18 @@
   // 状态计数口径 = 其他筛选不变、去掉状态（countsScope=same-filters-except-status），不是当前页行数。
   // paidFrom/paidTo/productId/pt 由经营概览下钻带入（支付时间 / 线路；pt 只是线路名的展示用，不参与查询）；status 允许逗号多值
   // viewAsType/viewAsId：R-01 主体只读代看透传（服务端注入行级过滤；带此参数的写操作网关拒绝）
-  const ORDER_KEYS = ['kw', 'status', 'createdFrom', 'createdTo', 'paidFrom', 'paidTo', 'productId', 'pt', 'viewAsType', 'viewAsId']
+  // P-04：sort（创建/支付/出行/金额）与商户、品类、推广来源筛选写入地址栏，刷新和返回后保留
+  const ORDER_KEYS = ['kw', 'status', 'sort', 'merchantId', 'cat', 'promoSource', 'createdFrom', 'createdTo', 'paidFrom', 'paidTo', 'productId', 'pt', 'viewAsType', 'viewAsId']
   const blankOrderState = () => Object.fromEntries([...ORDER_KEYS.map((k) => [k, '']), ['page', 1]])
   let orderState = blankOrderState()
   let orderData = { rows: [], total: 0, page: 1, pageSize: 20, statusCounts: { all: 0 } }
   window.orders = async function () {
     app.innerHTML = `<div class="card">${skel(5)}</div>`
+    // P-04：商户 / 推广来源下拉选项（一次拉取，页面内复用）
+    window.__orderFilterOpts = window.__orderFilterOpts || Promise.all([
+      api('GET', '/admin/merchants').catch(() => []), api('GET', '/admin/promoters').catch(() => []),
+    ]).then(([m, p]) => ({ merchants: Array.isArray(m) ? m : (m.rows || []), promoters: Array.isArray(p) ? p : (p.rows || []) }))
+    window.__orderFilterData = await window.__orderFilterOpts
     // 从地址栏恢复筛选：#orders?kw=..&status=20&page=2
     const q = {}
     const hq = (location.hash.split('?')[1] || '')
@@ -182,6 +188,11 @@
       <details class="muted" style="margin:2px 0 10px"><summary style="cursor:pointer">数字是怎么统计的</summary><p class="td-sub">总数与各状态计数，都统计当前筛选范围内的全部订单（不限于本页显示的 20 条）；切换状态页签时，其余筛选条件保持不变。更早的历史订单可按订单号、买家昵称或完整手机号精确找到。</p></details>
       <form class="orders-search" id="ordersSearch"><label for="orderKeyword" class="muted">搜索订单</label><input id="orderKeyword" type="search" value="${esc(orderState.kw)}" placeholder="订单号 / 线路 / 用户昵称 / 联系人 / 完整手机号">
         <label class="muted" for="orderCreatedFrom">创建</label><input id="orderCreatedFrom" type="date" value="${esc(orderState.createdFrom)}" style="width:130px"><span class="muted">~</span><input id="orderCreatedTo" type="date" value="${esc(orderState.createdTo)}" style="width:130px">
+        <label class="muted" for="orderSort">排序</label><select id="orderSort">
+          ${[['created', '创建时间 倒序'], ['paid', '支付时间 倒序'], ['depart', '出行日期 倒序'], ['amount', '金额 从高到低']].map(([v, l]) => `<option value="${v}" ${String(orderState.sort || 'created') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <select id="orderMerchant"><option value="">全部商户</option>${(window.__orderFilterData?.merchants || []).map((m) => `<option value="${m.id}" ${String(orderState.merchantId || '') === String(m.id) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+        <select id="orderCat"><option value="">全部品类</option><option value="tour" ${orderState.cat === 'tour' ? 'selected' : ''}>主题游</option><option value="shop" ${orderState.cat === 'shop' ? 'selected' : ''}>商城好物</option></select>
+        <select id="orderPromo"><option value="">全部来源</option>${(window.__orderFilterData?.promoters || []).map((p) => `<option value="${p.user_id ?? p.id}" ${String(orderState.promoSource || '') === String(p.user_id ?? p.id) ? 'selected' : ''}>推广：${esc(p.nickname || p.name || ('#' + (p.user_id ?? p.id)))}</option>`).join('')}</select>
         <button class="btn primary" type="submit">查询</button><button class="btn ghost" id="clearOrders" type="button">重置</button></form>
       ${srcChips.length ? `<div class="src-chips"><span class="muted">来自经营概览的筛选</span>${srcChips.map((c) => `<span class="src-chip">${esc(c)}</span>`).join('')}<button type="button" class="btn ghost sm" id="clearSrcChips">清除</button></div>` : ''}
       <div class="cfg-tabs" role="tablist" aria-label="订单状态">${[[0, '全部'], ...Object.entries(ST).map(([v, label]) => [Number(v), label])].map(([v, label]) => `<button type="button" class="cfg-tab ${String(v) === String(orderState.status || 0) ? 'on' : ''}" role="tab" aria-selected="${String(v) === String(orderState.status || 0)}" data-order-status="${v}">${label}<span> ${Number(v === 0 ? counts.all : counts[v] || 0).toLocaleString()}</span></button>`).join('')}</div>
@@ -195,8 +206,14 @@
       orderState.kw = document.getElementById('orderKeyword').value.trim()
       orderState.createdFrom = document.getElementById('orderCreatedFrom').value
       orderState.createdTo = document.getElementById('orderCreatedTo').value
+      orderState.sort = document.getElementById('orderSort').value
+      orderState.merchantId = document.getElementById('orderMerchant').value
+      orderState.cat = document.getElementById('orderCat').value
+      orderState.promoSource = document.getElementById('orderPromo').value
       orderState.page = 1; loadOrders().catch((er) => toast(er.message, true))
     }
+    // P-04：排序切换即时生效
+    document.getElementById('orderSort').onchange = () => { orderState.sort = document.getElementById('orderSort').value; orderState.page = 1; loadOrders().catch((er) => toast(er.message, true)) }
     document.getElementById('clearOrders').onclick = () => { orderState = blankOrderState(); loadOrders().catch((er) => toast(er.message, true)) }
     const clearSrc = document.getElementById('clearSrcChips')
     if (clearSrc) clearSrc.onclick = () => { Object.assign(orderState, { paidFrom: '', paidTo: '', productId: '', pt: '', page: 1 }); if (String(orderState.status).includes(',')) orderState.status = ''; loadOrders().catch((er) => toast(er.message, true)) }

@@ -37,7 +37,7 @@ async function orderDrawer(no) {
       <tr><td class="td-sub">实际商品成交额（早鸟/折扣后）</td><td class="num">${yuan(e.effectiveGoodsFen)}</td></tr>
       <tr><td class="td-sub">自由豆补贴 / 旅豆抵扣</td><td class="num">${yuan(e.freedomDiscountFen)} / ${yuan(e.beanDeductFen)}</td></tr>
       <tr><td class="td-sub">实际现金（商品口径）</td><td class="num"><b>${yuan(e.goodsCashFen)}</b>　<span class="td-sub">保费/代收款 ${yuan(e.insuranceFen)} 另列，不算销售收入</span></td></tr>
-      <tr><td class="td-sub">直接成本（下单快照）</td><td class="num">${e.costFen != null ? yuan(e.costFen) : '<span class="muted">未维护/不可计算</span>'}${e.costConfirmedFen != null ? ' · 已确认 ' + yuan(e.costConfirmedFen) : ' · <span class="td-sub">确认成本未接入（B04）</span>'}</td></tr>
+      <tr><td class="td-sub">直接成本（下单快照）</td><td class="num">${e.costFen != null ? yuan(e.costFen) : '<span class="muted">未维护/不可计算</span>'}${e.costConfirmedFen != null ? ' · 已确认 ' + yuan(e.costConfirmedFen) : ' · <span class="td-sub">确认成本待商户回填</span>'}</td></tr>
       ${e.refunded ? `<tr><td class="td-sub">退款冲减</td><td>已全额退款：净销售额与成本计 0（实退现金以退款单为准）</td></tr>` : ''}
       <tr><td class="td-sub">商品经营毛利 / 毛利率</td><td class="num">${e.profitFen != null ? '<b style="color:' + (e.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + yuan(e.profitFen) + ' / ' + e.marginPct.toFixed(2) + '%</b>' : '—'}${e.profitFen != null && e.profitFen < 0 ? ' <span class="pill warn">负毛利</span>' : ''}</td></tr>
     </table>
@@ -299,7 +299,7 @@ window.productSupplyEditor = async (pid) => {
     <button class="btn ghost sm" onclick="window.__siRows.push({itemId:${items.rows[0]?.id || 0},qty:1});document.getElementById('siRows').innerHTML=siRowHtml()">＋ 添加供给项</button>
     <h3 style="margin:12px 0 6px">团期预计毛利（当前配置 × 实时价）</h3>
     <table><thead><tr><th>出发日</th><th>有效单价</th><th>每份成本</th><th>预计毛利</th><th>毛利率</th></tr></thead><tbody>${previewRows || '<tr><td colspan="5" class="muted">暂无在售团期</td></tr>'}</tbody></table>
-    <p class="td-sub">参考零售价之和不能冒充套餐实际售价；确认成本随 B04 结算接入前一律"未确认"。</p>
+    <p class="td-sub">参考零售价之和不能冒充套餐实际售价；确认成本由商户回填后即为「已确认」，回填前一律显示"未确认"。</p>
     <div class="field"><label>操作依据 *（4–300 字）</label><input id="psReason" maxlength="300"></div>
     <div id="psErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="productSupplySave(${pid})">保存成本构成</button>`)
@@ -390,7 +390,7 @@ window.packageItemEditor = async (pid, id) => {
     <div class="field"><label>提供方门店 *（跨店隔离：仅该店可核销）</label><select id="piMerchant">${merchants.filter((m) => m.status === 1).map((m) => `<option value="${m.id}" ${Number(r.merchant_id) === Number(m.id) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
     <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" value="${r.qty_per_unit || 1}"></div>
-    <div class="field"><label>成本来源供给项（选填，B01）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
+    <div class="field"><label>成本来源供给项（选填）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
         <div class="field"><label>权益说明（游客可见，≤500字，选填）</label><textarea id="piBenefit" maxlength="500" placeholder="如：含专业讲解 90 分钟 · 每单 1 次">${esc(r.benefit_desc || '')}</textarea>
     </textarea></div>
     <div class="field"><label>使用规则（游客可见，≤300字，选填）</label><input id="piRules" maxlength="300" placeholder="如：出发前 24 小时可预约，当日有效" value="${esc(r.benefit_rules || '')}"></div>
@@ -632,7 +632,7 @@ window.rescheduleDiff = (productId) => {
   if (!sel) return
   const opt = sel.options[sel.selectedIndex]
   void productId
-  document.getElementById('rsDiff').textContent = '所选团期单价：¥' + (Number(opt?.dataset.price || 0) / 100).toFixed(0) + '——价差以提交时服务端计算为准（正=需补款，负=应退差）。'
+  document.getElementById('rsDiff').textContent = '所选团期单价：¥' + (Number(opt?.dataset.price || 0) / 100).toFixed(0) + '——价差以提交时系统核算为准（正=需补款，负=应退差）。'
 }
 window.rescheduleSubmit = async (orderNo) => {
   try {
@@ -662,7 +662,7 @@ window.rescheduleDrawer = async (orderNo) => {
         ${Number(r.status) === 0 && (rescheduleIsApplicant(r) || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${escJs(orderNo)}')">撤回</button>` : ''}
         ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${escJs(orderNo)}')">执行换团</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : emptyBox('该订单暂无改期申请')}
-    <p class="td-sub">执行时服务端会再次校验订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
+    <p class="td-sub">执行时系统会再次核对订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
 }
 window.rescheduleVerdict = async (id, pass, orderNo) => {
   modal(pass ? '通过改期申请' : '驳回改期申请', `

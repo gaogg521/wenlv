@@ -169,6 +169,14 @@ async function orderFiltersOf(req, a) {
   if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
   const productId = Number(req.query.productId || 0)
   if (productId) { addCond('o.product_id = ?', productId); filters.productId = productId }
+  // P-04：商户 / 品类 / 推广来源筛选（导出与检索共用同一套条件）
+  const merchantId = Number(req.query.merchantId || 0)
+  if (merchantId) { addCond('o.merchant_id = ?', merchantId); filters.merchantId = merchantId }
+  const cat = String(req.query.cat || '').trim()
+  if (cat === 'shop') { addCond('o.product_id IN (SELECT id FROM tour_product WHERE cat = ?)', 'shop'); filters.cat = 'shop' }
+  else if (cat === 'tour') { addCond('o.product_id IN (SELECT id FROM tour_product WHERE cat <> ?)', 'shop'); filters.cat = 'tour' }
+  const promoSource = Number(req.query.promoSource || 0)
+  if (promoSource) { addCond('o.id IN (SELECT order_id FROM commission WHERE promoter_id = ?)', promoSource); filters.promoSource = promoSource }
   const kw = String(req.query.kw || '').trim()
   if (kw) {
     // 红线 11：完整手机号检索时不把号码原样回显（filters.kw 脱敏）
@@ -436,6 +444,9 @@ const admin = {
       FROM orders o JOIN tour_product p ON p.id = o.product_id
       WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}
       GROUP BY p.id, p.title, p.cat ORDER BY orders DESC, gmv DESC LIMIT 5`)
+    // P-03：TOP5 占比跟随口径——同窗口总数（订单数 / GMV）随行数据一并下发
+    const topToursTotal = await one(`SELECT COUNT(*) orders, COALESCE(SUM(o.amount_pay),0) gmv
+      FROM orders o WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}`)
     // 转化漏斗：周期内下单的这一批订单走到哪一步（下单 → 已支付 → 已核销）。
     // 以订单状态机为准：20 已支付 / 30 已确认 / 40 已核销 / 50 已完成 / 60 退款中 / 70 已退款 / 90 已关闭；
     // 已支付 = 20~70（含后续退款，退款也是付过款的），已核销 = 40/50
@@ -471,7 +482,7 @@ const admin = {
         merchants: Number(pendingMerchants.c) || 0,
         tasks: Number(pendingTasks.c) || 0,
       },
-      topTours,
+      topTours, topToursTotal,
       statusMix: statusMix.map((r) => ({ status: Number(r.s), count: Number(r.c) })),
       revenue,
       funnel: {
@@ -690,14 +701,15 @@ const admin = {
     const W = mainConds.length ? 'WHERE ' + mainConds.map((c) => c.sql).join(' AND ') : ''
     const mainArgs = mainConds.flatMap((c) => c.args)
     const from = `FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id`
-    const sort = { id: 'o.id DESC', paid: 'o.paid_at DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC' }[req.query.sort] || 'o.id DESC'
+    // P-04：排序口径——创建时间（默认）/支付时间/出行日期/金额；id 仅作平局 tiebreaker
+    const sort = { created: 'o.created_at DESC, o.id DESC', paid: 'o.paid_at DESC, o.id DESC', depart: '(SELECT s.depart_date FROM tour_session s WHERE s.id = o.session_id) DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC', id: 'o.id DESC' }[req.query.sort] || 'o.created_at DESC, o.id DESC'
     const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, mainArgs)).n)
     const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone).map((o) => ({ ...o, statusText: orderStatusText(o.status, 'a') }))
     // 状态计数：baseWhere（去掉状态、其余筛选不变）
     const countsRaw = await q(`SELECT o.status, COUNT(*) n ${from} ${baseWhere ? 'WHERE ' + baseWhere : ''} GROUP BY o.status`, baseArgs)
     const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
     statusCounts.all = countsRaw.reduce((s, r) => s + Number(r.n), 0)
-    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters, sort: req.query.sort || 'id' }
+    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters, sort: req.query.sort || 'created' }
   },
 
   'GET /admin/orders/:no': async (req) => {
@@ -1400,7 +1412,7 @@ const admin = {
       const W = conds.length ? 'WHERE ' + conds.map((c) => c.sql).join(' AND ') : ''
       const args = conds.flatMap((c) => c.args)
       rows = await q(`SELECT o.order_no, o.status, o.qty, o.amount_goods, o.amount_bean_ded, o.insurance_fee, o.amount_pay,
-        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY o.id DESC LIMIT 5000`, args)
+        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY  o.created_at DESC, o.id DESC LIMIT 5000`, args)
       name = 'orders-filtered'
     } else if (what === 'products') {
       // V82 主体方：只导出授权行（商户=本店；景区=本景区商品），字段不含内部成本

@@ -41,7 +41,7 @@ async function reviewqueue() {
   const myName = 'admin:' + (ME?.displayName || ME?.username || '')
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>审核工作队列</h2><span class="muted">四类待办统一聚合 · 认领协调（同一待办同时一人） · 判定仍走各队列原接口 · 超 48 小时标红</span></div>
+    <div class="card-head"><h2>审核工作队列</h2><span class="muted">四类待办统一聚合 · 认领后他人不可重复处理 · 完成判定自动释放 · 超 48 小时标红</span></div>
     <p class="td-sub">点「去处理」打开对应待办。完成判定后认领自动释放，回到当前队列。</p>
     ${d.queues.map((q) => `
     <div class="card" style="margin-bottom:12px">

@@ -245,13 +245,28 @@ function dxTrendCard(k, c) {
 }
 
 function dxTopCard(k, ins, c) {
-  const tours = ins ? ins.topTours : [], maxG = Math.max(...tours.map((t) => Number(t.gmv)), 1), total = Number(k.gmv) * 100
+  // P-03：排序与占比同一口径（按订单数 / 按 GMV 可切换），占比分母为同窗口总数，不再是「订单数排序 + GMV 占比」混排
+  const mode = window.__dxTopMode || 'orders'
+  const tours = ins ? ins.topTours : []
+  const tot = (ins && ins.topToursTotal) || { orders: 0, gmv: 0 }
+  const metric = (t) => mode === 'orders' ? Number(t.orders) : Number(t.gmv)
+  const maxM = Math.max(...tours.map(metric), 1)
   const medal = ['#d9a21b', '#9aa3ab', '#c27b43']
-  return `<section class="dx-card"><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数 · 含品类（B3 口径：原「热门主题游」混入商城礼盒，现以品类区分）</span></div>
-    ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
+  const chip = (m, l) => `<button class="dx-chip${mode === m ? ' on' : ''}" aria-pressed="${mode === m}" onclick="dxTopModeSet('${m}')">${l}</button>`
+  return `<section class="dx-card" data-dx-top><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span>
+      <span class="dx-range" role="group" aria-label="排序与占比口径">${chip('orders', '按订单数')}${chip('gmv', '按 GMV')}</span>
+      <span class="dx-right dx-legend"><span class="td-sub">占比 = 该商品 ÷ 本周期全部成交的${mode === 'orders' ? '订单数' : 'GMV'}</span></span></div>
+    ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => { const m = metric(t)
+      const pct = (mode === 'orders' ? (tot.orders ? m / Number(tot.orders) : 0) : (tot.gmv ? m / Number(tot.gmv) : 0)) * 100
+      return `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
         <span class="nm" title="${esc(t.title)}">${esc(t.title)}${t.cat ? ` <span class="pill s20" style="font-size:11px">${esc(CAT_CN[t.cat] || t.cat)}</span>` : ''}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
-        <span class="trk"><i style="width:${Math.max((Number(t.gmv) / maxG) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单${total ? ' · 占 ' + ((Number(t.gmv) / total) * 100).toFixed(0) + '%' : ''}</span></li>`).join('')}</ol>`
+        <span class="trk"><i style="width:${Math.max((m / maxM) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单 · ${mode === 'orders' ? '占订单数' : '占 GMV'} ${pct.toFixed(0)}%</span></li>` }).join('')}</ol>`
       : emptyBox('该周期内暂无成交')}</section>`
+}
+window.dxTopModeSet = (m) => {
+  window.__dxTopMode = m
+  const sec = document.querySelector('[data-dx-top]')
+  if (sec && window.__dxTopCtx) sec.outerHTML = dxTopCard(window.__dxTopCtx.k, window.__dxTopCtx.ins, window.__dxTopCtx.c)
 }
 
 function dxFunnelCard(ins, c) {
@@ -343,6 +358,7 @@ async function dash() {
     }
     window.__dxPer = { from: k.from, to: k.to } // 下钻用：把当前周期带到明细页
     window.__dxTours = ins ? ins.topTours : []
+    window.__dxTopCtx = { k, ins, c } // P-03：TOP5 口径切换就地重渲染
     app.innerHTML = `<div class="dx">
       ${dxHero(k, c)}
       ${dxLive(k, ins)}
