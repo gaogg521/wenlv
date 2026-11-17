@@ -4,7 +4,7 @@
 const api = require('../../../utils/api')
 Page({
   data: {
-    n: null, loadTxt: '加载中…',
+    n: null, loadTxt: '加载中…', showSquareBack: false,
     reporting: false, reportReason: '', reportMsg: '', reportBusy: false,
     comments: [], commentTotal: 0, commentNext: null, commentMsg: '',
     commentsLoading: true,       // 骨架屏：首次评论加载中
@@ -17,7 +17,15 @@ Page({
     livePlayer: '', playerLabel: '', liveLoading: false,
   },
   onLoad(q) { this.id = q.id; this.cursor = null },
-  onShow() { if (this.id) { this.fetch(); this.fetchComments(true) } },
+  onShow() {
+    this.setData({ showSquareBack: getCurrentPages().length <= 1 })
+    if (this.id) { this.fetch(); this.fetchComments(true) }
+  },
+  goBack() {
+    const goSquare = () => wx.reLaunch({ url: '/package-content/pages/square/index' })
+    if (getCurrentPages().length <= 1) return goSquare()
+    wx.navigateBack({ delta: 1, fail: goSquare })
+  },
   onHide() { this.closeLive(); if (this.commentPlayer) this.commentPlayer.stop(); if (this.data.recording && this.recorder) this.recorder.stop() },
   onUnload() {
     this.liveRequest = null

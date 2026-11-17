@@ -1,5 +1,8 @@
 /* 笔记详情（小红书式）：图集轮播 + 白底正文卡 + 评论区 + 底部操作栏 */
 page { background: #fff; }
+.note-back-row { padding: 0 24rpx; border-bottom: 1rpx solid #eee9e2; }
+.note-back { width: auto; min-height: 88rpx; line-height: 88rpx; margin: 0; padding: 0 12rpx; text-align: left; background: transparent; color: #86502e; font-size: 28rpx; font-weight: 600; }
+.note-back::after { border: none; }
 .detail { padding-bottom: calc(120rpx + env(safe-area-inset-bottom)); }
 .detail-reply { padding-bottom: calc(188rpx + env(safe-area-inset-bottom)); }
 .detail-attachment { padding-bottom: calc(204rpx + env(safe-area-inset-bottom)); }
