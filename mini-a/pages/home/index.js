@@ -115,8 +115,12 @@ Page({
     const b = this.data.banners[e.currentTarget.dataset.i]
     if (b && b.link) {
       const target = b.link.split('?')[0]
+      // 旧版轮播配置仍可能指向分包迁移前的线路详情。
+      const url = target === '/pages/tour/detail'
+        ? '/package-tour/pages/detail/index' + b.link.slice(target.length)
+        : b.link
       if (TAB_PAGES.includes(target)) wx.switchTab({ url: target })
-      else wx.navigateTo({ url: b.link, fail: () => wx.showToast({ title: '该入口已下线', icon: 'none' }) })
+      else wx.navigateTo({ url, fail: () => wx.showToast({ title: '该入口已下线', icon: 'none' }) })
     }
   },
   onShareAppMessage() {
