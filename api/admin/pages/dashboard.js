@@ -166,7 +166,7 @@ function dxHero(k, c) {
   return `<section class="dx-hero">
     ${dxSpark((k.trend || []).slice(0, dxLastIdx(k) + 1).map((t) => Number(t.gmv)), 640, 160, '#ffb27a', 'dxHeroG', { top: 0.5, sw: 2.5 })}
     <div class="dx-hero-top">
-      <div><div class="dx-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${esc(c.cityTag)}口径</div>
+      <div><div class="dx-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${esc(c.cityTag)}</div>
         <h2>${c.hello}</h2>
         <p>${c.todoTotal ? `此刻有 <b>${c.todoTotal}</b> 项待办${k.alerts ? `、<b>${k.alerts}</b> 条风控告警` : ''}，` : '待办已全部处理完毕，'}<a href="#" onclick="document.getElementById('dxLive').scrollIntoView({behavior:'smooth',block:'start'});return false">查看实时事项 ↓</a></p></div>
       <div class="dx-range-box">
@@ -325,7 +325,7 @@ async function dash() {
     const c = {
       rangeCn: ({ today: '今日', '7d': '近 7 天', '30d': '近 30 天', '1y': '近一年' })[k.range] || '自定义周期',
       cmp: DX_CMP[k.range] || '上一周期',
-      cityTag: k.scopeCity ? `本城 ${k.scopeCity}` : '全域',
+      cityTag: k.scopeCity ? `本城 ${CITY_CN[k.scopeCity] || k.scopeCity}` : '全域',
       hello: (hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好') + '，' + esc(ME?.displayName || ME?.username || ''),
       todoTotal: ins ? Object.values(ins.pending).reduce((s, n) => s + n, 0) : 0,
     }

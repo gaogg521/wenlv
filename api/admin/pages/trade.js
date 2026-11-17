@@ -58,7 +58,8 @@ async function orderDrawer(no) {
       ${o.tickets.map((t) => `<tr><td class="num">${esc(t.ticket_no)}</td><td>${TICKET_CAT[t.category] || esc(t.category)}<div class="td-sub">${esc(t.assignee || '待认领')}</div></td>
         <td>${TICKET_ST[t.status] || t.status}</td>
         <td><button class="btn ghost sm" onclick="closeModal();window.__tkQ.page=1;tickets().then(() => setTimeout(() => ticketDrawer(${t.id}), 600))">时间线</button></td></tr>`).join('')}</table>` : ''}
-    <div class="row" style="gap:8px"><span class="pill s${o.status}">${ST[o.status]}</span>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill s${o.status}">${o.statusText || ST[o.status]}</span>
+      ${window.ORDER_STATUS_TOURIST && window.ORDER_STATUS_TOURIST[o.status] ? `<span class="td-sub">游客看到的是：${esc(window.ORDER_STATUS_TOURIST[o.status])}</span>` : ''}
       <span class="money" style="font-size:18px">${fen(o.amount_pay)}</span>
       ${o.bean_deducted ? `<span class="pill warn">抵扣 ${o.bean_deducted} 豆</span>` : ''}</div>
     <table style="margin-top:10px">

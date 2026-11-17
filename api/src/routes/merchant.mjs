@@ -16,6 +16,7 @@ import { sanitizeRich } from '../infra/sanitize.mjs'
 import { whereMobile, sealMobile, openMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import { merchantRange, merchantPaging } from '../infra/merchant-range.mjs'
+import { orderStatusText } from '../domain/dict.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
 import * as vc from '../domain/vc.mjs'
@@ -242,7 +243,8 @@ const m = {
       ${depart ? 'AND s.depart_date = ?' : ''}
       ${kw ? 'AND (p.title LIKE ? OR o.order_no LIKE ? OR o.contact_name LIKE ?)' : ''}
       ORDER BY o.id DESC LIMIT ? OFFSET ?`, [u.merchantId,...(range?[range.from,range.to]:[]),...(depart?[depart]:[]),...(kw?['%'+kw+'%','%'+kw+'%','%'+kw+'%']:[]),paging.size,paging.offset])
-    return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
+    // X-01：statusText 统一由服务端字典下发（商户视角）
+    return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook), statusText: orderStatusText(r.status, 'm') }))
   },
 
   'GET /m/orders/:no': async (req) => {
@@ -260,7 +262,7 @@ const m = {
     const phone = o.contact_phone_sealed ? (openMobile(o.contact_phone_sealed) || '') : (o.contact_phone_enc ? String(o.contact_phone_enc) : '')
     const passes = await q('SELECT id,status FROM travel_pass WHERE order_id=?', [o.id])
     const { contact_phone_enc, contact_phone_sealed, rebook_of, ...safe } = o
-    return { ...safe, rebook: !!rebook_of, rebookOf: rebook_of || null,
+    return { ...safe, rebook: !!rebook_of, rebookOf: rebook_of || null, statusText: orderStatusText(o.status, 'm'),
       contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
   },
   'GET /m/supply': async (req) => {

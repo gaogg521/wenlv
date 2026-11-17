@@ -3,8 +3,8 @@
 // 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
 
 const ACCOUNT_ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号', merchant_partner: '商户主体方', scenic_partner: '景区主体方' }
-const CITY_DICT_ACCOUNTS = [[310118, '上海·青浦'], [310000, '上海'], [320508, '苏州·姑苏'], [330500, '湖州'], [330523, '湖州·安吉']]
-const cityLabelAccounts = (code) => { const hit = CITY_DICT_ACCOUNTS.find(([c]) => String(c) === String(code)); return hit ? hit[1] : (code || '—') }
+// X-02：城市名直接复用 core.js 的统一字典 CITY_CN（服务端 capabilities.dicts 启动时刷新），不再本地复制一份
+const cityLabelAccounts = (code) => CITY_CN[String(code)] || code || '—'
 
 async function accounts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'

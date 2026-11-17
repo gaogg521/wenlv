@@ -26,6 +26,7 @@ import * as merchantLevel from '../domain/merchant-level.mjs'
 import * as taskReview from '../domain/task-review.mjs'
 import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
+import { orderStatusText, dictsForClient } from '../domain/dict.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -201,7 +202,8 @@ const admin = {
     // 前端菜单不再写死 access 表；未知角色默认拒绝（空集合），readonly/sre/dev 不再缺省放行全菜单。
     const { accountModules } = await import('../domain/admin-modules.mjs')
     // P-09：角色默认落地页随 capabilities 下发；不在有效集合内由前端回落第一个可用栏目
-    return { role: a.role, scopeCity: a.scopeCity || null, homeModule: ROLE_HOME[a.role] || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES }
+    // X-01/X-02：字典随 capabilities 下发（订单状态三视角文案、城市、品类、商户类目），前端只做缓存不再自建
+    return { role: a.role, scopeCity: a.scopeCity || null, homeModule: ROLE_HOME[a.role] || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES, dicts: dictsForClient() }
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
@@ -477,7 +479,7 @@ const admin = {
     return (await q(`SELECT o.*, p.title, u.nickname FROM orders o
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ${orderSql}`, sc.params)).map(publicOrderPhone)
+      ${orderSql}`, sc.params)).map(publicOrderPhone).map((o) => ({ ...o, statusText: orderStatusText(o.status, 'a') }))
   },
 
   // ===== R-02：改期 / 换团（申请 → 审批 → 执行；申请-审批分离，审批人≠申请人）=====
@@ -664,7 +666,7 @@ const admin = {
     const from = `FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id`
     const sort = { id: 'o.id DESC', paid: 'o.paid_at DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC' }[req.query.sort] || 'o.id DESC'
     const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, mainArgs)).n)
-    const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone)
+    const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone).map((o) => ({ ...o, statusText: orderStatusText(o.status, 'a') }))
     // 状态计数：baseWhere（去掉状态、其余筛选不变）
     const countsRaw = await q(`SELECT o.status, COUNT(*) n ${from} ${baseWhere ? 'WHERE ' + baseWhere : ''} GROUP BY o.status`, baseArgs)
     const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
@@ -692,7 +694,8 @@ const admin = {
     // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
     const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
     const serviceRecords = await q("SELECT actor, action, after_val, created_at FROM audit_log WHERE module = 'order' AND biz_ref = ? AND action IN ('contact-update','service-note') ORDER BY id DESC LIMIT 30", [o.order_no])
-    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote, serviceRecords, tickets }
+    // X-01：statusText（后台口径）+ statusTextTourist（客服对口径：「游客看到的是：xxx」）
+    return { ...publicOrderPhone(o), statusText: orderStatusText(o.status, 'a'), statusTextTourist: orderStatusText(o.status, 'c'), events, passes, pay, refunds, refundQuote: quote, serviceRecords, tickets }
   },
 
   // 客服只修正履约联系人，不更改订单归属、交易金额、出行人或团期。

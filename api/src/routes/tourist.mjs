@@ -19,6 +19,7 @@ import { sanitizeRich } from '../infra/sanitize.mjs'
 import { bindMobile, sealMobile, maskMobile } from '../infra/mobile.mjs'
 import { bookingOpenSql, bookingNow } from '../domain/booking-window.mjs'
 import { visibleChannelSql, channelAllowed } from '../domain/discount.mjs'
+import { ORDER_TIMELINE_TEXT, orderStatusText, dictsForClient } from '../domain/dict.mjs'
 
 // 游客订单详情可见的订单字段（小程序订单页实际用到的 + 本人订单的基本事实）
 const ORDER_PUBLIC = ['id', 'order_no', 'channel', 'product_id', 'session_id', 'city_code', 'qty', 'amount_goods', 'amount_bean_ded', 'bean_deducted',
@@ -601,9 +602,14 @@ const c = {
     return { payParams: pay }
   },
 
-  'GET /c/orders': async (req) => requireUser(req) && await q(
+  // X-01：三端统一状态文案——订单行带 statusText（游客视角），小程序不再自建状态表
+  'GET /c/orders': async (req) => requireUser(req) && (await q(
     `SELECT o.order_no, o.status, o.amount_pay, o.qty, o.created_at, p.title, p.days_desc
-     FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`, [requireUser(req).uid]),
+     FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`, [requireUser(req).uid]))
+    .map((o) => ({ ...o, statusText: orderStatusText(o.status, 'c') })),
+
+  // X-02：三端统一字典（城市/品类/订单状态文案）。公开只读、无内部字段，小程序启动时拉取缓存。
+  'GET /c/dicts': async () => dictsForClient(),
 
   'GET /c/orders/:no': async (req) => {
     const u = requireUser(req)
@@ -619,9 +625,9 @@ const c = {
       FROM order_item oi JOIN merchant m ON m.id = oi.merchant_id WHERE oi.order_id = ? ORDER BY oi.id`, [o.id])
     const itemStatusText = { 0: '待履约', 1: '已完成', 2: '已退款', 3: '赠送' }
     // A-27：时间线下发面向用户的文案——内部事件键（REFUND_APPLY）、actor（user:57）、交易号、内部备注不下发
-    const ST_TEXT = { 0: '下单', 10: '待支付', 20: '已支付', 30: '待出行', 40: '已核销', 50: '已完成', 60: '退款处理中', 70: '已退款', 90: '已关闭' }
+    // X-01：时间线文案收敛到统一字典（dict.ORDER_TIMELINE_TEXT）
     const events = (await q('SELECT from_st, to_st, created_at FROM order_event WHERE order_id = ? ORDER BY id', [o.id]))
-      .map((e) => ({ text: `${ST_TEXT[Number(e.from_st)] || '订单'} → ${ST_TEXT[Number(e.to_st)] || '处理中'}`, at: String(e.created_at).slice(0, 19) }))
+      .map((e) => ({ text: `${ORDER_TIMELINE_TEXT[Number(e.from_st)] || '订单'} → ${ORDER_TIMELINE_TEXT[Number(e.to_st)] || '处理中'}`, at: String(e.created_at).slice(0, 19) }))
     const reviewed = !!(await one('SELECT id FROM review WHERE order_id = ?', [o.id]))
     const canRebook = Number(o.status) === 70 && o.close_reason === 'group_cancel' &&
       !(await one('SELECT id FROM orders WHERE rebook_of = ?', [o.order_no]))
@@ -646,7 +652,9 @@ const c = {
     const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
     // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
-    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, stockOrder: !!sRow && sRow.depart_date == null, merchantContact,
+    // X-01：statusText 统一由服务端字典下发；statusSceneText 供支付结果页场景文案
+    pub.statusText = orderStatusText(o.status, 'c')
+    return { ...pub, statusSceneText: orderStatusText(o.status, 'scene'), freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, stockOrder: !!sRow && sRow.depart_date == null, merchantContact,
       orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), benefit: (i.benefit_desc ? i.benefit_desc : '') + (i.benefit_rules ? '；' + i.benefit_rules : ''), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
   },
 

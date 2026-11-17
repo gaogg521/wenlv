@@ -19,7 +19,7 @@ export const DICT = {
   merchantKind: [['catering', '餐饮'], ['hotel', '住宿'], ['ticket', '门票'], ['transport', '交通'], ['experience', '体验'], ['other', '其他']],
   supplierCat: [['ticket', '门票'], ['hotel', '住宿'], ['transport', '交通'], ['ground', '地接'], ['catering', '餐饮'], ['other', '其他']],
   settleMode: [['monthly', '月结'], ['per_order', '单结'], ['prepaid', '预付']],
-  productCat: [['script', '剧本闯关'], ['yoga', '瑜伽之旅'], ['sister', '姐姐系列'], ['single', '单身社交'], ['sport', '体育竞技'], ['family', '亲子主题'], ['red', '红色文旅'], ['shop', '商城 SKU']],
+  productCat: [['script', '剧本闯关'], ['yoga', '瑜伽之旅'], ['sister', '姐姐系列'], ['single', '单身社交'], ['sport', '体育竞技'], ['family', '亲子主题'], ['red', '红色文旅'], ['shop', '商城好物']],
   channels: [['main', '游客端'], ['mini_b', '商户端'], ['pc', 'PC 工作台']],
   weekday: [['1', '周一'], ['2', '周二'], ['3', '周三'], ['4', '周四'], ['5', '周五'], ['6', '周六'], ['7', '周日']],
 }
