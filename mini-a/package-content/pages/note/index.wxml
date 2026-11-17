@@ -1,6 +1,6 @@
-<view wx:if="{{n}}" class="detail">
+<view wx:if="{{n}}" class="detail {{replyTarget ? 'detail-reply' : ''}} {{pendingImage || pendingAudio ? 'detail-attachment' : ''}}">
   <!-- 图集轮播（小红书式：全宽 + 页码） -->
-  <view wx:if="{{hasGallery}}" class="gallery">
+  <view wx:if="{{hasGallery}}" class="note-gallery">
     <swiper class="gallery-swiper" current="{{current}}" bindchange="onSwiper">
       <swiper-item wx:for="{{n.imagesFull}}" wx:key="url">
         <image class="gallery-img" src="{{item.url}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
@@ -35,7 +35,6 @@
       </block>
       <block wx:else>
         <rich-text nodes="{{n.html}}" class="article-plain"></rich-text>
-        <video wx:if="{{n.video}}" src="{{n.video}}" controls style="width:100%;margin-top:16rpx"></video>
       </block>
     </view>
 
@@ -52,7 +51,7 @@
 
   <!-- 评论区（小红书式：一级评论 + 楼内回复展开 + 骨架屏 + 语音） -->
   <view class="comments">
-    <view class="c-head">共 {{commentTotal}} 条评论</view>
+    <view class="c-head"><text>评论</text><text wx:if="{{!commentsLoading}}" class="c-count">{{commentTotal}}</text></view>
     <!-- 骨架屏（三期③）：首次加载中 -->
     <block wx:if="{{commentsLoading}}">
       <view class="c-skeleton" wx:for="{{[1,2,3]}}" wx:key="*this">
@@ -106,7 +105,7 @@
         </view>
       </view>
       <view wx:if="{{commentNext}}" class="c-more c-more-main" bindtap="loadMoreComments">展开更多评论</view>
-      <view wx:if="{{!comments.length}}" class="c-empty">还没有评论，来说点什么吧</view>
+      <view wx:if="{{!comments.length}}" class="c-empty">还没有评论</view>
     </block>
     <view wx:if="{{commentMsg}}" class="note">{{commentMsg}}</view>
   </view>
@@ -132,14 +131,25 @@
 
 <!-- 底部操作栏（图片/语音评论 / 输入 / 点赞 / 分享） -->
 <view wx:if="{{n}}" class="action-bar">
-  <view wx:if="{{replyTarget}}" class="ab-reply-chip" bindtap="cancelReply">回复 @{{replyTarget.label}} ✕</view>
-  <image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" catchtap="removePendingImage" />
-  <view wx:if="{{pendingAudio}}" class="ab-pending-audio" catchtap="removePendingAudio">🎙 语音已录 ✕</view>
-  <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment"
-    placeholder="{{replyTarget ? '回复 @' + replyTarget.label + '：' : '说点什么…'}}" />
-  <text class="ab-img {{recording ? 'rec' : ''}}" catchtap="recordVoice">{{recording ? '■' : '🎙'}}</text>
-  <text class="ab-img" catchtap="pickCommentImage">🖼</text>
-  <button class="ab-send {{canSend ? 'on' : ''}}" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy || recording}}">发送</button>
-  <text class="ab-act {{liked ? 'on' : ''}}" catchtap="toggleLike">{{liked ? '♥' : '♡'}} {{likeCount}}</text>
-  <button class="ab-share" open-type="share">分享</button>
+  <view wx:if="{{replyTarget}}" class="ab-context">
+    <text class="ab-context-label">回复 @{{replyTarget.label}}</text>
+    <button class="ab-mini" bindtap="cancelReply">取消</button>
+  </view>
+  <view wx:if="{{pendingImage || pendingAudio}}" class="ab-context ab-attachment">
+    <image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" />
+    <text class="ab-context-label">{{pendingImage ? '已选图片' : '已录语音'}}</text>
+    <button wx:if="{{pendingImage}}" class="ab-mini" bindtap="removePendingImage">移除</button>
+    <button wx:else class="ab-mini" bindtap="removePendingAudio">移除</button>
+  </view>
+  <view class="ab-row">
+    <input class="ab-input" value="{{commentDraft}}" bindinput="onCommentInput" confirm-type="send" bindconfirm="submitComment"
+      placeholder="{{replyTarget ? '写回复…' : '写评论…'}}" />
+    <button class="ab-mini {{recording ? 'rec' : ''}}" catchtap="recordVoice">{{recording ? '停止' : '录音'}}</button>
+    <button class="ab-mini" catchtap="pickCommentImage">图片</button>
+    <button wx:if="{{canSend || commentBusy}}" class="ab-send" bindtap="submitComment" loading="{{commentBusy}}" disabled="{{commentBusy || recording}}">发送</button>
+    <block wx:else>
+      <button class="ab-mini ab-act {{liked ? 'on' : ''}}" catchtap="toggleLike" aria-label="{{liked ? '取消点赞' : '点赞'}}">{{liked ? '♥' : '♡'}} {{likeCount}}</button>
+      <button class="ab-mini" open-type="share">分享</button>
+    </block>
+  </view>
 </view>
