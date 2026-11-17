@@ -43,8 +43,9 @@ await check('冷启动产品码先解析再记来源，畸形编码拒绝',async
 })
 await check('产品专属来源不污染其他产品购买，原目标购买保留来源',async()=>{
  let submitted
- const p=page('package-tour/pages/booking/index.js',{ensureLogin:async()=>{},request:async()=>({}),createOrder:async b=>{submitted=b;throw {msg:'test stop before payment'}}},{showToast(){},getStorageSync:k=>k==='promoProductId'?1:'p123'})
+ const p=page('package-tour/pages/booking/index.js',{ensureLogin:async()=>{},request:async path=>path==='/c/freedom/quote'?{rows:[],goods:19900,insurance:0,discount:0,beanDeduct:0,beanDeductCount:0,beanCapBeans:0,cashPay:19900}:{},createOrder:async b=>{submitted=b;throw {msg:'test stop before payment'}}},{showToast(){},getStorageSync:k=>k==='promoProductId'?1:'p123'})
  Object.assign(p.data,{p:{},sessions:[{id:1,price_adult:19900,left_seats:5}],agree:true,useBean:false,contactName:'测试',contactPhone:'13800000000'})
+ p.updatePrice();await tick()
  p.pid=2;await p.submit();assert.equal(submitted.promoScene,undefined)
  p.pid=1;await p.submit();assert.equal(submitted.promoScene,'p123')
 })

@@ -137,6 +137,8 @@ export const supplyAdminRoutes = {
     const summary = supply.summarizeEconomics(rows, commissions)
     const prods = await q('SELECT id,title FROM tour_product WHERE id IN (?)', [summary.byProduct.map(x => x.key).length ? summary.byProduct.map(x => x.key) : [0]])
     for (const r of summary.byProduct) r.title = (prods.find(p => Number(p.id) === Number(r.key)) || {}).title || ('产品#' + r.key)
+    // C-03：受影响商品清单补标题（财务从清单追到对应商品）
+    for (const r of summary.missingProducts || []) r.title = (prods.find(p => Number(p.id) === Number(r.key)) || {}).title || ('产品#' + r.key)
     // 待支付/退款中单（未进实际口径）：单独提示，避免"看起来少了"
     const pending = Number((await one(`SELECT COUNT(*) n FROM orders o WHERE ${cond[0]} AND o.status IN (10,60) ${productId ? 'AND o.product_id=?' : ''} ${city ? 'AND o.city_code=?' : ''}`,
       [from, to, ...(productId ? [productId] : []), ...(city ? [city] : [])])).n)

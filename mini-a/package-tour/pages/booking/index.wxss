@@ -25,3 +25,14 @@ page { padding-bottom: 160rpx; }
 .bk-phone-input { flex: 1; min-width: 0; width: 0; height: 72rpx; padding: 0 16rpx; box-sizing: border-box; border: 1rpx solid var(--line); border-radius: 12rpx; }
 .bk-phone-controls .phone-btn { flex: none; width: auto; min-height: 64rpx; padding: 0 18rpx; line-height: 64rpx; white-space: nowrap; }
 .bk-phone-hint { display: block; margin-top: 10rpx; color: var(--sub); font-size: 22rpx; }
+
+/* ===== B1 实付解释：底栏优惠原因/算价状态/金额变动脉冲 + 明细应付合计 ===== */
+.dt-pay-reason { font-size: 20rpx; color: #1a9c6b; max-width: 380rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-pricing { font-size: 20rpx; color: #9a8a74; margin-left: 8rpx; }
+.dt-pricing-err { display: block; font-size: 20rpx; color: #c2410c; margin-top: 2rpx; }
+.pay-pulse { animation: payBump .7s ease; display: inline-block; }
+@keyframes payBump { 0% { transform: scale(1); } 40% { transform: scale(1.12); color: #1a9c6b; } 100% { transform: scale(1); } }
+.bk-adjust-hint { font-size: 20rpx; color: var(--brand, #e87722); margin-top: 2rpx; }
+.bk-total-row { border-top: 1rpx dashed #e5ded2; margin-top: 8rpx; padding-top: 14rpx; }
+.bk-calc-line { font-size: 20rpx; color: #9a8a74; margin-top: 6rpx; line-height: 1.5; }
+.bk-calc-err { color: #c2410c; }

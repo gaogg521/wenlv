@@ -16,7 +16,7 @@ async function contentCaseReview(kind,id) {
   const load=window.__contentCaseReviewLoad=(window.__contentCaseReviewLoad||0)+1
   let d
   try{d=await api('GET',`/admin/content-cases/${kind}/${id}`)}catch(e){return toast(e.message,true)}
-  if(load!==window.__contentCaseReviewLoad||location.hash!=='#contentcases')return
+  if(load!==window.__contentCaseReviewLoad||!['#contentcases','#reviewqueue'].includes(location.hash))return
   window.__contentCaseActive={kind,id}
   reviewDrawer(kind==='reports'?'举报处理':'下架申诉复核',`<div class="rv-box">${kv('提交原因',esc(d.reason))}${d.offlineReason?kv('下架原因',esc(d.offlineReason)):''}${d.resolution?kv('处理结果',esc(d.resolution)):''}</div>
     <div class="rv-box"><div class="rv-h">当前内容 · ${esc(d.note.title)}</div>${submissionHtml(d.note)}</div>
@@ -26,7 +26,7 @@ async function contentCaseReview(kind,id) {
 }
 async function contentCaseDecide(action) {
   const {kind,id}=window.__contentCaseActive
-  try{await api('POST',`/admin/content-cases/${kind}/${id}/verdict`,{action,reason:$('#caseReason').value});closeModal();toast('处理完成，结果已反馈');contentCases()}
+  try{await api('POST',`/admin/content-cases/${kind}/${id}/verdict`,{action,reason:$('#caseReason').value});toast('处理完成，结果已反馈');if(await rqFinish(kind==='reports'?'report':'appeal',id))return;closeModal();contentCases()}
   catch(e){if($('#caseError'))$('#caseError').textContent=e.message;else toast(e.message,true)}
 }
 async function contentTakedown(id) {

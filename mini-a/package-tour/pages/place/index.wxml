@@ -48,6 +48,18 @@
   <view class="sec-title" wx:if="{{d.traffic}}">交通指引</view>
   <view class="card" wx:if="{{d.traffic}}"><view class="rich-p">🚇 {{d.traffic}}</view></view>
 
+  <view class="sec-title" wx:if="{{d.kind === 'scenic' && (placeNotes.length || !notesEmpty)}}">这个景区的旅行笔记</view>
+  <block wx:if="{{d.kind === 'scenic' && placeNotes.length}}">
+    <view class="pl-notes">
+      <view class="pl-note" wx:for="{{placeNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
+        <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <view wx:else class="pl-note-cover pl-note-text"><text>{{item.excerpt}}</text></view>
+        <view class="pl-note-title">{{item.title}}</view>
+      </view>
+    </view>
+    <view class="pl-notes-more" bindtap="goScenicNotes">看这个景区的全部旅行笔记 ›</view>
+  </block>
+
   <view class="sec-title" wx:if="{{d.tours.length}}">相关线路</view>
   <view class="tour-item" wx:for="{{d.tours}}" wx:key="id" bindtap="goTour" data-id="{{item.id}}">
     <image wx:if="{{item.cover}}" class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load />

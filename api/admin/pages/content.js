@@ -14,6 +14,9 @@ async function content() {
   const [data, rvs] = await Promise.all([api('GET', '/admin/content?' + search.toString()), api('GET', '/admin/reviews')])
   const rows = data.rows
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize))
+  // B3 连续办理：记录本页待审清单（判定后自动打开下一条）；keepScroll 时保留筛选/页码与滚动位置
+  window.__pendingNotes = rows.filter((n) => [0, 1].includes(Number(n.status))).map((n) => n.id)
+  const __keep = window.__contentKeepScroll; window.__contentKeepScroll = false
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>笔记审核</h2><span class="muted">查看全文与图片，处理待审笔记；已发布内容可下架并告知作者原因。</span></div>
@@ -23,7 +26,7 @@ async function content() {
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
     ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
       <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(noteExcerpt(n.body))}</td>
-      <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}</td>
+      <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}${Number(n.status) === 2 && n.visibility === 'private' ? ' <span class="pill s40">仅自己可见</span>' : ''}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
       <td>${[0, 1].includes(Number(n.status)) && adminCan('note.review') ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
     </tbody></table>` : emptyBox((Q.kw || Q.status !== '') ? '没有符合条件的笔记——调整关键词或状态后重试。' : '暂无笔记；游客提交笔记后会显示在这里，待审内容可查看材料后处理。')}
@@ -39,6 +42,8 @@ async function content() {
       <td>${adminCan('review.moderate') ? `<button class="btn ${r.status === 1 ? 'danger' : 'primary'} sm" onclick="toggleReview(${r.id}, ${r.status === 1 ? 0 : 1})">${r.status === 1 ? '隐藏' : '恢复展示'}</button>` : '<span class="muted">由审核员管理展示</span>'}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('还没有评价——游客核销完成后可评价')}
   </div>`
+  // B3：连续办理时保留列表滚动位置（筛选/页码本就存于 window.__contentQ）
+  if (__keep) window.scrollTo(0, window.__contentScroll || 0)
 }
 async function toggleReview(id, show) {
   if (!adminCan('review.moderate')) return toast('评价展示由审核员或超级管理员处理', true)
@@ -151,6 +156,9 @@ async function taskEntries(taskId) {
   let rows
   try { rows = await api('GET', `/admin/content-tasks/${taskId}/entries`) } catch (e) { return toast(e.message, true) }
   const t = await api('GET', '/admin/content-tasks/' + taskId).catch(() => ({ title: '' }))
+  // B3 连续办理：记录本任务待审投稿清单（判定后自动打开下一条）
+  window.__pendingEntries = rows.filter((e) => Number(e.status) === 2).map((e) => e.id)
+  window.__entryTaskId = taskId
   reviewDrawer(`参与者 · ${esc(t.title)}`, rows.length ? `<table><thead><tr><th>作者</th><th>进度</th><th>投稿</th><th>领取 / 投稿时间</th><th>操作</th></tr></thead><tbody>
     ${rows.map((e) => `<tr><td>${esc(e.nickname || '用户#' + e.user_id)}${e.creator_tag && e.creator_tag !== 'none' ? ` <span class="pill s40">${esc(CREATOR_TAG[e.creator_tag] || '')}</span>` : ''}</td>
       <td>${ENTRY_ST[e.status] || ''}${Number(e.rejected_times) ? `<div class="td-sub">被驳回 ${e.rejected_times} 次</div>` : ''}${Number(e.cash_status) === 1 ? '<div class="td-sub">现金待打款</div>' : ''}</td>
@@ -216,6 +224,7 @@ async function reviewEntry(id) {
   let p
   try { p = await api('GET', `/admin/task-entries/${id}/review`) } catch (e) { return toast(e.message, true) }
   const r = p.requirements, live = p.entry.status === 2 && p.submission
+  window.__contentScroll = window.scrollY || 0
   const fails = p.checks.filter((c) => !c.ok).length
   const right = `
     <div class="rv-box"><div class="rv-h">约稿要求</div><p>${esc(r.brief || '')}</p>
@@ -235,7 +244,8 @@ async function reviewEntry(id) {
       <span class="td-sub">${esc(String(h.created_at).slice(0, 16).replace('T', ' '))} · ${esc(h.reviewer)}${h.note_id ? ' · 作品#' + h.note_id : ''}</span>${h.reason ? `<div>${esc(h.reason)}</div>` : ''}</div>`).join('')}</div>` : ''}`
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）/ 通过备注（选填）"></textarea>
     <div class="rv-actions"><button class="btn danger" onclick="entryVerdict(${id}, false, 0, ${p.task.id})">驳回，退回修改</button>
-      <button class="btn primary" id="rvPass" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id})">通过并发放 ${r.reward_beans} 旅豆</button></div>` : ''
+      <button class="btn primary" id="rvPass" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id})">通过并发放 ${r.reward_beans} 旅豆</button>
+      <button class="btn ghost" id="rvPassNext" onclick="entryVerdict(${id}, true, ${fails}, ${p.task.id}, true)">通过并下一条 ›</button></div>` : ''
   reviewDrawer(`${live ? '审核投稿' : '投稿与审核记录'} · ${esc(p.task.title)}`, `<div class="rv-grid"><div>${submissionHtml(p.submission)}</div><div>${right}</div></div>`, foot)
   rvSync()
 }
@@ -244,9 +254,11 @@ function rvSync() {
   const boxes = [...document.querySelectorAll('[data-rule]')]
   const left = boxes.filter((b) => !b.checked).length
   pass.disabled = left > 0
+  const next = $('#rvPassNext')
+  if (next) next.disabled = pass.disabled
   pass.title = left ? `还有 ${left} 条审核标准未确认` : ''
 }
-async function entryVerdict(id, pass, fails = 0, taskId) {
+async function entryVerdict(id, pass, fails = 0, taskId, next) {
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
   if (pass && fails && !confirm(`有 ${fails} 项自动核对未通过，确定仍然通过？`)) return
@@ -254,26 +266,51 @@ async function entryVerdict(id, pass, fails = 0, taskId) {
   try {
     const r = await api('POST', '/admin/task-entries/' + id + '/verdict', { pass, reason, rules })
     toast(pass ? `已通过，发放 ${r.rewarded} 旅豆${r.cashReward ? '；现金加奖已进入待打款' : ''}` : '已驳回，退回作者修改')
-    await tasks(); taskEntries(taskId)
+    if (await rqFinish('task_entry', id, next)) return
+    if (!next) { await tasks(); taskEntries(taskId); return }
+    // B3 连续办理：保留列表位置，自动打开本任务下一条待审投稿
+    closeModal()
+    window.__contentKeepScroll = true
+    await tasks()
+    window.scrollTo(0, window.__contentScroll || 0)
+    const pend = (window.__pendingEntries || []).filter((x) => Number(x) !== Number(id))
+    if (pend.length) setTimeout(() => reviewEntry(pend[0]), 120)
+    else toast('本任务待审投稿已处理完')
   } catch (e) { toast(e.message, true) }
 }
 async function reviewNote(id) {
   let p
   try { p = await api('GET', `/admin/content/${id}`) } catch (e) { return toast(e.message, true) }
   const n = p.note, pending = [0, 1].includes(Number(n.status)), live = pending && adminCan('note.review')
+  // B3：记录打开抽屉时的列表滚动位置——判定后恢复，连续办理不丢上下文
+  window.__contentScroll = window.scrollY || 0
   const right = `${authorHtml(p.author, ` · 被驳回 ${Number(p.author?.rejected || 0)} 篇`)}
+    ${n.visibility === 'private' ? '<div class="rv-box"><div class="rv-h">可见范围</div><span class="pill s40">🔒 仅自己可见</span><div class="td-sub">私密笔记不上广场/首页，素材仅作者本人可读</div></div>' : ''}
     ${p.product ? `<div class="rv-box"><div class="rv-h">关联线路</div>${esc(p.product.title)}</div>` : ''}
     ${p.tasks.length ? `<div class="rv-box"><div class="rv-h">作为约稿投稿</div>${p.tasks.map((t) => esc(t.title)).join('<br>')}</div>` : ''}
     <div class="rv-box"><div class="rv-h">审核要点</div><div class="td-sub">是否原创、图文是否相符、有无广告导流/联系方式、有无不实承诺或违规内容。驳回原因会展示给作者。</div></div>`
   const foot = live ? `<textarea id="rvReason" rows="2" maxlength="300" placeholder="驳回原因（必填，作者会在小程序里看到）"></textarea>
-    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false, ${n.revision})">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true, ${n.revision})">通过并发布</button></div>` : (pending ? '<p class="muted">当前账号仅可查看审核材料；请由审核员或超级管理员完成通过或驳回。</p>' : '')
+    <div class="rv-actions"><button class="btn danger" onclick="noteVerdict(${id}, false, ${n.revision})">驳回</button><button class="btn primary" onclick="noteVerdict(${id}, true, ${n.revision})">通过并发布</button><button class="btn ghost" onclick="noteVerdict(${id}, true, ${n.revision}, true)">通过并下一条 ›</button></div>` : (pending ? '<p class="muted">当前账号仅可查看审核材料；请由审核员或超级管理员完成通过或驳回。</p>' : '')
   reviewDrawer(`${live ? '审核笔记' : '查看笔记'} · ${esc(n.title || '（无题）')}`, `<div class="rv-grid"><div>${submissionHtml(n)}</div><div>${right}</div></div>`, foot)
 }
-async function noteVerdict(id, pass, revision) {
+async function noteVerdict(id, pass, revision, next) {
   if (!adminCan('note.review')) return toast('请由审核员或超级管理员处理笔记审核', true)
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
-  try { await api('POST', `/admin/content/${id}/verdict`, { pass, reason, revision }); toast(pass ? '已通过并发布' : '已驳回，作者可看到原因'); closeModal(); content() } catch (e) { toast(e.message, true) }
+  try {
+    await api('POST', `/admin/content/${id}/verdict`, { pass, reason, revision })
+    toast(pass ? '已通过并发布' : '已驳回，作者可看到原因')
+    if (await rqFinish('note', id, next)) return
+    if (!next) { closeModal(); content(); return }
+    // B3 连续办理：保留筛选/页码与滚动位置，自动打开本页下一条待办
+    closeModal()
+    window.__contentKeepScroll = true
+    await content()
+    window.scrollTo(0, window.__contentScroll || 0)
+    const pend = (window.__pendingNotes || []).filter((x) => Number(x) !== Number(id))
+    if (pend.length) setTimeout(() => reviewNote(pend[0]), 120)
+    else toast('本页待办已处理完，可翻页继续')
+  } catch (e) { toast(e.message, true) }
 }
 async function deleteTask(id) {
   if (!adminCan('task.delete')) return toast('任务删除由运营或超级管理员处理', true)

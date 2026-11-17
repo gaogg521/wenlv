@@ -15,9 +15,33 @@
 <view class="theme-arrow">↗</view>
 </view>
 </view>
-<view class="content-entry" bindtap="goSquare">
-  <view class="ce-main"><text class="ce-ico">🏮</text><text class="ce-name">旅行笔记广场</text><text class="ce-sub">看看大家去了哪 · 发布即得旅豆</text></view>
-  <view class="ce-go">去逛逛 ›</view>
+<view class="notes-section">
+  <view class="notes-head">
+    <view class="notes-title"><text class="nt-ico">📒</text>旅行笔记<text class="notes-sub">真实旅人的现场记录</text></view>
+    <view class="notes-more" bindtap="goSquare">看更多 ›</view>
+  </view>
+  <view wx:if="{{notesLoading}}" class="notes-body">
+    <view class="note-card note-ph" wx:for="{{[1,2]}}" wx:key="*this"></view>
+  </view>
+  <view wx:elif="{{notesError}}" class="notes-empty">
+    <view class="ne-main">{{notesError}}</view>
+    <view class="ne-acts"><text class="ne-act" bindtap="fetchNotes">重新加载</text><text class="ne-act" bindtap="goSquare">先去广场逛逛 ›</text></view>
+  </view>
+  <view wx:elif="{{!notes.length}}" class="notes-empty">
+    <view class="ne-main">还没有公开的旅行笔记</view>
+    <view class="ne-acts"><text class="ne-act" bindtap="goSquare">去广场看看 ›</text><text class="ne-act" bindtap="goCompose">写一篇 · 发布得旅豆 ›</text></view>
+  </view>
+  <view wx:else class="notes-body">
+    <view class="note-card" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
+      <view class="note-cover-box">
+        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load binderror="onNoteCoverError" data-id="{{item.id}}" />
+        <view wx:else class="note-cover note-cover-text"><text>{{item.excerpt}}</text></view>
+        <view wx:if="{{item.video}}" class="note-flag">▶ 视频</view>
+      </view>
+      <view class="note-title">{{item.title}}</view>
+      <view wx:if="{{item.place}}" class="note-place">📍 {{item.place}}</view>
+    </view>
+  </view>
 </view>
 <swiper wx:if="{{banners.length}}" indicator-dots circular style="height:300rpx;margin:16rpx 0;border-radius:16rpx" bindchange="onBannerChange">
     <swiper-item wx:for="{{banners}}" wx:key="id">

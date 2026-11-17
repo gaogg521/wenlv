@@ -48,6 +48,8 @@ Page({
         liked: n.liked, likeCount: n.likeCount,
         n: { ...n, when: String(n.published_at || '').replace('T', ' ').slice(0, 16), html: n.text || '',
           imagesFull,
+          // A2：线路仅在架才给入口（product_status=1），下架/删除不生成死链
+          productLink: Number(n.related_product_id) > 0 && Number(n.product_status) === 1,
           blocksReady: blocks, topicsReady: n.topics || [], isPrivate: n.visibility === 'private' },
         hasGallery: imagesFull.length > 0,
         mediaLabel: imagesFull.length ? '1/' + imagesFull.length : '',
@@ -91,6 +93,10 @@ Page({
   },
   goScenic() {
     if (this.data.n && this.data.n.scenic_id) wx.navigateTo({ url: '/package-tour/pages/place/index?kind=scenic&id=' + this.data.n.scenic_id })
+  },
+  // A2：关联线路在架时可跳线路详情（下架商品不给入口防死链）
+  goProduct() {
+    if (this.data.n && this.data.n.productLink) wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + this.data.n.related_product_id })
   },
 
   /* ---------- 点赞 / 举报 ---------- */

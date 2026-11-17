@@ -418,11 +418,11 @@ const admin = {
     const pendingNotes = sc ? zero : await one("SELECT COUNT(*) c FROM content_note WHERE status = 1")
     const pendingMerchants = await one("SELECT COUNT(*) c FROM merchant m WHERE m.status = 0" + (sc ? ' AND m.city_code = ' + Number(sc) : ''))
     const pendingTasks = sc ? zero : await one('SELECT COUNT(*) c FROM content_task_entry WHERE status = 2')
-    // 热门主题游：周期内已支付（与 GMV 同口径）
-    const topTours = await q(`SELECT p.id, p.title, COUNT(o.id) orders, COALESCE(SUM(o.amount_pay),0) gmv
+    // 热销商品 TOP5（B3：原「热门主题游」不带品类，商城礼盒混入无法归类——补 cat 与销量排序说明）
+    const topTours = await q(`SELECT p.id, p.title, p.cat, COUNT(o.id) orders, COALESCE(SUM(o.amount_pay),0) gmv
       FROM orders o JOIN tour_product p ON p.id = o.product_id
       WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}
-      GROUP BY p.id, p.title ORDER BY orders DESC, gmv DESC LIMIT 5`)
+      GROUP BY p.id, p.title, p.cat ORDER BY orders DESC, gmv DESC LIMIT 5`)
     // 转化漏斗：周期内下单的这一批订单走到哪一步（下单 → 已支付 → 已核销）。
     // 以订单状态机为准：20 已支付 / 30 已确认 / 40 已核销 / 50 已完成 / 60 退款中 / 70 已退款 / 90 已关闭；
     // 已支付 = 20~70（含后续退款，退款也是付过款的），已核销 = 40/50
@@ -470,10 +470,14 @@ const admin = {
     else if (a.role === 'scenic_partner') where.push(subO.scenicId ? 'o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ' + Number(subO.scenicId) + ')' : '1 = 0')
     if (status) where.push('o.status = ' + Number(status))
     if (kw) where.push('o.order_no LIKE ' + JSON.stringify('%' + kw + '%'))
+    // B3：sort=recent 时按支付/创建时间倒序（看板「最新订单」口径），缺省仍按订单号倒序
+    const orderSql = req.query.sort === 'recent'
+      ? 'ORDER BY COALESCE(o.paid_at, o.created_at) DESC, o.id DESC LIMIT 100'
+      : 'ORDER BY o.id DESC LIMIT 100'
     return (await q(`SELECT o.*, p.title, u.nickname FROM orders o
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY o.id DESC LIMIT 100`, sc.params)).map(publicOrderPhone)
+      ${orderSql}`, sc.params)).map(publicOrderPhone)
   },
 
   // ===== R-02：改期 / 换团（申请 → 审批 → 执行；申请-审批分离，审批人≠申请人）=====

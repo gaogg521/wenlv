@@ -393,3 +393,12 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .photo-banner-copy { position:absolute;left:0;right:0;bottom:0;padding:44rpx 28rpx 24rpx;background:linear-gradient(transparent,rgba(0,0,0,.6));color:white; }
 .photo-banner-copy view { font-size:32rpx;font-weight:600; }
 .photo-banner-copy text { font-size:20rpx;opacity:.85; }
+
+/* ===== A2 景区/线路详情页内笔记卡（三端打磨） ===== */
+.pl-notes { display:flex; gap:16rpx; margin:0 32rpx; }
+.pl-notes .pl-note { flex:1; min-width:0; border-radius:14rpx; overflow:hidden; background:#fff; box-shadow:0 2rpx 12rpx rgba(0,0,0,.05); }
+.pl-note-cover { display:block; width:100%; height:200rpx; background:#f3ece2; }
+.pl-note-text { display:flex; align-items:center; padding:16rpx; box-sizing:border-box; background:linear-gradient(135deg,#f7efe3,#efe3d0); }
+.pl-note-text text { font-size:20rpx; color:#6b5a41; line-height:1.5; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; }
+.pl-note-title { padding:12rpx 14rpx 14rpx; font-size:22rpx; color:#1f2937; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.pl-notes-more { margin:14rpx 32rpx 0; font-size:24rpx; color:var(--brand,#e87722); text-align:right; }

@@ -44,6 +44,7 @@
       <text class="topic-tag" wx:for="{{n.topicsReady}}" wx:key="*this" data-topic="{{item}}" bindtap="goTopic">#{{item}}</text>
     </view>
     <view wx:if="{{n.scenic_id}}" class="scenic-line" bindtap="goScenic">📍 {{n.scenic_name}} · 看这个景区的笔记 ›</view>
+    <view wx:if="{{n.productLink}}" class="scenic-line" bindtap="goProduct">🧭 {{n.product_title}} · 查看这条线路 ›</view>
 
     <!-- 赞数 -->
     <view wx:if="{{likeCount}}" class="like-sum">👍 {{likeCount}} 人觉得有用</view>

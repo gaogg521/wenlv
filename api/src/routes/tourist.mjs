@@ -797,25 +797,29 @@ const c = {
 
   // 旅行笔记广场（A-43）：仅已发布公开笔记，分页，带封面/作者/点赞/关联线路
   // 话题聚合（三期①）：?topic= 按 body.topics 精确匹配；?scenic= 按关联景区聚合，页头展示景区名
+  // 线路聚合（三端打磨 A2）：?product= 按关联线路（related_product_id）聚合
   'GET /c/notes/feed': async (req) => {
     const u = requireUser(req)
     const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
     const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
     const topic = String(req.query.topic || '').trim().toLowerCase().slice(0, 20)
     const scenic = Math.floor(Number(req.query.scenic) || 0)
+    const product = Math.floor(Number(req.query.product) || 0)
     const rows = await q(`SELECT n.id, n.title, n.like_count, n.comment_count, n.published_at, u.nickname author, u.avatar_url, p.title product_title,
         COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.cover')), 'null'),
           JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']')))) cover,
         JSON_TYPE(JSON_EXTRACT(n.body, '$.video')) = 'STRING' hasVideo,
-        JSON_EXTRACT(n.body, '$.topics') topics, s.name scenic_name
+        JSON_EXTRACT(n.body, '$.topics') topics, s.name scenic_name, n.scenic_id,
+        JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.text')) body_text
       FROM content_note n JOIN user_account u ON u.id = n.user_id
       LEFT JOIN tour_product p ON p.id = n.related_product_id
       LEFT JOIN scenic_spot s ON s.id = n.scenic_id AND s.status = 1
       WHERE n.status = 2 AND n.visibility = 'public'
         AND (? = '' OR JSON_CONTAINS(JSON_EXTRACT(n.body, '$.topics'), JSON_QUOTE(?)))
         AND (? = 0 OR n.scenic_id = ?)
+        AND (? = 0 OR n.related_product_id = ?)
       ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`,
-      [topic, topic, scenic, scenic, pageSize, (page - 1) * pageSize])
+      [topic, topic, scenic, scenic, product, product, pageSize, (page - 1) * pageSize])
     const liked = rows.length ? await q(`SELECT note_id FROM content_note_likes WHERE user_id = ? AND note_id IN (${rows.map(() => '?').join(',')})`, [u.uid, ...rows.map((r) => r.id)]) : []
     const likedSet = new Set(liked.map((x) => Number(x.note_id)))
     return {
@@ -830,6 +834,8 @@ const c = {
           liked: likedSet.has(Number(r.id)), likeCount: Number(r.like_count), commentCount: Number(r.comment_count),
           productTitle: r.product_title || null, scenicName: r.scenic_name || null,
           topics: cardTopics,
+          // 无封面卡片用正文摘录兜底（A1 文字卡）：去空白/标记符，截 60 字
+          excerpt: plainText(r.body_text).replace(/\s+/g, ' ').slice(0, 60),
           when: String(r.published_at || '').slice(0, 10),
         }
       }),
@@ -1159,7 +1165,7 @@ const cNotes = {
     const user = requireUser(req)
     const n = await one(`SELECT c.id, c.title, c.body, c.like_count, c.comment_count, c.published_at, c.related_product_id,
       c.visibility, s.id scenic_id, s.name scenic_name,
-      u.nickname author, u.avatar_url, p.title product_title
+      u.nickname author, u.avatar_url, p.title product_title, p.status product_status
       FROM content_note c JOIN user_account u ON u.id = c.user_id
       LEFT JOIN tour_product p ON p.id = c.related_product_id
       LEFT JOIN scenic_spot s ON s.id = c.scenic_id AND s.status = 1

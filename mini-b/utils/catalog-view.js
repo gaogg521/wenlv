@@ -10,7 +10,7 @@ function stockView(list, options = {}, now = Date.now()) {
     if (range === 'week' && (date < today || date > end(6)) || range === 'month' && (date < today || date > end(29))) return false
     if (status === 'open' && (!active || Number(s.left_seats) <= 0)) return false
     if (status === 'tight' && (!active || Number(s.left_seats) > 2 || Number(s.left_seats) < 1)) return false
-    if (status === 'closed' && Number(s.status) < 3) return false
+    if (status === 'closed' && Number(s.status) < 3 && date >= today) return false
     return !keyword || (s.title + ' ' + date).toLowerCase().includes(keyword)
   }).map(s => {
     const date = String(s.depart_date).slice(0, 10), past = date < today, left = Math.max(0, Number(s.left_seats))
@@ -31,7 +31,7 @@ function stockView(list, options = {}, now = Date.now()) {
 function orderView(list, keyword = '', status = 'all', limit = 12) {
   const kw = String(keyword).trim().toLowerCase()
   const filtered = list.filter(o => (!kw || (o.title + ' ' + o.order_no + ' ' + (o.contact_name || '')).toLowerCase().includes(kw)) &&
-    (status === 'all' || status === 'waiting' && [20,30].includes(Number(o.status)) || status === 'done' && [40,50].includes(Number(o.status)) || status === 'refund' && [60,70].includes(Number(o.status))))
+    (status === 'all' || status === 'waiting' && [20,30].includes(Number(o.status)) || status === 'done' && [40,50].includes(Number(o.status)) || status === 'refund' && [60,70].includes(Number(o.status)) || status === 'refund_pending' && Number(o.status) === 60))
   return { visibleOrders: filtered.slice(0, limit), matchedCount: filtered.length, hasMore: filtered.length > limit }
 }
 module.exports = { stockView, orderView, money, businessDay }

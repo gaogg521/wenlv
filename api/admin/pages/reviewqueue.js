@@ -4,14 +4,45 @@
 const RQ_KIND = { note: '独立笔记审核', task_entry: '约稿投稿审核', report: '举报处理', appeal: '作者申诉' }
 const RQ_ROUTE = { note: 'content', task_entry: 'tasks', report: 'contentcases', appeal: 'contentcases' }
 
+let rqItems = []
+let rqActive = null
+
+async function rqOpen(kind, id) {
+  rqActive = { kind, id, scroll: window.scrollY }
+  if (kind === 'note') return reviewNote(id)
+  if (kind === 'task_entry') return reviewEntry(id)
+  return contentCaseReview(kind === 'report' ? 'reports' : 'appeals', id)
+}
+
+async function rqFinish(kind, id, next = false) {
+  if (location.hash !== '#reviewqueue' || rqActive?.kind !== kind || Number(rqActive.id) !== Number(id)) return false
+  const { scroll } = rqActive
+  const group = rqItems.find(queue => queue.kind === kind)?.items || []
+  const idx = group.findIndex(row => Number(row.item_id) === Number(id))
+  const candidates = [...group.slice(idx + 1), ...group.slice(0, Math.max(idx, 0))]
+  rqActive = null
+  closeModal()
+  await reviewqueue()
+  if (location.hash !== '#reviewqueue') return true
+  window.scrollTo(0, scroll)
+  const remaining = rqItems.find(queue => queue.kind === kind)?.items || []
+  const available = row => !row.claimedBy || Number(row.claimedUid) === Number(ME?.uid)
+  const target = candidates.find(row => remaining.some(item => item.item_id === row.item_id && available(item))) || remaining.find(available)
+  const button = target && document.querySelector(`[data-rq-kind="${kind}"][data-rq-id="${target.item_id}"]`)
+  if (button) button.focus({ preventScroll: true })
+  if (next && target) await rqOpen(kind, target.item_id)
+  return true
+}
+
 async function reviewqueue() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   const d = await api('GET', '/admin/review-queue')
+  rqItems = d.queues
   const myName = 'admin:' + (ME?.displayName || ME?.username || '')
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>审核工作队列</h2><span class="muted">四类待办统一聚合 · 认领协调（同一待办同时一人） · 判定仍走各队列原接口 · 超 48 小时标红</span></div>
-    <p class="td-sub">认领后请到对应栏目完成审核判定；判定完成后认领自动释放。本页只做待办发现与认领协调，不做审核判定。</p>
+    <p class="td-sub">点「去处理」打开对应待办。完成判定后认领自动释放，回到当前队列。</p>
     ${d.queues.map((q) => `
     <div class="card" style="margin-bottom:12px">
       <div class="card-head"><h3>${esc(q.kindCn)} <span class="pill ${Number(q.total) ? 'warn' : 'off'}">共 ${Number(q.total).toLocaleString()} 待办</span></h3>
@@ -21,14 +52,19 @@ async function reviewqueue() {
       ${q.items.map((it) => {
         // 本人判定优先按不可变 UID（旧数据无 uid 时回退名字快照）
         const mine = it.claimedUid != null ? (ME?.uid != null && Number(it.claimedUid) === Number(ME.uid)) : it.claimedBy === myName
+        // B3（498,564 小时异常修复）：submitted_at 为空（驳回回退置 NULL）时服务端返回 null——显示「待核对」，
+        // 不参与超时判定与 SLA 排序（服务端已把空值排最后）；正常超时项仍按时长标红定位。
+        const waitCell = it.waitingHours == null
+          ? '<span class="pill off" title="提交时间缺失（历史驳回回退数据），待核对">待核对</span>'
+          : (it.overdue ? '<span class="pill s70">' + it.waitingHours + 'h 超时</span>' : '<span class="pill ' + (it.waitingHours >= 24 ? 'warn' : 'off') + '">' + it.waitingHours + 'h</span>')
         return `<tr><td>${(q.kind === 'note' || q.kind === 'report') && !it.claimedBy ? `<input type="checkbox" class="rq-sel" data-kind="${q.kind}" data-id="${it.item_id}" aria-label="选择待办 ${it.item_id}">` : ''}</td>
         <td class="num">#${it.item_id}</td><td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.extra || '—')}</td>
-        <td>${it.overdue ? '<span class="pill s70">' + it.waitingHours + 'h 超时</span>' : '<span class="pill ' + (it.waitingHours >= 24 ? 'warn' : 'off') + '">' + it.waitingHours + 'h</span>'}</td>
+        <td>${waitCell}</td>
         <td>${it.claimedBy ? (mine ? '<span class="pill ok">本人处理中</span>' : '<span class="pill s40">' + esc(it.claimedBy.replace('admin:', '')) + '</span>') : '<span class="pill off">未认领</span>'}</td>
         <td><div class="td-actions">
           ${!it.claimedBy ? `<button class="btn primary sm" onclick="rqClaim('${q.kind}', ${it.item_id})">认领</button>` : ''}
           ${mine ? `<button class="btn ghost sm" onclick="rqRelease('${q.kind}', ${it.item_id})">释放</button>` : ''}
-          <button class="btn ghost sm" onclick="go('${RQ_ROUTE[q.kind]}')">去处理</button>
+          <button class="btn ghost sm" data-rq-kind="${q.kind}" data-rq-id="${it.item_id}" onclick="rqOpen('${q.kind}', ${it.item_id})">去处理</button>
         </div></td></tr>`}).join('')}</tbody></table>
       ${(q.kind === 'note' || q.kind === 'report') ? `<div class="row" style="margin-top:10px"><button class="btn primary sm" onclick="rqBatch('${q.kind}')">批量${q.kind === 'note' ? '通过' : '不成立'}</button>
         <span class="td-sub">勾选未认领待办 → 先逐笔预检列异常 → 逐笔执行并反馈结果（单次 ≤50 条；${q.kind === 'note' ? '仅超管/审核员' : '统一处理意见进逐笔审计'}）</span></div>` : ''}`

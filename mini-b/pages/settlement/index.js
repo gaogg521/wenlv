@@ -20,18 +20,20 @@ function periodTitle(p) {
   return m ? m[1] + ' 周结算单（补充 ' + m[2] + '）' : p + ' 周结算单'
 }
 Page({
-  data: { list: [], visibleList: [], loaded: false, detail: {}, expanded: {}, state: 'all', filters: [{k:'all',n:'全部账单'},{k:'pending',n:'待确认'},{k:'processing',n:'处理中'},{k:'paid',n:'已登记回单'}] },
+  data: { list: [], visibleList: [], loaded: false, detail: {}, adjustDetail: {}, expanded: {}, state: 'all', filters: [{k:'all',n:'全部账单'},{k:'pending',n:'待确认'},{k:'processing',n:'处理中'},{k:'paid',n:'已登记回单'}] },
   filterState(e) { this.setData({state:e.currentTarget.dataset.k}); this.applyFilter() },
   applyFilter() { this.setData({visibleList:this.data.list.filter(s=>this.data.state==='all' || this.data.state==='pending' && s.status===0 || this.data.state==='paid' && s.status===3 || this.data.state==='processing' && [1,2,4].includes(s.status))}) },
   toggleBill(e) { const id=e.currentTarget.dataset.id; this.setData({['expanded.'+id]:!this.data.expanded[id]}) },
-  // 展开/收起结算单订单明细（对账逐单可查）
+  // 展开/收起结算单订单明细（对账逐单可查；B2：调整明细一并列出，可追到对应订单）
   async toggleDetail(e) {
     const id = e.currentTarget.dataset.id
     if (this.data.detail[id]) return this.setData({ ['detail.' + id]: null })
     try {
       const s = await api.request('/m/settlements/' + id)
       const items = (s.items || []).map(it => ({ ...it, amountText: (Number(it.amount_pay) / 100).toFixed(2) }))
-      this.setData({ ['detail.' + id]: items })
+      const adjustments = (s.adjustments || []).map(a => ({ ...a, typeText: Number(a.type) === 1 ? '按项退款调整' : '成本变化调整',
+        amountText: (Number(a.amount_fen) / 100).toFixed(2), note: a.note || '' }))
+      this.setData({ ['detail.' + id]: items, ['adjustDetail.' + id]: adjustments })
     } catch (err) { wx.showToast({ title: err.msg || '加载失败', icon: 'none' }) }
   },
   onShow() { this.fetch() },
@@ -54,7 +56,11 @@ Page({
       beanText: (Number(s.amt_beanbudget) / 100).toFixed(2),
       retainedText: (Number(s.amt_retained) / 100).toFixed(2),
       feeTotalText: (Number(s.fee_total) / 100).toFixed(2),
-      feeMerchantText: (Number(s.fee_merchant) / 100).toFixed(2) }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
+      feeMerchantText: (Number(s.fee_merchant) / 100).toFixed(2),
+      // B2：调整净额（待冲抵的按项退款调整，负数=应付减少）；调整后应结 = 应结 + 调整净额
+      adjustText: (Number(s.adjust_pending || 0) / 100).toFixed(2),
+      hasAdjust: Number(s.adjust_pending || 0) !== 0,
+      payableAfterAdjText: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0)) / 100).toFixed(2) }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
   },
   dispute(e) {
     const id = e.currentTarget.dataset.id

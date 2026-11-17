@@ -56,6 +56,13 @@ export const partnerDash = {
         settlement,
         boundMerchants: merchants, reviews }
     }
+    // C-04：超管等非主体角色不再只收到“不可用”——给明确只读预览（结构同上，主体为空=全零展示，不落任何主体数据）
+    if (a.role === 'super') {
+      return { kind: 'preview', previewOnly: true, subject: null, windowDays: 30,
+        recent: { orders: 0, gmvFen: 0 }, refunds: { count: 0, amountFen: 0 },
+        settlement: { count: 0, payableFen: 0, paidFen: 0 }, pendingItems: 0, products: 0,
+        previewNote: '只读预览：主体方经营看板的数据按主体授权范围聚合，超级管理员账号未绑定商户/景区主体，此处为结构预览（全零）。请用商户/景区主体方账号查看真实经营数据。' }
+    }
     throw new BizError(1003, '主体方经营看板仅对商户/景区主体方开放')
   },
 }

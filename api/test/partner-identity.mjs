@@ -134,7 +134,12 @@ void orders
     assert.equal(Number(ds.subject.id), Number(scenicId), '景区看板绑定本景区')
     assert.ok(ds.recent.orders >= 1, '本景区订单聚合非空')
     assert.ok('boundMerchants' in ds && 'reviews' in ds, '景区看板含关联商户/复盘卡')
-    assert.equal((await call('GET', '/admin/partner-dash', null, admin)).code, 1003, '内部角色不开放主体看板（各用各的概览）')
+    // C-04：超管为明确只读预览（previewOnly=true，全零结构，不落主体数据）；其他内部角色仍 1003
+    const dp = ok(await call('GET', '/admin/partner-dash', null, admin))
+    assert.equal(dp.previewOnly, true, '超管主体看板=只读预览（不再只收到不可用提示）')
+    assert.equal(dp.subject, null, '预览不落任何主体数据')
+
+    // 内部角色（如 finance）的各自概览入口不在本用例范围；超管只读预览契约见上
   })
   await check('商户主体方·本店商品自维护：建品强制本店、他店编辑/上下架/排团期拒绝、本店可用', async () => {
     const foreign = ok(await call('POST', '/admin/products', { title: 'PI他店品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, tokM))

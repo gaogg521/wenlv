@@ -2,7 +2,7 @@
 const api = require('../../../utils/api')
 const place = require('../../../utils/place')
 Page({
-  data: { d: null, error: '', gIdx: 0 },
+  data: { d: null, error: '', gIdx: 0, placeNotes: [], notesEmpty: false },
   onLoad(q) { this.kind = q.kind === 'scenic' ? 'scenic' : 'merchant'; this.id = q.id; this.load() },
   load() {
     this.setData({ error: '' })
@@ -16,8 +16,20 @@ Page({
         aliasText: (d.alias || []).join(' / '),
         tours: (d.tours || []).map((t) => ({ ...t, cover: api.coverFor(t) })),
       } })
+      if (this.kind === 'scenic') this.fetchNotes()
     }).catch((e) => this.setData({ error: e.msg || '加载失败' }))
   },
+  // A2：景区详情直接展示 2–3 条公开笔记（独立加载——feed 失败不影响资料主体）；卡片进详情，更多进聚合页
+  fetchNotes() {
+    api.request('/c/notes/feed?scenic=' + this.id + '&pageSize=3').then((d) => {
+      const placeNotes = (d.items || []).slice(0, 3).map((x) => ({
+        id: x.id, title: x.title || '无标题笔记', cover: x.cover || '', video: !!x.hasVideo,
+        place: x.scenicName || '', excerpt: x.excerpt || (x.title || '').slice(0, 30),
+      }))
+      this.setData({ placeNotes, notesEmpty: !placeNotes.length })
+    }).catch(() => this.setData({ placeNotes: [], notesEmpty: true }))
+  },
+  goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   onSwiper(e) { this.setData({ gIdx: e.detail.current }) },
   preview(e) { wx.previewImage({ urls: this.data.d.gallery, current: this.data.d.gallery[Number(e.currentTarget.dataset.i)] }) },
   nav() { const d = this.data.d; place.openGeo(d.geo, d.short_name || d.name, d.address) },

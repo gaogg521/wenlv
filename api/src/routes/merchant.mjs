@@ -80,7 +80,15 @@ const m = {
       WHERE merchant_id = ? AND status IN (20,30,40,50) AND paid_at >= ? AND paid_at < DATE_ADD(?,INTERVAL 1 DAY)`, [mid,period.from,period.to])
     const pending = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
       WHERE o.merchant_id = ? AND tp.status = 1`, [mid])
+    // 今日待办（B2）：口径与下钻列表一致——待接待=今日出发且待服务订单；待核销=在店凭证；
+    // 临近截止=7 日内出发仍在售团期（报名窗口临近关闭）；异常待处理=退款申请中订单（status=60）
+    const arrivals = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM orders o JOIN tour_session s ON s.id = o.session_id
+      WHERE o.merchant_id = ? AND o.status IN (20,30) AND s.depart_date = CURDATE()`, [mid]) : 0
+    const closing = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+      WHERE p.merchant_id = ? AND s.status = 1 AND s.quota > s.booked AND s.depart_date >= CURDATE() AND s.depart_date < CURDATE() + INTERVAL 7 DAY`, [mid]) : 0
+    const abnormal = u.role >= 2 ? await count(`SELECT COUNT(*) c FROM orders o WHERE o.merchant_id = ? AND o.status = 60`, [mid]) : 0
     return { period, demo: process.env.NODE_ENV !== 'production' && !wxpay.isLive(), todayOrders: u.role >= 2 ? Number(today.c) : 0, todayGmv: u.role >= 2 ? fen2yuan(today.gmv) : '—', pendingVerify: pending, myVerified: await count('SELECT COUNT(*) c FROM verification_log WHERE merchant_id=? AND staff_id=? AND result=1 AND created_at>=? AND created_at<DATE_ADD(?,INTERVAL 1 DAY)',[mid,u.uid,period.from,period.to]),
+      todos: { arrivals: Number(arrivals), verify: pending, closing: Number(closing), abnormal: Number(abnormal) },
       level: await levelBrief(mid, req) }
   },
 
@@ -220,16 +228,20 @@ const m = {
     const u = requireUser(req)
     const range = merchantRange(req.query), paging = merchantPaging(req.query)
     const kw = String(req.query.kw || '').trim().slice(0,100), state = String(req.query.state || 'all')
-    const states = { all:'', waiting:'AND o.status IN (20,30)', done:'AND o.status IN (40,50)', refund:'AND o.status IN (60,70)' }
+    const states = { all:'', waiting:'AND o.status IN (20,30)', done:'AND o.status IN (40,50)', refund:'AND o.status IN (60,70)', refund_pending:'AND o.status=60' }
     if (!Object.prototype.hasOwnProperty.call(states,state)) throw new BizError(1001,'订单状态筛选无效')
+    // B2 今日待办下钻：depart=出发日（YYYY-MM-DD），与工作台「待接待」口径一致
+    const depart = String(req.query.depart || '').trim()
+    if (depart && !/^\d{4}-\d{2}-\d{2}$/.test(depart)) throw new BizError(1001, '出发日期格式无效')
     // A-01：rebook 标记 = 免费改签单（实收 ¥0，改签成本商户承担），商户端要能一眼认出
     const rows = await q(`SELECT o.order_no, o.status, o.amount_pay, o.qty, o.paid_at, p.title, o.contact_name, s.depart_date, (o.rebook_of IS NOT NULL) AS rebook
       FROM orders o JOIN tour_product p ON p.id = o.product_id
-      JOIN tour_session s ON s.id=o.session_id
+      LEFT JOIN tour_session s ON s.id=o.session_id
       WHERE o.merchant_id = ? AND o.status >= 20 ${states[state]}
       ${range ? 'AND o.paid_at >= ? AND o.paid_at < DATE_ADD(?,INTERVAL 1 DAY)' : ''}
+      ${depart ? 'AND s.depart_date = ?' : ''}
       ${kw ? 'AND (p.title LIKE ? OR o.order_no LIKE ? OR o.contact_name LIKE ?)' : ''}
-      ORDER BY o.id DESC LIMIT ? OFFSET ?`, [u.merchantId,...(range?[range.from,range.to]:[]),...(kw?['%'+kw+'%','%'+kw+'%','%'+kw+'%']:[]),paging.size,paging.offset])
+      ORDER BY o.id DESC LIMIT ? OFFSET ?`, [u.merchantId,...(range?[range.from,range.to]:[]),...(depart?[depart]:[]),...(kw?['%'+kw+'%','%'+kw+'%','%'+kw+'%']:[]),paging.size,paging.offset])
     return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
   },
 
@@ -250,10 +262,55 @@ const m = {
   },
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
-    return await q(`SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
+    // C-02 服务端分页：paged=1 时按 page/pageSize/from/to/status/kw 返回分页对象；
+    // 不带 paged 旧调用（回归测试）保持原数组形态。status: open 可售 / tight 余量紧张 / closed 截止取消
+    const paged = req.query.paged === '1'
+    const where = ['p.merchant_id = ?']
+    const args = [u.merchantId]
+    if (req.query.history !== '1' && !paged) where.push('s.depart_date >= CURDATE() - INTERVAL 7 DAY')
+    if (req.query.from && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)) { where.push('s.depart_date >= ?'); args.push(req.query.from) }
+    if (req.query.to && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) { where.push('s.depart_date <= ?'); args.push(req.query.to) }
+    if (req.query.status === 'open') where.push('s.status = 1 AND s.quota > s.booked AND s.depart_date >= CURDATE()')
+    else if (req.query.status === 'closed') where.push('(s.status >= 3 OR s.depart_date < CURDATE())')
+    else if (req.query.status === 'tight') where.push('s.status = 1 AND s.depart_date >= CURDATE() AND (s.quota - s.booked) BETWEEN 1 AND 2')
+    const kw = String(req.query.kw || '').trim().slice(0, 60)
+    if (kw) { where.push('(p.title LIKE ? OR DATE_FORMAT(s.depart_date, \'%Y-%m-%d\') LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%') }
+    const sql = `SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
       s.early_price, s.early_days, s.min_go, s.status, p.id AS product_id, p.title
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE p.merchant_id = ? ${req.query.history === '1' ? '' : 'AND s.depart_date >= CURDATE() - INTERVAL 7 DAY'} ORDER BY s.depart_date`, [u.merchantId])
+      WHERE ${where.join(' AND ')}
+      ORDER BY (s.depart_date >= CURDATE()) DESC, s.depart_date, p.id, s.id`
+    if (!paged) return await q(sql, args)
+    const paging = merchantPaging(req.query, 60)
+    const total = await count(`SELECT COUNT(*) c FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE ${where.join(' AND ')}`, args)
+    const items = await q(sql + ' LIMIT ? OFFSET ?', [...args, paging.size, paging.offset])
+    return { items, total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size, hasMore: paging.offset + items.length < total }
+  },
+
+  // C-02 批量操作：ids 内逐条校验归属门店，返回实际生效条数（前端先展示影响范围再提交）
+  'POST /m/supply/batch': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '批量调整需店长及以上')
+    const { ids, action, value } = req.body || {}
+    if (!Array.isArray(ids) || !ids.length || ids.length > 200) throw new BizError(1001, '请选择 1-200 个团期')
+    if (!['adjust_quota', 'price', 'stop_sell'].includes(action)) throw new BizError(1001, '不支持的批量操作')
+    const rows = await q(`SELECT s.id, s.quota, s.booked, s.price_adult, s.early_price, s.status FROM tour_session s
+      JOIN tour_product p ON p.id = s.product_id WHERE p.merchant_id = ? AND s.id IN (${ids.map(() => '?').join(',')})`, [u.merchantId, ...ids.map(Number)])
+    const allowed = rows.filter((s) => Number(s.status) !== 4)
+    let applied = 0
+    for (const s of allowed) {
+      if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ? AND status <> 4', [s.id]); applied++ }
+      else if (action === 'adjust_quota') {
+        const quota = Math.floor(Number(value))
+        if (!(quota >= Number(s.booked))) continue
+        await q('UPDATE tour_session SET quota = ? WHERE id = ?', [quota, s.id]); applied++
+      } else if (action === 'price') {
+        const price = Math.floor(Number(value))
+        if (!(price > 0) || (Number(s.early_price) > 0 && price <= Number(s.early_price))) continue
+        await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [price, s.id]); applied++
+      }
+    }
+    return { requested: ids.length, matched: allowed.length, applied, skipped: ids.length - applied }
   },
 
   'POST /m/supply/:sid': async (req) => {
