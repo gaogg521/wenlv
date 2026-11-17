@@ -50,12 +50,25 @@ export async function seedContent({ verbose = true } = {}) {
   }
   log(merchIds.length, '家商户')
 
+  // R-03/P-06：示例景区（幂等——按名查找，无则种）；部分线路按标题挂景区，
+  // 让「主体方代看 / 景区主体演示 / 商品资料一致性校验」在全新隔离库都有据可依
+  const SCENICS = [['310118', '朱家角古镇', '4A'], ['320508', '耦园', '3A'], ['330500', '安吉竹博园', '4A']]
+  const SCENIC_LINK = [['朱家角剧本游', '朱家角古镇'], ['苏州园林', '耦园'], ['安吉瑜伽谷', '安吉竹博园']]
+  const scenicIds = {}
+  for (const [city, name, lv] of SCENICS) {
+    const hit = await one('SELECT id FROM scenic_spot WHERE name = ?', [name])
+    scenicIds[name] = hit ? hit.id : await tx(async (c) => c.ins(
+      'INSERT INTO scenic_spot (city_code, name, scenic_level, coop_mode, status) VALUES (?,?,?,?,1)', [city, name, lv, '票务分成']))
+  }
+  log(Object.keys(scenicIds).length, '个示例景区（已存在则沿用）')
+
   let sessions = 0
   for (const [title, cat, city, mi, price, gift, days, intro] of PRODUCTS) {
+    const link = SCENIC_LINK.find(([t]) => title.includes(t))
     const pid = await tx(async (c) => c.ins(
-      `INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, status, rich_desc)
-       VALUES ('main',?,?,?,?,?,?,?,?,1,?)`,
-      [city, cat, title, intro, days, price, gift, merchIds[mi], JSON.stringify({ intro, includes: ['示例：行程/费用包含/退改规则可在此编辑'] })]))
+      `INSERT INTO tour_product (channel, city_code, cat, title, subtitle, days_desc, price_from, bean_gift, merchant_id, scenic_id, status, rich_desc)
+       VALUES ('main',?,?,?,?,?,?,?,?,?,1,?)`,
+      [city, cat, title, intro, days, price, gift, merchIds[mi], link ? scenicIds[link[1]] : null, JSON.stringify({ intro, includes: ['示例：行程/费用包含/退改规则可在此编辑'] })]))
     const dates = cat === 'shop' && days === '实物' ? [null] : cat === 'shop'
       ? [new Date(Date.now() + 86400000).toISOString().slice(0, 10)]
       : futureDates(3)

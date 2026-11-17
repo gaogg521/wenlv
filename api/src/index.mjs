@@ -47,6 +47,12 @@ async function bootstrap() {
       [hashPassword(cityPw)])
     console.log('[boot] 城市合伙人演示账号：city310118（仅可见 310118 青浦数据）')
   }
+  // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）——
+  // R-03 的主体方演示账号要绑「安麓大夫第 / 朱家角古镇」，必须在内容种子之后种
+  try {
+    const { seedContent } = await import('../db/seed-content.mjs')
+    await seedContent()
+  } catch (e) { console.error('[boot:seed]', e.message) }
   // R-03：主体方演示账号（幂等）——商户主体绑「安麓大夫第 · 朱家角」（商户端演示登录的门店 1 同一家），
   // 景区主体绑朱家角古镇。生产不种（口令已进 DEFAULT_PASSWORDS 黑名单，生产登录封死）。
   if (!isProduction() || process.env.MERCHANT_PARTNER_PASSWORD) {
@@ -69,11 +75,6 @@ async function bootstrap() {
       console.log('[boot] 景区主体演示账号：sce310118（朱家角古镇 · 主体 ' + demoScenic.id + '）')
     }
   }
-  // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）
-  try {
-    const { seedContent } = await import('../db/seed-content.mjs')
-    await seedContent()
-  } catch (e) { console.error('[boot:seed]', e.message) }
 }
 
 function json(res, code, data, status = 200) {
