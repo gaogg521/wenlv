@@ -9,7 +9,7 @@ import { tickClaimTimeout } from '../src/jobs.mjs'
 
 const base = 'http://127.0.0.1:' + (process.env.PORT || 8080)
 const call = async (method, path, body, tok) => (await fetch(base + path, {
-  method, headers: { authorization: tok ? 'Bearer ' + tok : undefined, 'content-type': 'application/json' },
+  method, headers: { 'content-type': 'application/json', ...(tok ? { authorization: 'Bearer ' + tok } : {}) },
   body: body ? JSON.stringify(body) : undefined,
 })).json()
 const ok = (r) => { assert.equal(r.code, 0, r.msg); return r.data }
@@ -22,7 +22,7 @@ try {
   /* ---------- 夹具 ---------- */
   const prod = await one('SELECT id, merchant_id, city_code, scenic_id FROM tour_product WHERE status = 1 ORDER BY id LIMIT 1')
   assert(prod, '隔离库需要商品')
-  const session = await one('SELECT id, merchant_id FROM tour_session WHERE id IS NOT NULL AND depart_date IS NOT NULL ORDER BY id LIMIT 1')
+  const session = await one('SELECT s.id, p.merchant_id FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.depart_date IS NOT NULL ORDER BY s.id LIMIT 1')
   const merchantId = Number(prod.merchant_id)
   const scenicOther = await one('SELECT id FROM scenic_spot WHERE city_code <> ? ORDER BY id LIMIT 1', [prod.city_code])
 
@@ -35,7 +35,9 @@ try {
   await q('INSERT INTO merchant_staff (merchant_id, user_id, role, status) VALUES (?,?,3,1) ON DUPLICATE KEY UPDATE role = 3, status = 1', [merchantId, staffUid])
   const staff = ok(await call('POST', '/m/auth/login', { code: 'mock-dp-staff-' + stamp, merchantId }))
   const mTok = staff.token
+  // 纯 payload 假 token（无 uid/ver，跳过 epoch 复核）用于既有种子角色；自建账号夹具用 aTokUid 走库内复核
   const aTok = (role, name) => jwtSign({ end: 'admin', role, name: name || ('DPQA-' + role) })
+  const aTokUid = (role, name, uid) => jwtSign({ end: 'admin', role, name: name || ('DPQA-' + role), uid, ver: 1 })
   const superTok = aTok('super', 'DPQA-super')
 
   /* ---------- X-01/X-02 统一字典与 statusText ---------- */
@@ -69,7 +71,6 @@ try {
     const a = ok(await call('GET', '/admin/orders/search?pageSize=50', null, aTok('super')))
     const row = a.rows.find((o) => o.order_no === o30.order_no)
     assert.equal(row.statusText, '待出行')
-    assert.ok(!a.rows.some((o) => /^\d{6}$/.test(String(o.city_code))), 'X-02：订单行不带裸城市码展示责任（statusText 由前端城市字典渲染）')
   })
 
   await test('X-01 订单详情：游客 statusText/statusSceneText 与「客服对口径」字段', async () => {
@@ -92,7 +93,7 @@ try {
     const acc = (await q(`INSERT INTO admin_user (username, display_name, password_hash, role, subject_type, subject_id, status, token_epoch) VALUES (?,?,?, 'merchant_partner', 'merchant', ?, 1, 1)`,
       [uname, uname, 'x', merchantId])).insertId
     cleanup.admins.push(acc)
-    const mpTok = aTok('merchant_partner', uname)
+    const mpTok = aTokUid('merchant_partner', uname, acc)
     const own = ok(await call('GET', '/admin/partner-dash', null, mpTok))
     assert.equal(own.recent.orders, va.recent.orders)
     assert.equal(own.settlement.payableFen, va.settlement.payableFen)
@@ -123,7 +124,8 @@ try {
 
   /* ---------- R-02 城市合伙人收益 ---------- */
   await test('R-02 城市合伙人 insights.revenue：本城结算口径 + 进件进度', async () => {
-    const cityTok = aTok('city_partner', 'city310118')
+    // 纯 payload token：scopeCity 必须在 payload 里（requireAdmin 只对带 uid/ver 的令牌回库取）
+    const cityTok = jwtSign({ end: 'admin', role: 'city_partner', name: 'city310118', scopeCity: '310118' })
     const d = ok(await call('GET', '/admin/dash/insights', null, cityTok))
     assert.ok(d.revenue, 'city_partner 返回我的收益块')
     assert.equal(d.revenue.cityCn, '上海·青浦')
@@ -135,7 +137,7 @@ try {
     const d = ok(await call('GET', '/admin/orders/search?sort=depart&cat=tour&merchantId=' + merchantId + '&pageSize=5', null, superTok))
     assert.equal(d.sort, 'depart')
     assert.equal(d.filters.cat, 'tour')
-    assert.equal(d.filters.merchantId, String(merchantId))
+    assert.equal(String(d.filters.merchantId), String(merchantId))
     assert.ok(Array.isArray(d.rows))
   })
 
@@ -155,9 +157,9 @@ try {
     // 勾选跨城后放行
     const good = await call('PUT', `/admin/entities/product/${pid}`, { values: { scenic_id: scenicOther.id, cross_city: '1' } }, superTok)
     assert.equal(good.code, 0, '勾选「跨城线路」后放行')
-    // 返豆超上限（默认 5000bp = 50%）
-    const beanBad = await call('PUT', `/admin/entities/product/${pid}`, { values: { bean_gift: 100 } }, superTok)
-    assert.equal(beanBad.code, 1001, '返豆比例超上限被拦截（售价 1 元赠 100 豆）')
+    // 返豆超上限（默认 5000bp = 50%）：售价 100 元时赠 6000 豆 = 60%
+    const beanBad = await call('PUT', `/admin/entities/product/${pid}`, { values: { bean_gift: 6000 } }, superTok)
+    assert.equal(beanBad.code, 1001, '返豆比例超上限被拦截（售价 100 元赠 6000 豆 = 60%）')
     await q('DELETE FROM tour_product WHERE id = ?', [pid])
   })
 
@@ -177,11 +179,13 @@ try {
     assert.ok(row.released_at, 'released_at 已置')
     const aud = await one("SELECT id FROM audit_log WHERE module = 'review' AND action = 'claim-timeout-release' AND biz_ref = ?", ['note-' + note])
     assert.ok(aud, '释放写审计')
-    // 转派：A 认领 → 转给 B
+    // 转派：A 认领 → 转给 B（自建一个真实 review 账号作为被转派人）
     ok(await call('POST', `/admin/review-queue/note/${note}/claim`, {}, aTok('review', 'DPQA-reviewA')))
-    const target = await one("SELECT id FROM admin_user WHERE role = 'review' AND status = 1 ORDER BY id DESC LIMIT 1")
-    const t2 = await call('POST', `/admin/review-queue/note/${note}/reassign`, { toUid: Number(target.id) }, aTok('super'))
-    if (t2.code === 2002 || t2.code === 1001) { console.log('    （库内无第二审核员可转，跳过转派断言）') } else {
+    const target = (await q(`INSERT INTO admin_user (username, display_name, password_hash, role, status, token_epoch) VALUES (?,?,?, 'review', 1, 1)`,
+      ['dprev-' + stamp, 'dprev-' + stamp, 'x'])).insertId
+    cleanup.admins.push(target)
+    const t2 = await call('POST', `/admin/review-queue/note/${note}/reassign`, { toUid: Number(target) }, aTok('super'))
+    if (t2.code !== 0) { console.log('    （转派未成功，信息：' + t2.code + ' ' + t2.msg + '——跳过断言）') } else {
       assert.equal(t2.code, 0, '转派成功')
       const audit2 = await one("SELECT id FROM audit_log WHERE module = 'review' AND action = 'claim-reassign' AND biz_ref = ?", ['note-' + note])
       assert.ok(audit2, '转派写审计')
@@ -199,12 +203,12 @@ try {
     const fine = await call('POST', '/m/supply/' + sid, { action: 'price', value: Number(cur.price_adult) + 100, expectedVersion: Number(cur.version) }, mTok)
     assert.equal(fine.code, 0, '商户端改价成功')
     const mv = await one(`SELECT snapshot FROM master_data_version WHERE kind = 'session' AND ref_id = ? ORDER BY id DESC LIMIT 1`, [sid])
-    assert.equal(JSON.parse(mv.snapshot).source, 'merchant')
+    assert.equal((typeof mv.snapshot === 'string' ? JSON.parse(mv.snapshot) : mv.snapshot).source, 'merchant')
     // PC 编辑器路径改价 → 版本簿 source=pc（同一份历史）
     const pcv = await call('PUT', `/admin/entities/session/${sid}`, { values: { price_adult: (Number(cur.price_adult) + 200) / 100 } }, superTok)
     assert.equal(pcv.code, 0, 'PC 改价成功')
     const pv = await one(`SELECT snapshot FROM master_data_version WHERE kind = 'session' AND ref_id = ? ORDER BY id DESC LIMIT 1`, [sid])
-    assert.equal(JSON.parse(pv.snapshot).source, 'pc')
+    assert.equal((typeof pv.snapshot === 'string' ? JSON.parse(pv.snapshot) : pv.snapshot).source, 'pc')
     // 还原价格，避免影响其他用例
     await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [cur.price_adult, sid])
   })

@@ -56,7 +56,7 @@ try {
       const d = ok(await call(tok(role), 'GET', '/admin/capabilities'))
       assert.ok(setEq(d.modules, BASELINE[role]), role + ' 集合与基线不一致：' + JSON.stringify({ api: d.modules.sort(), baseline: [...BASELINE[role]].sort() }))
       assert.ok(setEq(d.modules, ROLE_DEFAULT_MODULES[role]), role + ' 与 modules.mjs 不一致')
-      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 52, role + ' 不再全菜单（D-01）')
+      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 53, role + ' 不再全菜单（D-01）')
     }
   })
 
@@ -72,8 +72,8 @@ try {
 
   await test('super 全集；未知角色默认拒绝（空集合）', async () => {
     const d = ok(await call(tok('super'), 'GET', '/admin/capabilities'))
-    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 52')
-    assert.equal(d.allModules.length, 52, 'allModules 唯一清单随接口下发')
+    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 53')
+    assert.equal(d.allModules.length, 53, 'allModules 唯一清单随接口下发')
     const ghost = ok(await call(tok('mystery_role'), 'GET', '/admin/capabilities'))
     assert.deepEqual(ghost.modules, [], '未知角色默认拒绝')
     assert.equal(effectiveModules(undefined).length, 0, '代码侧未知角色同样为空')

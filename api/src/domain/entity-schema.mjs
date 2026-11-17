@@ -7,7 +7,7 @@
 //   'profile'（默认）     → 表的 profile JSON 列（V27 新增，扩展资料：图集、证照、联系人、行程……）
 // 新增字段只需要在这里加一行；不需要迁移、不需要改接口。
 import { one, q, BizError } from '../db.mjs'
-import { cfgArr } from '../config.mjs'
+import { cfgArr, cfgNum } from '../config.mjs'
 import { sanitizeRich, richTextLength } from '../infra/sanitize.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
 import { validDeadline } from './booking-window.mjs'
@@ -101,10 +101,12 @@ const S = {
           if (mc && mc.city_code && String(mc.city_code) !== String(v.city_code)) errs.city_code = '履约商户所在城市与商品城市不一致；确属跨城线路请勾选「跨城线路」后再保存'
         }
       }
-      // P-06：返豆比例上限走参数中心（bp 存储上限）；超限拦截
+      // P-06：返豆比例上限走参数中心（bp 存储上限）；超限拦截。
+      // validate 收到的是展示口径（price_from 为元），先转分再算比例（红线 3：金额存分）
       if (v.price_from != null && Number(v.price_from) > 0 && Number(v.bean_gift || 0) > 0) {
         const maxBp = await cfgNum('product.bean_gift_max_bp')
-        if (Math.round(Number(v.bean_gift) / Number(v.price_from) * 10000) > maxBp) errs.bean_gift = `完成赠豆占售价比例超过上限（${maxBp / 100}%），请降低赠豆或提高售价`
+        const priceFen = Math.round(Number(v.price_from) * 100)
+        if (Math.round(Number(v.bean_gift) / priceFen * 10000) > maxBp) errs.bean_gift = `完成赠豆占售价比例超过上限（${maxBp / 100}%），请降低赠豆或提高售价`
       }
       return Object.keys(errs).length ? errs : undefined
     },
@@ -899,6 +901,8 @@ export async function save(kind, input, ctx, tx) {
     let id = ctx.id
     if (creating) id = await sc.create(c, vals, { parentId: ctx.parentId })
     const cur = await c.one(`SELECT * FROM ${sc.table} WHERE ${sc.idCol} = ? FOR UPDATE`, [id])
+    // X-03：版本列归属——product/merchant 用 updated_version，session 用 version（在事务内先算好，return 处还要用）
+    const verCol = cur && cur.updated_version != null ? 'updated_version' : (kind === 'session' && cur && cur.version != null ? 'version' : null)
     const sets = [], args = []
     for (const [k, v] of Object.entries(cols)) { sets.push(`\`${k}\` = ?`); args.push(v) }
     for (const [col, kv] of Object.entries(jsonCols)) { sets.push(`\`${col}\` = ?`); args.push(JSON.stringify({ ...(parseJson(cur[col], {}) || {}), ...kv })) }
@@ -917,8 +921,7 @@ export async function save(kind, input, ctx, tx) {
         Object.fromEntries(changed.map((k) => [k, mask(k, vals[k])])))
       // R-01：product/merchant 关键变更入版本簿（同一事务、只增不改；乐观锁版本号随编辑递增）
       // X-03：session（团期）改价同样入簿，快照带来源端（pc/merchant）与操作人——两端共用同一份变更历史
-      const verCol = row && row.updated_version != null ? 'updated_version' : (kind === 'session' && row && row.version != null ? 'version' : null)
-      if (['product', 'merchant', 'session'].includes(kind) && row && verCol) {
+      if (['product', 'merchant', 'session'].includes(kind) && verCol) {
         await c.upd(`UPDATE ${sc.table} SET ${verCol} = ${verCol} + 1 WHERE ${sc.idCol} = ?`, [id])
         const vseq = await c.one('SELECT COALESCE(MAX(version_no), 0) v FROM master_data_version WHERE kind = ? AND ref_id = ?', [kind, id])
         await c.q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
@@ -929,7 +932,7 @@ export async function save(kind, input, ctx, tx) {
             'admin:' + (ctx.admin.name || ''), ctx.versionReason || null])
       }
     }
-    return { id, changed, version: row && verCol ? (row.updated_version != null ? Number(row.updated_version) + 1 : Number(row.version) + 1) : undefined }
+    return { id, changed, version: verCol ? (cur.updated_version != null ? Number(cur.updated_version) + 1 : Number(cur.version) + 1) : undefined }
   })
 }
 
