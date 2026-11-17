@@ -234,10 +234,10 @@ Page({
       this.setData({ pendingImage: { kind: 'image', src: p, data: up.url, uploading: false } })
     } catch (e) {
       wx.showToast({ title: e.msg || '图片上传失败', icon: 'none' })
-      this.setData({ pendingImage: null, canSend: this.computeCanSend(this.data.commentDraft) })
+      this.removePendingImage()
     }
   },
-  removePendingImage() { this.setData({ pendingImage: null, canSend: this.computeCanSend(this.data.commentDraft) }) },
+  removePendingImage() { this.setData({ pendingImage: null, canSend: Boolean(this.data.commentDraft || this.data.pendingAudio) }) },
 
   /* ---------- 语音评论（三期）：wx.getRecorderManager → mp3 → 随评论发送 ---------- */
   recordVoice() {
@@ -260,7 +260,7 @@ Page({
     this.recorder.start({ duration: 30000, format: 'mp3', sampleRate: 16000, numberOfChannels: 1, encodeBitRate: 48000 })
     this.setData({ recording: true })
   },
-  removePendingAudio() { this.setData({ pendingAudio: null, canSend: this.computeCanSend(this.data.commentDraft) }) },
+  removePendingAudio() { this.setData({ pendingAudio: null, canSend: Boolean(this.data.commentDraft || this.data.pendingImage) }) },
   // 试听待发送语音 / 播放列表语音（同一播放器，重复点即停止）
   playCommentAudio(e) {
     const url = e.currentTarget.dataset.url
