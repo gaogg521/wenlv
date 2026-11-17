@@ -150,38 +150,49 @@ async function completeOrder(no) {
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
   // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；带视角参数的写操作网关拒绝）
+  // P-05：服务端筛选（关键词/品类/城市/状态），供应商/景区保留前端联动
   const vq = new URLSearchParams(location.hash.split('?')[1] || '')
-  const vqs = vq.get('viewAsType') ? '?viewAsType=' + encodeURIComponent(vq.get('viewAsType')) + '&viewAsId=' + encodeURIComponent(vq.get('viewAsId') || '') : ''
-  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + vqs), api('GET', '/admin/merchants'),
+  const F = window.__fprod || (window.__fprod = { sup: '', scn: '', kw: '', cat: '', city: '', status: '' })
+  const pq = new URLSearchParams()
+  if (F.kw) pq.set('kw', F.kw)
+  if (F.cat) pq.set('cat', F.cat)
+  if (F.city) pq.set('cityCode', F.city)
+  if (F.status !== '' && F.status != null) pq.set('status', F.status)
+  if (vq.get('viewAsType')) { pq.set('viewAsType', vq.get('viewAsType')); pq.set('viewAsId', vq.get('viewAsId') || '') }
+  const vqs = vq.get('viewAsType') ? 'viewAsType=' + encodeURIComponent(vq.get('viewAsType')) : ''
+  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + (pq.toString() ? '?' + pq.toString() : '')), api('GET', '/admin/merchants'),
     ADMIN_CAPABILITIES.modules.includes('suppliers') ? api('GET', '/admin/suppliers').catch(() => []) : Promise.resolve([]), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
-  const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商品与团期${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('products', '商品 CSV')}${!vqs && adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : `<span class="muted">${vqs ? '只读代看模式下不能修改商品' : '当前角色仅查看，商品维护需运营权限'}</span>`}</div>
     <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
-    <div class="row" style="margin:10px 0 0">
-      <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
+    <div class="row" style="margin:10px 0 0;flex-wrap:wrap">
+      <input id="f_prodKw" type="search" placeholder="搜商品标题" value="${esc(F.kw || '')}" style="max-width:200px">
+      <select id="f_cat" onchange="window.__fprod={...window.__fprod,cat:this.value};products()">
+        <option value="">全部品类</option>${Object.entries(CAT_CN).map(([k, n]) => `<option value="${k}" ${F.cat === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="f_city" onchange="window.__fprod={...window.__fprod,city:this.value};products()">
+        <option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${F.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="f_status" onchange="window.__fprod={...window.__fprod,status:this.value};products()">
+        <option value="">全部状态</option><option value="1" ${F.status === '1' ? 'selected' : ''}>上架</option><option value="0" ${F.status === '0' ? 'selected' : ''}>下架</option></select>
+      <select id="f_supplier" onchange="window.__fprod={...window.__fprod,sup:this.value};products()">
         <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <select id="f_scenic" onchange="window.__fprod={sup:document.getElementById('f_supplier').value,scn:this.value};products()">
+      <select id="f_scenic" onchange="window.__fprod={...window.__fprod,scn:this.value};products()">
         <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
       <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
     </div>
     ${frs.length ? `<table><thead><tr><th></th><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((p) => `<tr>
       <td>${eeThumb(info[p.id])}</td>
-      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
+      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${p.cat === 'shop' ? '库存 ' + Number(p.stock_left || 0) + ' 件' : esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
       <td><span class="pill off">${esc(CAT_CN[p.cat] || p.cat)}</span></td><td>${esc(CITY_CN[p.city_code] || p.city_code)}</td>
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
-      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
+      <td>${adminCan('entity.product.edit') ? `<button class="btn ghost sm" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">库存 / 时段</button>
-          ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="packageItemsDrawer(${p.id})">套餐项</button>` : ''}
-          ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productMore(${p.id}, ${p.status})">更多 ▾</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>
   <div class="card" style="margin-top:16px">
@@ -196,6 +207,22 @@ async function products() {
   </div>`
   promoDiscountList().catch((e) => { document.getElementById('promoDiscountBox').innerHTML = `<p class="muted">折扣规则加载失败：${esc(e.message)}</p>` })
   supplyItemList().catch((e) => { document.getElementById('supplyItemBox').innerHTML = `<p class="muted">供给项加载失败：${esc(e.message)}</p>` })
+  const kwEl = document.getElementById('f_prodKw')
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__fprod = { ...window.__fprod, kw: kwEl.value.trim() }; products() }, 400) } }
+}
+
+// P-05：行内只留「编辑资料 / 库存时段 / 更多」——其余低频操作收进「更多」菜单（两次点击内可达）
+window.productMore = (id, status) => {
+  const canStatus = adminCan('product.status')
+  const canCost = ['super', 'finance', 'ops'].includes(ME?.role)
+  modal('更多操作 · 商品 #' + id, `
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="btn ghost" onclick="closeModal();productProfile(${id})">经营总览</button>
+      ${canStatus ? `<button class="btn ghost" onclick="closeModal();toggleProduct(${id}, ${status === 1 ? 0 : 1})">${status === 1 ? '下架' : '上架'}</button>` : ''}
+      ${canCost ? `<button class="btn ghost" onclick="closeModal();productSupplyEditor(${id})">成本构成</button>
+      <button class="btn ghost" onclick="closeModal();packageItemsDrawer(${id})">套餐项</button>` : ''}
+      <button class="btn ghost" onclick="closeModal();productVersions(${id})">变更历史</button>
+    </div>`, '<button class="btn ghost" onclick="closeModal()">关闭</button>')
 }
 
 /* ============ B01 供给项台账 ============ */

@@ -213,10 +213,11 @@
   window.eeDirty = () => { if (st && document.getElementById('eeRoot')) { st.dirty = true; applyShowIf(); progress() } }
   function applyShowIf() {
     for (const f of st.schema.sections.flatMap((s) => s.fields)) {
-      if (!f.showIf) continue
-      const cur = read(fieldOf(f.showIf[0]))
       const wrap = document.querySelector(`[data-field="${f.k}"]`)
-      if (wrap) wrap.hidden = String(cur ?? '') !== f.showIf[1]
+      if (!wrap) continue
+      // P-05：hideIf=[字段,值]——等于该值时隐藏（商城好物隐藏线路字段）；showIf 为等值显示
+      if (f.showIf) wrap.hidden = String(read(fieldOf(f.showIf[0])) ?? '') !== f.showIf[1]
+      else if (f.hideIf) wrap.hidden = String(read(fieldOf(f.hideIf[0])) ?? '') === f.hideIf[1]
     }
   }
   const empty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length)
@@ -227,7 +228,7 @@
     const ring = document.getElementById('eeRing')
     if (ring) { ring.style.setProperty('--p', pct); ring.querySelector('b').textContent = pct + '%' }
     st.schema.sections.forEach((s, i) => {
-      const req = s.fields.filter((f) => f.required && !(f.showIf && document.querySelector(`[data-field="${f.k}"]`)?.hidden))
+      const req = s.fields.filter((f) => f.required && !(f.showIf && document.querySelector(`[data-field="${f.k}"]`)?.hidden) && !(f.hideIf && document.querySelector(`[data-field="${f.k}"]`)?.hidden))
       const miss = req.filter((f) => empty(vals[f.k])).length
       const nav = document.querySelector(`.ee-nav a[data-i="${i}"] small`)
       if (nav) { nav.textContent = miss ? `缺 ${miss} 项必填` : `${s.fields.filter((f) => !empty(vals[f.k])).length}/${s.fields.length}`; nav.className = miss ? 'warn' : '' }

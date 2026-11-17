@@ -806,12 +806,24 @@ const admin = {
       if (!['merchant', 'scenic'].includes(vatP) || !viP) throw new BizError(1001, '代看主体参数无效')
       subSql += vatP === 'merchant' ? ' AND p.merchant_id = ?' : ' AND p.scenic_id = ?'; subParams.push(viP)
     }
-    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
+    // P-05：服务端筛选（关键词/品类/城市/状态）；stock_left 供商城商品副标题显示库存池余量
+    const condsPX = []
+    const kwPX = String(req.query.kw || '').trim()
+    if (kwPX) condsPX.push(['p.title LIKE ?', '%' + kwPX + '%'])
+    const catPX = String(req.query.cat || '').trim()
+    if (catPX) condsPX.push(['p.cat = ?', catPX])
+    const cityPX = String(req.query.cityCode || '').trim()
+    if (cityPX) condsPX.push(['p.city_code = ?', cityPX])
+    if (['0', '1'].includes(String(req.query.status))) condsPX.push(['p.status = ?', Number(req.query.status)])
+    const wherePX = condsPX.map(([w]) => ' AND ' + w).join('')
+    const argsPX = condsPX.map(([, v]) => v)
+    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name,
+      COALESCE((SELECT SUM(s2.quota - s2.booked) FROM tour_session s2 WHERE s2.product_id = p.id AND s2.depart_date IS NULL), 0) AS stock_left
       FROM tour_product p
       LEFT JOIN merchant m ON m.id = p.merchant_id
       LEFT JOIN supplier sup ON sup.id = p.supplier_id
       LEFT JOIN scenic_spot sc ON sc.id = p.scenic_id
-      WHERE 1=1 ${sc.sql}${subSql} ORDER BY p.id DESC`, [...sc.params, ...subParams])
+      WHERE 1=1 ${sc.sql}${subSql}${wherePX} ORDER BY p.id DESC`, [...sc.params, ...subParams, ...argsPX])
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])

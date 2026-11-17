@@ -40,7 +40,8 @@ const S = {
         { k: 'subtitle', label: '副标题 / 卖点一句话', type: 'text', store: 'col', max: 80, span: 2, ph: '一句话说清楚为什么值得去' },
         { k: 'cat', label: '主题频道', type: 'select', store: 'col', required: true, options: DICT.productCat },
         { k: 'city_code', label: '目的地城市', type: 'select', store: 'col', required: true, options: DICT.city },
-        { k: 'days_desc', label: '行程天数', type: 'text', store: 'col', max: 20, ph: '如：1天 / 2天1夜' },
+        { k: 'cross_city', label: '跨城线路', type: 'switch', store: { json: 'profile', key: 'cross_city' }, help: '商品城市与关联景区/履约商户城市不一致时必须勾选（P-06 一致性校验）' },
+        { k: 'days_desc', label: '行程天数', type: 'text', store: 'col', max: 20, ph: '如：1天 / 2天1夜', hideIf: ['cat', 'shop'] },
         { k: 'price_from', label: '起售价', type: 'money', store: 'col', required: true, min: 1, unit: '元', help: '列表展示的"起"价；实际以团期价格为准' },
         { k: 'bean_gift', label: '完成赠送旅豆', type: 'int', store: 'col', min: 0, max: 100000, unit: '豆' },
         { k: 'reward_extra_beans', label: '专属完成奖励旅豆', type: 'int', store: { json: 'profile', key: 'reward_extra_beans' }, min: 0, max: 10000, unit: '豆', help: '该产品订单完成时额外赠送（B14）；沿用旅豆预算双闸+账本幂等' },
@@ -57,16 +58,16 @@ const S = {
         { k: 'highlights', label: '玩法亮点', type: 'lines', store: { json: 'rich_desc', key: 'highlights' }, max: 8, span: 2, help: '每行一条，详情页以要点展示' },
         { k: 'intro', label: '行程介绍', type: 'rich', store: { json: 'rich_desc', key: 'intro' }, span: 2, required: true },
       ] },
-      { title: '行程安排', desc: '按时间顺序排列，详情页以时间线展示', fields: [
-        { k: 'itinerary', label: '行程节点', type: 'repeat', span: 2, max: 20, of: [
+      { title: '行程安排', desc: '按时间顺序排列，详情页以时间线展示（商城好物不显示本组字段）', fields: [
+        { k: 'itinerary', label: '行程节点', type: 'repeat', span: 2, max: 20, hideIf: ['cat', 'shop'], of: [
           { k: 'time', label: '时间/日程', type: 'text', max: 20, ph: 'D1 09:00' },
           { k: 'title', label: '安排', type: 'text', max: 40, required: true, ph: '古镇集合 · 领取剧本' },
           { k: 'desc', label: '说明', type: 'textarea', max: 300 },
           { k: 'image', label: '配图', type: 'image' },
         ] },
-        { k: 'transport', label: '交通方式', type: 'text', max: 80, span: 2, ph: '如：自行前往集合点 / 含往返大巴' },
-        { k: 'meeting_point', label: '集合地点', type: 'text', store: 'col', max: 120, span: 2 },
-        { k: 'meeting_geo', label: '集合点坐标', type: 'geo', help: '用于导航，格式：纬度,经度' },
+        { k: 'transport', label: '交通方式', type: 'text', max: 80, span: 2, ph: '如：自行前往集合点 / 含往返大巴', hideIf: ['cat', 'shop'] },
+        { k: 'meeting_point', label: '集合地点', type: 'text', store: 'col', max: 120, span: 2, hideIf: ['cat', 'shop'] },
+        { k: 'meeting_geo', label: '集合点坐标', type: 'geo', help: '用于导航，格式：纬度,经度', hideIf: ['cat', 'shop'] },
       ] },
       { title: '费用与须知', fields: [
         { k: 'includes', label: '费用包含', type: 'lines', store: { json: 'rich_desc', key: 'includes' }, max: 20 },
@@ -87,7 +88,25 @@ const S = {
       ] },
     ],
     async validate(v, ctx) {
-      if (v.merchant_id && !(await one('SELECT id FROM merchant WHERE id = ? AND status = 1', [v.merchant_id]))) return { merchant_id: '请选择已审核的履约商户' }
+      const errs = {}
+      if (v.merchant_id && !(await one('SELECT id FROM merchant WHERE id = ? AND status = 1', [v.merchant_id]))) errs.merchant_id = '请选择已审核的履约商户'
+      // P-06：资料一致性——商品城市须与关联景区、履约商户城市一致；确属跨城须显式勾选「跨城线路」
+      if (v.city_code && !v.cross_city) {
+        if (v.scenic_id) {
+          const sc = await one('SELECT city_code FROM scenic_spot WHERE id = ?', [v.scenic_id])
+          if (sc && sc.city_code && String(sc.city_code) !== String(v.city_code)) errs.city_code = '关联景区所在城市与商品城市不一致；确属跨城线路请勾选「跨城线路」后再保存'
+        }
+        if (!errs.city_code && v.merchant_id) {
+          const mc = await one('SELECT city_code FROM merchant WHERE id = ?', [v.merchant_id])
+          if (mc && mc.city_code && String(mc.city_code) !== String(v.city_code)) errs.city_code = '履约商户所在城市与商品城市不一致；确属跨城线路请勾选「跨城线路」后再保存'
+        }
+      }
+      // P-06：返豆比例上限走参数中心（bp 存储上限）；超限拦截
+      if (v.price_from != null && Number(v.price_from) > 0 && Number(v.bean_gift || 0) > 0) {
+        const maxBp = await cfgNum('product.bean_gift_max_bp')
+        if (Math.round(Number(v.bean_gift) / Number(v.price_from) * 10000) > maxBp) errs.bean_gift = `完成赠豆占售价比例超过上限（${maxBp / 100}%），请降低赠豆或提高售价`
+      }
+      return Object.keys(errs).length ? errs : undefined
     },
     async create(c, v) {
       return c.ins(`INSERT INTO tour_product (channel, city_code, cat, title, price_from, merchant_id, status, rich_desc)
@@ -851,8 +870,11 @@ export async function save(kind, input, ctx, tx) {
     const w = findBanned(vals[k])
     if (w) errors[k] = `含小程序审核敏感词「${w}」${SUGGEST[w] ? '，建议改为「' + SUGGEST[w] + '」' : ''}`
   }
-  // showIf 隐藏的字段不校验
-  for (const f of allFields(sc)) if (f.showIf && vals[f.showIf[0]] !== undefined && String(vals[f.showIf[0]] ?? '') !== f.showIf[1]) delete errors[f.k]
+  // showIf 隐藏的字段不校验；P-05：hideIf（等于该值时隐藏，如商城好物隐藏线路字段）同样跳过
+  for (const f of allFields(sc)) {
+    if (f.showIf && vals[f.showIf[0]] !== undefined && String(vals[f.showIf[0]] ?? '') !== f.showIf[1]) delete errors[f.k]
+    if (f.hideIf && vals[f.hideIf[0]] !== undefined && String(vals[f.hideIf[0]] ?? '') === f.hideIf[1]) delete errors[f.k]
+  }
   if (sc.validate) Object.assign(errors, (await sc.validate({ ...before, ...vals }, { creating, row, id: ctx.id })) || {})
   if (Object.keys(errors).length) {
     const first = Object.entries(errors)[0]

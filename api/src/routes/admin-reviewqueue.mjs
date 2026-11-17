@@ -52,7 +52,28 @@ async function staffOf(req) {
 }
 
 export const adminReviewQueue = {
-  // 队列聚合：四类待办各返回前 20 条（含等待时长与认领状态），total 为独立计数
+  // P-07：组长转派——当前认领释放、目标审核员获得新认领（同事务 + 审计）；转派后原认领人不再能提交判定
+  'POST /admin/review-queue/:kind/:itemId/reassign': async (req) => {
+    const a = await requireAdmin(req, ['super', 'review'])
+    const { kind, itemId } = req.params
+    if (!KINDS.includes(kind)) throw new BizError(1001, '队列类型无效')
+    const toUid = Number((req.body || {}).toUid || 0)
+    if (!toUid) throw new BizError(1001, '请选择被转派人')
+    const target = await one('SELECT id, name, role, status FROM admin_user WHERE id = ?', [toUid])
+    if (!target || Number(target.status) !== 1) throw new BizError(1004, '被转派人不存在或已停用')
+    if (!CLAIM_ROLES[kind].includes(target.role)) throw new BizError(1003, '被转派人不具备该队列的审核资格（' + CLAIM_ROLE_CN[kind] + '）')
+    await tx(async (c) => {
+      const cur = await c.one('SELECT * FROM review_claim WHERE queue_kind = ? AND item_id = ? AND released_at IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE', [kind, itemId])
+      if (!cur) throw new BizError(2002, '该待办当前没有有效认领，无需转派')
+      if (cur.claimed_uid != null && Number(cur.claimed_uid) === Number(target.id)) throw new BizError(1001, '该待办已由被转派人认领')
+      await c.upd('UPDATE review_claim SET released_at = NOW(3) WHERE id = ?', [cur.id])
+      await c.q('INSERT INTO review_claim (queue_kind, item_id, claimed_by, claimed_uid) VALUES (?,?,?,?)', [kind, itemId, 'admin:' + target.name, target.id])
+      await c.q('INSERT INTO audit_log (actor, module, action, biz_ref, before_val, after_val) VALUES (?,?,?,?,?,?)',
+        ['admin:' + a.name, 'review', 'claim-reassign', kind + '-' + itemId, JSON.stringify({ from: cur.claimed_by }), JSON.stringify({ to: 'admin:' + target.name })])
+    })
+    return { reassigned: true, to: target.name }
+  },
+
   'GET /admin/review-queue': async (req) => {
     const a = await staffOf(req)
     const citySql = a.scopeCity ? ' AND p.city_code = ?' : ''
