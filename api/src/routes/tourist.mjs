@@ -378,7 +378,7 @@ const c = {
     // A-39：groups 过滤下架商品（此前只过滤团期，下架商品仍在列）
     groups: await q(`SELECT s.id session_id, p.id product_id, p.title, p.days_desc, s.depart_date, s.quota - s.booked AS left_seats
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-      WHERE s.status = 1 AND p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')} ORDER BY s.depart_date LIMIT 6`, [bookingNow()]),
+      WHERE s.status = 1 AND p.status = 1 AND p.cat <> 'shop' AND p.channel = 'main' AND ${visibleChannelSql('main')} AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')} ORDER BY s.depart_date LIMIT 6`, [bookingNow()]),
     // 修复6：首页 hot 与列表/详情同一渠道口径（此前无渠道过滤，渠道限定商品从首页仍可进入）
     hot: await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc
       FROM tour_product p WHERE p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} ORDER BY p.id LIMIT 10`),
@@ -390,6 +390,7 @@ const c = {
     // A-30：主题游"全部"不再混入商城商品（此前 6 条里 3 条是 shop SKU）
     const like = '%' + kw + '%'
     const rows = await q(`SELECT p.id, p.title, p.subtitle, p.price_from, p.bean_gift, p.city_code, p.cat, p.days_desc, p.images, p.days_desc days,
+        (SELECT GREATEST(0, IF(i.status = 1, i.quota - i.booked, 0)) FROM tour_session i WHERE i.stock_product_id = p.id) stock,
         JSON_EXTRACT(p.profile, '$.tags') tags_json, m.level merchant_lv
       FROM tour_product p JOIN merchant m ON m.id = p.merchant_id WHERE p.status = 1 AND p.channel = 'main' AND ${visibleChannelSql('main')} ${cat !== 'all' ? 'AND p.cat = ?' : 'AND p.cat <> \'shop\''}
       ${kw ? `AND (p.title LIKE ? OR p.subtitle LIKE ? OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.keywords') IS NOT NULL OR JSON_SEARCH(p.profile, 'one', ?, NULL, '$.tags') IS NOT NULL)` : ''}
@@ -399,7 +400,11 @@ const c = {
     for (const r of rows) if (!(r.merchant_lv in tagCache)) tagCache[r.merchant_lv] = await merchantLevel.listTagFor(r.merchant_lv)
     // D01：列表同源显示原价与折扣后价——对在售团期批量注价，取最低有效单价（作用域按产品城市/渠道判定）
     const ids = rows.map(r => Number(r.id))
-    const sessRows = ids.length ? await q(`SELECT s.product_id, s.depart_date, s.price_adult, s.early_price, s.early_days FROM tour_session s WHERE s.product_id IN (?) AND s.status = 1 AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')}`, [ids, bookingNow()]) : []
+    const sessRows = ids.length ? await q(`SELECT s.product_id, s.depart_date, IF(s.depart_date IS NULL, p.price_from, s.price_adult) price_adult, s.early_price, s.early_days
+      FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+      LEFT JOIN tour_session i ON i.stock_product_id = s.product_id
+      WHERE s.product_id IN (?) AND s.status = 1 AND
+        ((p.cat = 'shop' AND s.id = i.id) OR (i.id IS NULL AND s.depart_date >= CURDATE() AND ${bookingOpenSql('s')}))`, [ids, bookingNow()]) : []
     const priceByProd = {}
     if (sessRows.length) {
       const srcById = Object.fromEntries(rows.map(r => [Number(r.id), r]))
@@ -432,7 +437,9 @@ const c = {
     if (p.channel !== 'main') throw new BizError(1004, '商品不存在或已下架') // B11
     // B11：visible_channels 限定时，未含游客端渠道的商品不可见（修复6：与列表/试算/建单共用 channelAllowed，空数组=不限）
     if (!channelAllowed(p.profile, 'main')) throw new BizError(1004, '商品不存在或已下架')
-    const sessions = await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
+    const stock = p.cat === 'shop' ? await one('SELECT *, quota - booked left_seats FROM tour_session WHERE stock_product_id = ?', [p.id]) : null
+    if (stock) stock.price_adult = p.price_from
+    const sessions = stock ? [] : await q(`SELECT id, depart_date, quota, quota - booked AS left_seats, booked, min_go,
       price_adult, early_price, early_days, status, profile
       FROM tour_session s WHERE product_id = ? AND depart_date >= CURDATE() AND status = 1 AND ${bookingOpenSql('s')} ORDER BY depart_date`, [p.id, bookingNow()])
     const img = (u) => apiImg(u, req)
@@ -448,7 +455,7 @@ const c = {
     const pub = Object.fromEntries(PUB_COLS.map((k) => [k, p[k]]))
     pub.profile = Object.fromEntries(PUB_PROFILE.filter((k) => pf[k] != null).map((k) => [k, pf[k]]))
     // D01：早鸟/商品折扣统一注价——priceNow 为最终有效单价（同源建单试算），命中折扣时附 promo 信息
-    const annotated = await annotateSessions(sessions, { product_id: p.id, city_code: p.city_code, channel: p.channel })
+    const annotated = await annotateSessions(stock ? [stock] : sessions, { product_id: p.id, city_code: p.city_code, channel: p.channel })
     const sessPub = sessions.map(({ profile, ...s }, i) => {
       const ep = order.priceForSession(s)
       const hit = annotated[i]
@@ -458,7 +465,7 @@ const c = {
         isEarly: ep.isEarly, daysToDepart: ep.daysToDepart,
         promo: rule ? { id: Number(rule.id), name: rule.name, zhe: Number(rule.discount_bp) / 1000, stack: Number(rule.stack_early) === 1,
           type: hit.price.type, originalFen: hit.price.originalFen, zheLabel: (Number(rule.discount_bp) / 1000).toFixed(2).replace(/\.?0+$/, '') } : null,
-        groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }
+        ...(p.cat === 'shop' ? {} : { groupProgress: { booked: Number(s.booked), minGo: Number(s.min_go), reached: Number(s.booked) >= Number(s.min_go) } }) }
     })
     return { ...pub, hasPhrase: !!p.phrase_user, beanGift: Number(p.bean_gift), priceLabel: fen2yuan(p.price_from),
       insuranceAvailable: process.env.NODE_ENV !== 'production', insuranceMode: process.env.NODE_ENV === 'production' ? 'unavailable' : 'demo',
@@ -467,13 +474,15 @@ const c = {
       scenicCard: scenicRow ? { id: scenicRow.id, ...entities.publicProfile('scenic', scenicRow, img) } : null,
       relatedFaqs,
       sessions: sessPub,
+      purchase: stock ? { left_seats: Number(stock.status) === 1 ? Number(stock.left_seats) : 0,
+        price_adult: Number(stock.price_adult), priceNow: annotated[0]?.price?.unitFen ?? Number(stock.price_adult) } : null,
       // B02：套餐组成项公开信息（名称/类型/数量/提供方名称；不含成本、分摊等经营字段）
       packageItems: (await q(`SELECT pi.name, pi.kind, pi.qty_per_unit, pi.benefit_desc, pi.benefit_rules, m.name merchant_name FROM package_item pi JOIN merchant m ON m.id = pi.merchant_id
         WHERE pi.product_id = ? AND pi.status = 1 ORDER BY pi.sort, pi.id`, [p.id])).map(i => ({ name: i.name, kind: Number(i.kind), qtyPerUnit: Number(i.qty_per_unit), merchantName: i.merchant_name, benefitDesc: i.benefit_desc || null, benefitRules: i.benefit_rules || null })),
       rating: { avg: Math.round(Number(agg.avg_rating) * 10) / 10, count: Number(agg.count) },
       // 预订须知用的实时规则：页面不写死参数中心可调的数值
       bookingRules: { payTimeoutMin: await cfgNum('order.pay_timeout'), beanDeductMaxPct: await cfgNum('bean.deduct_max_pct'), beanPerYuan: 10,
-        refundRules: refundPolicy.describe(await cfg('order.refund_policy')) } }
+        refundRules: stock ? ['未核销的商品可申请退款'] : refundPolicy.describe(await cfg('order.refund_policy')) } }
   },
 
   // 小程序装修（公开，首屏可用）：文案与配置来自后台「小程序装修」；旅豆数值来自参数中心，页面不写死
@@ -538,7 +547,7 @@ const c = {
     // A-44：隐私授权兜底——未同意（或已撤回）隐私政策不得下单（小程序端下单页有勾选，这里是服务端强校验）
     const consent = await one("SELECT granted FROM user_privacy_consent WHERE user_id = ? AND scene = 'privacy'", [u.uid])
     if (!consent || Number(consent.granted) !== 1) throw new BizError(1001, '请先阅读并同意《隐私政策》后再下单')
-    const { sessionId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone, phoneTicket } = req.body
+    const { sessionId, productId, qty = 1, beanDeduct = 0, promoScene, contactName, contactPhone, phoneTicket } = req.body
     // A-23：联系信息在建单前拦截——此前校验缺失，姓名过长时报"系统错误"但订单已建、旅豆已扣、名额已占
     const name = String(contactName || '').trim()
     if (name.length < 2 || name.length > 20) throw new BizError(1001, '请填写联系人姓名（2–20 字）')
@@ -556,7 +565,7 @@ const c = {
       sealedPhone = sealMobile(String(contactPhone)).enc
     }
     const r = await order.place({
-      userId: u.uid, sessionId, qty, wantedBeans: beanDeduct, promoScene, withInsurance: !!req.body.insurance,
+      userId: u.uid, sessionId, productId, qty, wantedBeans: beanDeduct, promoScene, withInsurance: !!req.body.insurance,
       freedomRightId:req.body.freedomRightId, expectedGoodsFen: req.body.expectedGoodsFen != null ? Number(req.body.expectedGoodsFen) : null,
       beanHook: { deduct: (uid, beans, orderNo) => bean.deduct(uid, beans, bean.BIZ.DEDUCT, orderNo) },
     })
@@ -620,7 +629,7 @@ const c = {
     const rebookOptions = canRebook ? await q(
       `SELECT s.id, s.depart_date, s.price_adult, s.quota - s.booked AS left_seats, p.title
        FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-       WHERE p.channel = (SELECT p2.channel FROM tour_product p2 WHERE p2.id = ?)
+       WHERE p.cat <> 'shop' AND p.channel = (SELECT p2.channel FROM tour_product p2 WHERE p2.id = ?)
          AND s.price_adult * ? = ? AND s.status = 1 AND s.depart_date >= CURDATE()
          AND s.quota - s.booked >= ? AND s.id <> ?
        ORDER BY s.depart_date LIMIT 10`,
@@ -631,13 +640,13 @@ const c = {
     // 已支付后才给领队联系方式；商户只给公开营业信息
     const paid = [20, 30, 40, 50].includes(Number(o.status))
     const sRow = await one('SELECT * FROM tour_session WHERE id = ?', [o.session_id])
-    const trip = sRow ? { departDate: String(sRow.depart_date).slice(0, 10), ...(paid ? entities.sessionForOrder(sRow) : entities.publicProfile('session', sRow)) } : null
+    const trip = sRow?.depart_date ? { departDate: String(sRow.depart_date).slice(0, 10), ...(paid ? entities.sessionForOrder(sRow) : entities.publicProfile('session', sRow)) } : null
     const mRow = await one('SELECT * FROM merchant WHERE id = ?', [o.merchant_id])
     const mp = entities.publicProfile('merchant', mRow, (u) => apiImg(u, req)) || {}
     const merchantContact = { id: o.merchant_id, name: mp.short_name || mp.name, phone: mp.service_phone || null, address: mp.address || null, geo: mp.geo || null, logo: mp.logo || null }
     // 红线 2：只下发白名单字段，不能 { ...o } 整行（会带出 user_id / merchant_id / settlement_id / 版本号、电话密文与历史明文列等内部字段）
     const pub = Object.fromEntries(ORDER_PUBLIC.filter((k) => k in o).map((k) => [k, o[k]]))
-    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, merchantContact,
+    return { ...pub, freedom:await (await import('../domain/freedom.mjs')).orderView(o.order_no,u.uid), contactPhone: maskMobile(o.contact_phone_sealed || o.contact_phone_enc), amountPayLabel: fen2yuan(o.amount_pay), passes, events, reviewed, canRebook, rebookOptions, refundInfo, trip, stockOrder: !!sRow && sRow.depart_date == null, merchantContact,
       orderItems: orderItems.map(i => ({ id: Number(i.id), name: i.name, kind: Number(i.kind), kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', qty: Number(i.qty), cashYuan: fen2yuan(i.cash_fen), benefit: (i.benefit_desc ? i.benefit_desc : '') + (i.benefit_rules ? '；' + i.benefit_rules : ''), status: Number(i.status), statusText: itemStatusText[Number(i.status)] || '待履约', passTotal: Number(i.pass_total), passDone: Number(i.pass_done), merchantName: i.merchant_name })) }
   },
 

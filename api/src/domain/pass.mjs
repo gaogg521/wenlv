@@ -128,8 +128,10 @@ export async function verifyScan({ merchantId, staffId, payload, cityCode, offli
   // A-11：核销日期窗（出发日当天到结束日）——此前完全不校验，出发前 60 天和过期 20 天都能核销
   if (owner.session_id) {
     const s = await one('SELECT depart_date FROM tour_session WHERE id = ?', [owner.session_id])
-    const vw = await verifyWindowOk(s && s.depart_date)
-    if (!vw.ok) return { ok: false, reason: vw.reason, passId }
+    if (!s || s.depart_date) {
+      const vw = await verifyWindowOk(s?.depart_date)
+      if (!vw.ok) return { ok: false, reason: vw.reason, passId }
+    }
   }
 
   const consumed = await tx(async (c) => {

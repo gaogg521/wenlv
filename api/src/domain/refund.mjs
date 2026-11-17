@@ -23,7 +23,7 @@ export async function quoteFor(o) {
   const partialSettled = await one('SELECT COALESCE(SUM(cash_fen),0) s FROM partial_refund WHERE order_id = ? AND status = 2', [o.id])
   const remainingPay = Math.max(0, Number(o.amount_pay) - Number(partialSettled.s))
   const q = policy.quote({ policy: await cfg('order.refund_policy'), amountPayFen: remainingPay, departDate: s.depart_date })
-  return { ...q, departDate: String(s.depart_date).slice(0, 10), amountPayFen: remainingPay, beanReturn: Number(o.bean_deducted) || 0, partialRefunded: Number(o.amount_pay) - remainingPay }
+  return { ...q, departDate: s.depart_date && String(s.depart_date).slice(0, 10), amountPayFen: remainingPay, beanReturn: Number(o.bean_deducted) || 0, partialRefunded: Number(o.amount_pay) - remainingPay }
 }
 
 /**

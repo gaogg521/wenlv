@@ -28,7 +28,7 @@ Page({
         const isPromo = !!(s.promo && Number(s.priceNow) < Number(s.promo.originalFen))
         const zheLabel = s.promo ? String(s.promo.zheLabel || s.promo.zhe || '') : ''
         return {
-          id: s.id, date: s.depart_date + ' ' + weekday(s.depart_date),
+          id: s.id, date: [s.depart_date, weekday(s.depart_date), d.cat === 'shop' && s.info?.gather_time].filter(Boolean).join(' '),
           price: s.priceNowLabel || s.priceLabel,
           priceOriginal: isPromo ? (Number(s.promo.originalFen) / 100).toFixed(2) : '',
           promoTag: isPromo ? zheLabel + '折 · 按原价' + (Math.round(Number(s.promo.zhe) * 100) / 10) + '%付款' : '',
@@ -42,7 +42,11 @@ Page({
       wx.setNavigationBarTitle({ title: d.title || '线路详情' })
       this.setData({
         p: d, sessions, sessPreview, loading: false,
-        minGo: sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
+        displayPrice: d.purchase ? (Number(d.purchase.priceNow) / 100).toFixed(2) : d.priceLabel,
+        canOrder: d.purchase ? Number(d.purchase.left_seats) > 0 : sessions.length > 0,
+        orderLabel: d.purchase ? (d.purchase.left_seats > 0 ? '立即购买' : '已售罄') :
+          d.cat === 'shop' ? (sessions.length ? '选择时段' : '暂无可预约时段') : (sessions.length ? '选择日期' : '暂无团期'),
+        minGo: d.cat === 'shop' ? 0 : sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
         cityName: CITY[d.city_code] || '',
         rules: rulesOf(d),
         // B02：套餐组成项（名称/类型/每份数量/提供方）；空数组=非套餐产品不渲染
@@ -95,7 +99,7 @@ Page({
     wx.previewImage({ urls: this.data.gallery, current: this.data.gallery[Number(e.currentTarget.dataset.i)] })
   },
   goBooking() {
-    if (!this.data.sessions.length) return wx.showToast({ title: '近期暂无可预订团期', icon: 'none' })
+    if (!this.data.canOrder) return wx.showToast({ title: this.data.orderLabel, icon: 'none' })
     wx.navigateTo({ url: '/package-tour/pages/booking/index?id=' + this.pid })
   },
   onShareAppMessage() {

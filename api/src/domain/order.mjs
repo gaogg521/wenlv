@@ -2,7 +2,8 @@
 import { q, one, tx, count, BizError } from '../db.mjs'
 import { cfgNum } from '../config.mjs'
 import { bizDay } from '../infra/bizdate.mjs'
-import { bookingOpen, bookingNow, bookingOpenSql } from './booking-window.mjs'
+import { purchaseInventory } from './shop-stock.mjs'
+import { bookingNow, bookingOpenSql } from './booking-window.mjs'
 import * as bean from './bean.mjs'
 import { attest } from './attest.mjs'
 import { earlyInfo, priceSession, channelAllowed } from './discount.mjs'
@@ -49,12 +50,12 @@ export function priceForSession(s) {
  *  自由豆与旅豆同单可用、账本独立；自由豆门槛按有效商品金额判断；
  *  旅豆抵扣上限锚定最终实付（B ≤ r×X），余额不足按实际少抵；
  *  保费不打折、不凑门槛、不参与优惠。 */
-export async function place({ userId, sessionId, qty, wantedBeans, promoScene, withInsurance, freedomRightId, beanHook, expectedGoodsFen }) {
+export async function place({ userId, sessionId, productId, qty, wantedBeans, promoScene, withInsurance, freedomRightId, beanHook, expectedGoodsFen }) {
   if (withInsurance && process.env.NODE_ENV === 'production') throw new BizError(1001, '保险承保服务尚未接通，暂不可购买保险')
   if (!Number.isInteger(qty) || qty < 1 || qty > 9) throw new BizError(1001, '出行人数应为 1–9 人')
-  const s = await one('SELECT * FROM tour_session WHERE id = ?', [sessionId])
-  if (!s || s.status !== 1) throw new BizError(2001, '团期不可报名')
-  if (!bookingOpen(s.profile)) throw new BizError(2001, '该团期报名已截止')
+  const s = await purchaseInventory({ productId, sessionId })
+  const stock = s.depart_date == null
+  if (stock && withInsurance) throw new BizError(1001, '普通商品不支持出行保险')
   // 出行保险（P2）：产品级保费 × 人数，并入实付（保费不入商户结算与佣金基数）
   const prod = await one('SELECT p.insurance_fee, p.insurance_note, p.status, p.merchant_id,p.city_code,p.channel,p.profile, m.status merchant_status FROM tour_product p JOIN merchant m ON m.id=p.merchant_id WHERE p.id = ?', [s.product_id])
   if (!prod || prod.status !== 1 || prod.merchant_status !== 1) throw new BizError(2001, '商品或商户已暂停营业')
@@ -97,12 +98,21 @@ export async function place({ userId, sessionId, qty, wantedBeans, promoScene, w
     if (discount) freedomFace = discount.discount
     const pay = goods - freedomFace - beanDedFen + insFee
     if (!(pay > 0)) throw new BizError(1001, '订单金额异常，暂不可下单') // A-07 兜底
-    const n = await c.upd(`UPDATE tour_session s SET booked = booked + ? WHERE id = ? AND status=1 AND depart_date>=CURDATE() AND booked + ? <= quota AND ${bookingOpenSql('s')}`, [qty, sessionId, qty, bookingNow()])
-    if (n !== 1) throw new BizError(2001, '名额不足')
+    if (s.cat === 'shop') {
+      await c.one('SELECT id FROM tour_product WHERE id = ? FOR UPDATE', [s.product_id])
+      if (!stock && await c.one('SELECT id FROM tour_session WHERE stock_product_id = ? FOR UPDATE', [s.product_id])) {
+        throw new BizError(2001, '商品已改为直接购买，请刷新页面')
+      }
+    }
+    const n = await c.upd(`UPDATE tour_session s SET booked = booked + ?
+      WHERE id = ? AND status=1 AND booked + ? <= quota
+      AND ${stock ? 'depart_date IS NULL' : `depart_date>=CURDATE() AND ${bookingOpenSql('s')}`}`,
+    stock ? [qty, s.id, qty] : [qty, s.id, qty, bookingNow()])
+    if (n !== 1) throw new BizError(2001, stock ? '库存不足' : '名额不足')
     await c.ins(`INSERT INTO orders (order_no, user_id, product_id, session_id, city_code, merchant_id, qty,
         amount_goods, amount_bean_ded, bean_deducted, amount_pay, status, promo_scene, insurance_fee, contribution_scenic_id)
         SELECT ?,?,?,?,p.city_code,p.merchant_id,?,?,?,?,?,10,?,?,COALESCE(p.scenic_id,0) FROM tour_product p WHERE p.id = ?`,
-      [orderNo, userId, s.product_id, sessionId, qty, goods, beanDedFen, beans, pay, promoScene || null, insFee, s.product_id])
+      [orderNo, userId, s.product_id, s.id, qty, goods, beanDedFen, beans, pay, promoScene || null, insFee, s.product_id])
     await c.q('INSERT INTO order_event (order_id, from_st, to_st, actor, detail) VALUES ((SELECT id FROM orders WHERE order_no = ?),0,10,?,?)',
       [orderNo, 'user:' + userId, JSON.stringify('下单占位')])
     if (beans > 0) await bean.deduct(userId, beans, bean.BIZ.DEDUCT, orderNo, c)

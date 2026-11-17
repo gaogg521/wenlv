@@ -1,11 +1,11 @@
-<view wx:if="{{o.status === 10}}" class="card"><view class="sec-title">订单待支付</view><view class="note">名额为你暂时保留，可继续完成支付。</view><view class="btn" bindtap="retryPay">继续支付</view></view>
+<view wx:if="{{o.status === 10}}" class="card"><view class="sec-title">订单待支付</view><view class="note">{{o.stockOrder ? '库存已为你暂时保留，可继续完成支付。' : '名额为你暂时保留，可继续完成支付。'}}</view><view class="btn" bindtap="retryPay">继续支付</view></view>
 <view wx:if="{{!o}}" class="skeleton" style="height:300rpx;margin-top:20rpx"></view>
 <block wx:else>
   <view class="hero">
     <view class="hi">{{o.title}}</view>
-    <view class="sub2">{{o.days_desc}} · {{o.qty}} 人 · 单号 {{o.order_no}}</view>
+    <view class="sub2">{{o.days_desc}} · {{o.qty}} {{o.stockOrder ? '件' : '人'}} · 单号 {{o.order_no}}</view>
     <view style="margin-top:14rpx"><text style="font-size:44rpx;font-weight:600">¥{{o.amountPayLabel}}</text>
-      <text class="st-tag">{{stName[o.status] || '—'}}</text></view>
+      <text class="st-tag">{{o.stockOrder && o.status === 30 ? '待履约' : (stName[o.status] || '—')}}</text></view>
   </view>
 
   <view class="card" wx:if="{{o.trip && o.status >= 20 && o.status <= 40}}">

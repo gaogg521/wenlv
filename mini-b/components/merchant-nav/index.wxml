@@ -3,7 +3,7 @@
   <view class="nav-row" style="height:{{height}}px;padding-right:{{right}}px">
     <view wx:if="{{home}}" class="nav-brand"><text class="brand-mark">W</text><text>商户工作台</text></view>
     <block wx:else>
-      <button class="nav-back" bindtap="back" aria-label="{{backLabel}}"><text class="back-arrow">‹</text><text>{{tab ? '工作台' : '返回'}}</text></button>
+      <button class="nav-back" bindtap="back" aria-label="{{backLabel}}"><text class="back-arrow">‹</text><text>{{tab ? '返回工作台' : '返回'}}</text></button>
       <view class="nav-title">{{title}}</view>
     </block>
   </view>

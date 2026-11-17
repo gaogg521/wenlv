@@ -250,8 +250,11 @@ const m = {
     // A-46：时间列 DATE_FORMAT 去毫秒（此前 datetime(3) 直出 '2026-11-06 23:37:56.497'）
     const o = await one(`SELECT o.id,o.order_no,o.status,o.qty,o.amount_pay,o.contact_name,o.contact_phone_enc,o.contact_phone_sealed,
       DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') created_at, DATE_FORMAT(o.paid_at, '%Y-%m-%d %H:%i') paid_at,o.rebook_of,p.title,
-      DATE_FORMAT(s.depart_date, '%Y-%m-%d') depart_date
-      FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
+      DATE_FORMAT(s.depart_date, '%Y-%m-%d') depart_date, p.cat,
+      COALESCE(f.discount, 0) freedom_subsidy, f.status freedom_status
+      FROM orders o JOIN tour_product p ON p.id=o.product_id JOIN tour_session s ON s.id=o.session_id
+      LEFT JOIN freedom_order f ON f.order_no=o.order_no AND f.merchant_id=o.merchant_id
+      WHERE o.order_no=? AND o.merchant_id=?`, [req.params.no,u.merchantId])
     if (!o) throw new BizError(2003, '本店无此订单')
     // 密文优先（V38）；历史明文在旧列，加密脚本跑完后清空
     const phone = o.contact_phone_sealed ? (openMobile(o.contact_phone_sealed) || '') : (o.contact_phone_enc ? String(o.contact_phone_enc) : '')
@@ -265,7 +268,7 @@ const m = {
     // C-02 服务端分页：paged=1 时按 page/pageSize/from/to/status/kw 返回分页对象；
     // 不带 paged 旧调用（回归测试）保持原数组形态。status: open 可售 / tight 余量紧张 / closed 截止取消
     const paged = req.query.paged === '1'
-    const where = ['p.merchant_id = ?']
+    const where = ['p.merchant_id = ?', 's.depart_date IS NOT NULL']
     const args = [u.merchantId]
     if (req.query.history !== '1' && !paged) where.push('s.depart_date >= CURDATE() - INTERVAL 7 DAY')
     if (req.query.from && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)) { where.push('s.depart_date >= ?'); args.push(req.query.from) }
@@ -510,8 +513,10 @@ const mPhrase = {
       if (werr) return { ok: false, reason: werr, orderNo: o.order_no }
       if (![20, 30].includes(Number(o.status)))
         return { ok: false, reason: Number(o.status) === 40 || Number(o.status) === 50 ? '该订单已核销过（重复核销）' : '该订单已退款或已关闭，不可核销', orderNo: o.order_no }
-      const vw = await pass.verifyWindowOk(o.depart_date)
-      if (!vw.ok) return { ok: false, reason: vw.reason, orderNo: o.order_no }
+      if (o.depart_date) {
+        const vw = await pass.verifyWindowOk(o.depart_date)
+        if (!vw.ok) return { ok: false, reason: vw.reason, orderNo: o.order_no }
+      }
       const ids = (await q('SELECT id FROM travel_pass WHERE order_id = ? AND status = 1', [o.id])).map((r) => r.id)
       if (!ids.length) return { ok: false, reason: '该订单没有可核销的凭证（可能已核销或已退款）', orderNo: o.order_no }
       for (const pid of ids) {
@@ -529,14 +534,14 @@ const mPhrase = {
       [u.merchantId])).filter((o) => accepts(o))
     const dated = []
     for (const o of cands) {
-      if (!(await pass.verifyWindowOk(o.depart_date)).ok) continue
+      if (o.depart_date && !(await pass.verifyWindowOk(o.depart_date)).ok) continue
       dated.push(o)
     }
     if (!dated.length) return { ok: false, reason: '未找到对应该暗号的在途订单（仅限出发日至结束日内的订单；请让游客出示核销码扫码核销）' }
     if (dated.length > 1) {
       return { ok: false, needConfirm: true, reason: '该暗号对应多张在途订单，请与游客核对后选择',
         candidates: dated.slice(0, 6).map((o) => ({ orderNo: o.order_no, contactName: o.contact_name || null,
-          departDate: String(o.depart_date).slice(0, 10), qty: Number(o.qty) })) }
+          departDate: o.depart_date && String(o.depart_date).slice(0, 10), qty: Number(o.qty) })) }
     }
     const o = dated[0]
     const werr = windowErr(o)

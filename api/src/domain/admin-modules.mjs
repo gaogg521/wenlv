@@ -201,6 +201,7 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/products/:id/overview', 'products', 'view'],
   ['POST', '/admin/products', 'products', 'manage'],
   ['PUT', '/admin/products/:id', 'products', 'manage'],
+  ['PUT', '/admin/products/:id/stock', 'products', 'manage'],
   ['POST', '/admin/products/:id/status', 'products', 'manage'],
   ['POST', '/admin/products/:id/images', 'products', 'manage'],
   ['DELETE', '/admin/products/:id/images', 'products', 'manage'],

@@ -42,7 +42,7 @@ Page({
     const unpaid = this.data.o && this.data.o.status === 10
     let content
     if (unpaid) {
-      content = '订单尚未支付，取消后名额将释放。确认取消？'
+      content = this.data.o.stockOrder ? '订单尚未支付，取消后库存将释放。确认取消？' : '订单尚未支付，取消后名额将释放。确认取消？'
     } else {
       // 先试算：弹窗里的金额就是实际退回金额（与服务端扣费同一函数）
       let qt
@@ -53,7 +53,7 @@ Page({
       const beans = qt.beanReturn ? '，抵扣的 ' + qt.beanReturn + ' 旅豆全额返还' : ''
       content = qt.feeFen > 0
         ? '距出发 ' + qt.daysToDepart + ' 天，按退改规则收取 ' + Math.round(qt.rate * 1000) / 10 + '% 手续费 ¥' + qt.feeLabel + '。\n实际退回 ¥' + qt.refundLabel + beans + '。确认申请？'
-        : '距出发 ' + qt.daysToDepart + ' 天，免手续费，¥' + qt.refundLabel + ' 全额原路退回' + beans + '。确认申请？'
+        : (qt.daysToDepart == null ? '免手续费，¥' : '距出发 ' + qt.daysToDepart + ' 天，免手续费，¥') + qt.refundLabel + ' 全额原路退回' + beans + '。确认申请？'
     }
     const ok = await new Promise(r => wx.showModal({ title: unpaid ? '取消订单' : '申请退款', content, confirmText: unpaid ? '确认取消' : '确认退款', success: r }))
     if (!ok.confirm) return

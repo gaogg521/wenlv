@@ -173,7 +173,7 @@ async function products() {
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
       <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">团期</button>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">库存 / 时段</button>
           ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="packageItemsDrawer(${p.id})">套餐项</button>` : ''}
           ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
@@ -481,13 +481,34 @@ function sessionModal(pid, priceFen) { return entityEditor('session', null, { pa
 /** 团期管理：列出某线路全部团期，逐个用完整编辑器维护 */
 async function sessionsDrawer(pid) {
   const d = await api('GET', '/admin/products/' + pid + '/sessions')
+  const useStock = d.stock != null
+  if (d.cat === 'shop' && (useStock || adminCan('entity.session.create'))) {
+    const previous = useStock ? Number(d.stock.available) : null
+    if (useStock) {
+      drawer('商品库存 · ' + esc(d.title), `<p>有库存时可直接下单，无需预约日期。</p>
+        <label>可售库存 <input id="shopStock" type="number" min="0" max="1000000" step="1" value="${previous}" ${adminCan('entity.session.create') ? '' : 'disabled'}></label>
+        ${adminCan('entity.session.create') ? `<button class="btn primary sm" onclick="saveShopStock(${pid}, ${previous})">保存库存</button>` : ''}`)
+      return
+    }
+  }
   const STS = { 1: '报名中', 2: '已成团', 3: '已截止', 4: '已取消', 5: '未成团' }
-  drawer('团期管理 · ' + esc(d.title), `
-    <div class="row" style="margin:0 0 12px">${adminCan('entity.session.create') ? `<button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button>` : '<span class="muted">团期维护需运营权限</span>'}<span class="muted">${d.sessions.length} 个团期</span></div>
+  drawer((d.cat === 'shop' ? '到店时段 · ' : '团期管理 · ') + esc(d.title), `
+    <div class="row" style="margin:0 0 12px">${adminCan('entity.session.create') ? `<button class="btn primary sm" onclick="sessionModal(${pid}, ${d.priceFrom})">＋ 新增团期</button>` : '<span class="muted">团期维护需运营权限</span>'}<span class="muted">${d.sessions.length} 个${d.cat === 'shop' ? '时段' : '团期'}</span></div>
+    ${d.cat === 'shop' && adminCan('entity.session.create') ? `<div class="row"><label>普通商品库存 <input id="shopStock" type="number" min="0" max="1000000" step="1"></label><button class="btn ghost sm" onclick="saveShopStock(${pid}, null)">设为直接购买</button><span class="muted">启用后停止新增时段订单，历史订单保留。</span></div>` : ''}
     ${d.sessions.length ? `<table><thead><tr><th>出发日</th><th>价格</th><th>报名/名额</th><th>状态</th><th></th></tr></thead><tbody>
     ${d.sessions.map((x) => `<tr><td class="num">${esc(String(x.depart_date).slice(0, 10))}</td><td class="money num">${fen(x.price_adult)}${x.early_price ? `<div class="td-sub">早鸟 ${fen(x.early_price)}</div>` : ''}</td>
-      <td class="num">${x.booked}/${x.quota}<div class="td-sub">${x.min_go} 人成团</div></td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
+      <td class="num">${x.booked}/${x.quota}${d.cat === 'shop' ? '' : `<div class="td-sub">${x.min_go} 人成团</div>`}</td><td><span class="pill ${x.status === 1 ? 's30' : 'off'}">${STS[x.status] || x.status}</span></td>
       <td>${adminCan('entity.session.edit') ? `<button class="btn ghost sm" onclick="entityEditor('session', ${x.id}, { onSaved: () => sessionsDrawer(${pid}) })">编辑</button>` : '<span class="muted">仅查看</span>'}</td></tr>`).join('')}</tbody></table>` : emptyBox('还没有团期')}`)
+}
+
+async function saveShopStock(pid, previous) {
+  const input = $('#shopStock')
+  if (!input.value || !input.reportValidity()) return
+  try {
+    await api('PUT', '/admin/products/' + pid + '/stock', { available: Number(input.value), previous })
+    await sessionsDrawer(pid)
+    toast('库存已保存')
+  } catch (e) { toast(e.message, true) }
 }
 
 /* ============ 商户 ============ */
