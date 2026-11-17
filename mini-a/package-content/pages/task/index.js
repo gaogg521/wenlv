@@ -15,6 +15,10 @@ Page({
         slotsText: t.slotsLeft !== null && t.slotsLeft !== undefined ? '（剩 ' + t.slotsLeft + ' 个名额）' : '' } })
     }).catch((e) => this.setData({ error: e.msg || '加载失败' }))
   },
+  previewCover() {
+    const cover = this.data.t?.cover_img
+    if (cover) wx.previewImage({ current: cover, urls: [cover] })
+  },
   async claim() {
     try {
       await api.request('/c/tasks/' + this.id + '/claim', 'POST', {})

@@ -3,12 +3,14 @@
 <block wx:elif="{{p}}">
   <!-- 图集：有实拍图用图集，无图用主题插画 -->
   <view wx:if="{{promoVideo && !legacyItinerary}}" class="card fade-up" style="padding:0;overflow:hidden"><video src="{{promoVideo}}" controls object-fit="contain" style="width:100%;height:420rpx;background:#000" poster=""></video><view class="muted2" style="padding:12rpx 24rpx;font-size:22rpx">{{p.purchase ? '商品视频' : '线路宣传视频'}}</view></view>
-  <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
-    <swiper-item wx:for="{{gallery}}" wx:key="index">
-      <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
-    </swiper-item>
-  </swiper>
-  <view class="g-count">{{galleryCountText}}</view>
+  <view class="dt-cover">
+    <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
+      <swiper-item wx:for="{{gallery}}" wx:key="index">
+        <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
+      </swiper-item>
+    </swiper>
+    <view class="g-count">{{galleryCountText}}</view>
+  </view>
 
   <!-- 标题区：先回答"这是什么、多久、在哪、多少钱" -->
   <view class="book-bar dt-head">
