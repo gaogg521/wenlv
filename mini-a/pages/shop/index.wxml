@@ -2,21 +2,21 @@
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view class="hero">
   <view class="hi">{{site.shop_title}}</view>
-  <view class="sub2">{{site.shop_caption}}</view>
-  <view class="hero-chip"><view class="dot"></view>商城好物随时买 · 到店体验可预约</view>
+  <view class="sub2">{{shopCaption || '在地好物直接买 · 到店体验选时段'}}</view>
 </view>
 <view style="height:12rpx"></view>
 <view class="tour-item fade-up" wx:for="{{items}}" wx:key="id">
   <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill"/><text wx:if="{{item.sampleCover}}" class="tour-sample">商品参考图</text></view><view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
   <view style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-width:0">
     <view class="tour-title">{{item.title}}</view>
-    <view class="tour-desc">{{item.subtitle || item.days_desc || ""}}</view>
+    <view wx:if="{{item.stateLabel}}" class="shop-state {{item.direct ? (item.available ? 'shop-state-available' : 'shop-state-soldout') : 'shop-state-appointment'}}">{{item.stateLabel}}</view>
+    <view wx:if="{{!item.direct && item.subtitle}}" class="tour-desc">{{item.subtitle}}</view>
     <view style="display:flex;align-items:center;gap:16rpx">
       <view class="tour-price" style="margin:0"><text class="rmb">¥</text>{{item.priceText}}</view>
-      <view class="btn sm" bindtap="buy" data-id="{{item.id}}">{{item.buyLabel || '查看详情'}}</view>
+      <view class="btn sm {{item.direct && !item.available ? 'ghost' : ''}}" bindtap="buy" data-id="{{item.id}}">{{item.buyLabel || '查看详情'}}</view>
     </view>
   </view>
 </view>
-<view class="note">{{site.shop_note}}</view>
 
+<view wx:if="{{shopNote}}" class="note">{{shopNote}}</view>
 <view wx:if="{{!loading && !error && !items.length}}" class="empty">在地好物正在准备中，先去看看主题游吧。</view>

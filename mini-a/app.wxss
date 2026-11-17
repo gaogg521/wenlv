@@ -402,3 +402,10 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .pl-note-text text { font-size:20rpx; color:#6b5a41; line-height:1.5; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; }
 .pl-note-title { padding:12rpx 14rpx 14rpx; font-size:22rpx; color:#1f2937; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
 .pl-notes-more { margin:14rpx 32rpx 0; font-size:24rpx; color:var(--brand,#e87722); text-align:right; }
+
+/* 商城库存状态与预约类型 */
+.shop-state{display:inline-block;align-self:flex-start;padding:4rpx 12rpx;border-radius:8rpx;font-size:22rpx;font-weight:600;line-height:1.45}
+.shop-state-available{color:#166044;background:#e7f4ec}
+.shop-state-soldout{color:#963b27;background:#faeee8}
+.shop-state-appointment{color:#335672;background:#eaf2f9}
+.bk-head .shop-state{margin-top:10rpx}

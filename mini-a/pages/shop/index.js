@@ -2,14 +2,30 @@ const api = require('../../utils/api')
 const siteData = require('../../utils/site')
 Page({
   data: { site: siteData.DEFAULT, items: [], fromApi: false, icons: ['🎨', '🍵', '🍙'] },
-  retry() { this.onLoad() },
-  onReady() { siteData.get().then((site) => this.setData({ site })) },
-  onShow() { if (this.data.error) this.retry() }, // A-18：失败后回到本页自动重试
-  onLoad() {
+  retry() { this.loadItems() },
+  onReady() {
+    siteData.get().then(site => this.setData({
+      site,
+      shopCaption: site.shop_caption === siteData.DEFAULT.shop_caption ? '' : site.shop_caption,
+      shopNote: site.shop_note === siteData.DEFAULT.shop_note ? '' : site.shop_note,
+    }))
+  },
+  onShow() { this.loadItems() },
+  loadItems() {
+    if (this.data.loading) return
     this.setData({ loading: true, error: '' })
     api.getTours('shop').then((items) => {
       // D01：商城同样使用列表同源注价（priceNow 已含早鸟/折扣，无优惠时等于原价）
-      this.setData({ items: (items || []).map(t => { const cover = api.coverFor(t); const price = t.priceNow != null ? Number(t.priceNow) : Number(t.price || t.price_from); return { ...t, buyLabel: t.stock == null ? '预约体验' : Number(t.stock) > 0 ? '立即购买' : '查看商品', price, priceText: (price / 100).toFixed(2).replace(/\.?0+$/, ''), cover, sampleCover: api.isReferencePhoto(cover) } }), fromApi: true, loading: false })
+      this.setData({ items: (items || []).map(t => {
+        const cover = api.coverFor(t)
+        const price = Number(t.priceNow ?? t.price ?? t.price_from)
+        const direct = t.stock != null
+        const available = direct && Number(t.stock) > 0
+        return { ...t, direct, available, cover, sampleCover: api.isReferencePhoto(cover),
+          priceText: (price / 100).toFixed(2).replace(/\.?0+$/, ''),
+          stateLabel: direct ? (available ? '有库存' : '已售罄') : '到店预约',
+          buyLabel: direct ? (available ? '立即购买' : '查看商品') : '查看时段' }
+      }), fromApi: true, demo: false, loading: false })
     }).catch(e => {
       // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试
       if (api.demoAllowed()) {

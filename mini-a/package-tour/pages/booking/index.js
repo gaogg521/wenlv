@@ -21,7 +21,7 @@ Page({
       d.insuranceFeeYuan = (Number(d.insurance_fee) / 100).toFixed(2)
       // B02：套餐组成项（预订页展示包含内容；空数组=非套餐）
       d.pkgItems = (d.packageItems || []).map((i) => ({ name: i.name, qtyText: '×' + i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefit: (i.benefitDesc ? i.benefitDesc : '') + (i.benefitRules ? '；' + i.benefitRules : '') }))
-      this.setData({ p: d, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !d.purchase && !withFallbackSessions.length,
+      this.setData({ p: d, soldOut: !!d.purchase && Number(d.purchase.left_seats) <= 0, sessions: withFallbackSessions, sel: firstOpen, selView: this.sessView(withFallbackSessions[firstOpen]), loading: false, fallback: !d.purchase && !withFallbackSessions.length,
         gallery, gIdx: 0, rich: { intro: rich.intro || '', highlights: rich.highlights || [], includes: rich.includes || [] },
         rv: d.rating ? { avg: d.rating.avg, count: d.rating.count, list: [] } : this.data.rv }, () => this.updatePrice())
     }).catch(e => this.setData({ error: e.msg || '线路加载失败，请重试', loading: false }))
@@ -71,6 +71,7 @@ Page({
   },
   // 本地估算（登录试算前的即时反馈）：s.priceNow 已是详情接口按早鸟/折扣同源注价的有效单价
   updatePrice() {
+    if (this.data.soldOut) return
     const s = this.selectedInventory()
     if (!s) return
     const goods = Number(s.priceNow || s.price_adult) * this.data.qty
