@@ -39,9 +39,12 @@ Page({
       let pf = {}
       try { pf = typeof d.profile === 'string' ? JSON.parse(d.profile || '{}') : (d.profile || {}) } catch (e) { pf = {} }
       const SUIT = { family: '亲子', couple: '情侣', friends: '朋友结伴', solo: '独自出行', senior: '银发长辈', team: '公司团建' }
+      // 含旧行程节点的实物仍带线路介绍，不在商品详情中展示。
+      const legacyItinerary = !!d.purchase && Array.isArray(pf.itinerary) && pf.itinerary.length > 0
       wx.setNavigationBarTitle({ title: d.title || '线路详情' })
       this.setData({
-        p: d, sessions, sessPreview, loading: false,
+        p: d, sessions, sessPreview, legacyItinerary, loading: false,
+        stockLabel: d.purchase ? (Number(d.purchase.left_seats) > 0 ? '有库存' : '已售罄') : '',
         displayPrice: d.purchase ? (Number(d.purchase.priceNow) / 100).toFixed(2) : d.priceLabel,
         canOrder: d.purchase ? Number(d.purchase.left_seats) > 0 : sessions.length > 0,
         orderLabel: d.purchase ? (d.purchase.left_seats > 0 ? '立即购买' : '已售罄') :

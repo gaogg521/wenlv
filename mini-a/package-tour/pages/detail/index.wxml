@@ -2,7 +2,7 @@
 <view wx:elif="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <block wx:elif="{{p}}">
   <!-- 图集：有实拍图用图集，无图用主题插画 -->
-  <view wx:if="{{promoVideo}}" class="card fade-up" style="padding:0;overflow:hidden"><video src="{{promoVideo}}" controls object-fit="contain" style="width:100%;height:420rpx;background:#000" poster=""></video><view class="muted2" style="padding:12rpx 24rpx;font-size:22rpx">线路宣传视频</view></view>
+  <view wx:if="{{promoVideo && !legacyItinerary}}" class="card fade-up" style="padding:0;overflow:hidden"><video src="{{promoVideo}}" controls object-fit="contain" style="width:100%;height:420rpx;background:#000" poster=""></video><view class="muted2" style="padding:12rpx 24rpx;font-size:22rpx">{{p.purchase ? '商品视频' : '线路宣传视频'}}</view></view>
   <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
     <swiper-item wx:for="{{gallery}}" wx:key="index">
       <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
@@ -13,14 +13,15 @@
   <!-- 标题区：先回答"这是什么、多久、在哪、多少钱" -->
   <view class="book-bar dt-head">
     <view class="dt-title">{{p.title}}</view>
-    <view class="dt-sub" wx:if="{{p.subtitle}}">{{p.subtitle}}</view>
+    <view class="dt-sub" wx:if="{{p.subtitle && !legacyItinerary}}">{{p.subtitle}}</view>
     <view class="dt-meta">
-      <text class="tag">{{p.days_desc || '1天'}}</text>
+      <text wx:if="{{p.purchase}}" class="shop-state {{canOrder ? 'shop-state-available' : 'shop-state-soldout'}}">{{stockLabel}}</text>
+      <text wx:else class="tag">{{p.days_desc || '1天'}}</text>
       <text class="tag blue" wx:if="{{cityName}}">{{cityName}}</text>
       <text class="tag" wx:if="{{rv.count > 0}}">★ {{rv.avg}} · {{rv.count}} 条评价</text>
-      <text class="tag" wx:for="{{extra.tags}}" wx:key="*this">{{item}}</text>
+      <text class="tag" wx:if="{{!legacyItinerary}}" wx:for="{{extra.tags}}" wx:key="*this">{{item}}</text>
     </view>
-    <view class="dt-fit" wx:if="{{extra.suitable || extra.groupSize || extra.ageRange}}">
+    <view class="dt-fit" wx:if="{{!p.purchase && (extra.suitable || extra.groupSize || extra.ageRange)}}">
       <text wx:if="{{extra.suitable}}">适合：{{extra.suitable}}</text>
       <text wx:if="{{extra.groupSize}}">{{extra.groupSize}}</text>
       <text wx:if="{{extra.ageRange}}">{{extra.ageRange}}</text>
@@ -32,8 +33,7 @@
   </view>
 
   <!-- 近期团期：不用进下一页就知道哪天能去 -->
-  <view class="card" wx:if="{{p.purchase}}"><view class="muted2">{{p.purchase.left_seats > 0 ? '有库存，可直接购买' : '暂时售罄'}}</view></view>
-  <block wx:else>
+  <block wx:if="{{!p.purchase}}">
   <view class="sec-title">{{p.cat === 'shop' ? '可预约时段' : '近期团期'}} <text class="more" wx:if="{{sessions.length}}" bindtap="goBooking">全部 {{sessions.length}} 个 ›</text></view>
   <view class="card" wx:if="{{sessPreview.length}}">
     <view class="sess-row" wx:for="{{sessPreview}}" wx:key="id" bindtap="goBooking">
@@ -51,15 +51,15 @@
   <view class="card" wx:else><view class="muted2">{{p.cat === 'shop' ? '近期暂无可预约时段' : '近期暂无可预订团期'}}</view></view>
   </block>
 
-  <view class="sec-title" wx:if="{{rich.highlights.length || rich.intro}}">玩法介绍</view>
-  <view class="card" wx:if="{{rich.highlights.length || rich.intro}}">
+  <view class="sec-title" wx:if="{{!legacyItinerary && (rich.highlights.length || rich.intro)}}">{{p.purchase ? '商品介绍' : '玩法介绍'}}</view>
+  <view class="card" wx:if="{{!legacyItinerary && (rich.highlights.length || rich.intro)}}">
     <view class="hl-item" wx:for="{{rich.highlights}}" wx:key="*this"><text class="hl-dot">◆</text>{{item}}</view>
     <rich-text class="rich-p" wx:if="{{rich.intro}}" nodes="{{rich.intro}}"></rich-text>
   </view>
 
   <!-- 行程时间线：后台「行程节点」逐条维护 -->
-  <view class="sec-title" wx:if="{{extra.itinerary.length}}">行程安排</view>
-  <view class="card" wx:if="{{extra.itinerary.length}}">
+  <view class="sec-title" wx:if="{{!p.purchase && extra.itinerary.length}}">行程安排</view>
+  <view class="card" wx:if="{{!p.purchase && extra.itinerary.length}}">
     <view class="iti" wx:for="{{extra.itinerary}}" wx:key="index">
       <view class="iti-dot"></view>
       <view class="iti-body">
@@ -72,20 +72,20 @@
     <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">🚌 {{extra.transport}}</view>
   </view>
 
-  <view class="sec-title" wx:if="{{rich.includes.length || rich.excludes.length}}">费用说明</view>
-  <view class="card" wx:if="{{rich.includes.length || rich.excludes.length}}">
+  <view class="sec-title" wx:if="{{!legacyItinerary && (rich.includes.length || rich.excludes.length)}}">费用说明</view>
+  <view class="card" wx:if="{{!legacyItinerary && (rich.includes.length || rich.excludes.length)}}">
     <view class="fee-h" wx:if="{{rich.includes.length}}">费用包含</view>
     <view class="hl-item" wx:for="{{rich.includes}}" wx:key="*this"><text class="hl-dot ok">✓</text>{{item}}</view>
     <view class="fee-h" wx:if="{{rich.excludes.length}}" style="margin-top:14rpx">费用不含</view>
     <view class="hl-item" wx:for="{{rich.excludes}}" wx:key="*this"><text class="hl-dot no">✕</text>{{item}}</view>
   </view>
 
-  <view class="sec-title" wx:if="{{p.meeting_point}}">集合信息</view>
-  <view class="card" wx:if="{{p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
+  <view class="sec-title" wx:if="{{!p.purchase && p.meeting_point}}">集合信息</view>
+  <view class="card" wx:if="{{!p.purchase && p.meeting_point}}"><view class="rich-p">📍 {{p.meeting_point}}</view>
     <view wx:if="{{extra.meetingGeo}}" class="btn ghost sm-btn" bindtap="navMeeting">导航到集合点</view></view>
 
   <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
-  <view class="sec-title" wx:if="{{scenic || merchant}}">在哪里玩 · 谁来接待</view>
+  <view class="sec-title" wx:if="{{scenic || merchant}}">{{p.purchase ? '商户信息' : '在哪里玩 · 谁来接待'}}</view>
   <view class="card place-card" wx:if="{{scenic}}" bindtap="goPlace" data-kind="scenic" data-id="{{scenic.id}}">
     <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
@@ -110,7 +110,7 @@
 
   <!-- A2 线路关联笔记（显式区分线路关联与同景区推荐，防重复） -->
   <block wx:if="{{lineNotes.length}}">
-    <view class="sec-title">走过这条线路的笔记</view>
+    <view class="sec-title">{{p.purchase ? '商品相关笔记' : '走过这条线路的笔记'}}</view>
     <view class="pl-notes">
       <view class="pl-note" wx:for="{{lineNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
         <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
@@ -140,21 +140,21 @@
   </block>
 
   <!-- 预订须知：与服务端真实规则一致，不写系统做不到的承诺 -->
-  <view class="sec-title">预订须知</view>
+  <view class="sec-title">{{p.purchase ? '购买须知' : '预订须知'}}</view>
   <view class="card">
-    <view class="hl-item"><text class="hl-dot">·</text>下单后 {{rules.payTimeoutMin}} 分钟内完成支付，超时订单自动关闭并释放名额。</view>
-    <view class="hl-item"><text class="hl-dot">·</text>出行当天出示订单里的动态核销码，由商户现场扫码核验。</view>
+    <view class="hl-item"><text class="hl-dot">·</text>下单后 {{rules.payTimeoutMin}} 分钟内完成支付，超时订单自动关闭并释放{{p.purchase ? '库存' : '名额'}}。</view>
+    <view class="hl-item"><text class="hl-dot">·</text>{{p.purchase ? '履约时出示订单里的动态核销码，由商户扫码核验。' : '出行当天出示订单里的动态核销码，由商户现场扫码核验。'}}</view>
     <view class="hl-item"><text class="hl-dot">·</text>凭证核销前可在订单中申请退款，按以下退改规则原路退回，抵扣的旅豆全额返还：</view>
     <view class="hl-item refund-tier" wx:for="{{rules.refundRules}}" wx:key="*this"><text class="hl-dot ok">›</text>{{item}}</view>
     <view class="hl-item" wx:if="{{minGo > 1}}"><text class="hl-dot">·</text>本线路 {{minGo}} 人成团；未成团时可全额退款，也可免费改签同类团期一次。</view>
-    <rich-text wx:if="{{extra.notice}}" class="rich-p" nodes="{{extra.notice}}"></rich-text>
+    <rich-text wx:if="{{!legacyItinerary && extra.notice}}" class="rich-p" nodes="{{extra.notice}}"></rich-text>
     <view class="hl-item"><text class="hl-dot">·</text>旅豆最多抵扣订单金额的 {{rules.deductPct}}%，{{rules.beanPerYuan}} 旅豆抵 1 元。</view>
   </view>
 
-  <view class="sec-title" wx:if="{{p.safety_note}}">安全告知</view>
-  <view class="card safety" wx:if="{{p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
+  <view class="sec-title" wx:if="{{!legacyItinerary && p.safety_note}}">安全告知</view>
+  <view class="card safety" wx:if="{{!legacyItinerary && p.safety_note}}"><view class="rich-p">🛡️ {{p.safety_note}}</view></view>
 
-  <view class="sec-title" wx:if="{{faqs.length}}">关于这条线路的常见问题</view>
+  <view class="sec-title" wx:if="{{faqs.length}}">{{p.purchase ? '商品常见问题' : '关于这条线路的常见问题'}}</view>
   <view class="card" wx:if="{{faqs.length}}">
     <view wx:for="{{faqs}}" wx:key="id">
       <view class="kv" bindtap="toggleFaq" data-i="{{index}}"><text style="flex:1">{{item.question}}</text><text class="v">{{faqOpen === index ? '−' : '+'}}</text></view>

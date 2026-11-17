@@ -3,9 +3,11 @@
 <block wx:elif="{{p}}">
   <view class="card bk-head">
     <view class="dt-title" style="font-size:32rpx">{{p.title}}</view>
-    <view class="muted2">{{p.days_desc || '1天'}} · 履约商户 {{p.merchant_name || '—'}}</view>
+    <view class="muted2"><text wx:if="{{!p.purchase}}">{{p.days_desc || '1天'}} · </text>履约商户 {{p.merchant_name || '—'}}</view>
+    <view wx:if="{{p.purchase}}" class="shop-state {{soldOut ? 'shop-state-soldout' : 'shop-state-available'}}">{{soldOut ? '已售罄' : '有库存'}}</view>
   </view>
 
+  <block wx:if="{{!soldOut}}">
   <block wx:if="{{!p.purchase}}">
   <view class="sec-title">{{p.cat === 'shop' ? '选择到店时段' : '选择出发日期'}}</view>
   <view class="chips">
@@ -106,4 +108,5 @@
     </view>
     <button class="btn dt-cta {{submitting || pricing || !quoted || fallback ? 'off' : ''}}" bindtap="submit" disabled="{{submitting || pricing || !quoted || fallback}}">{{submitting ? '正在提交…' : '提交订单并支付'}}</button>
   </view>
+  </block>
 </block>
