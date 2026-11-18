@@ -49,4 +49,22 @@ for (const [k, code] of [['纯游客', 'mock-pure1'], ['推广员', 'mock-promo1
   const wc = await call('GET', '/c/work-contexts', null, t).catch((e) => ({ subjects: 'err:' + e.message }))
   console.log(`${k}: uid=${k === '纯游客' ? pureUid : k === '推广员' ? promoUid : coopUid} overview.promoter=${ov.promoter} work.subjects=${wc.subjects?.length}`)
 }
+
+// ---- 商户端走查夹具（项2）：店长=mock-chenjie（门店1·角色2）；核销员=mock-verify1（门店1·角色1）----
+const mLogin = (code, merchantId) => call('POST', '/m/auth/login', { code, merchantId })
+const m1 = (await q('SELECT id FROM merchant ORDER BY id LIMIT 1'))[0][0].id
+await mLogin('mock-chenjie', m1)
+// 核销员：先无参登录建档（unbound 会话），补员工行后再带 merchantId 登录
+await mLogin('mock-verify1', null)
+const vUid = (await q("SELECT id FROM user_account WHERE mini_b_openid='mock-openid-mock-verify1'"))[0][0].id
+await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role, status) VALUES (?, ?, 1, 1)', [m1, vUid])
+await mLogin('mock-verify1', m1)
+// B-02 评价页数据：给隔离库已有核销完成单补 1 条评价（幂等）
+const rv = (await q("SELECT id FROM review LIMIT 1"))[0]
+if (!rv.length) {
+  const o = (await q('SELECT o.id, o.user_id, o.product_id FROM orders o WHERE o.status=50 ORDER BY o.id DESC LIMIT 1'))[0][0]
+  if (o) await q("INSERT INTO review (order_id, user_id, product_id, rating, content) VALUES (?, ?, ?, 5, '剧本设计很用心，NPC 特别入戏，孩子全程投入，复盘环节也很惊喜！')", [o.id, o.user_id, o.product_id])
+}
+const staff = (await q('SELECT s.merchant_id, s.user_id, s.role, u.nickname FROM merchant_staff s JOIN user_account u ON u.id=s.user_id WHERE s.merchant_id=? AND s.status=1', [m1]))[0]
+console.log('商户端夹具：门店', m1, '员工', staff.map((s) => `${s.nickname}(role${s.role})`).join('、'), '；评价', (await q('SELECT COUNT(*) n FROM review'))[0][0].n, '条')
 await c.end()
