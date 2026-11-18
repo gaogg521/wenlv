@@ -12,3 +12,8 @@
 .rv-reply.off { opacity: 0.55; }
 .rv-reply-tag { display: block; font-size: 20rpx; color: var(--brand, #57704f); margin-bottom: 4rpx; }
 .list-end { text-align: center; color: var(--muted, #8a919c); font-size: 22rpx; padding: 16rpx 0 8rpx; }
+.nt-head { display: flex; justify-content: space-between; gap: 12rpx; margin-bottom: 8rpx; }
+.nt-title { font-size: 28rpx; font-weight: 600; }
+.nt-date { font-size: 20rpx; color: var(--muted, #8a919c); }
+.nt-excerpt { font-size: 24rpx; color: var(--ink, #1f2a2e); line-height: 1.6; }
+.nt-meta { margin-top: 10rpx; font-size: 22rpx; color: var(--muted, #8a919c); }

@@ -99,6 +99,8 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/security/recent-codes', 'security', 'view'],
   ['GET', '/admin/accounts', 'accounts', 'view'],
   ['POST', '/admin/accounts', 'accounts', 'manage'],
+  // R-05：角色能力矩阵（后台账号页「角色说明」页签）
+  ['GET', '/admin/role-matrix', 'accounts', 'view'],
   ['GET', '/admin/accounts/:id/modules', 'accounts', 'view'],
   ['POST', '/admin/accounts/:id/modules', 'accounts', 'manage'],
   ['GET', '/admin/role-modules', 'accounts', 'view'],

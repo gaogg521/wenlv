@@ -241,6 +241,29 @@ try {
     assert.ok(pend.items.some((r) => Number(r.id) === rv), '被下架后回到「待回复/被下架」筛选')
   })
 
+
+  /* ---------- B-05 游客笔记（商户端只读） ---------- */
+  await test('B-05 游客笔记：仅本店商品关联的已发布公开稿可见（五种夹具隔绝）', async () => {
+    const myProd = await one('SELECT id FROM tour_product WHERE merchant_id = ? LIMIT 1', [merchantId])
+    const mkNote = async (title, status, visibility, product) => (await q('INSERT INTO content_note (user_id, title, body, status, visibility, related_product_id, published_at) VALUES (?,?,?,?,?,?,NOW(3))',
+      [tourist.user.id, stamp + title, JSON.stringify({ text: '正文', cover: '' }), status, visibility, product])).insertId
+    const notesMade = []
+    notesMade.push(await mkNote('公开稿', 2, 'public', myProd.id))
+    notesMade.push(await mkNote('私密稿', 2, 'private', myProd.id))
+    notesMade.push(await mkNote('机审中', 0, 'public', myProd.id))
+    notesMade.push(await mkNote('人工审核', 1, 'public', myProd.id))
+    notesMade.push(await mkNote('驳回稿', 3, 'public', myProd.id))
+    notesMade.push(await mkNote('下架稿', 4, 'public', myProd.id))
+    cleanup.notes.push(...notesMade)
+    const d = ok(await call('GET', '/m/notes?page=1&pageSize=20', null, mTok))
+    const titles = d.items.map((x) => x.title)
+    assert.ok(titles.some((t) => t.includes('公开稿')), '本店已发布公开稿可见')
+    for (const bad of ['私密稿', '机审中', '人工审核', '驳回稿', '下架稿']) {
+      assert.ok(!titles.some((t) => t.includes(bad)), bad + ' 不出现在商户笔记列表')
+    }
+  })
+
+
   /* ---------- X-05 消息触达落记录 ---------- */
   await test('X-05 MOCK 支付/退款逐场景落 notify_log，后台可查', async () => {
     const o10 = await mkOrder(10)

@@ -11,7 +11,8 @@ Page({
   goFaq() { wx.navigateTo({ url: '/pages/faq/index' }) },
   goOrders() { wx.navigateTo({ url: '/package-order/pages/orders/index' }) },
   // A-02：资产与快捷入口
-  goBean() { wx.switchTab({ url: '/pages/bean/index' }) },
+  // A-03：旅豆页已从一级位并入「我的」资产摘要，改为普通页面跳转
+  goBean() { wx.navigateTo({ url: '/pages/bean/index' }) },
   goFreedom() { wx.navigateTo({ url: '/package-promo/pages/freedom/index' }) },
   goOrdersFilter(e) {
     wx.setStorageSync('orderFilter', e.currentTarget.dataset.bucket)

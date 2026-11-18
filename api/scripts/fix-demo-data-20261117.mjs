@@ -25,16 +25,21 @@ line(`# 演示数据修正（D-01～D-06）· 库=${db} · ${APPLY ? '【--apply
 /* ---------- D-01 装修字样恢复正式文案 ---------- */
 line('\n## D-01 品牌装修字样')
 {
-  const site = await one('SELECT id, brand_name, slogan, hero_eyebrow FROM site_config WHERE id = 1')
+  // D-01：装修字样存 site_config.profile JSON（表单引擎 kind=site），不是独立列
+  const site = await one(`SELECT id,
+    JSON_UNQUOTE(JSON_EXTRACT(profile, '$.brand_name')) brand_name,
+    JSON_UNQUOTE(JSON_EXTRACT(profile, '$.slogan')) slogan,
+    JSON_UNQUOTE(JSON_EXTRACT(profile, '$.hero_eyebrow')) hero_eyebrow FROM site_config WHERE id = 1`)
   const want = { brand_name: '向往的自由', slogan: '世界就是我的游乐场', hero_eyebrow: 'WANDERLUST · 向往的自由' }
   const dirty = site && (site.brand_name !== want.brand_name || site.slogan !== want.slogan || site.hero_eyebrow !== want.hero_eyebrow)
   line(`- 当前：brand_name=${JSON.stringify(site?.brand_name)} slogan=${JSON.stringify(site?.slogan)} hero_eyebrow=${JSON.stringify(site?.hero_eyebrow)}`)
   if (dirty) {
     if (APPLY) {
-      await q('UPDATE site_config SET brand_name=?, slogan=?, hero_eyebrow=? WHERE id=1', [want.brand_name, want.slogan, want.hero_eyebrow])
+      await q(`UPDATE site_config SET profile = JSON_SET(profile,
+        '$.brand_name', ?, '$.slogan', ?, '$.hero_eyebrow', ?) WHERE id = 1`, [want.brand_name, want.slogan, want.hero_eyebrow])
       await audit('d01-site-reset', 'site-1', { brand_name: site.brand_name, slogan: site.slogan, hero_eyebrow: site.hero_eyebrow }, want)
       line('- ✅ 已恢复为正式文案（游客端「我的」页底部与「关于」随即生效）')
-    } else line('- 将执行：UPDATE site_config SET brand_name/slogan/hero_eyebrow 为正式文案')
+    } else line('- 将执行：JSON_SET profile.brand_name/slogan/hero_eyebrow 为正式文案')
   } else line('- ✅ 已是正式文案，无需处理')
 }
 

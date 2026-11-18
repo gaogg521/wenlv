@@ -436,6 +436,33 @@ const m = {
   // 商户经营数据（7 日订单/核销趋势 + 本店评分 + 最新评价）
   // A-34：全部按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 丢当天；
   //       核销数按"核销日"（verification_log.created_at）统计，此前错按支付日
+  // ===== B-05：游客笔记——本店商品关联的已发布公开稿（只读）=====
+  // 五种夹具口径（对齐 PR#213）：已发布公开稿可见；私密（visibility=private）、机审中(0)、人工审核(1)、驳回(3)、下架(4) 一律不出现。
+  'GET /m/notes': async (req) => {
+    const u = requireUser(req)
+    const paging = merchantPaging(req.query, 20)
+    const rows = await q(`SELECT n.id, n.title, n.like_count, n.comment_count,
+      DATE_FORMAT(n.published_at, '%Y-%m-%d') published_at, u.nickname author, p.title product_title,
+      COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.cover')), 'null'),
+        JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']')))) cover,
+      SUBSTRING(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.text')), 1, 90) excerpt
+      FROM content_note n
+      JOIN user_account uu ON uu.id = n.user_id
+      JOIN user_account u ON u.id = u.id
+      LEFT JOIN tour_product p ON p.id = n.related_product_id
+      JOIN user_account u2 ON u2.id = u2.id
+      WHERE n.status = 2 AND n.visibility = 'public'
+        AND n.related_product_id IN (SELECT id FROM tour_product WHERE merchant_id = ?)
+      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`.replace('JOIN user_account u ON u.id = u.id', 'JOIN user_account u ON u.id = n.user_id').replace('JOIN user_account u2 ON u2.id = u2.id', '').replace(/u\.nickname/, 'uu.nickname'),
+      [u.merchantId, paging.size, paging.offset])
+    const total = Number((await one(`SELECT COUNT(*) c FROM content_note n JOIN tour_product p ON p.id = n.related_product_id
+      WHERE n.status = 2 AND n.visibility = 'public' AND p.merchant_id = ?`, [u.merchantId])).c)
+    return { items: rows.map((r) => ({ ...r, excerpt: r.excerpt || (r.title || '').slice(0, 40) })),
+      total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size }
+  },
+
+  // A-34：全部按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 丢当天；
+  //       核销数按"核销日"（verification_log.created_at）统计，此前错按支付日
   'GET /m/stats': async (req) => {
     const u = requireUser(req)
     if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
@@ -538,7 +565,10 @@ const mSite = {
     const { getSecrets } = await import('../infra/secrets.mjs')
     const sec = await getSecrets(['WX_A_APPID']).catch(() => ({}))
     return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '',
-      miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null }
+      miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null,
+      roleGuide: { 1: '核销员：到店扫码/暗号核销、查看核销记录。订单、库存与结算不可见。',
+        2: '店长：核销员全部 + 订单查看、团期改价/名额/停售、对账单查看、评价回复。',
+        3: '老板：店长全部 + 店员角色管理、门店码、店员邀请码。' } }
   },
 
   // X-05：商户侧订阅模板 ID（新订单/退款申请/结算待确认；未配置返回 null，前端跳过且不报错）
@@ -550,6 +580,9 @@ const mSite = {
       refundApply: s.WX_TMPL_REFUND_APPLY || process.env.WX_TMPL_REFUND_APPLY || null,
       settlementPending: s.WX_TMPL_SETTLE_PENDING || process.env.WX_TMPL_SETTLE_PENDING || null }
   },
+
+  // R-05：商户端岗位说明（mini-b「我的」角色说明卡按本人岗位高亮）
+  // roleGuide 放 /m/site 响应（随站点配置下发）
 }
 
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------

@@ -1,8 +1,9 @@
-<merchant-nav id="merchant-navigation" title="游客评价" />
-<view class="page-heading"><view class="page-eyebrow">GUEST REVIEWS</view><view class="page-title">游客的声音</view><view class="page-caption">认真回复每一条评价，被平台审核通过后游客可以看到</view></view>
+<merchant-nav id="merchant-navigation" title="游客的声音" />
+<view class="page-heading"><view class="page-eyebrow">GUEST VOICE</view><view class="page-title">游客的声音</view><view class="page-caption">评价与游客笔记 · 内容由平台审核把关</view></view>
+<view class="chips-bar"><view class="chip {{tab === 'reviews' ? 'on' : ''}}" bindtap="switchTab" data-k="reviews">评价</view><view class="chip {{tab === 'notes' ? 'on' : ''}}" bindtap="switchTab" data-k="notes">游客笔记</view></view>
 <view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="retry">重新加载</view></view>
 <view wx:elif="{{loading}}" class="skeleton" style="height:240rpx"></view>
-<block wx:else>
+<block wx:if="{{tab === 'reviews'}}">
   <view class="chips-bar">
     <view wx:for="{{replyFilters}}" wx:key="k" class="chip {{replyStatus === item.k ? 'on' : ''}}" bindtap="filterReply" data-k="{{item.k}}">{{item.n}}</view>
     <view wx:for="{{ratingFilters}}" wx:key="v" class="chip {{rating === item.v ? 'on' : ''}}" bindtap="filterRating" data-v="{{item.v}}">{{item.n}}</view>
@@ -19,4 +20,16 @@
     <view wx:else class="list-end">共 {{total}} 条评价</view>
   </view>
   <view wx:else class="card"><view class="empty"><view class="e-ico">💬</view>暂无符合条件的评价<view class="note">游客完成行程后可以评价本店商品</view></view></view>
+</block>
+<block wx:else>
+  <view wx:if="{{notes.length}}" class="review-list">
+    <view wx:for="{{notes}}" wx:key="id" class="card review-card">
+      <view class="nt-head"><text class="nt-title">{{item.title}}</text><text class="nt-date">{{item.published_at}}</text></view>
+      <view class="nt-excerpt">{{item.excerpt}}</view>
+      <view class="nt-meta">{{item.product_title}} · {{item.author}} · {{item.like_count}} 赞</view>
+    </view>
+    <view wx:if="{{hasMore}}" class="btn ghost" bindtap="loadMore">加载更多</view>
+    <view wx:else class="list-end">共 {{notesTotal}} 篇笔记</view>
+  </view>
+  <view wx:else class="card"><view class="empty"><view class="e-ico">📓</view>还没有关于本店的游客笔记<view class="note">游客发布关联本店商品/景区的公开笔记后出现在这里</view></view></view>
 </block>

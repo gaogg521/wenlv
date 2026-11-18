@@ -9,11 +9,14 @@ Page({
       if(choice !== null) await api.switchStore(stores[choice].id)
     } catch(e) { wx.showToast({title:e.msg || '切换失败',icon:'none'}) }
   },
-  data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
+  data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '', roleGuide: null, roleGuideOpen: false, roleGuideCurrent: '', roleGuideOthers: [] },
   onShow() {
     this.setData({ demoAvailable: api.canDemoLogin() })
     if (getApp().globalData.token) {
-      api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null })).catch(() => {})
+      api.request('/m/site').then((s) => {
+        this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null, roleGuide: s.roleGuide || null })
+        this.fillRoleGuide()
+      }).catch(() => {})
       // X-05：商户侧订阅模板预取（requestSubscribeMessage 必须在手势栈内同步调用）
       api.request('/m/notify/templates').then((t) => {
         this.notifyIds = [t.newOrder, t.refundApply, t.settlementPending].filter(Boolean).slice(0, 3)
@@ -100,6 +103,19 @@ Page({
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
   goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
+  // R-05：岗位说明卡（当前岗位高亮 + 其他岗位摘要；文案由 /m/site.roleGuide 下发）
+  fillRoleGuide() {
+    const guide = this.data.roleGuide
+    if (!guide) return
+    const role = Number(this.data.role) || 0
+    const NAMES = { 1: '核销员', 2: '店长', 3: '老板' }
+    this.setData({
+      roleGuideCurrent: guide[role] ? '【' + (NAMES[role] || '员工') + '】' + guide[role] : '',
+      roleGuideOthers: [1, 2, 3].filter((r) => r !== role && guide[r]).map((r) => ({ role: r, text: (NAMES[r] || '') + '：' + guide[r] })),
+      roleGuideOpen: this.data.roleGuideOpen,
+    })
+  },
+  toggleRoleGuide() { this.setData({ roleGuideOpen: !this.data.roleGuideOpen }) },
   // X-05：到单提醒订阅（模板在 onShow 预取，手势内同步调用 requestSubscribeMessage；未配置跳过）
   askNotify() {
     const ids = this.notifyIds || []

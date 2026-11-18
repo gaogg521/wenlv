@@ -36,7 +36,9 @@
       ['出行安排与领队', [['商品与团期 → 团期', 'products']]], ['商户联系方式', [['商户与进件', 'merchants']]], ['退款试算与退款明细', [['订单 → 退款', 'orders'], ['参数中心', 'config']]]] },
     { end: '游客端', path: 'package-order/pages/pass-code/index', name: '核销凭证', items: [['动态核销码时长', [['参数中心 · 核销', 'config']]], ['入戏暗号、提示、角色与地点', [['暗号管理', 'phrases']]]] },
     { end: '游客端', path: 'pages/bean/index', name: '旅豆', items: [
-      ['返豆比例、抵扣上限、有效期', [['参数中心 · 旅豆', 'config']]], ['旅豆说明', [['小程序装修 · 旅豆与推广', 'site']]], ['旅豆账本', [['积分发行台账', 'pointassets']]]] },
+      ['入口在「我的 → 资产摘要」（A-03 已从一级导航并入）', [['我的页 · 资产摘要', 'miniapp']]], ['返豆比例、抵扣上限、有效期', [['参数中心 · 旅豆', 'config']]], ['旅豆说明', [['小程序装修 · 旅豆与推广', 'site']]], ['旅豆账本', [['积分发行台账', 'pointassets']]]] },
+    { end: '游客端', path: 'pages/notes/index', name: '旅行笔记（一级导航）', items: [
+      ['笔记列表：标题、封面、作者、点赞与评论数', [['内容审核', 'content']]], ['笔记详情（公开稿）', [['内容审核', 'content'], ['创作者池', 'creators']]], ['发布入口', [['创作中心 / 发布页', 'compose']]]] },
     { end: '游客端', path: 'package-content/pages/create/index', name: '创作中心', items: [['约稿任务卡片', [['约稿任务', 'tasks']]], ['笔记审核', [['内容审核', 'content']]], ['下架原因、作者申诉与我的举报反馈', [['举报与申诉', 'contentcases']]], ['未通过原因（笔记 / 约稿投稿）', [['内容审核 → 审核', 'content'], ['约稿任务 → 审核投稿', 'tasks']]]] },
     { end: '游客端', path: 'package-content/pages/compose/index', name: '发布与编辑旅行笔记', items: [['图文、视频与实况笔记发布后的审核', [['内容审核', 'content']]]] },
     { end: '游客端', path: 'package-content/pages/task/index', name: '约稿任务详情', items: [['任务说明、必须提及/禁止出现、参考范例、审核标准、奖励', [['约稿任务', 'tasks']]], ['上次投稿未通过的原因', [['约稿任务 → 审核投稿', 'tasks']]]] },
