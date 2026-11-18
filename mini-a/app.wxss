@@ -46,7 +46,7 @@ page {
 /* ---- 分类 chips ---- */
 .chips { display: flex; flex-wrap: nowrap; gap: 14rpx; margin: 20rpx 24rpx; overflow-x: auto; padding-bottom: 6rpx; }
 .chips::-webkit-scrollbar { display: none; }
-.chip { flex-shrink: 0; padding: 12rpx 30rpx; background: #fff; border-radius: 999rpx; font-size:24rpx; color: var(--ink2); border: 1rpx solid var(--line); }
+.chip { flex-shrink: 0; padding: 12rpx 30rpx; background: #fff; border-radius: 999rpx; font-size:24rpx; color: var(--ink2); border: 1rpx solid var(--line); min-height: 88rpx; display: inline-flex; align-items: center; box-sizing: border-box; }
 .chip.on { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600;
   box-shadow: 0 6rpx 18rpx rgba(232,119,34,.35); }
 
@@ -76,7 +76,7 @@ page {
   padding: 24rpx 0; font-size:32rpx; font-weight:600; margin: 24rpx; letter-spacing: 2rpx;
   box-shadow: 0 10rpx 26rpx rgba(232,119,34,.35); }
 .btn.ghost { background: #fff; color: var(--brand); border: 1.5rpx solid var(--brand); box-shadow: none; }
-.btn.sm { display: inline-block; margin: 0; padding: 12rpx 34rpx; font-size:24rpx; }
+.btn.sm { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 12rpx 34rpx; font-size:24rpx; min-height: 88rpx; line-height: 40rpx; box-sizing: border-box; }
 
 /* ---- 行 / 数值 ---- */
 .kv { display: flex; justify-content: space-between; padding: 22rpx 0; border-bottom: 1rpx solid var(--line); font-size:26rpx; align-items: center; }
