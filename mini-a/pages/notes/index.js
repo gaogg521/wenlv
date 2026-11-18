@@ -32,6 +32,7 @@ Page({
     const id = Number(e.currentTarget.dataset.id)
     this.setData({ notes: this.data.notes.map((n) => n.id === id ? { ...n, cover: '' } : n) })
   },
+  goCompose() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
   goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   goLogin() { wx.navigateTo({ url: '/pages/me/index' }) },
 })
