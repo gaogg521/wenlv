@@ -59,8 +59,8 @@ export async function code2Session(jsCode, client = 'a') {
 }
 
 /** scrypt 密码散列：salt$hex */
-/** 代码里写死过的默认口令：开发 / 演示可用，生产环境禁止 */
-const DEFAULT_PASSWORDS = new Set(['admin123', 'city123'])
+/** 代码里写死过的默认口令：开发 / 演示可用，生产环境禁止（R-03：主体方演示账号口令一并封死） */
+const DEFAULT_PASSWORDS = new Set(['admin123', 'city123', 'mer123', 'sce123'])
 export const isProduction = (env = process.env) => env.NODE_ENV === 'production'
 export const isForbiddenPassword = (pw, env = process.env) => isProduction(env) && DEFAULT_PASSWORDS.has(String(pw || ''))
 /** 首次种后台账号用的口令。生产环境没配（或配成默认口令）就随机生成，只打印一次，首次登录必须改 */

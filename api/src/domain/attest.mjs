@@ -148,7 +148,8 @@ export async function closeBeanDay(bizDate, opts = {}) {
     `SELECT id, tx_no, account_id, direction, amount, after_bal, biz_type, biz_ref
        FROM bean_ledger WHERE DATE(created_at) = ? ORDER BY id`, [day])
   // 空日不封存：没有流水的根没有任何证明力，只会在后台多出"0 叶"噪声
-  if (!rows.length && !opts.force) return { skipped: true, bizDate: day, reason: '当日无旅豆流水，不封存空日' }
+  // force 只用于"重封已封存日"，不能用来给空日造 0 叶根（buildTree 至少需要 1 叶，空日一律 skip）
+  if (!rows.length) return { skipped: true, bizDate: day, reason: '当日无旅豆流水，不封存空日' }
   const creditSum = rows.filter((r) => Number(r.direction) === 1).reduce((s, r) => s + Number(r.amount), 0)
   const debitSum = rows.filter((r) => Number(r.direction) === 2).reduce((s, r) => s + Number(r.amount), 0)
   if (creditSum !== debitSum) {

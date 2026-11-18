@@ -24,7 +24,7 @@ const test = async (name, fn) => { await fn(); passed++; console.log('  ✓ ' + 
 // §5.1 基线快照：2026-11-05 开工（SHA 700f727）时 core.js access 表的实际计算结果；
 // readonly/sre/dev 为 D-01 显式默认（原缺省放行全菜单属缺陷，不作为基线）。
 const BASELINE = {
-  ops: ['users', 'dash', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
+  ops: ['users', 'dash', 'scenario', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
   finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
   review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases', 'comments'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],
@@ -46,8 +46,8 @@ void stamp
 
 try {
   await test('模块清单：50 个模块、分组与图标齐全、key 无重复', async () => {
-    assert.equal(MODULES.length, 52, '模块总数 52（V82 partnerdash + V86 小红书化评论管理 comments）')
-    assert.equal(new Set(MODULE_KEYS).size, 52, 'key 无重复')
+    assert.equal(MODULES.length, 53, '模块总数 53（V82 partnerdash + V86 comments + P-01 scenario）')
+    assert.equal(new Set(MODULE_KEYS).size, 53, 'key 无重复')
     for (const m of MODULES) { assert.ok(m.key && m.name && m.group && m.icon, '模块字段齐全：' + m.key) }
   })
 
@@ -56,7 +56,7 @@ try {
       const d = ok(await call(tok(role), 'GET', '/admin/capabilities'))
       assert.ok(setEq(d.modules, BASELINE[role]), role + ' 集合与基线不一致：' + JSON.stringify({ api: d.modules.sort(), baseline: [...BASELINE[role]].sort() }))
       assert.ok(setEq(d.modules, ROLE_DEFAULT_MODULES[role]), role + ' 与 modules.mjs 不一致')
-      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 52, role + ' 不再全菜单（D-01）')
+      if (['readonly', 'sre', 'dev'].includes(role)) assert.ok(d.modules.length < 53, role + ' 不再全菜单（D-01）')
     }
   })
 
@@ -72,8 +72,8 @@ try {
 
   await test('super 全集；未知角色默认拒绝（空集合）', async () => {
     const d = ok(await call(tok('super'), 'GET', '/admin/capabilities'))
-    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 52')
-    assert.equal(d.allModules.length, 52, 'allModules 唯一清单随接口下发')
+    assert.ok(setEq(d.modules, MODULE_KEYS), 'super 恒为全部 53')
+    assert.equal(d.allModules.length, 53, 'allModules 唯一清单随接口下发')
     const ghost = ok(await call(tok('mystery_role'), 'GET', '/admin/capabilities'))
     assert.deepEqual(ghost.modules, [], '未知角色默认拒绝')
     assert.equal(effectiveModules(undefined).length, 0, '代码侧未知角色同样为空')

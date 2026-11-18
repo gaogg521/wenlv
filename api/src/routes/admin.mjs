@@ -26,6 +26,8 @@ import * as merchantLevel from '../domain/merchant-level.mjs'
 import * as taskReview from '../domain/task-review.mjs'
 import { noteMediaOwner, noteMediaTicket } from '../domain/note-media.mjs'
 import { findBanned, SUGGEST } from '../domain/wording.mjs'
+import { orderStatusText, dictsForClient } from '../domain/dict.mjs'
+import * as notifyDomain from '../domain/notify.mjs'
 import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepagerPng } from '../domain/onepager.mjs'
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
@@ -152,11 +154,29 @@ async function orderFiltersOf(req, a) {
     if (!sub.scenicId) addCond('1 = 0')
     else addCond('o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)', sub.scenicId)
   }
+  // R-01：超管只读代看主体——与主体方登录同一套行级条件（写操作已在网关拒绝）
+  const vat = String(req.query.viewAsType || '').trim()
+  if (vat) {
+    if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+    const vi = Number(req.query.viewAsId || 0)
+    if (!['merchant', 'scenic'].includes(vat) || !vi) throw new BizError(1001, '代看主体参数无效')
+    if (vat === 'merchant') addCond('o.merchant_id = ?', vi)
+    else addCond('o.product_id IN (SELECT id FROM tour_product WHERE scenic_id = ?)', vi)
+    filters.viewAs = vat + ':' + vi
+  }
   const filters = {}
   const cityCode = String(req.query.cityCode || '').trim()
   if (cityCode && !a.scopeCity) { addCond('o.city_code = ?', cityCode); filters.cityCode = cityCode }
   const productId = Number(req.query.productId || 0)
   if (productId) { addCond('o.product_id = ?', productId); filters.productId = productId }
+  // P-04：商户 / 品类 / 推广来源筛选（导出与检索共用同一套条件）
+  const merchantId = Number(req.query.merchantId || 0)
+  if (merchantId) { addCond('o.merchant_id = ?', merchantId); filters.merchantId = merchantId }
+  const cat = String(req.query.cat || '').trim()
+  if (cat === 'shop') { addCond('o.product_id IN (SELECT id FROM tour_product WHERE cat = ?)', 'shop'); filters.cat = 'shop' }
+  else if (cat === 'tour') { addCond('o.product_id IN (SELECT id FROM tour_product WHERE cat <> ?)', 'shop'); filters.cat = 'tour' }
+  const promoSource = Number(req.query.promoSource || 0)
+  if (promoSource) { addCond('o.id IN (SELECT order_id FROM commission WHERE promoter_id = ?)', promoSource); filters.promoSource = promoSource }
   const kw = String(req.query.kw || '').trim()
   if (kw) {
     // 红线 11：完整手机号检索时不把号码原样回显（filters.kw 脱敏）
@@ -201,7 +221,8 @@ const admin = {
     // 前端菜单不再写死 access 表；未知角色默认拒绝（空集合），readonly/sre/dev 不再缺省放行全菜单。
     const { accountModules } = await import('../domain/admin-modules.mjs')
     // P-09：角色默认落地页随 capabilities 下发；不在有效集合内由前端回落第一个可用栏目
-    return { role: a.role, scopeCity: a.scopeCity || null, homeModule: ROLE_HOME[a.role] || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES }
+    // X-01/X-02：字典随 capabilities 下发（订单状态三视角文案、城市、品类、商户类目），前端只做缓存不再自建
+    return { role: a.role, scopeCity: a.scopeCity || null, homeModule: ROLE_HOME[a.role] || null, actions, modules: [...(await accountModules(a.uid, a.role))], allModules: MODULES, dicts: dictsForClient() }
   },
   'POST /admin/login': async (req) => {
     const { username, password } = req.body
@@ -423,6 +444,9 @@ const admin = {
       FROM orders o JOIN tour_product p ON p.id = o.product_id
       WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}
       GROUP BY p.id, p.title, p.cat ORDER BY orders DESC, gmv DESC LIMIT 5`)
+    // P-03：TOP5 占比跟随口径——同窗口总数（订单数 / GMV）随行数据一并下发
+    const topToursTotal = await one(`SELECT COUNT(*) orders, COALESCE(SUM(o.amount_pay),0) gmv
+      FROM orders o WHERE o.status IN (20,30,40,50) AND ${per.between('o.paid_at')} ${oc}`)
     // 转化漏斗：周期内下单的这一批订单走到哪一步（下单 → 已支付 → 已核销）。
     // 以订单状态机为准：20 已支付 / 30 已确认 / 40 已核销 / 50 已完成 / 60 退款中 / 70 已退款 / 90 已关闭；
     // 已支付 = 20~70（含后续退款，退款也是付过款的），已核销 = 40/50
@@ -435,6 +459,20 @@ const admin = {
     // 旅豆使用率是累计存量（累计抵扣 ÷ 累计发放），不随周期；仅总部可见
     const beanFlow = sc ? null : await bean.flow()
     const nCreated = Number(created.c) || 0, nPaid = Number(created.paid) || 0, nVerified = Number(created.verified) || 0
+    // R-02：城市合伙人首页「我的收益」——本城结算应付/已付（与合伙人中心对账同口径：剔除混入外城订单/退改费的结算单）
+    let revenue = null
+    if (a.role === 'city_partner' && sc) {
+      const cityFrom = `FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE m.city_code = ?
+        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.settlement_id = s.id AND o.city_code <> ?)
+        AND NOT EXISTS (SELECT 1 FROM refunds r JOIN orders o ON o.id = r.order_id WHERE r.settlement_id = s.id AND o.city_code <> ?)`
+      const rev = await one(`SELECT COUNT(*) settleCount, COALESCE(SUM(s.amt_fulfill + s.fee_merchant), 0) payable,
+        COALESCE(SUM(IF(s.status = 3, s.amt_fulfill + s.fee_merchant, 0)), 0) paid ${cityFrom}`, [sc, sc, sc])
+      const cityGmv = await one(`SELECT COUNT(*) orders, COALESCE(SUM(o.amount_pay), 0) gmv FROM orders o
+        WHERE o.city_code = ? AND o.status IN (20,30,40,50) AND ${per.between('o.paid_at')}`, [sc])
+      revenue = { city: sc, cityCn: (entities.DICT.city.find(([k]) => k === String(sc)) || [])[1] || sc,
+        settleCount: Number(rev.settleCount) || 0, payableFen: Number(rev.payable) || 0, paidFen: Number(rev.paid) || 0,
+        orders: Number(cityGmv.orders) || 0, gmvFen: Number(cityGmv.gmv) || 0, merchantsPending: Number(pendingMerchants.c) || 0 }
+    }
     return {
       period: { range: per.range, label: per.label, from: per.from, to: per.to, days: per.days },
       pending: {
@@ -444,8 +482,9 @@ const admin = {
         merchants: Number(pendingMerchants.c) || 0,
         tasks: Number(pendingTasks.c) || 0,
       },
-      topTours,
+      topTours, topToursTotal,
       statusMix: statusMix.map((r) => ({ status: Number(r.s), count: Number(r.c) })),
+      revenue,
       funnel: {
         created: nCreated, paid: nPaid, verified: nVerified,
         payRate: pct1(nPaid, nCreated),
@@ -477,7 +516,7 @@ const admin = {
     return (await q(`SELECT o.*, p.title, u.nickname FROM orders o
       JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ${orderSql}`, sc.params)).map(publicOrderPhone)
+      ${orderSql}`, sc.params)).map(publicOrderPhone).map((o) => ({ ...o, statusText: orderStatusText(o.status, 'a') }))
   },
 
   // ===== R-02：改期 / 换团（申请 → 审批 → 执行；申请-审批分离，审批人≠申请人）=====
@@ -662,14 +701,15 @@ const admin = {
     const W = mainConds.length ? 'WHERE ' + mainConds.map((c) => c.sql).join(' AND ') : ''
     const mainArgs = mainConds.flatMap((c) => c.args)
     const from = `FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id`
-    const sort = { id: 'o.id DESC', paid: 'o.paid_at DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC' }[req.query.sort] || 'o.id DESC'
+    // P-04：排序口径——创建时间（默认）/支付时间/出行日期/金额；id 仅作平局 tiebreaker
+    const sort = { created: 'o.created_at DESC, o.id DESC', paid: 'o.paid_at DESC, o.id DESC', depart: '(SELECT s.depart_date FROM tour_session s WHERE s.id = o.session_id) DESC, o.id DESC', amount: 'o.amount_pay DESC, o.id DESC', id: 'o.id DESC' }[req.query.sort] || 'o.created_at DESC, o.id DESC'
     const total = Number((await one(`SELECT COUNT(*) n ${from} ${W}`, mainArgs)).n)
-    const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone)
+    const rows = (await q(`SELECT o.*, p.title, u.nickname ${from} ${W} ORDER BY ${sort} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, mainArgs)).map(publicOrderPhone).map((o) => ({ ...o, statusText: orderStatusText(o.status, 'a') }))
     // 状态计数：baseWhere（去掉状态、其余筛选不变）
     const countsRaw = await q(`SELECT o.status, COUNT(*) n ${from} ${baseWhere ? 'WHERE ' + baseWhere : ''} GROUP BY o.status`, baseArgs)
     const statusCounts = Object.fromEntries(countsRaw.map((r) => [Number(r.status), Number(r.n)]))
     statusCounts.all = countsRaw.reduce((s, r) => s + Number(r.n), 0)
-    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters, sort: req.query.sort || 'id' }
+    return { rows, total, page, pageSize, statusCounts, countsScope: 'same-filters-except-status', filters, sort: req.query.sort || 'created' }
   },
 
   'GET /admin/orders/:no': async (req) => {
@@ -692,7 +732,8 @@ const admin = {
     // 客服处理前先看"如果按梯度退会扣多少"，再决定按规则还是全额特批
     const quote = [20, 30].includes(Number(o.status)) ? await refund.quoteFor(o) : null
     const serviceRecords = await q("SELECT actor, action, after_val, created_at FROM audit_log WHERE module = 'order' AND biz_ref = ? AND action IN ('contact-update','service-note') ORDER BY id DESC LIMIT 30", [o.order_no])
-    return { ...publicOrderPhone(o), events, passes, pay, refunds, refundQuote: quote, serviceRecords, tickets }
+    // X-01：statusText（后台口径）+ statusTextTourist（客服对口径：「游客看到的是：xxx」）
+    return { ...publicOrderPhone(o), statusText: orderStatusText(o.status, 'a'), statusTextTourist: orderStatusText(o.status, 'c'), events, passes, pay, refunds, refundQuote: quote, serviceRecords, tickets }
   },
 
   // 客服只修正履约联系人，不更改订单归属、交易金额、出行人或团期。
@@ -757,12 +798,32 @@ const admin = {
       if (!sub.scenicId) return []
       subSql = ' AND p.scenic_id = ?'; subParams = [sub.scenicId]
     }
-    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name
+    // R-01：超管只读代看主体——商品列表同一套行级过滤（写操作已在网关拒绝）
+    const vatP = String(req.query.viewAsType || '').trim()
+    if (vatP) {
+      if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+      const viP = Number(req.query.viewAsId || 0)
+      if (!['merchant', 'scenic'].includes(vatP) || !viP) throw new BizError(1001, '代看主体参数无效')
+      subSql += vatP === 'merchant' ? ' AND p.merchant_id = ?' : ' AND p.scenic_id = ?'; subParams.push(viP)
+    }
+    // P-05：服务端筛选（关键词/品类/城市/状态）；stock_left 供商城商品副标题显示库存池余量
+    const condsPX = []
+    const kwPX = String(req.query.kw || '').trim()
+    if (kwPX) condsPX.push(['p.title LIKE ?', '%' + kwPX + '%'])
+    const catPX = String(req.query.cat || '').trim()
+    if (catPX) condsPX.push(['p.cat = ?', catPX])
+    const cityPX = String(req.query.cityCode || '').trim()
+    if (cityPX) condsPX.push(['p.city_code = ?', cityPX])
+    if (['0', '1'].includes(String(req.query.status))) condsPX.push(['p.status = ?', Number(req.query.status)])
+    const wherePX = condsPX.map(([w]) => ' AND ' + w).join('')
+    const argsPX = condsPX.map(([, v]) => v)
+    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name,
+      COALESCE((SELECT SUM(s2.quota - s2.booked) FROM tour_session s2 WHERE s2.product_id = p.id AND s2.depart_date IS NULL), 0) AS stock_left
       FROM tour_product p
       LEFT JOIN merchant m ON m.id = p.merchant_id
       LEFT JOIN supplier sup ON sup.id = p.supplier_id
       LEFT JOIN scenic_spot sc ON sc.id = p.scenic_id
-      WHERE 1=1 ${sc.sql}${subSql} ORDER BY p.id DESC`, [...sc.params, ...subParams])
+      WHERE 1=1 ${sc.sql}${subSql}${wherePX} ORDER BY p.id DESC`, [...sc.params, ...subParams, ...argsPX])
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
@@ -878,7 +939,7 @@ const admin = {
     await requireAdmin(req, ['super', 'ops', 'finance'])
     const kind = String(req.query.kind || '').trim()
     const refId = Number(req.query.refId || 0)
-    if (!['product', 'merchant'].includes(kind) || !refId) throw new BizError(1001, '请指定 kind（product/merchant）与 refId')
+    if (!['product', 'merchant', 'session'].includes(kind) || !refId) throw new BizError(1001, '请指定 kind（product/merchant/session）与 refId')
     const rows = await q('SELECT id, kind, ref_id refId, version_no versionNo, snapshot, changed_by changedBy, reason, created_at createdAt FROM master_data_version WHERE kind = ? AND ref_id = ? ORDER BY version_no DESC LIMIT 100', [kind, refId])
     return { kind, refId, rows }
   },
@@ -991,8 +1052,20 @@ const admin = {
   'GET /admin/merchants': async (req) => {
     const a = await requireAdmin(req); const sc = scopeFilter(a)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    // P-08：列表筛选（关键词/类目/等级/状态/城市），与商户列表页下拉同一套
+    const condsM = [], argsM = []
+    const kwM = String(req.query.kw || '').trim()
+    if (kwM) { condsM.push('(name LIKE ? OR merchant_no LIKE ?)'); argsM.push('%' + kwM + '%', '%' + kwM + '%') }
+    const kindM = String(req.query.kind || '').trim()
+    if (kindM) { condsM.push('kind = ?'); argsM.push(kindM) }
+    const levelM = Number(req.query.level || 0)
+    if (levelM) { condsM.push('level = ?'); argsM.push(levelM) }
+    if (['0', '1'].includes(String(req.query.status))) { condsM.push('status = ?'); argsM.push(Number(req.query.status)) }
+    const cityM = String(req.query.cityCode || '').trim()
+    if (cityM) { condsM.push('city_code = ?'); argsM.push(cityM) }
+    const whereM = condsM.length ? ' AND ' + condsM.join(' AND ') : ''
     // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
-    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + ' ORDER BY id', sc.params))
+    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + whereM + ' ORDER BY id', [...sc.params, ...argsM]))
       .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
   },
   // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====
@@ -1013,8 +1086,8 @@ const admin = {
       if (String(row.city_code ?? '') !== String(a.scopeCity)) throw new BizError(1003, '仅可查看本城主体资料')
     }
     const values = entities.readValues(req.params.kind, row)
-    // R-01：乐观锁版本随详情下发，编辑器保存时带回（期间被人改过 → 2002）
-    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values), version: row.updated_version != null ? Number(row.updated_version) : undefined }
+    // R-01：乐观锁版本随详情下发，编辑器保存时带回（期间被人改过 → 2002）；X-03：团期走 version 列
+    return { id: row[sc.idCol], values, completeness: entities.completeness(req.params.kind, values), version: row.updated_version != null ? Number(row.updated_version) : (row.version != null ? Number(row.version) : undefined) }
   },
   // 列表页用：一次取回某类实体全部的扩展资料完整度（不返回资料本身）
   'GET /admin/entities/:kind': async (req) => {
@@ -1183,6 +1256,15 @@ const admin = {
       // 订单数按本景区行复算；调整按本景区行且未冲抵过滤；整单 order_count/五口径/成本不下发
       return promo.scenicSettlementRows(sub.scenicId)
     }
+    // R-01：超管只读代看主体——结算列表同一套行级过滤（写操作已在网关拒绝）
+    const vatS = String(req.query.viewAsType || '').trim()
+    if (vatS) {
+      if (!actionRoles('partner.viewAs').roles.includes(a.role)) throw new BizError(1003, '无主体代看权限')
+      const viS = Number(req.query.viewAsId || 0)
+      if (!['merchant', 'scenic'].includes(vatS) || !viS) throw new BizError(1001, '代看主体参数无效')
+      subSql += vatS === 'merchant' ? ' AND s.merchant_id = ?' : ' AND s.merchant_id IN (SELECT merchant_id FROM tour_product WHERE scenic_id = ?)'
+      subParams.push(viS)
+    }
     // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
     const rows = await q(`SELECT s.*, m.name merchant_name,
         (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1 AND x.applied_settlement_id IS NULL) AS adjust_pending,
@@ -1314,6 +1396,20 @@ const admin = {
     return await q(bizRef ? 'SELECT * FROM attest_event WHERE biz_ref = ?' : 'SELECT * FROM attest_event ORDER BY id DESC LIMIT 50', bizRef ? [bizRef] : [])
   },
 
+  // ===== X-05 消息下发记录：MOCK / 真实下发 / 跳过（未配模板）/ 失败 全部留痕可查 =====
+  'GET /admin/notify-logs': async (req) => {
+    await requireAdmin(req, ['super', 'ops'])
+    const conds = [], args = [], filters = {}
+    const scene = String(req.query.scene || '').trim()
+    if (scene) { conds.push('scene = ?'); args.push(scene); filters.scene = scene }
+    const result = String(req.query.result || '').trim()
+    if (['sent', 'mock', 'skipped', 'failed'].includes(result)) { conds.push('result = ?'); args.push(result); filters.result = result }
+    const W = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const rows = await q(`SELECT id, scene, target, openid, template_id, biz_ref, mock, result, error,
+      DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') created_at FROM notify_log ${W} ORDER BY id DESC LIMIT 200`, args)
+    return { rows, filters, scenes: Object.keys(notifyDomain.SCENES) }
+  },
+
   // 开发联调：触发支付回调（MOCK 通道）；生产由 /callback/wxpay 真实回调
   'POST /admin/dev/mock-pay': async (req) => {
     await requireAdmin(req)
@@ -1340,7 +1436,7 @@ const admin = {
       const W = conds.length ? 'WHERE ' + conds.map((c) => c.sql).join(' AND ') : ''
       const args = conds.flatMap((c) => c.args)
       rows = await q(`SELECT o.order_no, o.status, o.qty, o.amount_goods, o.amount_bean_ded, o.insurance_fee, o.amount_pay,
-        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY o.id DESC LIMIT 5000`, args)
+        o.city_code, o.promo_scene, o.created_at, p.title FROM orders o JOIN tour_product p ON p.id = o.product_id JOIN user_account u ON u.id = o.user_id ${W} ORDER BY  o.created_at DESC, o.id DESC LIMIT 5000`, args)
       name = 'orders-filtered'
     } else if (what === 'products') {
       // V82 主体方：只导出授权行（商户=本店；景区=本景区商品），字段不含内部成本

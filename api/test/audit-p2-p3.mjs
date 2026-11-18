@@ -258,9 +258,11 @@ await t('A46-1 离线名单 syncedAt 是本地时间格式（非 UTC ISO）；�
 })
 
 console.log('== 页面静态口径（A-26/31/33/37/45 + A-29） ==')
-await t('A26 订单详情状态映射含 60', async () => {
+await t('A26 订单详情状态映射含 60（X-01 后：服务端字典统一下发，页面读 statusText/dict）', async () => {
   const js = read('mini-a/package-order/pages/order-detail/index.js')
-  assert.ok(/60:\s*'[^']*退款/.test(js), 'stName 缺 60（退款处理中显示"—"）')
+  assert.ok(/statusText|utils\/dict/.test(js), '详情页状态文案来自服务端字典（o.statusText / utils/dict）')
+  const dict = read('mini-a/utils/dict.js')
+  assert.ok(/60:\s*'退款处理中'/.test(dict), '统一字典覆盖 60（退款处理中）')
 })
 await t('A31 详情页返豆承诺与发放同口径（显示"约"或以实付试算）', async () => {
   const wxml = read('mini-a/package-tour/pages/detail/index.wxml')

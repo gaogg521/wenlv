@@ -80,6 +80,10 @@ export const ROUTE_MODULES = [
   ['POST', '/admin/risk-cases/:id/:action', 'cases', 'manage'],
   // 审计日志（finance/risk 默认可见；模块授权可扩展/收回）
   ['GET', '/admin/audit-logs', 'audit', 'view'],
+  // X-05：消息下发记录挂在系统治理（system 模块）
+  ['GET', '/admin/notify-logs', 'system', 'view'],
+  // R-01：进入/退出主体代看（审计写入端点）
+  ['POST', '/admin/partner-dash/view-as', 'partnerdash', 'view-as'],
   // 提现审批（资金敏感：查看与裁决同一模块，动作另有 ADMIN_ACTIONS 细粒度）
   ['GET', '/admin/withdrawals', 'withdrawals', 'view'],
   ['POST', '/admin/withdrawals/:id/verdict', 'withdrawals', 'manage'],
@@ -95,6 +99,8 @@ export const ROUTE_MODULES = [
   ['GET', '/admin/security/recent-codes', 'security', 'view'],
   ['GET', '/admin/accounts', 'accounts', 'view'],
   ['POST', '/admin/accounts', 'accounts', 'manage'],
+  // R-05：角色能力矩阵（后台账号页「角色说明」页签）
+  ['GET', '/admin/role-matrix', 'accounts', 'view'],
   ['GET', '/admin/accounts/:id/modules', 'accounts', 'view'],
   ['POST', '/admin/accounts/:id/modules', 'accounts', 'manage'],
   ['GET', '/admin/role-modules', 'accounts', 'view'],

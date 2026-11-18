@@ -18,7 +18,7 @@
     { end: '游客端', path: 'pages/destination/index', name: '目的地', items: [
       ['目的地名称、介绍、封面、排序', [['小程序装修 · 目的地', 'site']]], ['在架线路数与起价（自动统计）', [['商品与团期', 'products']]]] },
     { end: '游客端', path: 'pages/shop/index', name: '旅行商城', items: [
-      ['商城 SKU', [['商品与团期（频道：商城 SKU）', 'products']]], ['标题、副标题、说明', [['小程序装修 · 列表与商城', 'site']]]] },
+      ['商城好物', [['商品与团期（频道：商城好物）', 'products']]], ['标题、副标题、说明', [['小程序装修 · 列表与商城', 'site']]]] },
     { end: '游客端', path: 'package-tour/pages/detail/index', name: '线路详情', items: [
       ['标题、图集、亮点、行程介绍、行程节点、费用含/不含、集合点与导航、补充须知、安全与保险、分享图', [['商品与团期 → 编辑资料', 'products']]],
       ['近期团期（日期、价格、余位、成团进度）', [['商品与团期 → 团期', 'products']]],
@@ -36,7 +36,9 @@
       ['出行安排与领队', [['商品与团期 → 团期', 'products']]], ['商户联系方式', [['商户与进件', 'merchants']]], ['退款试算与退款明细', [['订单 → 退款', 'orders'], ['参数中心', 'config']]]] },
     { end: '游客端', path: 'package-order/pages/pass-code/index', name: '核销凭证', items: [['动态核销码时长', [['参数中心 · 核销', 'config']]], ['入戏暗号、提示、角色与地点', [['暗号管理', 'phrases']]]] },
     { end: '游客端', path: 'pages/bean/index', name: '旅豆', items: [
-      ['返豆比例、抵扣上限、有效期', [['参数中心 · 旅豆', 'config']]], ['旅豆说明', [['小程序装修 · 旅豆与推广', 'site']]], ['旅豆账本', [['积分发行台账', 'pointassets']]]] },
+      ['入口在「我的 → 资产摘要」（A-03 已从一级导航并入）', [['我的页 · 资产摘要', 'miniapp']]], ['返豆比例、抵扣上限、有效期', [['参数中心 · 旅豆', 'config']]], ['旅豆说明', [['小程序装修 · 旅豆与推广', 'site']]], ['旅豆账本', [['积分发行台账', 'pointassets']]]] },
+    { end: '游客端', path: 'pages/notes/index', name: '旅行笔记（一级导航）', items: [
+      ['笔记列表：标题、封面、作者、点赞与评论数', [['内容审核', 'content']]], ['笔记详情（公开稿）', [['内容审核', 'content'], ['创作者池', 'creators']]], ['发布入口', [['创作中心 / 发布页', 'compose']]]] },
     { end: '游客端', path: 'package-content/pages/create/index', name: '创作中心', items: [['约稿任务卡片', [['约稿任务', 'tasks']]], ['笔记审核', [['内容审核', 'content']]], ['下架原因、作者申诉与我的举报反馈', [['举报与申诉', 'contentcases']]], ['未通过原因（笔记 / 约稿投稿）', [['内容审核 → 审核', 'content'], ['约稿任务 → 审核投稿', 'tasks']]]] },
     { end: '游客端', path: 'package-content/pages/compose/index', name: '发布与编辑旅行笔记', items: [['图文、视频与实况笔记发布后的审核', [['内容审核', 'content']]]] },
     { end: '游客端', path: 'package-content/pages/task/index', name: '约稿任务详情', items: [['任务说明、必须提及/禁止出现、参考范例、审核标准、奖励', [['约稿任务', 'tasks']]], ['上次投稿未通过的原因', [['约稿任务 → 审核投稿', 'tasks']]]] },
@@ -53,6 +55,8 @@
     { end: '商户端', path: 'pages/records/index', name: '核销记录', items: [['核销流水', [['订单', 'orders'], ['审计日志', 'audit']]]] },
     { end: '商户端', path: 'pages/orders/index', name: '订单', items: [['门店订单、历史日期筛选与翻页', [['订单', 'orders']]]] },
     { end: '商户端', path: 'pages/order-detail/index', name: '订单详情', items: [['订单与凭证', [['订单', 'orders']]]] },
+    { end: '商户端', path: 'pages/reviews/index', name: '游客评价与回复', items: [
+      ['评价列表与筛选、本店回复（提交后由平台内容审核把关，通过后游客可见）', [['内容审核 · 评价管理', 'content']]]] },
     { end: '商户端', path: 'pages/supply/index', name: '供给 / 库存', items: [['按商品分组、搜索与历史日期筛选的团期余位', [['商品与团期', 'products']]]] },
     { end: '商户端', path: 'pages/settlement/index', name: '结算', items: [['周结算单、确认、异议、回单', [['结算', 'settlements'], ['协议变更', 'agreements']]], ['退改手续费分成比例', [['参数中心 · settlement.refund_fee_merchant_pct', 'config'], ['商户资料 · 结算账户', 'merchants']]]] },
     { end: '商户端', path: 'pages/proof/index', name: '记录复核', items: [['复核结果里的类型、名称、日期、封存状态', [['存证总览 → 存证检索（后台查同一条记录）', 'web3dash']]], ['记录编号对应的勋章名称', [['徽章管理', 'badges']]]] },

@@ -1,8 +1,6 @@
 const api = require('../../../utils/api')
 const place = require('../../../utils/place')
-
-// 城市编码 → 名称（与 tour-list 筛选一致；未知编码不显示，避免把数字编码直接给游客看）
-const CITY = { '310118': '上海·青浦', '330523': '湖州·安吉', '320508': '苏州·姑苏', '310000': '上海' }
+const dict = require('../../../utils/dict')
 
 Page({
   data: { extra: { tags: [], suitable: '', itinerary: [] }, rules: rulesOf({}), p: null, sessions: [], sessPreview: [], minGo: 0, cityName: '', loading: true, error: '',
@@ -50,7 +48,7 @@ Page({
         orderLabel: d.purchase ? (d.purchase.left_seats > 0 ? '立即购买' : '已售罄') :
           d.cat === 'shop' ? (sessions.length ? '选择时段' : '暂无可预约时段') : (sessions.length ? '选择日期' : '暂无团期'),
         minGo: d.cat === 'shop' ? 0 : sessions.reduce((m, s) => Math.max(m, Number(s.min_go) || 0), 0),
-        cityName: CITY[d.city_code] || '',
+        cityName: dict.cityText(d.city_code) || '',
         rules: rulesOf(d),
         // B02：套餐组成项（名称/类型/每份数量/提供方）；空数组=非套餐产品不渲染
         pkgItems: (d.packageItems || []).map((i) => ({ name: i.name, qty: i.qtyPerUnit, kindText: Number(i.kind) === 1 ? '按人凭证' : '服务项', merchantName: i.merchantName, benefitDesc: i.benefitDesc || '', benefitRules: i.benefitRules || '', benefitTail: (i.benefitDesc ? ' · ' + i.benefitDesc : '') + (i.benefitRules ? '；' + i.benefitRules : '') })),

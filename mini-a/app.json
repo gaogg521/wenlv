@@ -4,6 +4,7 @@
     "pages/tour-list/index",
     "pages/shop/index",
     "pages/bean/index",
+    "pages/notes/index",
     "pages/me/index",
     "pages/destination/index",
     "pages/faq/index"
@@ -94,10 +95,10 @@
         "selectedIconPath": "assets/tab/shop-on.png"
       },
       {
-        "pagePath": "pages/bean/index",
-        "text": "旅豆",
-        "iconPath": "assets/tab/bean.png",
-        "selectedIconPath": "assets/tab/bean-on.png"
+        "pagePath": "pages/notes/index",
+        "text": "笔记",
+        "iconPath": "assets/tab/notes.png",
+        "selectedIconPath": "assets/tab/notes-on.png"
       },
       {
         "pagePath": "pages/me/index",

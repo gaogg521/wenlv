@@ -11,7 +11,7 @@ import { hashPassword } from '../src/auth.mjs'
 const base = 'http://127.0.0.1:' + (process.env.PORT || 18095)
 const call = async (m, p, t) => (await fetch(base + p, { method: m, headers: { authorization: 'Bearer ' + t } })).json()
 const PRIMARY = {
-  dash: '/admin/dash/kpi', products: '/admin/products', merchants: '/admin/merchants', scenics: '/admin/scenics',
+  scenario: '/admin/dash/insights', dash: '/admin/dash/kpi', products: '/admin/products', merchants: '/admin/merchants', scenics: '/admin/scenics',
   suppliers: '/admin/suppliers', orders: '/admin/orders/search?pageSize=5', tickets: '/admin/tickets?page=1',
   phrases: '/admin/phrases?pageSize=5', conflicts: '/admin/verify/conflicts', users: '/admin/users/stats',
   kyc: '/admin/kyc', wallets: '/admin/web3/wallets', badges: '/admin/web3/badges', entitlements: '/admin/entitlements?page=1',

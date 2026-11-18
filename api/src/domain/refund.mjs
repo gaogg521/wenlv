@@ -68,6 +68,12 @@ export async function refundOrder({ orderNo, reason, operator = 'user', applyPol
   const wxr = refundFen > 0
     ? await wxpay.refund({ orderNo, refundNo, amountFen: refundFen, totalFen: Number(total0.amount_pay), reason })
     : { status: 'SUCCESS' }
+  // X-05：退款申请触达商户（notifyMerchantStaff 同源：模板未配置记 skipped，MOCK 落 notify_log）
+  ;(async () => { try {
+    const { notifyMerchant } = await import('./notify.mjs')
+    await notifyMerchant(total0.merchant_id, { scene: 'refund_apply', bizRef: orderNo,
+      data: { thing1: { value: '收到新的退款申请' }, character_string2: { value: String(orderNo).slice(0, 32) } }, page: 'pages/orders/index' })
+  } catch (e) { console.error('[notify:refundApply]', e.message) } })()
   if (wxr.status !== 'SUCCESS') return { refunded: false, processing: true, wxRefund: wxr.status, refundNo, refundFen, feeFen }
   const o = await order.byNo(orderNo)
   return { ...(await complete(o, refundNo, reason, wxr.status)), refundNo, refundFen, feeFen, feeRate }
@@ -99,6 +105,14 @@ async function complete(o, refundNo, reason, status) {
   if (rf && rf.close_reason) {
     await q("UPDATE orders SET close_reason = ? WHERE order_no = ? AND status = 70 AND (close_reason IS NULL OR close_reason = '')", [rf.close_reason, orderNo])
   }
+  // X-05：退款到账触达游客（MOCK/真实统一落 notify_log）
+  try {
+    const { sendScene } = await import('./notify.mjs')
+    const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])
+    await sendScene({ scene: 'refund_done', openid: u && u.mini_a_openid, bizRef: orderNo,
+      data: { character_string1: { value: String(orderNo).slice(0, 32) }, thing2: { value: '退款已原路退回，请留意到账' } },
+      page: 'package-order/pages/orders/index' })
+  } catch (e) { console.error('[notify:refundDone]', orderNo, e.message) }
   return { refunded: true, wxRefund: status }
 }
 

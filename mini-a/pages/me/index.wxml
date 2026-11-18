@@ -22,15 +22,42 @@
     <view class="btn ghost" style="margin:24rpx 0 0" bindtap="login">微信一键登录</view>
   </block>
 </view>
+
+<!-- A-02：资产摘要 -->
+<view class="card" wx:if="{{user}}">
+  <view class="me-assets">
+    <view class="me-asset" bindtap="goBean"><view class="me-asset-n">{{beanBalance}}</view><view class="me-asset-l">旅豆</view></view>
+    <view class="me-asset" bindtap="goFreedom"><view class="me-asset-n">{{freedomCount == null ? '—' : freedomCount}}</view><view class="me-asset-l">自由豆（可用）</view></view>
+    <view class="me-asset" bindtap="goIdentity"><view class="me-asset-n">{{passCount}}</view><view class="me-asset-l">出行凭证</view></view>
+  </view>
+</view>
+
+<!-- A-02：订单快捷入口（数量与订单列表筛选一致） -->
+<view class="card" wx:if="{{user}}">
+  <view class="me-sec"><text class="sec-title">我的订单</text><text class="me-more" bindtap="goOrders">全部订单 ›</text></view>
+  <view class="me-quick">
+    <view class="me-quick-item" bindtap="goOrdersFilter" data-bucket="waitPay"><view class="me-quick-n">{{ordersSummary ? ordersSummary.waitPay : '—'}}</view><view class="me-quick-l">待付款</view></view>
+    <view class="me-quick-item" bindtap="goOrdersFilter" data-bucket="waitTravel"><view class="me-quick-n">{{ordersSummary ? ordersSummary.waitTravel : '—'}}</view><view class="me-quick-l">待出行</view></view>
+    <view class="me-quick-item" bindtap="goOrdersFilter" data-bucket="waitReview"><view class="me-quick-n">{{ordersSummary ? ordersSummary.waitReview : '—'}}</view><view class="me-quick-l">待评价</view></view>
+    <view class="me-quick-item" bindtap="goOrdersFilter" data-bucket="refunding"><view class="me-quick-n">{{ordersSummary ? ordersSummary.refunding : '—'}}</view><view class="me-quick-l">退款/售后</view></view>
+  </view>
+</view>
+
+<!-- R-04：身份与工作（按资格显示） -->
 <view class="card">
-  <view class="kv" bindtap="goOrders"><text>我的订单</text><text class="v">›</text></view>
-  <navigator class="kv" url="/package-promo/pages/freedom/index"><text>自由豆</text><text class="v">官方满减补贴 ›</text></navigator>
-  <view class="kv" wx:if="{{canPromote}}" bindtap="goPromo"><text>推广中心</text><text class="v">我的推广身份 ›</text></view>
+  <view class="me-sec"><text class="sec-title">我的身份与工作</text></view>
+  <view class="kv" wx:if="{{canPromote}}" bindtap="goPromo"><text>推广中心</text><text class="v">分享赚佣金 ›</text></view>
   <view class="kv" wx:if="{{workAvailable}}" bindtap="goWork"><text>合作中心</text><text class="v">主体 · 项目 · 分润 ›</text></view>
-  <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">›</text></view>
+  <view class="kv" bindtap="goCreate"><text>创作中心</text><text class="v">笔记 · 约稿 ›</text></view>
+  <view class="kv" wx:if="{{merchantStaff}}" bindtap="goMerchantWorkbench"><text>进入商户工作台</text><text class="v">{{merchantStaff.merchantName}} · {{staffRoleText}}{{miniBAppId ? ' ›' : ''}}</text></view>
   <view class="kv" bindtap="goIdentity"><text>我的数字身份</text><text class="v">凭证 · 勋章 · 可信记录 ›</text></view>
+</view>
+
+<!-- A-02：服务与帮助（收在底部） -->
+<view class="card">
+  <view class="me-sec"><text class="sec-title">服务与帮助</text></view>
   <view class="kv" bindtap="goFaq"><text>常见问题</text><text class="v">返豆 · 核销 · 退改 ›</text></view>
-    <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
+  <button class="kv contact-btn" open-type="contact"><text>联系客服</text><text class="v">官方会话 ›</text></button>
   <view class="kv" wx:if="{{site.service_phone}}" bindtap="callService"><text>客服电话</text><text class="v">{{site.service_phone}}{{serviceLine}} ›</text></view>
   <view class="kv" bindtap="showPrivacy"><text>设置与隐私</text><text class="v">{{consentOpen ? '收起 ⌃' : '隐私授权 ›'}}</text></view>
   <view wx:if="{{consentOpen}}" style="padding:8rpx 0 4rpx">
@@ -41,8 +68,6 @@
     </view>
     <view class="note" wx:if="{{consentSavedAt}}">最近一次操作：{{consentSavedAt}}（已留档，可随时复核）</view>
   </view>
-</view>
-<view class="card">
   <view class="kv" bindtap="goDoc" data-type="agreement"><text>用户协议</text><text class="v">›</text></view>
   <view class="kv" bindtap="goDoc" data-type="privacy"><text>隐私政策</text><text class="v">›</text></view>
   <view class="kv" bindtap="goDoc" data-type="about"><text>关于{{site.brand_name}}</text><text class="v">›</text></view>

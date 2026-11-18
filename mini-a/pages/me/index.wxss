@@ -1,0 +1,12 @@
+/* A-02 「我的」页重组：资产摘要 / 订单快捷宫格 / 分组标题（其余复用 app.wxss 体系） */
+.me-sec { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8rpx; }
+.me-sec .sec-title { margin: 8rpx 0; }
+.me-more { font-size: 24rpx; color: var(--muted, #8a919c); }
+.me-assets { display: flex; }
+.me-asset { flex: 1; text-align: center; }
+.me-asset-n { font-size: 36rpx; font-weight: 600; color: var(--ink, #1f2a2e); }
+.me-asset-l { font-size: 22rpx; color: var(--muted, #8a919c); margin-top: 6rpx; }
+.me-quick { display: flex; }
+.me-quick-item { flex: 1; text-align: center; padding: 8rpx 0; }
+.me-quick-n { font-size: 34rpx; font-weight: 600; color: #b76b24; }
+.me-quick-l { font-size: 22rpx; color: var(--muted, #8a919c); margin-top: 6rpx; }

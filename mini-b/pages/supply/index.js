@@ -77,7 +77,9 @@ Page({
   },
   batchSubmit(ids, action, value, scope) {
     api.request('/m/supply/batch', 'POST', { ids, action, value }).then(r => {
-      wx.showToast({ title: '影响 ' + scope + ' 个团期 · 生效 ' + (r.applied || 0) + ' 个', icon: 'none', duration: 2500 })
+      // X-03：批量改价时被并发改过的团期不静默覆盖，明确提示冲突数量
+      const conflictTail = (r.conflicts && r.conflicts.length) ? ' · ' + r.conflicts.length + ' 个冲突未生效（请刷新后重试）' : ''
+      wx.showToast({ title: '影响 ' + scope + ' 个团期 · 生效 ' + (r.applied || 0) + ' 个' + conflictTail, icon: 'none', duration: 3000 })
       this.fetch()
     }).catch(e => wx.showToast({ title: e.msg || '批量操作失败', icon: 'none' }))
   },
@@ -85,7 +87,7 @@ Page({
     if (this.data.role < 2) return
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))
     if (!s) return
-    const event = { currentTarget: { dataset: { id: s.id, price: s.price_adult, early: s.early_price, earlydays: s.early_days } } }
+    const event = { currentTarget: { dataset: { id: s.id, price: s.price_adult, early: s.early_price, earlydays: s.early_days, version: s.version } } }
     const actions = ['调整名额','修改价格','早鸟设置']; if (Number(s.status) === 1) actions.push('停售团期')
     wx.showActionSheet({ itemList: actions, success: r => { [this.addQuota,this.changePrice,this.setEarly,this.stopSell][r.tapIndex].call(this,event) } })
   },
@@ -101,17 +103,18 @@ Page({
       if (r.confirm && r.content) api.request('/m/supply/' + id, 'POST', { action: 'adjust_quota', value: Number(r.content) }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '名额调整失败',icon:'none'}))
     }})
   },
-  // 改价（店长/老板权限；单位分，界面提示元）
+  // 改价（店长/老板权限；单位分，界面提示元）。X-03：带乐观锁版本提交，两端并发改价时后者收到明确冲突提示
   changePrice(e) {
     const id = e.currentTarget.dataset.id
     const cur = (Number(e.currentTarget.dataset.price) / 100).toFixed(2)
+    const version = e.currentTarget.dataset.version != null ? Number(e.currentTarget.dataset.version) : undefined
     wx.showModal({ title: '修改团期价格', editable: true, placeholderText: '当前 ¥' + cur + '，输入新价格（元）', success: (r) => {
       if (!r.confirm || !r.content) return
       const yuan = Number(r.content)
       if (!yuan || yuan <= 0) return wx.showToast({ title: '价格非法', icon: 'none' })
-      api.request('/m/supply/' + id, 'POST', { action: 'price', value: Math.round(yuan * 100) })
+      api.request('/m/supply/' + id, 'POST', { action: 'price', value: Math.round(yuan * 100), expectedVersion: version })
         .then(() => { wx.showToast({ title: '已改价 ¥' + yuan }); this.fetch() })
-        .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none' }))
+        .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none', duration: 3000 }))
     }})
   },
   // 早鸟价（旺季武器 §9 P1）：格式「价格(元),提前天数」；留空提交=关闭早鸟

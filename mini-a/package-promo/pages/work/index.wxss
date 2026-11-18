@@ -1,1 +1,13 @@
-page{padding-bottom:40rpx}.card{margin:24rpx}.sec-title{font-weight:600;margin-bottom:20rpx}
+/* A-01 合作中心：复用 app.wxss 体系，仅补本页布局 */
+page { padding-bottom: 40rpx; }
+.card { margin: 24rpx; }
+.sec-title { font-weight: 600; margin-bottom: 20rpx; }
+.wk-subject { font-size: 30rpx; font-weight: 600; }
+.wk-picker { color: var(--brand, #d9622f); font-weight: 500; }
+.wk-input { border: 1rpx solid var(--line, #e8e2d6); border-radius: 16rpx; padding: 18rpx 24rpx; margin: 16rpx 0; font-size: 26rpx; }
+.wk-amount { font-weight: 600; color: #b76b24; }
+.wk-state { font-size: 24rpx; color: var(--muted, #8a919c); margin: 8rpx 0; }
+.wk-actions { display: flex; flex-wrap: wrap; gap: 14rpx; margin-top: 16rpx; }
+.wk-project { margin-bottom: 20rpx; padding-bottom: 16rpx; border-bottom: 1rpx dashed var(--line, #e8e2d6); }
+.wk-project:last-child { border-bottom: none; margin-bottom: 0; }
+.wk-contract { background: var(--brand-soft, #fff7ee); border-radius: 16rpx; padding: 16rpx 20rpx; margin-top: 12rpx; }
