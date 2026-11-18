@@ -1,7 +1,9 @@
 <view class="hero"><view class="hi">旅行笔记</view><view class="sub2">真实的旅程，由走过的人写下</view></view>
 <view wx:if="{{error}}" class="card"><view class="empty"><view class="e-ico">📓</view>{{error}}<view class="btn ghost" style="margin-top:16rpx" bindtap="retry">重试</view></view></view>
-<view wx:elif="{{loading && !notes.length}}" class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view>
+<block wx:elif="{{loading && !notes.length}}"><view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view></block>
 <block wx:else>
+  <view class="card" wx:if="{{!loading && !notes.length}}"><view class="empty"><view class="e-ico">📓</view>还没有人分享旅程<view class="note">去过朱家角或安吉？写下第一篇旅行笔记</view></view></view>
+  <view class="btn" style="margin:16rpx 24rpx" bindtap="goCompose">写一篇旅行笔记</view>
   <view class="note-list">
     <view class="note-card fade-up" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
       <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" binderror="onCoverError" data-id="{{item.id}}" />
@@ -13,5 +15,5 @@
     </view>
   </view>
   <view class="card" wx:if="{{loading && notes.length}}">加载中…</view>
-  <view class="card" wx:if="{{!loading && notes.length && !hasMore}}"><view class="note">已经到底啦 · 点右上角相机图标也可以发布你的旅程</view></view>
+  <view class="card" wx:if="{{!loading && notes.length && !hasMore}}"><view class="note">已经到底啦 · 点上方「写一篇旅行笔记」分享你的旅程</view></view>
 </block>
