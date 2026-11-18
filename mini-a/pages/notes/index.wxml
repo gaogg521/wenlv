@@ -6,8 +6,11 @@
   <view class="btn" style="margin:16rpx 24rpx" bindtap="goCompose">写一篇旅行笔记</view>
   <view class="note-list">
     <view class="note-card fade-up" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
-      <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" binderror="onCoverError" data-id="{{item.id}}" />
-      <view class="note-video-flag" wx:if="{{item.video}}">▶ 视频</view>
+      <view class="note-cover-box" wx:if="{{item.cover || item.video}}">
+        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" binderror="onCoverError" data-id="{{item.id}}" />
+        <view class="note-cover note-cover-placeholder" wx:else>视频笔记</view>
+        <view class="note-video-flag" wx:if="{{item.video}}">▶ 视频</view>
+      </view>
       <view class="note-title">{{item.title}}</view>
       <view class="note-place" wx:if="{{item.place}}">📍 {{item.place}}</view>
       <view class="note-excerpt">{{item.excerpt}}</view>
