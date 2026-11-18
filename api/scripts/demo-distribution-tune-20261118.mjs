@@ -86,17 +86,22 @@ console.log('A 组完成：' + x + ' 笔已支付')
 
 // B 组：未支付单分波——每次下单前动态选余量最大的团期（避免轮转撞小余量团期报"名额不足"），
 // 波间等关单 job 释放名额；两轮等待无进展则结束（等下一轮幂等补差）
+// 波内每次下单前动态选当前最大余量团期——把全库余量吃掉约 85% 才进入等待，最大化单波吞吐
 let wave = 0, lastProgress = -1, stallRounds = 0
 while (unpaidDone < closed && stallRounds < 2) {
   const remain = Number((await one(`SELECT COUNT(*) n FROM orders WHERE contact_name LIKE ? AND status = 10`, [PREFIX + '%'])).n)
-  const top = await one(`SELECT s.id, s.quota - s.booked seats FROM tour_session s JOIN tour_product p ON p.id = s.product_id
-    WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 2
-    AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.profile, '$.sign_deadline')), '') = ''
-    ORDER BY (s.quota - s.booked) DESC LIMIT 1`)
-  console.log(`波 ${++wave}：在途未关 ${remain} · 最大余量团期 ${top ? top.id + '（' + top.seats + '）' : '无'}`)
-  if (!top) break
-  let placed = 0
-  while (unpaidDone < closed && placed < Math.max(10, Math.floor(Number(top.seats) * 0.85))) {
+  const avail = Number((await one(`SELECT COALESCE(SUM(s.quota - s.booked), 0) v FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+    WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 2`)).v)
+  console.log(`波 ${++wave}：在途未关 ${remain} · 全库可报名余量 ${avail}`)
+  if (avail < 2) break
+  const quota = Math.floor(Number(avail) * 0.85)
+  let placed = 0, consecFail = 0
+  while (unpaidDone < closed && placed < quota && consecFail < 5) {
+    const top = await one(`SELECT s.id FROM tour_session s JOIN tour_product p ON p.id = s.product_id
+      WHERE s.status = 1 AND p.status = 1 AND s.depart_date >= CURDATE() AND s.quota - s.booked >= 2
+      AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(s.profile, '$.sign_deadline')), '') = ''
+      ORDER BY (s.quota - s.booked) DESC LIMIT 1`)
+    if (!top) break
     try {
       const buyer = ok(await api('POST', '/c/auth/login', { code: 'mock-dt-' + TAG + '-unpaid-' + wave + '-' + placed }), '买家登录')
       ok(await api('POST', '/c/consent', { scene: 'privacy', granted: true }, buyer.token), '隐私授权')
@@ -105,17 +110,17 @@ while (unpaidDone < closed && stallRounds < 2) {
         contactPhone: '138' + String(10000000 + Math.floor(Math.random() * 89999999)) }, buyer.token), '下单')
       unpaidDone++
       placed++
+      consecFail = 0
       if (unpaidDone % 100 === 0) console.log(`  B 组在途 ${unpaidDone}/${closed}`)
     } catch (e) {
-      if (/名额不足|已满/.test(e.message || '')) break // 该团期耗尽，回外层换最大余量
-      if (++placed && false) {}
-      console.log('  [skip]', (e.message || '').slice(0, 80))
+      consecFail++
+      await wait(300)
     }
   }
   if (unpaidDone === lastProgress) { stallRounds++; console.log(`  两轮无进展（${stallRounds}/2），将结束`) } else stallRounds = 0
   lastProgress = unpaidDone
   if (unpaidDone >= closed) break
-  console.log('  等待 17 分钟关单 job 释放名额…')
+  console.log(`  本波放下 ${placed} 笔 · 等待 17 分钟关单 job 释放名额…`)
   await wait(17 * 60000)
 }
 
