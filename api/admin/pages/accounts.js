@@ -3,13 +3,33 @@
 // 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
 
 const ACCOUNT_ROLE_CN = { super: '超级管理员', ops: '运营管理员', finance: '财务管理员', review: '审核管理员', risk: '风控管理员', city_partner: '城市合伙人', readonly: '只读账号', merchant_partner: '商户主体方', scenic_partner: '景区主体方' }
-const CITY_DICT_ACCOUNTS = [[310118, '上海·青浦'], [310000, '上海'], [320508, '苏州·姑苏'], [330500, '湖州'], [330523, '湖州·安吉']]
-const cityLabelAccounts = (code) => { const hit = CITY_DICT_ACCOUNTS.find(([c]) => String(c) === String(code)); return hit ? hit[1] : (code || '—') }
+// X-02：城市名直接复用 core.js 的统一字典 CITY_CN（服务端 capabilities.dicts 启动时刷新），不再本地复制一份
+const cityLabelAccounts = (code) => CITY_CN[String(code)] || code || '—'
 
 async function accounts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   if (window.__accTab === 'rolematrix') return roleMatrixTab()
+  if (window.__accTab === 'roleexplain') return roleExplainTab()
   return accountsList()
+}
+
+// R-05：角色能力说明（谁、在哪端、能看什么、能做什么）——数据与 modules.mjs / ADMIN_ACTIONS 同源（domain/role-matrix.mjs）
+async function roleExplainTab() {
+  const d = await api('GET', '/admin/role-matrix')
+  const SIDE_CN = { PC: 'PC 后台', '商户端': '商户端小程序', '游客端': '游客端小程序' }
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>角色能力说明</h2><span class="muted">与实际权限同源（modules.mjs / ADMIN_ACTIONS），改权限这里自动跟随</span></div>
+    ${['PC', '商户端', '游客端'].map((side) => `
+    <div style="margin:14px 0"><b>${SIDE_CN[side] || side}</b><table><thead><tr><th style="width:160px">身份</th><th style="width:180px">数据范围</th><th>能看什么</th><th>能做什么</th><th>说明</th></tr></thead><tbody>
+      ${d.matrix.filter((r) => r.side === side).map((r) => `<tr><td><b>${esc(r.label)}</b><div class="td-sub">${esc(r.actor)}</div></td>
+        <td class="td-sub">${esc(r.scope)}</td>
+        <td class="td-sub">${r.side === 'PC' ? r.canView.length + ' 个模块' : esc(r.canView.join('、'))}</td>
+        <td class="td-sub">${r.side === 'PC' ? r.canDo.length + ' 项能力点' : esc(r.canDo.join('、'))}</td>
+        <td class="td-sub">${esc(r.note || '—')}</td></tr>`).join('')}
+    </tbody></table></div>`).join('')}
+    <p class="muted">PC 行「能看什么」= 该角色有效模块集合、「能做什么」= 该角色命中的能力点（ADMIN_ACTIONS）；本页与权限表同源生成，不会出现说明与实际权限不一致。</p>
+  </div>`
 }
 
 // C-05：角色默认权限矩阵（行=模块，列=角色；super 恒全部不可编辑；城市不可授予名单联动禁用）
@@ -53,7 +73,8 @@ window.roleModuleSubmit = async (role, moduleKey, on) => {
 function tabBar(active) {
   return `<div class="cfg-tabs" style="margin-bottom:12px">
     <button class="cfg-tab ${active === 'list' ? 'on' : ''}" onclick="window.__accTab='list';accounts()">账号</button>
-    <button class="cfg-tab ${active === 'rolematrix' ? 'on' : ''}" onclick="window.__accTab='rolematrix';accounts()">角色默认权限</button></div>`
+    <button class="cfg-tab ${active === 'rolematrix' ? 'on' : ''}" onclick="window.__accTab='rolematrix';accounts()">角色默认权限</button>
+    <button class="cfg-tab ${active === 'roleexplain' ? 'on' : ''}" onclick="window.__accTab='roleexplain';accounts()">角色说明</button></div>`
 }
 
 async function accountsList() {

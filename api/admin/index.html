@@ -39,7 +39,7 @@
         <button id="loginSubmit" class="login-submit" type="submit"><span>登录工作台</span><span aria-hidden="true">↗</span></button>
         <p class="login-access-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 3 5v5c0 4 7 8 7 8s7-4 7-8V5zM7 10l2 2 4-4"/></svg>登录后按账号角色开放相应权限</p>
         <!-- 演示快捷填充：按钮不带凭据，账号密码只在 login.js 的本机判断分支里注入，公开部署的 HTML 不含默认凭据 -->
-        <details class="demo-accounts" id="demoAccounts" hidden><summary>本地演示账号 <span>仅供体验</span></summary><div class="quick-accounts"><button type="button" class="qa" data-demo-user="admin">超级管理员</button><button type="button" class="qa" data-demo-user="finance">财务</button><button type="button" class="qa" data-demo-user="city310118">城市合伙人</button></div></details>
+        <details class="demo-accounts" id="demoAccounts" hidden><summary>本地演示账号 <span>仅供体验</span></summary><div class="quick-accounts"><button type="button" class="qa" data-demo-user="admin">超级管理员</button><button type="button" class="qa" data-demo-user="finance">财务</button><button type="button" class="qa" data-demo-user="city310118">城市合伙人</button><button type="button" class="qa" data-demo-user="mer310118">商户主体</button><button type="button" class="qa" data-demo-user="sce310118">景区主体</button></div></details>
       </form>
       <form class="glass-card" id="step2" style="display:none">
         <p class="form-eyebrow">账号安全验证</p><h2>再确认一下，是你本人</h2><p class="login-intro" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
@@ -86,6 +86,7 @@
 <!-- 普通脚本，共享全局作用域：core 先加载（全局状态、导航、登录、通用组件），pages/ 为各栏目页面，workspace 为外壳（api/go/订单列表/无障碍） -->
 <script src="/admin-ui/core.js"></script>
 <script src="/admin-ui/pages/operating-scenario.js"></script>
+<script src="/admin-ui/pages/scenario.js"></script>
 <script src="/admin-ui/pages/dashboard.js"></script>
 <script src="/admin-ui/pages/trade.js"></script>
 <script src="/admin-ui/pages/growth.js"></script>

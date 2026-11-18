@@ -4,11 +4,12 @@ Component({
   data: {
     role: 0,
     selected: 0,
+    // B-03：与游客端同质量的图标资源（gen-tab-icons.mjs 生成，暖色主色 #ad603d）；核销员只显示工作台/我的（A-33 逻辑保留）
     list: [
-      { path: '/pages/index/index', text: '工作台', ico: '▦' },
-      { path: '/pages/orders/index', text: '订单', ico: '☰' },
-      { path: '/pages/supply/index', text: '库存', ico: '▣' },
-      { path: '/pages/me/index', text: '我的', ico: '👤' },
+      { path: '/pages/index/index', text: '工作台', img: '/assets/tab/index.png', imgOn: '/assets/tab/index-on.png' },
+      { path: '/pages/orders/index', text: '订单', img: '/assets/tab/orders.png', imgOn: '/assets/tab/orders-on.png' },
+      { path: '/pages/supply/index', text: '库存', img: '/assets/tab/supply.png', imgOn: '/assets/tab/supply-on.png' },
+      { path: '/pages/me/index', text: '我的', img: '/assets/tab/me.png', imgOn: '/assets/tab/me-on.png' },
     ],
   },
   lifetimes: { attached() { this.sync() } },

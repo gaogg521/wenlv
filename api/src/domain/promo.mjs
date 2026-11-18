@@ -325,6 +325,14 @@ export async function generateSettlement(merchantId, period) {
     }, c, 0)
     return sid
   })
+  // X-05：结算单生成后触达商户（settlement_pending；未配模板记 skipped，不阻断出账）
+  try {
+    const { notifyMerchant } = await import('./notify.mjs')
+    await notifyMerchant(merchantId, { scene: 'settlement_pending', bizRef: 'settle-' + sid,
+      data: { thing1: { value: '新一期结算单已生成，请确认' }, character_string2: { value: ('settle-' + sid).slice(0, 32) } },
+      page: 'pages/settlement/index' })
+  } catch (e) { console.error('[notify:settlement]', sid, e.message) }
+  return sid
 }
 
 /** 修复4：按项退款成功后，被退项已进结算（order_item.settle_line_id 非空）→ 按提供方登记结算调整。

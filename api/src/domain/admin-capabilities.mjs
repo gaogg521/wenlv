@@ -16,6 +16,8 @@ export const ADMIN_ACTIONS = {
   'coProfit.void': { roles: ['super'], label: '仅超级管理员' },
   // T02：后台账号生命周期仅超管
   'account.manage': { roles: ['super'], label: '仅超级管理员' },
+  // R-01：主体视角只读代看（默认仅超管）——进入/退出各记一条审计；带 viewAs 参数的写操作在网关层一律拒绝
+  'partner.viewAs': { roles: ['super'], label: '仅超级管理员' },
   // T04：售后工单办理（认领/转派/办结/关闭/重开）=平台客服；城市账号可发起与补充材料
   'ticket.manage': { roles: ['super', 'ops'], label: '超级管理员或运营' },
   // T12：风险案件办理（研判/转态/复核/结案）=风控或超管；城市账号发起协查与补充材料

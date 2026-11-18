@@ -9,10 +9,19 @@ Page({
       if(choice !== null) await api.switchStore(stores[choice].id)
     } catch(e) { wx.showToast({title:e.msg || '切换失败',icon:'none'}) }
   },
-  data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '' },
+  data: { demoAvailable: false, demoBusy: false, loginTip: '', merchant: null, role: 0, roleNames:['未绑定','核销员','店长','老板'], midInput: '', inviteCode: '', inviteInput: '', applyName: '', applyContact: '', applyMobile: '', roleGuide: null, roleGuideOpen: false, roleGuideCurrent: '', roleGuideOthers: [] },
   onShow() {
     this.setData({ demoAvailable: api.canDemoLogin() })
-    if (getApp().globalData.token) api.request('/m/site').then((s) => this.setData({ joinTip: s.joinTip || '' })).catch(() => {})
+    if (getApp().globalData.token) {
+      api.request('/m/site').then((s) => {
+        this.setData({ joinTip: s.joinTip || '', miniAAppId: s.miniAAppId || null, roleGuide: s.roleGuide || null })
+        this.fillRoleGuide()
+      }).catch(() => {})
+      // X-05：商户侧订阅模板预取（requestSubscribeMessage 必须在手势栈内同步调用）
+      api.request('/m/notify/templates').then((t) => {
+        this.notifyIds = [t.newOrder, t.refundApply, t.settlementPending].filter(Boolean).slice(0, 3)
+      }).catch(() => { this.notifyIds = [] })
+    }
     this.setData({ merchant: app.globalData.merchant || wx.getStorageSync('merchant') || null, role: app.globalData.role })
     if (app.globalData.token) this.fetchApplications()
     if (this.data.merchant && this.data.role >= 2) this.fetchInvite()
@@ -93,6 +102,35 @@ Page({
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },
+  goReviews() { wx.navigateTo({ url: '/pages/reviews/index' }) },
+  // R-05：岗位说明卡（当前岗位高亮 + 其他岗位摘要；文案由 /m/site.roleGuide 下发）
+  fillRoleGuide() {
+    const guide = this.data.roleGuide
+    if (!guide) return
+    const role = Number(this.data.role) || 0
+    const NAMES = { 1: '核销员', 2: '店长', 3: '老板' }
+    this.setData({
+      roleGuideCurrent: guide[role] ? '【' + (NAMES[role] || '员工') + '】' + guide[role] : '',
+      roleGuideOthers: [1, 2, 3].filter((r) => r !== role && guide[r]).map((r) => ({ role: r, text: (NAMES[r] || '') + '：' + guide[r] })),
+      roleGuideOpen: this.data.roleGuideOpen,
+    })
+  },
+  toggleRoleGuide() { this.setData({ roleGuideOpen: !this.data.roleGuideOpen }) },
+  // X-05：到单提醒订阅（模板在 onShow 预取，手势内同步调用 requestSubscribeMessage；未配置跳过）
+  askNotify() {
+    const ids = this.notifyIds || []
+    if (!ids.length) return wx.showToast({ title: '到单提醒尚未开通', icon: 'none' })
+    wx.requestSubscribeMessage({ tmplIds: ids, complete: (r) => {
+      const ok = ids.some((id) => r[id] === 'accept')
+      wx.showToast({ title: ok ? '已订阅到单提醒' : '未订阅', icon: ok ? 'success' : 'none' })
+    } })
+  },
+  // R-04：回到游客端（WX_A_APPID 未配置时入口不渲染；跳转能力依赖正式 AppID，记交验单外部条件）
+  openTouristApp() {
+    const appId = this.data.miniAAppId
+    if (!appId) return
+    wx.navigateToMiniProgram({ appId, path: 'pages/home/index', fail: () => wx.showToast({ title: '打开游客端失败，请确认已安装', icon: 'none' }) })
+  },
   // 门店码：官方 getUnlimitedQRCode，游客扫码带商户归因进入首页
   async storeQrcode() {
     try {
@@ -103,7 +141,8 @@ Page({
           success: () => wx.previewImage({ urls: [path] }),
           fail: () => this.setData({ qr: 'data:image/png;base64,' + r.image }) })
       } else {
-        wx.showModal({ title: 'MOCK 模式', content: '需在管理后台「集成中心」配置微信小程序凭据后生成真实门店码（scene=' + r.scene + '）', showCancel: false })
+        // B-04：对商户只说业务话术；技术细节（scene/集成中心配置）留在后台日志
+        wx.showModal({ title: '门店码', content: '门店码暂未开通，请联系平台开通后使用。', showCancel: false })
       }
     } catch (e) { wx.showToast({ title: e.msg || '生成失败', icon: 'none' }) }
   },

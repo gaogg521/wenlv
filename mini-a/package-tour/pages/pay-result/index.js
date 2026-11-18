@@ -1,4 +1,5 @@
 const api = require('../../../utils/api')
+const dict = require('../../../utils/dict')
 Page({
   data: { orderNo: '', status: 0, amount: '', mock: false, tries: 0, payIcon: '◷' },
   onLoad(q) {
@@ -28,7 +29,8 @@ Page({
   poll() {
     api.getOrder(this.data.orderNo).then((o) => {
       const ok = Number(o.status) >= 20 && Number(o.status) !== 90
-      this.setData({ status: o.status, amount: o.amountPayLabel, error: '', statusText: ({10:'订单待支付',20:'支付成功 · 出票中',30:'报名成功 · 已出票',40:'已核销',50:'行程已完成',60:'退款处理中',70:'已退款',90:'订单已关闭'})[o.status] || '正在查询订单', hasPass: [30,40,50].includes(Number(o.status)), payIcon: ok ? '✅' : '⏳', subscribed: false })
+      // X-01：支付结果页场景文案由服务端字典下发（statusSceneText），本地仅兜底
+      this.setData({ status: o.status, amount: o.amountPayLabel, error: '', statusText: o.statusSceneText || dict.sceneText(o.status), hasPass: [30,40,50].includes(Number(o.status)), payIcon: ok ? '✅' : '⏳', subscribed: false })
       if (o.status === 10 && this.data.tries < 6) {
         this.setData({ tries: this.data.tries + 1 })
         this.timer = setTimeout(() => this.poll(), 2000)

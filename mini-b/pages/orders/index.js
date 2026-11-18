@@ -26,7 +26,8 @@ Page({
       const depart = this.data.presetDepart || ''
       const rows = await api.request('/m/orders?page='+page+'&pageSize=12&state='+this.data.status+'&kw='+encodeURIComponent(this.data.kw)+(depart?'&depart='+depart:'')+'&'+periodQuery(this.data.periodIndex,this.data.customDate,true))
       if (requestId !== this._requestId) return
-      const mapped = rows.map(x => Object.assign({}, x, { isDemo:String(x.contact_name || '').startsWith('演示样例'), contactLabel:String(x.contact_name || '').startsWith('演示样例') ? '演示游客' : x.contact_name || '游客', priceLabel: money(x.amount_pay), statusText: ({20:'已支付',30:'待核销',40:'已核销',50:'已完成',60:'退款中',70:'已退款',90:'已关闭'})[x.status] || '处理中' }))
+      // X-01：statusText 由服务端字典下发（商户视角），页面不再自建状态表
+      const mapped = rows.map(x => Object.assign({}, x, { isDemo:String(x.contact_name || '').startsWith('演示样例'), contactLabel:String(x.contact_name || '').startsWith('演示样例') ? '演示游客' : x.contact_name || '游客', priceLabel: money(x.amount_pay), statusText: x.statusText || '处理中' }))
       const orders = append ? this.data.orders.concat(mapped) : mapped
       this.setData({ orders, page, hasMore: rows.length === 12, loadingMore: false, waitingCount: orders.filter(o => [20,30].includes(Number(o.status))).length, loaded: true, error: '' }); this.applyFilters()
     } catch (e) { if (requestId === this._requestId) { this.setData({ loaded: true, loadingMore: false, error: e.msg || '订单加载失败' }); if (!append) { this.setData({orders:[]}); this.applyFilters() } } }

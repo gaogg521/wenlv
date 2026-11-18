@@ -1,6 +1,6 @@
 // 定时任务进程（生产与 node src/index.mjs 并行跑：node src/jobs.mjs / PM2 apps 里加一项）
 // 周期（总方案 §7.5）：关单每分钟 · 完成订单每小时 · 佣金到期每日 02:00 · 周结算每周一 01:00
-import { q, one } from './db.mjs'
+import { q, one, tx } from './db.mjs'
 import { cfgNum } from './config.mjs'
 import * as order from './domain/order.mjs'
 import * as bean from './domain/bean.mjs'
@@ -162,6 +162,49 @@ export async function tickExpireVouchers() {
   return done.length
 }
 
+/** P-07 审核认领超时自动释放：有效期走参数中心 review.claim_hours（默认 2 小时），逐条写审计。
+ *  幂等：只处理 released_at IS NULL 的行；释放后队列项回到「未认领」，原认领人不能再提交判定。 */
+export async function tickClaimTimeout() {
+  const hours = await cfgNum('review.claim_hours')
+  const rows = await q(`SELECT rc.id, rc.queue_kind, rc.item_id, rc.claimed_by FROM review_claim rc
+    WHERE rc.released_at IS NULL AND rc.created_at < NOW() - INTERVAL ? MINUTE LIMIT 100`, [Math.max(Number(hours) || 2, 0.1) * 60])
+  for (const r of rows) {
+    try {
+      await tx(async (c) => {
+        const n = await c.upd('UPDATE review_claim SET released_at = NOW(3) WHERE id = ? AND released_at IS NULL', [r.id])
+        if (n !== 1) throw new Error('已被释放')
+        await c.q('INSERT INTO audit_log (actor, module, action, biz_ref, before_val, after_val) VALUES (?,?,?,?,?,NULL)',
+          ['system:claim-timeout', 'review', 'claim-timeout-release', r.queue_kind + '-' + r.item_id, JSON.stringify({ claimedBy: r.claimed_by })])
+      })
+    } catch (e) { console.error('[job:claim-timeout]', r.id, e.message) }
+  }
+  if (rows.length) console.log('[job:claim-timeout]', rows.length, 'released')
+  return rows.length
+}
+
+/** X-05 出行前一天提醒：明日出发、状态 20/30 的订单逐单发送（按 notify_log 去重，幂等可重跑）。
+ *  模板 WX_TMPL_DEPART_REMIND 未配置时每单记 skipped（下发记录可查，不报错）。 */
+export async function tickDepartRemind() {
+  const rows = await q(`SELECT o.order_no, o.user_id, o.merchant_id, p.title
+    FROM orders o JOIN tour_session s ON s.id = o.session_id JOIN tour_product p ON p.id = o.product_id
+    WHERE o.status IN (20, 30) AND s.depart_date = DATE_ADD(CURDATE(), INTERVAL 1 DAY) LIMIT 200`)
+  const { sendScene } = await import('./domain/notify.mjs')
+  let sent = 0
+  for (const r of rows) {
+    try {
+      const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [r.user_id])
+      const dup = await one('SELECT id FROM notify_log WHERE scene = ? AND biz_ref = ? AND openid = ? LIMIT 1', ['depart_reminder', r.order_no, u && u.mini_a_openid])
+      if (dup) continue
+      const out = await sendScene({ scene: 'depart_reminder', openid: u && u.mini_a_openid, bizRef: r.order_no,
+        data: { thing1: { value: String(r.title || '您的行程').slice(0, 20) }, thing2: { value: '明天出发，请留意集合时间' } },
+        page: 'package-order/pages/order-detail/index?no=' + r.order_no })
+      if (!out.skipped) sent++
+    } catch (e) { console.error('[job:depart-remind]', r.order_no, e.message) }
+  }
+  if (rows.length) console.log('[job:depart-remind]', rows.length, 'orders', sent, 'sent')
+  return rows.length
+}
+
 /** 豆过期（滚动 expire_months 个月 FIFO）：回收超期豆（负向分录 biz=6）。
  *  A-02 修复：旧实现用原发放分录的 tx_no 比对过期分录（tx_no 永远不同 → 每分钟重复扣），
  *  也没有按 FIFO 扣除已消费部分（已花掉的旧豆会被再扣一次）。
@@ -253,12 +296,13 @@ async function tickRiskNotify() {
 async function main() {
   await (await import('./infra/secrets.mjs')).warmSecrets().catch(() => {})
   console.log('[jobs] started：close 60s / complete 3600s / commission 02:00 / bean-day 03:10 / reconcile 04:00 / settlement 周一 01:00')
-  let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = ''
+  let lastCommission = '', lastSettlement = '', lastBeanDay = '', lastReconcile = '', lastDepartRemind = ''
   for (;;) {
     const now = new Date()
     const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
     try {
       await tickClose()
+      await tickClaimTimeout() // P-07：认领超时自动释放（每分钟扫描，有效期走参数中心）
       await tickComplete()
       await tickGroupCancel()
       await tickExpire()
@@ -275,6 +319,8 @@ async function main() {
       if (hhmm >= '03:10' && lastBeanDay !== now.toDateString()) { lastBeanDay = now.toDateString(); await tickBeanDayClose() }
       if (hhmm >= '04:00' && lastReconcile !== now.toDateString()) { lastReconcile = now.toDateString(); await tickAttestReconcile() }
       if (hhmm >= '01:00' && now.getDay() === 1 && lastSettlement !== now.toDateString()) { lastSettlement = now.toDateString(); await tickSettlement() }
+      // X-05：出行前一天提醒（每日 08:00 后跑一次；notify_log 去重，重复执行安全）
+      if (hhmm >= '08:00' && lastDepartRemind !== now.toDateString()) { lastDepartRemind = now.toDateString(); await tickDepartRemind() }
     } catch (e) { console.error('[jobs:err]', e.message) }
     await sleep(60_000)
   }

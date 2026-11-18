@@ -43,17 +43,16 @@ export async function cancelDueSessions() {
   return done
 }
 
-/** 订阅通知（模板未配置/无凭据时静默 MOCK，不阻塞取消主链路） */
+/** 订阅通知（X-05：统一走 notify.sendScene，模板未配置/无凭据记 skipped 落 notify_log，不阻塞取消主链路） */
 async function notifyUser(orderNo, productTitle) {
   try {
     const o = await order.byNo(orderNo)
     const u = await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])
-    const { getSecret } = await import('../infra/secrets.mjs')
-    const tpl = await getSecret('WX_TMPL_GROUP_CANCEL')
-    await wxapi.sendSubscribeMessage(u && u.mini_a_openid, tpl, {
+    const { sendScene } = await import('./notify.mjs')
+    await sendScene({ scene: 'group_cancel', openid: u && u.mini_a_openid, bizRef: orderNo, data: {
       thing1: { value: String(productTitle).slice(0, 20) },
       thing4: { value: '未达成团人数已取消，退款进度见订单' },
-    }, 'package-order/pages/orders/index')
+    }, page: 'package-order/pages/orders/index' })
   } catch (e) { console.error('[group:notify]', orderNo, e.message) }
 }
 

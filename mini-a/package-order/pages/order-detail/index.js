@@ -1,10 +1,32 @@
 const api = require('../../../utils/api')
 const place = require('../../../utils/place')
+const dict = require('../../../utils/dict')
 Page({
-  data: { o: null, passes: [], stName: { 10: '待支付', 20: '已支付', 30: '待出行·待核销', 40: '已核销', 50: '已完成', 60: '退款处理中', 70: '已退款', 90: '已关闭' },
+  // X-01：状态文案来自统一字典（服务端 /c/dicts 缓存），页面不再自建状态表；订单行 statusText 优先
+  data: { o: null, passes: [], stName: dict.statusMap(),
     passSt: { 1: '有效 · 待核销', 2: '已核销', 3: '已撤销', 4: '已冲正' },
     rating: 5, rvText: '', reviewDone: false },
-  onLoad(q) { this.no = q.no; this.fetch() },
+  // X-05：模板预取（requestSubscribeMessage 必须在手势栈内同步调用，不能先 await 网络请求）
+  async loadNotifyTemplates() {
+    try {
+      const t = await api.getNotifyTemplates()
+      this.notifyIds = { depart: t.departRemind || null, refund: t.refundDone || null }
+    } catch (e) { this.notifyIds = {} }
+  },
+  askDepartRemind() {
+    const id = this.notifyIds && this.notifyIds.depart
+    if (!id) return wx.showToast({ title: '出行提醒尚未开通', icon: 'none' })
+    wx.requestSubscribeMessage({ tmplIds: [id], complete: (r) => {
+      const ok = r[id] === 'accept'
+      wx.showToast({ title: ok ? '已订阅出行提醒' : '未订阅', icon: ok ? 'success' : 'none' })
+    } })
+  },
+  askRefundDone() {
+    const id = this.notifyIds && this.notifyIds.refund
+    if (!id) return
+    wx.requestSubscribeMessage({ tmplIds: [id], complete: () => {} })
+  },
+  onLoad(q) { this.no = q.no; this.loadNotifyTemplates(); this.fetch() },
   onShow() { if (this.no) this.fetch() },
   async fetch() {
     try {
@@ -57,6 +79,7 @@ Page({
     }
     const ok = await new Promise(r => wx.showModal({ title: unpaid ? '取消订单' : '申请退款', content, confirmText: unpaid ? '确认取消' : '确认退款', success: r }))
     if (!ok.confirm) return
+    this.askRefundDone() // X-05：确认退款的手势内同步请求「退款到账」订阅（模板未配置静默跳过）
     try {
       await api.refund(this.no, '用户申请')
       wx.showToast({ title: unpaid ? '订单已取消' : '退款已受理' })

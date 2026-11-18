@@ -55,6 +55,7 @@ const SHAPES = {
     const slit = Math.abs((x - 0.5) * 0.7 + (y - 0.5) * 0.7) < 0.05
     return c && !slit
   },
+  notes: (x, y) => (inRect(x, y, 0.2, 0.12, 0.8, 0.88, 0.08) && !inRect(x, y, 0.3, 0.26, 0.7, 0.32, 0.02) && !inRect(x, y, 0.3, 0.4, 0.7, 0.46, 0.02) && !inRect(x, y, 0.3, 0.54, 0.7, 0.6, 0.02)) || (x > 0.6 && y > 0.68 && Math.abs((x - 0.6) + (y - 0.88)) < 0.2 ? false : x >= 0.6 && y >= 0.68 && (x - 0.6) + (0.88 - y) <= 0.2 ? true : false),
   me: (x, y) => inCircle(x, y, 0.5, 0.3, 0.2) || inRect(x, y, 0.16, 0.56, 0.84, 0.94, 0.24),
   grid: (x, y) => {
     const g = [[0.1, 0.1], [0.54, 0.1], [0.1, 0.54], [0.54, 0.54]]
@@ -89,8 +90,8 @@ function render(shape, color, size = 81) {
 }
 
 const jobs = [
-  ['mini-a', [['home', 'home'], ['tour', 'tour-list'], ['shop', 'shop'], ['bean', 'bean'], ['me', 'me']], '#8a919c', '#e87722'],
-  ['mini-b', [['grid', 'index'], ['list', 'orders'], ['box', 'supply'], ['me', 'me']], '#8a919c', '#7b5aa6'],
+  ['mini-a', [['home', 'home'], ['tour', 'tour-list'], ['shop', 'shop'], ['notes', 'notes'], ['me', 'me']], '#8a919c', '#e87722'],
+  ['mini-b', [['grid', 'index'], ['list', 'orders'], ['box', 'supply'], ['me', 'me']], '#8a919c', '#ad603d'],
 ]
 const root = path.resolve(import.meta.dirname, '..', '..')
 for (const [app, icons, off, on] of jobs) {

@@ -89,7 +89,8 @@ const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minim
 // 统一的日期解析：后端下发 "YYYY-MM-DD HH:mm:ss"（空格分隔），Safari 的 Date 构造器不认，
 // 必须把空格换成 T 再解析；非法输入返回 Invalid Date，由调用方按需兜底。
 const parseDate = (s) => new Date(String(s ?? '').replace(' ', 'T').replace(/\./g, '-'))
-const ST = { 10: '待支付', 20: '已支付', 30: '已确认', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
+// X-01：订单状态文案以服务端字典为准（boot 时用 capabilities.dicts 覆盖刷新）；本地字面量仅为登录前兜底
+const ST = { 10: '待支付', 20: '已支付', 30: '待出行', 40: '已核销', 50: '已完成', 60: '退款中', 70: '已退款', 90: '已关闭' }
 
 function toast(msg, err) {
   const d = document.createElement('div')
@@ -181,6 +182,14 @@ async function boot() {
   try {
     ADMIN_CAPABILITIES = await api('GET', '/admin/capabilities')
     ME = { ...ME, role: ADMIN_CAPABILITIES.role, scopeCity: ADMIN_CAPABILITIES.scopeCity }
+    // X-01/X-02：字典以服务端下发为准（订单状态三视角文案、城市、品类、商户类目），
+    // 新增字典项只改服务端一处，刷新页面即生效
+    const dcts = ADMIN_CAPABILITIES.dicts || {}
+    if (dcts.orderStatusAdmin) Object.assign(ST, dcts.orderStatusAdmin)
+    if (dcts.orderStatusTourist) window.ORDER_STATUS_TOURIST = dcts.orderStatusTourist
+    if (dcts.cities) Object.assign(CITY_CN, dcts.cities)
+    if (dcts.productCats) Object.assign(CAT_CN, dcts.productCats)
+    if (dcts.merchantKinds) Object.assign(MERCHANT_KIND, dcts.merchantKinds)
   } catch (e) {
     $('#app').innerHTML = `<div class="card error-state"><h2>操作权限加载失败</h2><p>${esc(e.message)}</p><button class="btn primary" onclick="boot()">重试</button></div>`
     return
@@ -237,7 +246,7 @@ const emptyBox = (txt) => `<div class="empty"><div class="e-ico">🗂</div>${txt
 
 // ---- 资源池：景区资源（G端合作台账）/ 供应商（资源供给方）----
 const RESOURCE_ST = { 1: '<span class="pill ok">合作中</span>', 0: '<span class="pill warn">暂缓</span>', 2: '<span class="pill s70">清退</span>' }
-const CAT_CN = { script: '剧本闯关', yoga: '瑜伽之旅', sister: '姐姐系列', single: '单身社交', sport: '体育竞技', family: '亲子主题', red: '红色文旅', shop: '商城 SKU' }
+const CAT_CN = { script: '剧本闯关', yoga: '瑜伽之旅', sister: '姐姐系列', single: '单身社交', sport: '体育竞技', family: '亲子主题', red: '红色文旅', shop: '商城好物' }
 const CITY_CN = { 310118: '上海·青浦', 310000: '上海', 320508: '苏州·姑苏', 330500: '湖州', 330523: '湖州·安吉' }
 const SUP_KIND = { ticket: '门票', hotel: '住宿', transport: '交通', ground: '地接', catering: '餐饮', other: '其他' }
 const MERCHANT_KIND = { catering: '餐饮', hotel: '住宿', ticket: '门票', transport: '交通', experience: '体验', other: '其他' }
