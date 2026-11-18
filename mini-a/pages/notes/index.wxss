@@ -2,7 +2,9 @@
 .note-list { padding: 20rpx; display: flex; flex-direction: column; gap: 20rpx; }
 .note-card { background: #fff; border-radius: 28rpx; overflow: hidden; border: 1rpx solid var(--line, #f0e9de); }
 .note-cover { width: 100%; height: 320rpx; display: block; background: var(--brand-soft, #fff7ee); }
-.note-video-flag { position: absolute; }
+.note-cover-box { position: relative; overflow: hidden; }
+.note-cover-placeholder { display: flex; align-items: center; justify-content: center; color: var(--muted, #8a919c); font-size: 26rpx; }
+.note-video-flag { position: absolute; left: 16rpx; top: 16rpx; padding: 4rpx 14rpx; border-radius: 999rpx; background: rgba(0, 0, 0, .6); color: #fff; font-size: 22rpx; line-height: 1.5; white-space: nowrap; }
 .note-title { font-size: 30rpx; font-weight: 600; padding: 20rpx 24rpx 6rpx; }
 .note-place { font-size: 22rpx; color: var(--brand, #d9622f); padding: 0 24rpx; }
 .note-excerpt { font-size: 24rpx; color: var(--muted, #8a919c); padding: 8rpx 24rpx; line-height: 1.6; }
