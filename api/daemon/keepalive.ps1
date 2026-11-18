@@ -1,9 +1,9 @@
-# wanderlust API 看门狗：由 Windows 计划任务每分钟调用一次
+﻿# wanderlust API 看门狗：由 Windows 计划任务每分钟调用一次
 # 端口不通则拉起 node 服务（脱离任何 IDE/会话进程树）
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
 
-$apiDir = 'C:\Users\allenzhao\Desktop\文旅项目\wanderlust\api'
-$logFile = Join-Path $apiDir 'daemon\keepalive.log'
+$apiDir = Split-Path -Parent $PSScriptRoot
+$logFile = Join-Path $PSScriptRoot 'keepalive.log'
 $port = 8080
 
 function Write-Log($msg) {
@@ -18,22 +18,43 @@ function Write-Log($msg) {
 
 # 1) 端口是否有监听
 $listening = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-if ($listening) { exit 0 }   # 活着，静默退出
+if ($listening) {
+  try {
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/c/health" -TimeoutSec 5
+    if ($health.code -eq 0 -and $health.data.app -eq 'wanderlust-api') { exit 0 }
+  } catch { }
+  Write-Log "端口 $port 已占用但 API 健康检查未通过，请检查现有进程；不自动终止占用者"
+  exit 1
+}
 
 # 2) 端口空着，但可能有僵尸进程占着 --env-file 之外的启动方式，先不动，只补起一个
-Start-Process -FilePath 'node' `
+try {
+  $nodePath = (Get-Command node -ErrorAction Stop).Source
+  $process = Start-Process -FilePath $nodePath `
   -ArgumentList '--env-file=.env src/index.mjs' `
   -WorkingDirectory $apiDir `
-  -WindowStyle Hidden
+  -WindowStyle Hidden -PassThru `
+  -RedirectStandardOutput (Join-Path $PSScriptRoot 'api-stdout.log') `
+  -RedirectStandardError (Join-Path $PSScriptRoot 'api-stderr.log')
+} catch {
+  Write-Log "启动 API 失败：$($_.Exception.Message)"
+  exit 1
+}
 
-Start-Sleep -Seconds 5
-
-# 3) 验证是否真的起来了
+# 3) 冷启动可能包含数据库和配置加载，最多等待 45 秒。
 $ok = $false
-try {
-  $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5
-  if ($r.StatusCode -eq 200) { $ok = $true }
-} catch { }
+for ($attempt = 0; $attempt -lt 15; $attempt++) {
+  Start-Sleep -Seconds 2
+  try {
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/c/health" -TimeoutSec 1
+    if ($health.code -eq 0 -and $health.data.app -eq 'wanderlust-api') { $ok = $true; break }
+  } catch { }
+  $process.Refresh()
+  if ($process.HasExited) { break }
+}
 
 if ($ok) { Write-Log "端口 $port 无监听 → 已拉起，验证 200 OK" }
-else { Write-Log "端口 $port 无监听 → 尝试拉起但验证失败，需人工介入" }
+else {
+  Write-Log "端口 $port 无监听 → 启动后健康检查失败，详见 daemon/api-stderr.log 与 api-stdout.log；下次计划任务重试"
+  exit 1
+}
