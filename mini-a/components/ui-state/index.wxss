@@ -9,14 +9,14 @@
 
 /* 无资格三问 */
 .uis-reasons { margin-top: 22rpx; text-align: left; background: var(--brand-soft); border-radius: 20rpx; padding: 6rpx 24rpx; }
-.uis-reason { padding: 18rpx 0; border-bottom: 1rpx solid rgba(232,119,34,.14); }
+.uis-reason { padding: 18rpx 0; border-bottom: 1rpx solid var(--line); }
 .uis-reason:last-child { border-bottom: none; }
 .uis-q { font-size: 24rpx; font-weight: 600; color: var(--brand-deep); }
 .uis-q::before { content: ""; display: inline-block; width: 10rpx; height: 10rpx; border-radius: 50%; background: var(--brand); margin-right: 12rpx; vertical-align: middle; }
 .uis-a { font-size: 23rpx; color: var(--ink2); line-height: 1.7; margin-top: 6rpx; }
 
 /* 权益示例预览 */
-.uis-preview { margin-top: 22rpx; text-align: left; background: #fff; border: 1rpx dashed rgba(232,119,34,.45); border-radius: 20rpx; padding: 20rpx 24rpx 12rpx; }
+.uis-preview { margin-top: 22rpx; text-align: left; background: #fff; border: 1rpx dashed var(--sub); border-radius: 20rpx; padding: 20rpx 24rpx 12rpx; }
 .uis-pt { font-size: 24rpx; font-weight: 600; color: var(--ink); margin-bottom: 6rpx; }
 .uis-pr { display: flex; justify-content: space-between; padding: 14rpx 0; border-bottom: 1rpx solid var(--line); font-size: 24rpx; color: var(--ink2); }
 .uis-pr:last-of-type { border-bottom: none; }

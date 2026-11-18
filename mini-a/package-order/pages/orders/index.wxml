@@ -1,9 +1,9 @@
-<view wx:if="{{error}}" class="card"><view>{{error}}</view><view class="btn ghost" bindtap="fetch">重新加载</view></view>
+<view wx:if="{{error}}" class="card"><ui-state kind="error" title="订单加载失败" desc="{{error}}" bind:retry="fetch" /></view>
 <view class="chips" wx:if="{{!error && !loading}}">
   <view wx:for="{{filters}}" wx:key="k" class="chip {{filter === item.k ? 'on' : ''}}" bindtap="filterTap" data-k="{{item.k}}">{{item.n}}</view>
 </view>
-<view wx:if="{{loading}}"><view class="skeleton" wx:for="{{[1,2]}}" wx:key="*this"></view></view>
-<view wx:elif="{{empty}}" class="empty"><view class="e-ico">🧾</view>还没有符合条件的订单<view class="note">去首页看看线路，或切换上面的筛选</view></view>
+<view wx:if="{{loading}}" class="card"><ui-state kind="loading" /></view>
+<view wx:elif="{{empty}}" class="card"><ui-state kind="empty" icon="🧾" title="还没有符合条件的订单" desc="{{emptyDesc}}" action-text="去首页逛逛" action-url="/pages/home/index" /></view>
 <block wx:else>
   <view class="tour-item fade-up" wx:for="{{visibleOrders}}" wx:key="order_no" bindtap="goDetail" data-no="{{item.order_no}}">
     <view class="tour-cover cover-{{index % 5}}" style="font-size:44rpx">🎫</view>

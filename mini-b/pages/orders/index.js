@@ -2,7 +2,7 @@ const api = require('../../utils/api')
 const { orderView, money } = require('../../utils/catalog-view')
 const { day, periodQuery } = require('../../utils/period')
 Page({
-  data: { orders: [], visibleOrders: [], loaded: false, kw: '', status: 'all', page: 1, presetDepart: '', periodIndex: 0, periodNames: ['全部历史','今日','近7天','近30天','指定日期'], customDate: day(), today: day(), filters: [{k:'all',n:'全部'},{k:'waiting',n:'待接待'},{k:'done',n:'已核销/完成'},{k:'refund',n:'退款'},{k:'refund_pending',n:'退款中'}] },
+  data: { emptyDesc: '换个关键词、状态或日期范围再试\n游客下单后 1 分钟内会出现在这里',  orders: [], visibleOrders: [], loaded: false, kw: '', status: 'all', page: 1, presetDepart: '', periodIndex: 0, periodNames: ['全部历史','今日','近7天','近30天','指定日期'], customDate: day(), today: day(), filters: [{k:'all',n:'全部'},{k:'waiting',n:'待接待'},{k:'done',n:'已核销/完成'},{k:'refund',n:'退款'},{k:'refund_pending',n:'退款中'}] },
   retry() { this.fetch() },
   onShow() {
     // B2 工作台「待接待/异常待处理」下钻预设：一次性消费（depart=今日出发 / status=refund）

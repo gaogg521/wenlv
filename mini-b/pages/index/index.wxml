@@ -23,8 +23,8 @@
         <view class="honor-link" bindtap="goHonor"><text>{{wb.level.name || '经营荣誉'}}</text><text class="metric-label">查看门店成长　↗</text></view>
       </view>
     </view>
-    <view class="loading-panel" wx:elif="{{loading}}">正在更新本店经营数据…</view>
-    <view class="error-panel" wx:else><view>{{err}}</view><button bindtap="retry">重新加载</button></view>
+    <view class="card" wx:elif="{{loading}}"><ui-state kind="loading" /></view>
+    <view class="card" wx:else><ui-state kind="error" title="经营数据加载失败" desc="{{err}}" bind:retry="retry" /></view>
     <view wx:if="{{wb.demo}}" class="demo-notice">联调演示环境 · 样例支付不代表真实扣款或到账</view>
     <button class="scan-action" bindtap="goVerify"><view class="scan-symbol"><view></view></view><view class="scan-copy"><view>扫码核销</view><text>游客到店 · 扫描动态凭证</text></view><text class="scan-arrow">↗</text></button>
     <view class="todo-panel" wx:if="{{wb && todoItems.length}}">

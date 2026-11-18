@@ -20,7 +20,7 @@ function periodTitle(p) {
   return m ? m[1] + ' 周结算单（补充 ' + m[2] + '）' : p + ' 周结算单'
 }
 Page({
-  data: { list: [], visibleList: [], loaded: false, detail: {}, adjustDetail: {}, expanded: {}, state: 'all', filters: [{k:'all',n:'全部账单'},{k:'pending',n:'待确认'},{k:'processing',n:'处理中'},{k:'paid',n:'已登记回单'}] },
+  data: { emptyDesc: '财务出账后可在这里逐期核对\n「确认」表示金额核对无误，不代表银行已到账',  list: [], visibleList: [], loaded: false, detail: {}, adjustDetail: {}, expanded: {}, state: 'all', filters: [{k:'all',n:'全部账单'},{k:'pending',n:'待确认'},{k:'processing',n:'处理中'},{k:'paid',n:'已登记回单'}] },
   filterState(e) { this.setData({state:e.currentTarget.dataset.k}); this.applyFilter() },
   applyFilter() { this.setData({visibleList:this.data.list.filter(s=>this.data.state==='all' || this.data.state==='pending' && s.status===0 || this.data.state==='paid' && s.status===3 || this.data.state==='processing' && [1,2,4].includes(s.status))}) },
   toggleBill(e) { const id=e.currentTarget.dataset.id; this.setData({['expanded.'+id]:!this.data.expanded[id]}) },

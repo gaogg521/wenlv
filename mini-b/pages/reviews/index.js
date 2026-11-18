@@ -2,7 +2,7 @@
 // B-05：游客笔记 tab——本店商品关联的已发布公开稿（只读；私密/审核中/驳回/下架不出现）
 const api = require('../../utils/api')
 Page({
-  data: {
+  data: { emptyDesc: '游客完成行程后可以评价本店商品\n在这里回复后经平台审核对游客可见', emptyNotesDesc: '游客发布关联本店商品或景区的公开笔记后\n会出现在这里（私密与审核中的不可见）',
     tab: 'reviews',
     items: [], total: 0, page: 1, pageSize: 20, loading: true, error: '',
     replyStatus: 'all', rating: 0,

@@ -2,7 +2,7 @@ const api = require('../../../utils/api')
 const dict = require('../../../utils/dict')
 const BUCKETS = { waitPay: [10], waitTravel: [30], waitReview: [50], refunding: [60, 70] }
 Page({
-  data: { orders: [], visibleOrders: [], filter: 'all', filters: [{ k: 'all', n: '全部' }, { k: 'waitPay', n: '待付款' }, { k: 'waitTravel', n: '待出行' }, { k: 'waitReview', n: '待评价' }, { k: 'refunding', n: '退款/售后' }], loading: true, empty: false },
+  data: { emptyDesc: '去首页看看线路与好物，或切换上面的状态筛选\n下单后 1 分钟内会出现在这里',  orders: [], visibleOrders: [], filter: 'all', filters: [{ k: 'all', n: '全部' }, { k: 'waitPay', n: '待付款' }, { k: 'waitTravel', n: '待出行' }, { k: 'waitReview', n: '待评价' }, { k: 'refunding', n: '退款/售后' }], loading: true, empty: false },
   onShow() {
     // A-02：快捷入口带筛选预设（一次性消费），与「我的」计数同一口径
     const preset = wx.getStorageSync('orderFilter') || ''

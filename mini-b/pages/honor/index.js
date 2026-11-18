@@ -1,13 +1,14 @@
 const api = require('../../utils/api')
 const fmt = (c) => (c.reverse ? '不高于 ' + c.need + c.unit : '达到 ' + c.need + c.unit)
 Page({
-  data: { d: null, groups: [], proofRecords: [], ownedCount: 0, total: 0, crit: [], active: 'level', tabs: [{k:'level',n:'经营等级'},{k:'badges',n:'等级勋章'},{k:'proof',n:'可信凭证'}], loadTxt: '加载中…' },
+  data: { d: null, groups: [], proofRecords: [], ownedCount: 0, total: 0, crit: [], active: 'level', tabs: [{k:'level',n:'经营等级'},{k:'badges',n:'等级勋章'},{k:'proof',n:'可信凭证'}], honState: 'loading', honTitle: '', errMsg: '' },
   onLoad(q) { if (q && ['level','badges','proof'].includes(q.tab)) this.setData({ active: q.tab }) },
   switchTab(e) { this.setData({ active: e.currentTarget.dataset.k }); wx.pageScrollTo({scrollTop:0,duration:0}) },
   onShow() { this.fetch() },
   onPullDownRefresh() { this.fetch().then(() => wx.stopPullDownRefresh()) },
+  retry() { this.fetch() },
   async fetch() {
-    if (!getApp().globalData.token) return this.setData({ d: null, proofRecords: [], loadTxt: '请先在「我的」绑定门店' })
+    if (!getApp().globalData.token) return this.setData({ d: null, proofRecords: [], honState: 'denied', honTitle: '还没有绑定门店', errMsg: '经营荣誉按门店统计，请先在「我的」加入门店后再来查看' })
     try {
       const d = await api.request('/m/honor')
       d.badges = d.badges.map(b => Object.assign({}, b, { proofState: b.proof ? ({0:'等待封存',1:'已封存 · 待确认',2:'已确认',3:'处理中',4:'待人工核对',5:'已提交 · 待确认'})[b.proof.status] || '记录已生成' : '暂无可信记录' }))
@@ -27,9 +28,9 @@ Page({
       }))
       d.level.ratingText = d.level.metrics.reviews ? ' · 评分 ' + (d.level.metrics.rating10 / 10) : ''
       const proofRecords = d.badges.filter(b => b.owned).map(b => Object.assign({},b,{dateLabel:String(b.granted_at || '').slice(0,10)}))
-      this.setData({ d, groups, crit, proofRecords, ownedCount: d.badges.filter((b) => b.owned).length, total: d.badges.length, loadTxt: '' })
+      this.setData({ d, groups, crit, proofRecords, ownedCount: d.badges.filter((b) => b.owned).length, total: d.badges.length, honState: '', errMsg: '' })
       if (d.fresh && d.fresh.length) wx.showModal({ title: '获得新徽章', content: '恭喜点亮「' + d.fresh.join('」「') + '」', showCancel: false, confirmText: '好的' })
-    } catch (e) { this.setData({ d: null, proofRecords: [], loadTxt: e.msg || '暂时无法加载，请稍后重试' }) }
+    } catch (e) { this.setData({ d: null, proofRecords: [], honState: 'error', honTitle: '经营荣誉加载失败', errMsg: e.msg || '暂时无法加载，请稍后重试' }) }
   },
   showBadge(e) {
     const b = this.data.d.badges.find((x) => Number(x.id) === Number(e.currentTarget.dataset.id))
