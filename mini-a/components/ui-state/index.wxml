@@ -1,0 +1,32 @@
+<view class="uis uis-{{kind}} {{compact ? 'uis-compact' : ''}}">
+  <block wx:if="{{kind === 'loading'}}">
+    <view class="uis-sk"></view>
+    <view class="uis-sk uis-sk-short"></view>
+  </block>
+  <block wx:else>
+    <view class="uis-ico">{{icon || defaultIcon}}</view>
+    <view class="uis-title">{{title || defaultTitle}}</view>
+    <view class="uis-desc" wx:if="{{descLines.length}}">
+      <view class="uis-line" wx:for="{{descLines}}" wx:key="*this">{{item}}</view>
+    </view>
+    <view class="uis-reasons" wx:if="{{reasons.length}}">
+      <view class="uis-reason" wx:for="{{reasons}}" wx:key="q">
+        <view class="uis-q">{{item.q}}</view>
+        <view class="uis-a">{{item.a}}</view>
+      </view>
+    </view>
+    <view class="uis-preview" wx:if="{{previewRows.length}}">
+      <view class="uis-pt">{{previewTitle || '开通后可以享受'}}</view>
+      <view class="uis-pr" wx:for="{{previewRows}}" wx:key="index">
+        <text>{{item[0]}}</text><text class="uis-pv">{{item[1]}}</text>
+      </view>
+      <view class="uis-pn">示例示意 · 非真实数据</view>
+    </view>
+    <view class="uis-actions">
+      <button wx:if="{{actionText}}" class="btn uis-btn" bindtap="onAction" open-type="{{actionOpen}}">{{actionText}}</button>
+      <button wx:if="{{secondaryText}}" class="btn ghost uis-btn" bindtap="onSecondary" open-type="{{secondaryOpen}}">{{secondaryText}}</button>
+      <button wx:if="{{kind === 'error' && !noRetry}}" class="btn ghost uis-btn" bindtap="onRetry">重试</button>
+    </view>
+    <slot></slot>
+  </block>
+</view>

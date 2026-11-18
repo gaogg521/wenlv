@@ -1,4 +1,10 @@
 <view class="hero"><view class="hi">{{kind === 'withdrawals' ? '提现记录' : '佣金明细'}}</view><view class="sub2">本人业务 · 金额以实际账目为准</view></view>
+<view class="card" wx:if="{{loading && !rows.length}}"><ui-state kind="loading" /></view>
+<ui-state wx:if="{{qual === 'denied'}}" kind="denied" title="推广资格未生效或已暂停" icon="🧾"
+  reasons="{{deniedReasons}}"
+  action-text="联系平台客服咨询" action-open="contact"
+  secondary-text="返回推广中心" secondary-url="/package-promo/pages/center/index" />
+<block wx:if="{{qual !== 'denied'}}">
 <view class="chips"><view wx:for="{{filters}}" wx:key="id" class="chip {{status === item.id ? 'on' : ''}}" data-id="{{item.id}}" bindtap="filter">{{item.name}}</view></view>
 <view class="card fade-up">
   <view class="kv"><picker mode="date" bindchange="queryInput" data-field="from"><text class="wk-picker">{{from || '开始日期'}}</text></picker><picker mode="date" bindchange="queryInput" data-field="to"><text class="wk-picker">{{to || '截止日期'}}</text></picker></view>
@@ -12,8 +18,7 @@
   <view class="kv"><text>已放行</text><text>¥{{summary.released}}</text></view>
   <view class="kv"><text>冲正 / 无效</text><text>¥{{summary.reversed}}</text></view>
 </view>
-<view class="card state-error" wx:if="{{error}}"><view>{{error}}</view><button class="btn ghost sm" bindtap="retry">重试</button></view>
-<view class="skeleton" wx:if="{{loading}}" style="height:240rpx"></view>
+<ui-state wx:if="{{error}}" kind="error" title="{{errorTitle}}" desc="{{error}}" bind:retry="retry" />
 <view class="card fade-up" wx:for="{{rows}}" wx:key="id">
   <view class="kv"><text>{{item.title}}</text><text class="wk-amount">¥{{item.amountText}}</text></view>
   <view class="wk-state">{{item.state}}</view>
@@ -35,5 +40,10 @@
   <view class="kv"><text>流水号</text><text>{{detail.payRef || '暂无'}}</text></view>
   <view class="note" wx:if="{{detail.reason}}">{{detail.reason}}</view>
 </view>
-<view class="card empty" wx:if="{{!rows.length && !error && !loading}}"><view class="e-ico">🧾</view>暂无记录</view>
+<view class="card" wx:if="{{!rows.length && !error && !loading}}">
+  <ui-state kind="empty" icon="🧾" compact
+    title="{{emptyTitle}}" desc="{{emptyDesc}}"
+    action-text="{{emptyAction}}" action-url="/package-promo/pages/center/index" />
+</view>
 <view class="chips"><button bindtap="prev" wx:if="{{page>1}}" class="btn ghost sm">上一页</button><text class="muted">第{{page}}页 · 共{{total}}条</text><button bindtap="next" wx:if="{{hasNext}}" class="btn ghost sm">下一页</button></view>
+</block>

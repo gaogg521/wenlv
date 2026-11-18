@@ -1,44 +1,67 @@
 <view class="hero">
   <view class="sub2">{{roleText}}</view>
-  <view class="hi" wx:if="{{ov && ov.promoter}}">¥{{ov.withdrawableYuan}}</view>
-  <view class="sub2" wx:if="{{ov && ov.promoter}}">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>
-  <view class="sub2" wx:else>还未开通推广资格 · 联系平台运营开通（一级推荐 · 无层级）</view>
+  <block wx:if="{{ov && ov.promoter}}">
+    <view class="hi">¥{{ov.withdrawableYuan}}</view>
+    <view class="sub2">可提现 · 累计佣金 ¥{{ov.earnedYuan}} · 已提 ¥{{ov.withdrawnYuan}}</view>
+  </block>
+  <view class="sub2" wx:else>开通后可推荐线路与好物 · 成交计佣 · 一级推荐无层级</view>
 </view>
-<view class="card" wx:if="{{error}}"><view>{{error}}</view><button bindtap="fetch">重试</button></view>
-<view class="card" wx:if="{{ov && ov.promoter}}"><view class="kv" bindtap="products"><text>可推广产品与素材</text><text>›</text></view><view class="kv" bindtap="commissions"><text>逐笔佣金明细</text><text>›</text></view><view class="kv" bindtap="withdrawals"><text>提现记录与回单</text><text>›</text></view><view class="note">待审/待付款申请占用金额，审批通过不表示已到账。</view></view>
-<view class="chips">
-  <view class="chip {{seg === 'earn' ? 'on' : ''}}" bindtap="switchSeg" data-k="earn">推广收益</view>
-  <view class="chip {{seg === 'invite' ? 'on' : ''}}" bindtap="switchSeg" data-k="invite">邀请收客</view>
-  <view class="chip {{seg === 'cust' ? 'on' : ''}}" bindtap="switchSeg" data-k="cust">推荐客户</view>
+
+<view class="card" wx:if="{{state === 'loading'}}">
+  <ui-state kind="loading" />
 </view>
-<block wx:if="{{seg === 'earn'}}">
-  <view class="card" wx:if="{{ov && ov.promoter}}">
-    <view class="kv"><text>当前档位费率</text><text class="v">{{ov.rateLabel}}</text></view>
-    <view class="kv"><text>累计有效成交（90天口径）</text><text class="v">{{ov.validGmvLabel}}</text></view>
-    <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
-    <view class="kv"><text>观察期佣金 / 待处理占用</text><text>¥{{ov.observingYuan}} / ¥{{ov.occupiedYuan}}</text></view><view class="kv"><text>收款账户尾号</text><text>{{ov.payoutTail || '尚未登记'}}</text></view><view class="note">收款资料由平台核实后维护，请联系运营办理变更。退款冲正后存在差额时暂停付款。</view>
+
+<ui-state wx:if="{{state === 'error'}}" kind="error" title="推广中心加载失败" desc="{{error}}" bind:retry="fetch" />
+
+<ui-state wx:if="{{state === 'denied'}}" kind="denied" title="推广资格还未开通"
+  icon="🤝"
+  desc="推广中心用来向好友推荐线路与好物，成交后按档位计佣、可申请提现。"
+  reasons="{{deniedReasons}}"
+  preview-title="分成档位与收益（示意）"
+  preview-rows="{{deniedPreview}}"
+  action-text="联系平台客服咨询开通" action-open="contact"
+  secondary-text="先去逛逛线路与好物" secondary-url="/pages/shop/index" />
+
+<block wx:if="{{state === 'ready'}}">
+  <view class="card"><view class="kv" bindtap="products"><text>可推广产品与素材</text><text>›</text></view><view class="kv" bindtap="commissions"><text>逐笔佣金明细</text><text>›</text></view><view class="kv" bindtap="withdrawals"><text>提现记录与回单</text><text>›</text></view><view class="note">待审/待付款申请占用金额，审批通过不表示已到账。</view></view>
+  <view class="chips">
+    <view class="chip {{seg === 'earn' ? 'on' : ''}}" bindtap="switchSeg" data-k="earn">推广收益</view>
+    <view class="chip {{seg === 'invite' ? 'on' : ''}}" bindtap="switchSeg" data-k="invite">邀请收客</view>
+    <view class="chip {{seg === 'cust' ? 'on' : ''}}" bindtap="switchSeg" data-k="cust">推荐客户</view>
   </view>
-  <view class="btn" wx:if="{{ov && ov.canWithdraw}}" bindtap="withdraw">申请提现</view>
-  <view class="note" wx:if="{{ov && ov.promoter}}">{{ov.ruleText}}</view>
-  <view class="note" wx:if="{{ov && ov.promoter && !ov.active}}">推广资格已停用，暂停取码及提现。</view>
-</block>
-<block wx:if="{{seg === 'invite'}}">
-  <view class="card" style="text-align:center">
-    <view class="sub2" style="color:var(--sub)">我的专属推广码（海报/小程序码携带）</view>
-    <view style="font-size:56rpx;font-weight:600;color:#2f6f9f;margin:20rpx 0">{{scene || '—'}}</view>
-    <image wx:if="{{qrcode}}" src="{{qrcode}}" style="width:320rpx;height:320rpx" mode="aspectFit" />
-    <view class="btn ghost" style="margin:20rpx 0 0" bindtap="makeQrcode">{{qrcode ? '刷新小程序码' : '生成专属小程序码'}}</view>
-    <view class="btn ghost" style="margin:16rpx 0 0" bindtap="copy" wx:if="{{scene}}">复制推广码</view>
-  </view>
-  <view class="note">好友扫码进店并消费，订单自动归因到你 · 只按真实成交计酬</view>
-</block>
-<block wx:if="{{seg === 'cust'}}">
-  <view class="card" wx:if="{{customers.length}}">
-    <view class="kv" wx:for="{{customers}}" wx:key="index">
-      <text>{{item.when}} · {{item.orderNo ? (item.statusText || '已下单') : '仅到访'}}</text>
-      <text class="v">{{item.amountText}}</text>
+  <block wx:if="{{seg === 'earn'}}">
+    <view class="card">
+      <view class="kv"><text>当前档位费率</text><text class="v">{{ov.rateLabel}}</text></view>
+      <view class="kv"><text>累计有效成交（90天口径）</text><text class="v">{{ov.validGmvLabel}}</text></view>
+      <view class="kv"><text>待审提现</text><text class="v">{{ov.pendingRequests}} 笔</text></view>
+      <view class="kv"><text>观察期佣金 / 待处理占用</text><text>¥{{ov.observingYuan}} / ¥{{ov.occupiedYuan}}</text></view><view class="kv"><text>收款账户尾号</text><text>{{ov.payoutTail || '尚未登记'}}</text></view><view class="note">收款资料由平台核实后维护，请联系运营办理变更。退款冲正后存在差额时暂停付款。</view>
     </view>
-  </view>
-  <view wx:else class="empty">还没有客户记录</view>
-  <view class="note">客户身份已脱敏 · 仅显示归因统计</view>
+    <view class="btn" wx:if="{{ov.canWithdraw}}" bindtap="withdraw">申请提现</view>
+    <view class="note">{{ov.ruleText}}</view>
+    <view class="note" wx:if="{{!ov.active}}">推广资格已停用，暂停取码及提现。</view>
+  </block>
+  <block wx:if="{{seg === 'invite'}}">
+    <view class="card" style="text-align:center">
+      <view class="sub2" style="color:var(--sub)">我的专属推广码（海报/小程序码携带）</view>
+      <view style="font-size:56rpx;font-weight:600;color:#2f6f9f;margin:20rpx 0">{{scene || '—'}}</view>
+      <image wx:if="{{qrcode}}" src="{{qrcode}}" style="width:320rpx;height:320rpx" mode="aspectFit" />
+      <view class="btn ghost" style="margin:20rpx 0 0" bindtap="makeQrcode">{{qrcode ? '刷新小程序码' : '生成专属小程序码'}}</view>
+      <view class="btn ghost" style="margin:16rpx 0 0" bindtap="copy" wx:if="{{scene}}">复制推广码</view>
+    </view>
+    <view class="note">好友扫码进店并消费，订单自动归因到你 · 只按真实成交计酬</view>
+  </block>
+  <block wx:if="{{seg === 'cust'}}">
+    <view class="card" wx:if="{{customers.length}}">
+      <view class="kv" wx:for="{{customers}}" wx:key="index">
+        <text>{{item.when}} · {{item.orderNo ? (item.statusText || '已下单') : '仅到访'}}</text>
+        <text class="v">{{item.amountText}}</text>
+      </view>
+    </view>
+    <view class="card" wx:else>
+      <ui-state kind="empty" icon="👤" title="还没有客户记录" compact
+        desc="{{custEmptyDesc}}"
+        action-text="去选可推广的产品" action-url="/package-promo/pages/products/index" />
+    </view>
+    <view class="note">客户身份已脱敏 · 仅显示归因统计</view>
+  </block>
 </block>
