@@ -151,18 +151,12 @@ export function publicBase(req) {
   return proto + '://' + host
 }
 // ---------- 微信支付回调 ----------
+// X-05：商户侧新订单通知统一走 notify.sendScene（模板未配置记 skipped，MOCK 落 notify_log）
 export async function notifyMerchantStaff(merchantId, orderNo) {
-  const { getSecrets } = await import('../infra/secrets.mjs')
-  const tpl = (await getSecrets(['WX_TMPL_NEW_ORDER'])).WX_TMPL_NEW_ORDER
-  if (!tpl) return { skipped: true }
-  const staff = await q(`SELECT DISTINCT u.mini_b_openid openid FROM merchant_staff s
-    JOIN user_account u ON u.id = s.user_id WHERE s.merchant_id = ? AND s.status = 1`, [merchantId])
-  for (const st of staff) {
-    await wxapi.sendSubscribeMessage(st.openid, tpl,
-      { thing1: { value: '您有新的已支付订单' }, character_string2: { value: String(orderNo).slice(0, 32) } },
-      'pages/orders/index')
-  }
-  return { sent: staff.length }
+  const { notifyMerchant } = await import('../domain/notify.mjs')
+  return await notifyMerchant(merchantId, { scene: 'new_order', bizRef: orderNo,
+    data: { thing1: { value: '您有新的已支付订单' }, character_string2: { value: String(orderNo).slice(0, 32) } },
+    page: 'pages/orders/index' })
 }
 
 export async function handlePayNotify(orderNo, transNo, mock = false) {
@@ -181,13 +175,12 @@ export async function handlePayNotify(orderNo, transNo, mock = false) {
   {
     // 商户端订阅消息（P2）：新订单通知门店（WX_TMPL_NEW_ORDER 未配置则 skipped，不阻断）
     notifyMerchantStaff(o.merchant_id, orderNo).catch((e) => console.error('[notify:merchant]', e.message))
-    // 订阅消息：支付成功通知（官方 subscribe/send；未订阅/未配置静默失败，不阻断主链）
-    wxapi.sendSubscribeMessage(
-      (await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])).mini_a_openid,
-      (await (async () => { const { getSecrets } = await import('../infra/secrets.mjs'); return (await getSecrets(['WX_TMPL_PAY_OK'])).WX_TMPL_PAY_OK })()) || '',
-      { character_string1: { value: orderNo }, thing2: { value: String((await one('SELECT title FROM tour_product WHERE id=?', [o.product_id]))?.title || '出行订单').slice(0, 20) } },
-      'package-order/pages/orders/index',
-    ).catch((e) => console.error('[notify] payOk send failed:', e.message))
+    // X-05：支付成功通知统一走 notify.sendScene（下发记录落 notify_log；未订阅/未配置静默，不阻断主链）
+    const { sendScene } = await import('../domain/notify.mjs')
+    sendScene({ scene: 'pay_ok', openid: (await one('SELECT mini_a_openid FROM user_account WHERE id = ?', [o.user_id])).mini_a_openid,
+      bizRef: orderNo,
+      data: { character_string1: { value: orderNo }, thing2: { value: String((await one('SELECT title FROM tour_product WHERE id=?', [o.product_id]))?.title || '出行订单').slice(0, 20) } },
+      page: 'package-order/pages/orders/index' }).catch((e) => console.error('[notify] payOk send failed:', e.message))
   }
   return { code: 0, ok: true }
 }

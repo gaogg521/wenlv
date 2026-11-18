@@ -11,13 +11,13 @@ button::after{border:0}button{font-weight:400}.scan-action{display:flex;align-it
 .attention{margin:17rpx 0 24rpx;padding:19rpx 2rpx;border-bottom:1rpx solid #e5dfd2;color:#7d725c;font-size:24rpx}.attention text{color:#a69a86;font-size:20rpx}.attention-dot{background:#b5915a;width:9rpx;height:9rpx}.trend-panel{background:#fffdf8;border:1rpx solid #e9e1d5;border-radius:20rpx;padding:27rpx 24rpx;margin-top:24rpx}.week-total{color:#57704e}.trend-column>view{background:#879b78;border-radius:5rpx 5rpx 0 0}.trend-day>text{color:#a29682}.announcement{background:transparent;border:0;border-top:1rpx solid #ded5c6;border-bottom:1rpx solid #ded5c6;border-radius:0;padding:26rpx 2rpx 28rpx;margin-top:32rpx}.announcement-kicker{font-size:20rpx;letter-spacing:2rpx;color:#ae9772;margin-bottom:13rpx}.announcement .section-heading{font-size:28rpx;margin-bottom:15rpx}.notice-toggle{color:#9b8059;font-size:22rpx}.notice-body{font-size:24rpx;line-height:1.85;color:#8e8270;max-height:132rpx}.notice-body.expanded{max-height:none}.review-panel{background:#f0ece2;border:0;border-radius:18rpx;padding:26rpx;margin-top:28rpx}.review-copy{color:#766c5d;line-height:1.8}.review-author{color:#a19683}.growth-links{background:transparent;border:0;border-radius:0;padding:0 2rpx;margin-top:22rpx}.growth-links>view{color:#64745b;border-color:#e5dfd2}.growth-links>view>text:last-child{color:#9f957e}.workbench-footer{color:#b3a58f;font-size:20rpx;margin-top:32rpx}
 
 /* ===== B2 今日待办面板：待接待/待核销/临近截止/异常待处理 ===== */
-.todo-panel { margin: 20rpx 24rpx 0; padding: 22rpx 24rpx; border-radius: 20rpx; background: #fff; box-shadow: 0 2rpx 12rpx rgba(123,90,166,.08); }
+.todo-panel { margin: 20rpx 24rpx 0; padding: 22rpx 24rpx; border-radius: 20rpx; background: #fff; box-shadow: 0 2rpx 12rpx rgba(173,96,61,.08); }
 .todo-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16rpx; }
-.todo-head text:first-child { font-size: 28rpx; font-weight: 600; color: #2b2350; }
+.todo-head text:first-child { font-size: 28rpx; font-weight: 600; color: #5a3a2a; }
 .todo-note { font-size: 20rpx; color: #9ca3af; }
 .todo-grid { display: flex; gap: 12rpx; }
-.todo-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4rpx; padding: 14rpx 16rpx; border-radius: 14rpx; background: #f7f5fb; }
-.todo-num { font-size: 34rpx; font-weight: 700; color: #2b2350; line-height: 1.2; }
+.todo-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4rpx; padding: 14rpx 16rpx; border-radius: 14rpx; background: #faf3ec; }
+.todo-num { font-size: 34rpx; font-weight: 700; color: #5a3a2a; line-height: 1.2; }
 .todo-num.todo-hot { color: #b45309; }
 .todo-label { font-size: 22rpx; color: #4c4470; font-weight: 600; }
 .todo-cap { font-size: 18rpx; color: #9ca3af; line-height: 1.4; }

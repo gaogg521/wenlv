@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { routes } from './routes.mjs'
-import { q, one, count } from './db.mjs'
+import { q, one, count, BizError } from './db.mjs'
 import { matchRouteModule } from './domain/admin-modules.mjs'
 import { requireModule } from './routes/_shared.mjs'
 import { hashPassword, initialAdminPassword, isProduction } from './auth.mjs'
@@ -47,11 +47,34 @@ async function bootstrap() {
       [hashPassword(cityPw)])
     console.log('[boot] 城市合伙人演示账号：city310118（仅可见 310118 青浦数据）')
   }
-  // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）
+  // 空库自动播种示例内容（商户/线路/商城SKU/团期/预算/示例推广员）——
+  // R-03 的主体方演示账号要绑「安麓大夫第 / 朱家角古镇」，必须在内容种子之后种
   try {
     const { seedContent } = await import('../db/seed-content.mjs')
     await seedContent()
   } catch (e) { console.error('[boot:seed]', e.message) }
+  // R-03：主体方演示账号（幂等）——商户主体绑「安麓大夫第 · 朱家角」（商户端演示登录的门店 1 同一家），
+  // 景区主体绑朱家角古镇。生产不种（口令已进 DEFAULT_PASSWORDS 黑名单，生产登录封死）。
+  if (!isProduction() || process.env.MERCHANT_PARTNER_PASSWORD) {
+    const demoMerchant = await one("SELECT id FROM merchant WHERE name LIKE '安麓大夫第%' ORDER BY id LIMIT 1")
+    if (demoMerchant) {
+      const merPw = process.env.MERCHANT_PARTNER_PASSWORD || 'mer123'
+      await q(`INSERT INTO admin_user (username, password_hash, role, display_name, subject_type, subject_id) VALUES
+        ('mer310118', ?, 'merchant_partner', '商户主体·安麓大夫第（演示）', 'merchant', ?) ON DUPLICATE KEY UPDATE username = VALUES(username)`,
+        [hashPassword(merPw), demoMerchant.id])
+      console.log('[boot] 商户主体演示账号：mer310118（安麓大夫第 · 主体 ' + demoMerchant.id + '）')
+    }
+  }
+  if (!isProduction() || process.env.SCENIC_PARTNER_PASSWORD) {
+    const demoScenic = await one("SELECT id FROM scenic_spot WHERE name LIKE '朱家角古镇%' ORDER BY id LIMIT 1")
+    if (demoScenic) {
+      const scePw = process.env.SCENIC_PARTNER_PASSWORD || 'sce123'
+      await q(`INSERT INTO admin_user (username, password_hash, role, display_name, subject_type, subject_id) VALUES
+        ('sce310118', ?, 'scenic_partner', '景区主体·朱家角古镇（演示）', 'scenic', ?) ON DUPLICATE KEY UPDATE username = VALUES(username)`,
+        [hashPassword(scePw), demoScenic.id])
+      console.log('[boot] 景区主体演示账号：sce310118（朱家角古镇 · 主体 ' + demoScenic.id + '）')
+    }
+  }
 }
 
 function json(res, code, data, status = 200) {
@@ -172,6 +195,8 @@ const server = http.createServer(async (req, res) => {
   const query = Object.fromEntries(url.searchParams)
 
   try {
+    // R-01：只读代看——带 viewAs 参数的请求只允许 GET，写操作一律拒绝（页面隐藏按钮之外的服务端兜底）
+    if (req.method !== 'GET' && url.searchParams.get('viewAsType')) throw new BizError(1003, '主体视角只读代看模式下不能执行写操作')
     // C-05/D-06：命中 ROUTE_MODULES 显式映射的路由统一跑模块强制校验（与路由内既有角色校验取交集，不放松）
     const rm = matchRouteModule(req.method, pathname)
     if (rm) await requireModule({ headers: req.headers, method: req.method, url: req.url }, rm.module)

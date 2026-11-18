@@ -348,7 +348,7 @@ async function entitlements() {
   const me = ME?.displayName || ME?.username || ''
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>人工权益调整</h2><span class="muted">运营/风控从用户画像发起 → 超管复核执行 → 账本分录与审计同事务；无直接改余额接口</span></div>
+    <div class="card-head"><h2>人工权益调整</h2><span class="muted">运营/风控从用户画像发起 → 超管复核执行 → 账本分录与审计同步留痕；余额只能走调整流程，不能直接改数</span></div>
     <div class="cfg-tabs">${[['', '全部'], [0, '待审批'], [1, '已执行'], [2, '已驳回'], [3, '已撤回']].map(([v, n]) => `<button class="cfg-tab ${String(Q.status) === String(v) ? 'on' : ''}" onclick="window.__eqQ.status='${v}';window.__eqQ.page=1;entitlements()">${n}</button>`).join('')}</div>
     ${rows.length ? `<table><thead><tr><th>申请号</th><th>用户</th><th>类型 / 数量</th><th>依据</th><th>状态</th><th>申请人 / 审批</th><th>操作</th></tr></thead><tbody>
     ${rows.map((r) => `<tr><td class="num">${esc(r.req_no)}</td><td>${esc(r.nickname || 'ID ' + r.user_id)}<div class="td-sub">ID ${r.user_id}</div></td>

@@ -41,7 +41,7 @@ async function reviewqueue() {
   const myName = 'admin:' + (ME?.displayName || ME?.username || '')
   $('#app').innerHTML = `
   <div class="card">
-    <div class="card-head"><h2>审核工作队列</h2><span class="muted">四类待办统一聚合 · 认领协调（同一待办同时一人） · 判定仍走各队列原接口 · 超 48 小时标红</span></div>
+    <div class="card-head"><h2>审核工作队列</h2><span class="muted">四类待办统一聚合 · 认领后他人不可重复处理 · 完成判定自动释放 · 超 48 小时标红</span></div>
     <p class="td-sub">点「去处理」打开对应待办。完成判定后认领自动释放，回到当前队列。</p>
     ${d.queues.map((q) => `
     <div class="card" style="margin-bottom:12px">
@@ -64,6 +64,7 @@ async function reviewqueue() {
         <td><div class="td-actions">
           ${!it.claimedBy ? `<button class="btn primary sm" onclick="rqClaim('${q.kind}', ${it.item_id})">认领</button>` : ''}
           ${mine ? `<button class="btn ghost sm" onclick="rqRelease('${q.kind}', ${it.item_id})">释放</button>` : ''}
+          ${mine && ['super', 'review'].includes(ME?.role) ? `<button class="btn ghost sm" onclick="rqReassign('${q.kind}', ${it.item_id})">转派</button>` : ''}
           <button class="btn ghost sm" data-rq-kind="${q.kind}" data-rq-id="${it.item_id}" onclick="rqOpen('${q.kind}', ${it.item_id})">去处理</button>
         </div></td></tr>`}).join('')}</tbody></table>
       ${(q.kind === 'note' || q.kind === 'report') ? `<div class="row" style="margin-top:10px"><button class="btn primary sm" onclick="rqBatch('${q.kind}')">批量${q.kind === 'note' ? '通过' : '不成立'}</button>
@@ -102,6 +103,21 @@ window.rqClaim = async (kind, itemId) => {
     toast(r.already ? '该待办本就由你认领' : '已认领，请尽快到对应栏目完成判定')
     reviewqueue()
   } catch (e) { toast(e.message, true) }
+}
+// P-07：组长转派——当前认领释放 + 目标审核员新认领（服务端同事务 + 审计）
+window.rqReassign = (kind, itemId) => {
+  modal('转派待办 #' + itemId, `
+    <p class="td-sub">当前认领会先释放，目标审核员即刻获得认领；操作写入审计。被转派人需具备该队列的审核资格。</p>
+    <div class="field"><label>被转派人账号 ID *</label><input id="rqToUid" type="number" placeholder="在「后台账号」页查看审核员的数字 ID"></div>
+    <div id="rqReErr" class="td-sub" style="color:var(--red)"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="rqReassignSubmit('${kind}', ${itemId})">确认转派</button>`)
+}
+window.rqReassignSubmit = async (kind, itemId) => {
+  try {
+    const r = await api('POST', `/admin/review-queue/${kind}/${itemId}/reassign`, { toUid: Number(document.getElementById('rqToUid').value) })
+    toast('已转派给 ' + r.to)
+    closeModal(); reviewqueue()
+  } catch (e) { const el = $('#rqReErr'); if (el) el.textContent = e.message; else toast(e.message, true) }
 }
 window.rqRelease = async (kind, itemId) => {
   try { await api('POST', `/admin/review-queue/${kind}/${itemId}/release`); toast('已释放'); reviewqueue() } catch (e) { toast(e.message, true) }

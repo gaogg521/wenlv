@@ -42,6 +42,13 @@ function tempPassword() {
 }
 
 const adminAccounts = {
+  // R-05：角色能力矩阵（谁、在哪端、能看什么、能做什么）——数据引用 modules.mjs 与 ADMIN_ACTIONS，与实际权限同源
+  'GET /admin/role-matrix': async (req) => {
+    await requireAdmin(req)
+    const { ROLE_MATRIX } = await import('../domain/role-matrix.mjs')
+    return { matrix: ROLE_MATRIX }
+  },
+
   'GET /admin/accounts': async (req) => {
     await requireAdmin(req, ['super'])
     // 不下发 password_hash / mfa_secret（红线：密钥哈希不出接口）

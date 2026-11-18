@@ -16,6 +16,9 @@ import { sanitizeRich } from '../infra/sanitize.mjs'
 import { whereMobile, sealMobile, openMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import { merchantRange, merchantPaging } from '../infra/merchant-range.mjs'
+import { orderStatusText } from '../domain/dict.mjs'
+import { recordVersion } from '../domain/master-version.mjs'
+import * as notifyDomain from '../domain/notify.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
 import * as vc from '../domain/vc.mjs'
@@ -242,7 +245,8 @@ const m = {
       ${depart ? 'AND s.depart_date = ?' : ''}
       ${kw ? 'AND (p.title LIKE ? OR o.order_no LIKE ? OR o.contact_name LIKE ?)' : ''}
       ORDER BY o.id DESC LIMIT ? OFFSET ?`, [u.merchantId,...(range?[range.from,range.to]:[]),...(depart?[depart]:[]),...(kw?['%'+kw+'%','%'+kw+'%','%'+kw+'%']:[]),paging.size,paging.offset])
-    return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook) }))
+    // X-01：statusText 统一由服务端字典下发（商户视角）
+    return rows.map((r) => ({ ...r, rebook: !!Number(r.rebook), statusText: orderStatusText(r.status, 'm') }))
   },
 
   'GET /m/orders/:no': async (req) => {
@@ -260,9 +264,48 @@ const m = {
     const phone = o.contact_phone_sealed ? (openMobile(o.contact_phone_sealed) || '') : (o.contact_phone_enc ? String(o.contact_phone_enc) : '')
     const passes = await q('SELECT id,status FROM travel_pass WHERE order_id=?', [o.id])
     const { contact_phone_enc, contact_phone_sealed, rebook_of, ...safe } = o
-    return { ...safe, rebook: !!rebook_of, rebookOf: rebook_of || null,
+    return { ...safe, rebook: !!rebook_of, rebookOf: rebook_of || null, statusText: orderStatusText(o.status, 'm'),
       contactPhone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), passes }
   },
+
+  // ===== X-04 评价闭环：本店评价列表（按商品/评分/回复状态筛选）+ 回复（机审，平台审核后游客可见）=====
+  'GET /m/reviews': async (req) => {
+    const u = requireUser(req)
+    const paging = merchantPaging(req.query, 20)
+    const where = ['p.merchant_id = ?'], args = [u.merchantId]
+    const productId = Number(req.query.productId || 0)
+    if (productId) { where.push('r.product_id = ?'); args.push(productId) }
+    const rating = Number(req.query.rating || 0)
+    if (rating >= 1 && rating <= 5) { where.push('r.rating = ?'); args.push(rating) }
+    const rs = String(req.query.replyStatus || 'all')
+    if (rs === 'pending') where.push('r.reply IS NULL OR r.reply_status = 2')
+    else if (rs === 'replied') where.push('r.reply IS NOT NULL AND r.reply_status = 1')
+    const from = `FROM review r JOIN tour_product p ON p.id = r.product_id JOIN user_account u ON u.id = r.user_id JOIN orders o ON o.id = r.order_id`
+    const W = where.join(' AND ')
+    const rows = await q(`SELECT r.id, r.product_id, r.rating, r.content, r.reply, r.reply_at, r.reply_status, r.status review_status,
+      DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i') created_at, u.nickname, p.title product_title, o.order_no
+      ${from} WHERE ${W} ORDER BY r.id DESC LIMIT ? OFFSET ?`, [...args, paging.size, paging.offset])
+    const total = await count(`SELECT COUNT(*) c ${from} WHERE ${W}`, args)
+    return { items: rows, total: Number(total.c), page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size }
+  },
+
+  'POST /m/reviews/:id/reply': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '回复评价需店长及以上')
+    const content = String((req.body || {}).content || '').trim()
+    if (content.length < 2 || content.length > 200) throw new BizError(1001, '回复请填 2–200 字')
+    const r = await one('SELECT r.id FROM review r JOIN tour_product p ON p.id = r.product_id WHERE r.id = ? AND p.merchant_id = ?', [req.params.id, u.merchantId])
+    if (!r) throw new BizError(1004, '评价不存在或不属于本店')
+    const sec = await wxsec.msgSecCheck(content, (await one('SELECT mini_b_openid FROM user_account WHERE id = ?', [u.uid])).mini_b_openid)
+    if (!sec.pass) throw new BizError(1001, '回复含违规内容，请修改后重新提交')
+    await tx(async (c) => {
+      // 回复提交后进入平台审核（reply_status=0），审核通过才对游客展示
+      await c.upd('UPDATE review SET reply = ?, reply_at = NOW(3), reply_status = 0 WHERE id = ?', [content.slice(0, 500), r.id])
+      await audit(c, 'merchant:' + u.merchantId, 'review', 'reply', 'review-' + r.id, null, { reply: content.slice(0, 200) })
+    })
+    return { id: Number(r.id), replyStatus: 0, secMock: sec.mock }
+  },
+
   'GET /m/supply': async (req) => {
     const u = requireUser(req)
     // C-02 服务端分页：paged=1 时按 page/pageSize/from/to/status/kw 返回分页对象；
@@ -279,7 +322,7 @@ const m = {
     const kw = String(req.query.kw || '').trim().slice(0, 60)
     if (kw) { where.push('(p.title LIKE ? OR DATE_FORMAT(s.depart_date, \'%Y-%m-%d\') LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%') }
     const sql = `SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
-      s.early_price, s.early_days, s.min_go, s.status, p.id AS product_id, p.title
+      s.early_price, s.early_days, s.min_go, s.status, s.version, p.id AS product_id, p.title
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
       WHERE ${where.join(' AND ')}
       ORDER BY (s.depart_date >= CURDATE()) DESC, s.depart_date, p.id, s.id`
@@ -297,10 +340,11 @@ const m = {
     const { ids, action, value } = req.body || {}
     if (!Array.isArray(ids) || !ids.length || ids.length > 200) throw new BizError(1001, '请选择 1-200 个团期')
     if (!['adjust_quota', 'price', 'stop_sell'].includes(action)) throw new BizError(1001, '不支持的批量操作')
-    const rows = await q(`SELECT s.id, s.quota, s.booked, s.price_adult, s.early_price, s.status FROM tour_session s
+    const rows = await q(`SELECT s.id, s.quota, s.booked, s.price_adult, s.early_price, s.status, s.version FROM tour_session s
       JOIN tour_product p ON p.id = s.product_id WHERE p.merchant_id = ? AND s.id IN (${ids.map(() => '?').join(',')})`, [u.merchantId, ...ids.map(Number)])
     const allowed = rows.filter((s) => Number(s.status) !== 4)
     let applied = 0
+    const conflicts = []
     for (const s of allowed) {
       if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ? AND status <> 4', [s.id]); applied++ }
       else if (action === 'adjust_quota') {
@@ -310,10 +354,20 @@ const m = {
       } else if (action === 'price') {
         const price = Math.floor(Number(value))
         if (!(price > 0) || (Number(s.early_price) > 0 && price <= Number(s.early_price))) continue
-        await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [price, s.id]); applied++
+        // X-03：批量改价同样走乐观锁 + 版本簿——并发被改过的团期记入 conflicts，不静默覆盖
+        const done = await tx(async (c) => {
+          const n = await c.upd('UPDATE tour_session SET price_adult = ?, version = version + 1 WHERE id = ? AND version = ?', [price, s.id, Number(s.version)])
+          if (n !== 1) return false
+          await recordVersion(c, { kind: 'session', refId: s.id,
+            snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: price } },
+            changedBy: 'merchant-staff:' + u.uid, reason: '商户端批量改价' })
+          await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + s.id, { price_adult: Number(s.price_adult) }, { price_adult: price })
+          return true
+        })
+        if (done) applied++; else conflicts.push(s.id)
       }
     }
-    return { requested: ids.length, matched: allowed.length, applied, skipped: ids.length - applied }
+    return { requested: ids.length, matched: allowed.length, applied, skipped: ids.length - applied, conflicts }
   },
 
   'POST /m/supply/:sid': async (req) => {
@@ -348,11 +402,20 @@ const m = {
     }
     if (action === 'price') {
       // A-07：改现价同步校验——不得低于已设早鸟价，否则早鸟窗口内游客按更高价成交还显示"早鸟价"
-      const s = await one('SELECT early_price FROM tour_session WHERE id = ?', [req.params.sid])
+      const s = await one('SELECT early_price, price_adult, version FROM tour_session WHERE id = ?', [req.params.sid])
       if (s && s.early_price != null && value <= Number(s.early_price))
         throw new BizError(1001, '现价需高于已设置的早鸟价 ' + fen2yuan(s.early_price) + ' 元（请先关闭早鸟或调低早鸟价）')
-      await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [value, req.params.sid])
-      return { price: value }
+      // X-03：改价并发防护（乐观锁）+ 与 PC 共用同一份变更历史（master_data_version kind=session）
+      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(s.version)
+      await tx(async (c) => {
+        const n = await c.upd('UPDATE tour_session SET price_adult = ?, version = version + 1 WHERE id = ? AND version = ?', [value, req.params.sid, expected])
+        if (n !== 1) throw new BizError(2002, '该团期价格刚被其他端修改，请刷新团期后重试')
+        await recordVersion(c, { kind: 'session', refId: req.params.sid,
+          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: value } },
+          changedBy: 'merchant-staff:' + u.uid, reason: '商户端改价' })
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + req.params.sid, { price_adult: Number(s.price_adult) }, { price_adult: value })
+      })
+      return { price: value, version: expected + 1 }
     }
     if (action === 'early') {
       // 早鸟价（旺季武器 §9 P1）：value={price, days}；price=null 关闭
@@ -371,6 +434,33 @@ const m = {
   },
 
   // 商户经营数据（7 日订单/核销趋势 + 本店评分 + 最新评价）
+  // A-34：全部按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 丢当天；
+  //       核销数按"核销日"（verification_log.created_at）统计，此前错按支付日
+  // ===== B-05：游客笔记——本店商品关联的已发布公开稿（只读）=====
+  // 五种夹具口径（对齐 PR#213）：已发布公开稿可见；私密（visibility=private）、机审中(0)、人工审核(1)、驳回(3)、下架(4) 一律不出现。
+  'GET /m/notes': async (req) => {
+    const u = requireUser(req)
+    const paging = merchantPaging(req.query, 20)
+    const rows = await q(`SELECT n.id, n.title, n.like_count, n.comment_count,
+      DATE_FORMAT(n.published_at, '%Y-%m-%d') published_at, u.nickname author, p.title product_title,
+      COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.cover')), 'null'),
+        JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']')))) cover,
+      SUBSTRING(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.text')), 1, 90) excerpt
+      FROM content_note n
+      JOIN user_account uu ON uu.id = n.user_id
+      JOIN user_account u ON u.id = u.id
+      LEFT JOIN tour_product p ON p.id = n.related_product_id
+      JOIN user_account u2 ON u2.id = u2.id
+      WHERE n.status = 2 AND n.visibility = 'public'
+        AND n.related_product_id IN (SELECT id FROM tour_product WHERE merchant_id = ?)
+      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`.replace('JOIN user_account u ON u.id = u.id', 'JOIN user_account u ON u.id = n.user_id').replace('JOIN user_account u2 ON u2.id = u2.id', '').replace(/u\.nickname/, 'uu.nickname'),
+      [u.merchantId, paging.size, paging.offset])
+    const total = Number((await one(`SELECT COUNT(*) c FROM content_note n JOIN tour_product p ON p.id = n.related_product_id
+      WHERE n.status = 2 AND n.visibility = 'public' AND p.merchant_id = ?`, [u.merchantId])).c)
+    return { items: rows.map((r) => ({ ...r, excerpt: r.excerpt || (r.title || '').slice(0, 40) })),
+      total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size }
+  },
+
   // A-34：全部按业务时区（bizdate）切日——此前 toISOString 取 UTC 日期，00:00–08:00 丢当天；
   //       核销数按"核销日"（verification_log.created_at）统计，此前错按支付日
   'GET /m/stats': async (req) => {
@@ -471,8 +561,28 @@ const mSite = {
   'GET /m/site': async (req) => {
     const row = await one('SELECT * FROM site_config WHERE id = 1')
     const v = row ? entities.readValues('site', row) : {}
-    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '' }
+    // R-04：游客端 AppID 随站点配置下发（未配置为 null，商户端「打开游客端」入口隐藏）
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const sec = await getSecrets(['WX_A_APPID']).catch(() => ({}))
+    return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '',
+      miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null,
+      roleGuide: { 1: '核销员：到店扫码/暗号核销、查看核销记录。订单、库存与结算不可见。',
+        2: '店长：核销员全部 + 订单查看、团期改价/名额/停售、对账单查看、评价回复。',
+        3: '老板：店长全部 + 店员角色管理、门店码、店员邀请码。' } }
   },
+
+  // X-05：商户侧订阅模板 ID（新订单/退款申请/结算待确认；未配置返回 null，前端跳过且不报错）
+  'GET /m/notify/templates': async (req) => {
+    requireUser(req)
+    const { getSecrets } = await import('../infra/secrets.mjs')
+    const s = await getSecrets(['WX_TMPL_NEW_ORDER', 'WX_TMPL_REFUND_APPLY', 'WX_TMPL_SETTLE_PENDING'])
+    return { newOrder: s.WX_TMPL_NEW_ORDER || process.env.WX_TMPL_NEW_ORDER || null,
+      refundApply: s.WX_TMPL_REFUND_APPLY || process.env.WX_TMPL_REFUND_APPLY || null,
+      settlementPending: s.WX_TMPL_SETTLE_PENDING || process.env.WX_TMPL_SETTLE_PENDING || null }
+  },
+
+  // R-05：商户端岗位说明（mini-b「我的」角色说明卡按本人岗位高亮）
+  // roleGuide 放 /m/site 响应（随站点配置下发）
 }
 
 // ---------- 商户端：暗号核销（§4 剧本游玩法） ----------

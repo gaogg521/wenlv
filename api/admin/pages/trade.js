@@ -37,7 +37,7 @@ async function orderDrawer(no) {
       <tr><td class="td-sub">实际商品成交额（早鸟/折扣后）</td><td class="num">${yuan(e.effectiveGoodsFen)}</td></tr>
       <tr><td class="td-sub">自由豆补贴 / 旅豆抵扣</td><td class="num">${yuan(e.freedomDiscountFen)} / ${yuan(e.beanDeductFen)}</td></tr>
       <tr><td class="td-sub">实际现金（商品口径）</td><td class="num"><b>${yuan(e.goodsCashFen)}</b>　<span class="td-sub">保费/代收款 ${yuan(e.insuranceFen)} 另列，不算销售收入</span></td></tr>
-      <tr><td class="td-sub">直接成本（下单快照）</td><td class="num">${e.costFen != null ? yuan(e.costFen) : '<span class="muted">未维护/不可计算</span>'}${e.costConfirmedFen != null ? ' · 已确认 ' + yuan(e.costConfirmedFen) : ' · <span class="td-sub">确认成本未接入（B04）</span>'}</td></tr>
+      <tr><td class="td-sub">直接成本（下单快照）</td><td class="num">${e.costFen != null ? yuan(e.costFen) : '<span class="muted">未维护/不可计算</span>'}${e.costConfirmedFen != null ? ' · 已确认 ' + yuan(e.costConfirmedFen) : ' · <span class="td-sub">确认成本待商户回填</span>'}</td></tr>
       ${e.refunded ? `<tr><td class="td-sub">退款冲减</td><td>已全额退款：净销售额与成本计 0（实退现金以退款单为准）</td></tr>` : ''}
       <tr><td class="td-sub">商品经营毛利 / 毛利率</td><td class="num">${e.profitFen != null ? '<b style="color:' + (e.profitFen < 0 ? 'var(--red)' : 'var(--green)') + '">' + yuan(e.profitFen) + ' / ' + e.marginPct.toFixed(2) + '%</b>' : '—'}${e.profitFen != null && e.profitFen < 0 ? ' <span class="pill warn">负毛利</span>' : ''}</td></tr>
     </table>
@@ -58,7 +58,8 @@ async function orderDrawer(no) {
       ${o.tickets.map((t) => `<tr><td class="num">${esc(t.ticket_no)}</td><td>${TICKET_CAT[t.category] || esc(t.category)}<div class="td-sub">${esc(t.assignee || '待认领')}</div></td>
         <td>${TICKET_ST[t.status] || t.status}</td>
         <td><button class="btn ghost sm" onclick="closeModal();window.__tkQ.page=1;tickets().then(() => setTimeout(() => ticketDrawer(${t.id}), 600))">时间线</button></td></tr>`).join('')}</table>` : ''}
-    <div class="row" style="gap:8px"><span class="pill s${o.status}">${ST[o.status]}</span>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><span class="pill s${o.status}">${o.statusText || ST[o.status]}</span>
+      ${window.ORDER_STATUS_TOURIST && window.ORDER_STATUS_TOURIST[o.status] ? `<span class="td-sub">游客看到的是：${esc(window.ORDER_STATUS_TOURIST[o.status])}</span>` : ''}
       <span class="money" style="font-size:18px">${fen(o.amount_pay)}</span>
       ${o.bean_deducted ? `<span class="pill warn">抵扣 ${o.bean_deducted} 豆</span>` : ''}</div>
     <table style="margin-top:10px">
@@ -148,36 +149,50 @@ async function completeOrder(no) {
 /* ============ 商品与团期 ============ */
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
-  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products'), api('GET', '/admin/merchants'),
+  // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；带视角参数的写操作网关拒绝）
+  // P-05：服务端筛选（关键词/品类/城市/状态），供应商/景区保留前端联动
+  const vq = new URLSearchParams(location.hash.split('?')[1] || '')
+  const F = window.__fprod || (window.__fprod = { sup: '', scn: '', kw: '', cat: '', city: '', status: '' })
+  const pq = new URLSearchParams()
+  if (F.kw) pq.set('kw', F.kw)
+  if (F.cat) pq.set('cat', F.cat)
+  if (F.city) pq.set('cityCode', F.city)
+  if (F.status !== '' && F.status != null) pq.set('status', F.status)
+  if (vq.get('viewAsType')) { pq.set('viewAsType', vq.get('viewAsType')); pq.set('viewAsId', vq.get('viewAsId') || '') }
+  const vqs = vq.get('viewAsType') ? 'viewAsType=' + encodeURIComponent(vq.get('viewAsType')) : ''
+  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + (pq.toString() ? '?' + pq.toString() : '')), api('GET', '/admin/merchants'),
     ADMIN_CAPABILITIES.modules.includes('suppliers') ? api('GET', '/admin/suppliers').catch(() => []) : Promise.resolve([]), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
-  const F = window.__fprod || (window.__fprod = { sup: '', scn: '' })
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商品与团期</h2>${EXPBTN('products', '商品 CSV')}${adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : '<span class="muted">当前角色仅查看，商品维护需运营权限</span>'}</div>
+    <div class="card-head"><h2>商品与团期${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('products', '商品 CSV')}${!vqs && adminCan('entity.product.create') ? `<button class="btn primary sm" onclick="entityEditor('product', null, { onSaved: (id) => products().then(() => sessionsDrawer(id)) })">＋ 新增线路</button>` : `<span class="muted">${vqs ? '只读代看模式下不能修改商品' : '当前角色仅查看，商品维护需运营权限'}</span>`}</div>
     <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
-    <div class="row" style="margin:10px 0 0">
-      <select id="f_supplier" onchange="window.__fprod={sup:this.value,scn:document.getElementById('f_scenic').value};products()">
+    <div class="row" style="margin:10px 0 0;flex-wrap:wrap">
+      <input id="f_prodKw" type="search" placeholder="搜商品标题" value="${esc(F.kw || '')}" style="max-width:200px">
+      <select id="f_cat" onchange="window.__fprod={...window.__fprod,cat:this.value};products()">
+        <option value="">全部品类</option>${Object.entries(CAT_CN).map(([k, n]) => `<option value="${k}" ${F.cat === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="f_city" onchange="window.__fprod={...window.__fprod,city:this.value};products()">
+        <option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${F.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="f_status" onchange="window.__fprod={...window.__fprod,status:this.value};products()">
+        <option value="">全部状态</option><option value="1" ${F.status === '1' ? 'selected' : ''}>上架</option><option value="0" ${F.status === '0' ? 'selected' : ''}>下架</option></select>
+      <select id="f_supplier" onchange="window.__fprod={...window.__fprod,sup:this.value};products()">
         <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <select id="f_scenic" onchange="window.__fprod={sup:document.getElementById('f_supplier').value,scn:this.value};products()">
+      <select id="f_scenic" onchange="window.__fprod={...window.__fprod,scn:this.value};products()">
         <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
       <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
     </div>
     ${frs.length ? `<table><thead><tr><th></th><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((p) => `<tr>
       <td>${eeThumb(info[p.id])}</td>
-      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
+      <td><div class="td-main">${esc(p.title)}</div><div class="td-sub">${p.cat === 'shop' ? '库存 ' + Number(p.stock_left || 0) + ' 件' : esc(p.days_desc || '')}${p.bean_gift ? ' · 完成得 ' + p.bean_gift + ' 豆' : ''}</div>${eeBar(info[p.id])}</td>
       <td><span class="pill off">${esc(CAT_CN[p.cat] || p.cat)}</span></td><td>${esc(CITY_CN[p.city_code] || p.city_code)}</td>
       <td class="money num">${fen(p.price_from)}</td><td class="td-sub">${esc(p.merchant_name || p.merchant_id)}</td>
       <td class="td-sub">${p.supplier_name ? '供:' + esc(p.supplier_name) : ''}${p.supplier_name && p.scenic_name ? '<br>' : ''}${p.scenic_name ? '景:' + esc(p.scenic_name) : ''}${!p.supplier_name && !p.scenic_name ? '—' : ''}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '上架' : '下架'}</span></td>
-      <td><button class="btn ghost sm" onclick="productProfile(${p.id})">经营总览</button> ${adminCan('product.status') ? `<button class="btn ghost sm" onclick="toggleProduct(${p.id}, ${p.status === 1 ? 0 : 1})">${p.status === 1 ? '下架' : '上架'}</button>` : ''}
+      <td>${adminCan('entity.product.edit') ? `<button class="btn ghost sm" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">库存 / 时段</button>
-          ${['super','finance','ops'].includes(ME?.role) ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productSupplyEditor(${p.id})">成本构成</button>
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="packageItemsDrawer(${p.id})">套餐项</button>` : ''}
-          ${adminCan('entity.product.edit') ? `<button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="editProduct(${p.id})">编辑资料</button>` : ''}
-          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productVersions(${p.id})">变更历史</button></td>
+          <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productMore(${p.id}, ${p.status})">更多 ▾</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
   </div>
   <div class="card" style="margin-top:16px">
@@ -192,6 +207,22 @@ async function products() {
   </div>`
   promoDiscountList().catch((e) => { document.getElementById('promoDiscountBox').innerHTML = `<p class="muted">折扣规则加载失败：${esc(e.message)}</p>` })
   supplyItemList().catch((e) => { document.getElementById('supplyItemBox').innerHTML = `<p class="muted">供给项加载失败：${esc(e.message)}</p>` })
+  const kwEl = document.getElementById('f_prodKw')
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__fprod = { ...window.__fprod, kw: kwEl.value.trim() }; products() }, 400) } }
+}
+
+// P-05：行内只留「编辑资料 / 库存时段 / 更多」——其余低频操作收进「更多」菜单（两次点击内可达）
+window.productMore = (id, status) => {
+  const canStatus = adminCan('product.status')
+  const canCost = ['super', 'finance', 'ops'].includes(ME?.role)
+  modal('更多操作 · 商品 #' + id, `
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <button class="btn ghost" onclick="closeModal();productProfile(${id})">经营总览</button>
+      ${canStatus ? `<button class="btn ghost" onclick="closeModal();toggleProduct(${id}, ${status === 1 ? 0 : 1})">${status === 1 ? '下架' : '上架'}</button>` : ''}
+      ${canCost ? `<button class="btn ghost" onclick="closeModal();productSupplyEditor(${id})">成本构成</button>
+      <button class="btn ghost" onclick="closeModal();packageItemsDrawer(${id})">套餐项</button>` : ''}
+      <button class="btn ghost" onclick="closeModal();productVersions(${id})">变更历史</button>
+    </div>`, '<button class="btn ghost" onclick="closeModal()">关闭</button>')
 }
 
 /* ============ B01 供给项台账 ============ */
@@ -295,7 +326,7 @@ window.productSupplyEditor = async (pid) => {
     <button class="btn ghost sm" onclick="window.__siRows.push({itemId:${items.rows[0]?.id || 0},qty:1});document.getElementById('siRows').innerHTML=siRowHtml()">＋ 添加供给项</button>
     <h3 style="margin:12px 0 6px">团期预计毛利（当前配置 × 实时价）</h3>
     <table><thead><tr><th>出发日</th><th>有效单价</th><th>每份成本</th><th>预计毛利</th><th>毛利率</th></tr></thead><tbody>${previewRows || '<tr><td colspan="5" class="muted">暂无在售团期</td></tr>'}</tbody></table>
-    <p class="td-sub">参考零售价之和不能冒充套餐实际售价；确认成本随 B04 结算接入前一律"未确认"。</p>
+    <p class="td-sub">参考零售价之和不能冒充套餐实际售价；确认成本由商户回填后即为「已确认」，回填前一律显示"未确认"。</p>
     <div class="field"><label>操作依据 *（4–300 字）</label><input id="psReason" maxlength="300"></div>
     <div id="psErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="productSupplySave(${pid})">保存成本构成</button>`)
@@ -386,7 +417,7 @@ window.packageItemEditor = async (pid, id) => {
     <div class="field"><label>提供方门店 *（跨店隔离：仅该店可核销）</label><select id="piMerchant">${merchants.filter((m) => m.status === 1).map((m) => `<option value="${m.id}" ${Number(r.merchant_id) === Number(m.id) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
     <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
     <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" value="${r.qty_per_unit || 1}"></div>
-    <div class="field"><label>成本来源供给项（选填，B01）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
+    <div class="field"><label>成本来源供给项（选填）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
         <div class="field"><label>权益说明（游客可见，≤500字，选填）</label><textarea id="piBenefit" maxlength="500" placeholder="如：含专业讲解 90 分钟 · 每单 1 次">${esc(r.benefit_desc || '')}</textarea>
     </textarea></div>
     <div class="field"><label>使用规则（游客可见，≤300字，选填）</label><input id="piRules" maxlength="300" placeholder="如：出发前 24 小时可预约，当日有效" value="${esc(r.benefit_rules || '')}"></div>
@@ -514,28 +545,49 @@ async function saveShopStock(pid, previous) {
 /* ============ 商户 ============ */
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const [rows, info, mlv] = await Promise.all([api('GET', '/admin/merchants'), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
+  // P-08：筛选状态（关键词/类目/等级/状态/城市），服务端过滤
+  const MF = window.__mfil || (window.__mfil = { kw: '', kind: '', level: '', status: '', city: '' })
+  const pq = new URLSearchParams()
+  if (MF.kw) pq.set('kw', MF.kw)
+  if (MF.kind) pq.set('kind', MF.kind)
+  if (MF.level) pq.set('level', MF.level)
+  if (MF.status !== '' && MF.status != null) pq.set('status', MF.status)
+  if (MF.city) pq.set('cityCode', MF.city)
+  const [rows, info, mlv] = await Promise.all([api('GET', '/admin/merchants' + (pq.toString() ? '?' + pq.toString() : '')), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
   const lvName = (n) => ((mlv.find((l) => l.lv === Number(n)) || {}).name) || ('Lv' + n)
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
-    <div class="row" style="margin-top:0">${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}<span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span></div>
+    <div class="row" style="margin-top:0;flex-wrap:wrap">
+      ${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}
+      <input id="mfilKw" type="search" placeholder="搜商户名 / 商户号" value="${esc(MF.kw)}" style="max-width:200px">
+      <select id="mfilKind" onchange="window.__mfil={...window.__mfil,kind:this.value};merchants()"><option value="">全部类目</option>${Object.entries(MERCHANT_KIND).map(([k, n]) => `<option value="${k}" ${MF.kind === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="mfilLevel" onchange="window.__mfil={...window.__mfil,level:this.value};merchants()"><option value="">全部等级</option>${mlv.map((l) => `<option value="${l.lv}" ${String(MF.level) === String(l.lv) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
+      <select id="mfilStatus" onchange="window.__mfil={...window.__mfil,status:this.value};merchants()"><option value="">全部状态</option><option value="1" ${MF.status === '1' ? 'selected' : ''}>生效</option><option value="0" ${MF.status === '0' ? 'selected' : ''}>进件中</option></select>
+      <select id="mfilCity" onchange="window.__mfil={...window.__mfil,city:this.value};merchants()"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${MF.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span>
+    </div>
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
-      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>⭐ ${m.score}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
-      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无商户')}
+      <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>评分 ${Number(m.score) > 0 ? Number(m.score).toFixed(1) : '—'}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
+      <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('筛选条件下暂无商户：清一下筛选再试')}
   </div>`
+  const kwEl = document.getElementById('mfilKw')
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__mfil = { ...window.__mfil, kw: kwEl.value.trim() }; merchants() }, 400) } }
 }
 async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
 
 /* ============ 结算 ============ */
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
-  const rows = await api('GET', '/admin/settlements')
+  // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；写按钮一并隐藏）
+  const vqS = new URLSearchParams(location.hash.split('?')[1] || '')
+  const vqs = vqS.get('viewAsType') ? '?viewAsType=' + encodeURIComponent(vqS.get('viewAsType')) + '&viewAsId=' + encodeURIComponent(vqS.get('viewAsId') || '') : ''
+  const rows = await api('GET', '/admin/settlements' + vqs)
   const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#7c3aed', '#64748b']
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商户周结算</h2>${EXPBTN('settlements', '结算 CSV')}
-      ${adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>'}</div>
+    <div class="card-head"><h2>商户周结算${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('settlements', '结算 CSV')}
+      ${vqs ? '<span class="muted">只读代看模式下不能办理结算</span>' : (adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>')}</div>
     <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
       退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
     ${rows.length && rows[0].scenic_net_fen != null ? `<table><thead><tr><th>周期</th><th>商户</th><th>状态</th><th>本景区行净额</th><th>本景区口径履约应付</th><th>待冲抵调整</th></tr></thead><tbody>
@@ -549,7 +601,7 @@ async function settlements() {
         <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
-          ${s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
+          ${!vqs && s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${!vqs && s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${!vqs && s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
       </div>
       ${Number(s.total_amount) > 0 ? `<div class="split-bar">${parts.map((v, i) => `<span style="background:${COLORS[i]};flex:${Math.max(v, 1)}">${v ? Math.round(v / total * 100) + '%' : ''}</span>`).join('')}</div>` : '<p class="muted" style="margin:0">本期无完成订单，仅计入退改手续费</p>'}
       ${s.payment_ref ? `<p class="muted">支付流水 ${esc(s.payment_ref)} · ${esc(s.paid_at || '')} · ${esc(s.payment_note || '')}</p>` : ''}
@@ -625,7 +677,7 @@ window.rescheduleDiff = (productId) => {
   if (!sel) return
   const opt = sel.options[sel.selectedIndex]
   void productId
-  document.getElementById('rsDiff').textContent = '所选团期单价：¥' + (Number(opt?.dataset.price || 0) / 100).toFixed(0) + '——价差以提交时服务端计算为准（正=需补款，负=应退差）。'
+  document.getElementById('rsDiff').textContent = '所选团期单价：¥' + (Number(opt?.dataset.price || 0) / 100).toFixed(0) + '——价差以提交时系统核算为准（正=需补款，负=应退差）。'
 }
 window.rescheduleSubmit = async (orderNo) => {
   try {
@@ -655,7 +707,7 @@ window.rescheduleDrawer = async (orderNo) => {
         ${Number(r.status) === 0 && (rescheduleIsApplicant(r) || ME?.role === 'super') ? `<button class="btn ghost sm" onclick="rescheduleCancel(${r.id}, '${escJs(orderNo)}')">撤回</button>` : ''}
         ${Number(r.status) === 1 && ['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="rescheduleExec(${r.id}, '${escJs(orderNo)}')">执行换团</button>` : ''}
       </div></td></tr>`).join('')}</tbody></table>` : emptyBox('该订单暂无改期申请')}
-    <p class="td-sub">执行时服务端会再次校验订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
+    <p class="td-sub">执行时系统会再次核对订单状态与目标团期名额；失败整体回滚并登记「执行失败」，可重新发起。</p>`)
 }
 window.rescheduleVerdict = async (id, pass, orderNo) => {
   modal(pass ? '通过改期申请' : '驳回改期申请', `

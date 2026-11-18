@@ -1,11 +1,39 @@
 <view class="hero"><view class="hi">{{kind === 'withdrawals' ? '提现记录' : '佣金明细'}}</view><view class="sub2">本人业务 · 金额以实际账目为准</view></view>
 <view class="chips"><view wx:for="{{filters}}" wx:key="id" class="chip {{status === item.id ? 'on' : ''}}" data-id="{{item.id}}" bindtap="filter">{{item.name}}</view></view>
-<view class="card"><view class="kv"><picker mode="date" bindchange="queryInput" data-field="from"><text>{{from || '开始日期'}}</text></picker><picker mode="date" bindchange="queryInput" data-field="to"><text>{{to || '截止日期'}}</text></picker></view><input wx:if="{{kind === 'commissions'}}" type="number" value="{{productId}}" placeholder="产品编号（留空全部）" bindinput="queryInput" data-field="productId"/><button bindtap="applyQuery">按条件查询</button></view>
-<view class="card" wx:if="{{summary}}"><view>当前条件计佣成交基数 ¥{{summary.gmv}} · 有效订单 {{summary.validOrders}}</view><view>观察期 ¥{{summary.observing}} · 已放行 ¥{{summary.released}} · 冲正/无效 ¥{{summary.reversed}}</view></view>
-<view class="card" wx:if="{{error}}">{{error}}<button bindtap="retry">重试</button></view><view class="card" wx:if="{{loading}}">正在查询…</view>
-<view class="card" wx:for="{{rows}}" wx:key="id"><view class="kv"><text>#{{item.id}} {{item.title}}</text><text>¥{{item.amountText}}</text></view><view>{{item.state}}</view>
- <block wx:if="{{kind === 'commissions'}}"><view class="note">{{item.order_no}} · 实付计佣基数 ¥{{item.baseText}} × {{item.rateText}}</view><view class="note">观察期截止 {{item.payable_at}}</view></block>
- <block wx:else><view class="note">申请 {{item.createdAt}} · {{item.reason}}</view><button data-id="{{item.id}}" bindtap="showDetail">查看审批与付款详情</button><button wx:if="{{item.status === 0}}" data-id="{{item.id}}" bindtap="cancel">撤销待审申请</button><button wx:if="{{item.hasReceipt}}" data-id="{{item.id}}" bindtap="receipt">查看真实回单</button></block>
+<view class="card fade-up">
+  <view class="kv"><picker mode="date" bindchange="queryInput" data-field="from"><text class="wk-picker">{{from || '开始日期'}}</text></picker><picker mode="date" bindchange="queryInput" data-field="to"><text class="wk-picker">{{to || '截止日期'}}</text></picker></view>
+  <input wx:if="{{kind === 'commissions'}}" class="wk-input" type="number" value="{{productId}}" placeholder="产品编号（留空查全部）" bindinput="queryInput" data-field="productId"/>
+  <button class="btn primary sm" bindtap="applyQuery">按条件查询</button>
 </view>
-<view class="card" wx:if="{{detail}}"><view>申请 #{{detail.id}} · ¥{{detail.amountText}}</view><view>收款尾号快照 {{detail.payoutTail || '历史未登记，请联系平台核对'}}</view><view>审批时间 {{detail.reviewedAt || '待审'}}</view><view>付款登记 {{detail.paidAt || '尚未登记'}} · {{detail.paidBy}}</view><view>流水 {{detail.payRef || '暂无'}}</view><view>{{detail.reason}}</view></view>
-<view class="note" wx:if="{{!rows.length && !error && !loading}}">暂无记录</view><view class="chips"><button bindtap="prev" wx:if="{{page>1}}">上一页</button><text>第{{page}}页 · 共{{total}}条</text><button bindtap="next" wx:if="{{hasNext}}">下一页</button></view>
+<view class="card fade-up" wx:if="{{summary}}">
+  <view class="kv"><text>计佣成交基数</text><text class="wk-amount">¥{{summary.gmv}}</text></view>
+  <view class="kv"><text>有效订单</text><text>{{summary.validOrders}} 单</text></view>
+  <view class="kv"><text>观察期中</text><text>¥{{summary.observing}}</text></view>
+  <view class="kv"><text>已放行</text><text>¥{{summary.released}}</text></view>
+  <view class="kv"><text>冲正 / 无效</text><text>¥{{summary.reversed}}</text></view>
+</view>
+<view class="card state-error" wx:if="{{error}}"><view>{{error}}</view><button class="btn ghost sm" bindtap="retry">重试</button></view>
+<view class="skeleton" wx:if="{{loading}}" style="height:240rpx"></view>
+<view class="card fade-up" wx:for="{{rows}}" wx:key="id">
+  <view class="kv"><text>{{item.title}}</text><text class="wk-amount">¥{{item.amountText}}</text></view>
+  <view class="wk-state">{{item.state}}</view>
+  <block wx:if="{{kind === 'commissions'}}">
+    <view class="note">订单 {{item.order_no}} · 计佣基数 ¥{{item.baseText}} × {{item.rateText}}</view>
+    <view class="note">观察期截止 {{item.payable_at}}</view>
+  </block>
+  <block wx:else>
+    <view class="note">申请 {{item.createdAt}} · {{item.reason}}</view>
+    <view class="wk-actions"><button class="btn ghost sm" data-id="{{item.id}}" bindtap="showDetail">审批与付款详情</button><button wx:if="{{item.status === 0}}" class="btn ghost sm" data-id="{{item.id}}" bindtap="cancel">撤销申请</button><button wx:if="{{item.hasReceipt}}" class="btn ghost sm" data-id="{{item.id}}" bindtap="receipt">查看回单</button></view>
+  </block>
+</view>
+<view class="card fade-up" wx:if="{{detail}}">
+  <view class="sec-title">申请详情</view>
+  <view class="kv"><text>申请金额</text><text class="wk-amount">¥{{detail.amountText}}</text></view>
+  <view class="kv"><text>收款账户</text><text>尾号 {{detail.payoutTail || '历史未登记，请联系平台核对'}}</text></view>
+  <view class="kv"><text>审批时间</text><text>{{detail.reviewedAt || '待审'}}</text></view>
+  <view class="kv"><text>付款登记</text><text>{{detail.paidAt || '尚未登记'}} · {{detail.paidBy}}</text></view>
+  <view class="kv"><text>流水号</text><text>{{detail.payRef || '暂无'}}</text></view>
+  <view class="note" wx:if="{{detail.reason}}">{{detail.reason}}</view>
+</view>
+<view class="card empty" wx:if="{{!rows.length && !error && !loading}}"><view class="e-ico">🧾</view>暂无记录</view>
+<view class="chips"><button bindtap="prev" wx:if="{{page>1}}" class="btn ghost sm">上一页</button><text class="muted">第{{page}}页 · 共{{total}}条</text><button bindtap="next" wx:if="{{hasNext}}" class="btn ghost sm">下一页</button></view>

@@ -28,5 +28,7 @@ App({
   onLaunch() {
     const token = wx.getStorageSync('token')
     if (token) this.globalData.token = token
+    // X-01/X-02：启动时拉取三端统一字典（订单状态文案/城市/品类），失败静默走内置兜底
+    require('./utils/dict').warmup()
   }
 })

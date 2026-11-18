@@ -1,1 +1,5 @@
-.chips{display:flex;flex-wrap:wrap;gap:12rpx;padding:24rpx}.sec-title{margin:12rpx 0}
+/* A-01 自由豆：复用 app.wxss 体系 */
+.chips { display: flex; flex-wrap: wrap; gap: 12rpx; padding: 24rpx; }
+.sec-title { margin: 12rpx 0; }
+.fr-amount { font-size: 44rpx; font-weight: 600; color: #b76b24; margin: 8rpx 0 16rpx; }
+.fr-page { align-items: center; }

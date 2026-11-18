@@ -33,3 +33,7 @@ api/server-cli.log
 # 检查/走查证据截图（本地留存，不入库）
 api/test/evidence-*/
 api/automator-shots*/
+
+# 数据库备份与整库导出不入库（含用户数据与加密凭据）
+backup/*.sql
+backup/*.sql.gz

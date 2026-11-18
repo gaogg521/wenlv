@@ -49,7 +49,31 @@ async function adminComments() {
       <option value="hidden" ${Q.status==='hidden'?'selected':''}>已隐藏</option></select>
       <input type="search" placeholder="搜索评论 / 用户 / 笔记" value="${esc(Q.kw)}" oninput="window.__commentsQ.kw=this.value" onchange="window.__commentsQ.page=1;adminComments()"></div>
     ${d.rows.length?`<table><thead><tr><th>评论内容</th><th>用户</th><th>所属笔记</th><th>状态</th><th>时间</th><th></th></tr></thead><tbody>${d.rows.map(r=>`<tr><td>${esc(r.content)}</td><td>${esc(r.nickname)}</td><td>${esc(r.note_title||'（无题）')}</td><td>${labels[r.status]||'未知'}</td><td>${dt(r.created_at)}</td><td><button class="btn ${r.status===1?'danger':'primary'} sm" data-id="${r.id}" data-act="${r.status===1?'hide':'restore'}" onclick="commentModerate(this.dataset.id,this.dataset.act)">${r.status===1?'隐藏':'恢复'}</button></td></tr>`).join('')}</tbody></table>`:emptyBox('暂无评论')}
-    <div class="pagination"><span>第 ${d.page} 页</span><div><button class="btn ghost sm" ${d.page<=1?'disabled':''} onclick="window.__commentsQ.page--;adminComments()">上一页</button><button class="btn ghost sm" ${d.page*d.size>=d.total?'disabled':''} onclick="window.__commentsQ.page++;adminComments()">下一页</button></div></div></div>`
+    <div class="pagination"><span>第 ${d.page} 页</span><div><button class="btn ghost sm" ${d.page<=1?'disabled':''} onclick="window.__commentsQ.page--;adminComments()">上一页</button><button class="btn ghost sm" ${d.page*d.size>=d.total?'disabled':''} onclick="window.__commentsQ.page++;adminComments()">下一页</button></div></div></div>
+  <div class="card"><div class="card-head"><h2>评价回复审核</h2><span class="muted">商户回复经平台审核后游客可见（X-04）</span></div><div id="reviewReplyBox" class="muted">加载中…</div></div>`
+  reviewReplyPanel()
+}
+
+// X-04：评价回复管控——商户回复提交后进入平台审核，这里通过/下架；下架后两端同步消失
+async function reviewReplyPanel() {
+  let d
+  try { d = await api('GET', '/admin/reviews') } catch (e) { return }
+  const replies = d.filter ? d : (d.rows || [])
+  const withReply = (Array.isArray(replies) ? replies : []).filter((r) => r.reply)
+  const RS = { 0: ['<span class="pill warn">待审核</span>', true], 1: ['<span class="pill ok">已展示</span>', false], 2: ['<span class="pill s70">已下架</span>', true] }
+  const box = document.getElementById('reviewReplyBox')
+  if (!box) return
+  box.innerHTML = withReply.length ? `<table><thead><tr><th>评价内容</th><th>商户回复</th><th>商品</th><th>回复状态</th><th></th></tr></thead><tbody>
+    ${withReply.map((r) => { const [pill, can] = RS[r.reply_status] || ['<span class="pill off">未知</span>', false]
+      return `<tr><td class="td-sub">${esc(String(r.content || '').slice(0, 40))}</td><td class="td-main">${esc(r.reply)}${r.reply_at ? `<div class="td-sub">回复于 ${esc(String(r.reply_at).slice(0, 16))}</div>` : ''}</td>
+      <td class="td-sub">${esc(r.title || '')}</td><td>${pill}</td>
+      <td>${can ? `<button class="btn ${r.reply_status === 0 ? 'primary' : 'ghost'} sm" onclick="reviewReplyVerdict(${r.id},true)">通过</button>
+        <button class="btn danger sm" onclick="reviewReplyVerdict(${r.id},false)">下架</button>` : '<span class="td-sub">展示中（可下架）</span>'}</td></tr>` }).join('')}</tbody></table>`
+    : emptyBox('暂无商户回复待审核——商户在小程序端回复评价后，这里会出现待审回复')
+}
+async function reviewReplyVerdict(id, show) {
+  try { await api('POST', `/admin/reviews/${id}/reply-verdict`, { show }); toast(show ? '回复已通过，游客端可见' : '回复已下架，两端同步消失'); reviewReplyPanel() }
+  catch (e) { toast(e.message, true) }
 }
 async function commentModerate(id,act) {
   try{await api('POST',`/admin/comments/${id}/${act}`);toast(act==='hide'?'已隐藏，小程序评论数已同步':'已恢复展示');adminComments()}

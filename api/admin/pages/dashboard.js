@@ -166,7 +166,7 @@ function dxHero(k, c) {
   return `<section class="dx-hero">
     ${dxSpark((k.trend || []).slice(0, dxLastIdx(k) + 1).map((t) => Number(t.gmv)), 640, 160, '#ffb27a', 'dxHeroG', { top: 0.5, sw: 2.5 })}
     <div class="dx-hero-top">
-      <div><div class="dx-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${esc(c.cityTag)}口径</div>
+      <div><div class="dx-eyebrow">${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} · ${esc(c.cityTag)}</div>
         <h2>${c.hello}</h2>
         <p>${c.todoTotal ? `此刻有 <b>${c.todoTotal}</b> 项待办${k.alerts ? `、<b>${k.alerts}</b> 条风控告警` : ''}，` : '待办已全部处理完毕，'}<a href="#" onclick="document.getElementById('dxLive').scrollIntoView({behavior:'smooth',block:'start'});return false">查看实时事项 ↓</a></p></div>
       <div class="dx-range-box">
@@ -191,20 +191,32 @@ function dxHero(k, c) {
 
 function dxLive(k, ins) {
   const P = ins ? ins.pending : null, v = (x) => (P ? x : '—')
+  // R-02：待办按账号有效模块集合渲染——没有该模块的科目显示「不在本角色范围」且不可点；有模块且为零才是「已清空」
+  const mods = (typeof ADMIN_CAPABILITIES !== 'undefined' && ADMIN_CAPABILITIES.modules) || []
+  const hasM = (m) => mods.includes(m)
   const todos = [['merchants', '商户进件', 'store', P && P.merchants, '去审批'], ['withdrawals', '提现待审', 'wallet', P && P.withdrawals, '去复核'],
     ['conflicts', '核销异常', 'alert', P && P.conflicts, '去处理'], ['content', '内容待审', 'doc', P && P.notes, '去审核'], ['tasks', '约稿待审', 'pen', P && P.tasks, '去处理']]
-  const total = P ? todos.reduce((s, t) => s + t[3], 0) : 0
-  const first = todos.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的
+    .map(([key, l, ic, n, verb]) => [key, l, ic, n, verb, hasM(key)])
+  const inScope = todos.filter((t) => t[5])
+  const total = P ? inScope.reduce((s, t) => s + t[3], 0) : 0
+  const first = inScope.find((t) => t[3] > 0) // 总数标签点击后去的队列：按卡片顺序第一个有待办的（仅数有模块的科目）
   const pool = k.globalScope ? parseFloat(k.budgetUsage) : NaN
+  // R-02：城市合伙人首屏「我的收益」——本城结算应付/已付（与合伙人中心对账同口径）+ 本城推荐商户进件进度
+  const revenue = ins && ins.revenue ? `<span class="dx-sep"></span>
+    <button class="dx-stat blue has" onclick="go('partners')"><span class="dx-todo-l"><i>💰</i>本城结算收益（${esc(ins.revenue.cityCn)}）</span><b>${fen(ins.revenue.payableFen)}</b>
+      <span class="dx-todo-go">应付 · 已付 ${fen(ins.revenue.paidFen)} · 本期 ${ins.revenue.orders} 单 · 商户进件中 ${ins.revenue.merchantsPending} → 查看明细</span></button>` : ''
   return `<section class="dx-card" id="dxLive">
     <div class="dx-hd"><h3>此刻待处理</h3><span class="dx-tag live"><i></i>实时</span><span class="dx-hint">当下的存量，不随统计周期变化</span>
       <span class="dx-right">${first ? `<button class="pill s10 dx-pill-go" title="跳到第一个有待办的队列：${first[1]}" onclick="go('${first[0]}')">共 ${total} 项待办 · 去处理 →</button>` : `<span class="pill s50">${P ? '待办已清空' : '待办数据暂不可用'}</span>`}</span></div>
     <div class="dx-live-grid">
-      ${todos.map(([key, l, ic, n, verb]) => `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`).join('')}
+      ${todos.map(([key, l, ic, n, verb, ok]) => ok
+        ? `<button class="dx-todo${n ? ' has' : ''}" onclick="go('${key}')"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>${v(n)}</b><span class="dx-todo-go">${!P ? '数据暂不可用' : n ? verb + ' →' : '已清空'}</span></button>`
+        : `<button class="dx-todo" disabled title="当前角色没有这条职责线"><span class="dx-todo-l"><i>${DX_ICON[ic]}</i>${l}</span><b>—</b><span class="dx-todo-go">不在本角色范围</span></button>`).join('')}
       <span class="dx-sep"></span>
       <button class="dx-stat red${k.alerts ? ' has' : ''}" onclick="go('risk')"><span class="dx-todo-l"><i>${DX_ICON.alert}</i>待处理告警</span><b>${k.globalScope ? k.alerts : '—'}</b><span class="dx-todo-go">${k.globalScope ? (k.alerts ? '去处置 →' : '一切正常') : '不在本角色范围'}</span></button>
       <button class="dx-stat gold" onclick="go('budgets')"><span class="dx-todo-l"><i>${DX_ICON.bean}</i>旅豆预算池水位</span><b>${k.globalScope ? esc(k.budgetUsage) : '—'}</b>
         ${isNaN(pool) ? '' : `<span class="dx-meter"><i style="width:${Math.min(Math.max(pool, 0.6), 100)}%"></i></span>`}<span class="dx-todo-go">${k.globalScope ? '累计已发放 ÷ 批次总额' : '不在本角色范围'}</span></button>
+      ${revenue}
     </div></section>`
 }
 
@@ -233,13 +245,28 @@ function dxTrendCard(k, c) {
 }
 
 function dxTopCard(k, ins, c) {
-  const tours = ins ? ins.topTours : [], maxG = Math.max(...tours.map((t) => Number(t.gmv)), 1), total = Number(k.gmv) * 100
+  // P-03：排序与占比同一口径（按订单数 / 按 GMV 可切换），占比分母为同窗口总数，不再是「订单数排序 + GMV 占比」混排
+  const mode = window.__dxTopMode || 'orders'
+  const tours = ins ? ins.topTours : []
+  const tot = (ins && ins.topToursTotal) || { orders: 0, gmv: 0 }
+  const metric = (t) => mode === 'orders' ? Number(t.orders) : Number(t.gmv)
+  const maxM = Math.max(...tours.map(metric), 1)
   const medal = ['#d9a21b', '#9aa3ab', '#c27b43']
-  return `<section class="dx-card"><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按订单数 · 含品类（B3 口径：原「热门主题游」混入商城礼盒，现以品类区分）</span></div>
-    ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
+  const chip = (m, l) => `<button class="dx-chip${mode === m ? ' on' : ''}" aria-pressed="${mode === m}" onclick="dxTopModeSet('${m}')">${l}</button>`
+  return `<section class="dx-card" data-dx-top><div class="dx-hd"><h3>热销商品 TOP5</h3><span class="dx-tag period">${esc(c.rangeCn)}</span>
+      <span class="dx-range" role="group" aria-label="排序与占比口径">${chip('orders', '按订单数')}${chip('gmv', '按 GMV')}</span>
+      <span class="dx-right dx-legend"><span class="td-sub">占比 = 该商品 ÷ 本周期全部成交的${mode === 'orders' ? '订单数' : 'GMV'}</span></span></div>
+    ${tours.length ? `<ol class="dx-top">${tours.map((t, i) => { const m = metric(t)
+      const pct = (mode === 'orders' ? (tot.orders ? m / Number(tot.orders) : 0) : (tot.gmv ? m / Number(tot.gmv) : 0)) * 100
+      return `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
         <span class="nm" title="${esc(t.title)}">${esc(t.title)}${t.cat ? ` <span class="pill s20" style="font-size:11px">${esc(CAT_CN[t.cat] || t.cat)}</span>` : ''}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
-        <span class="trk"><i style="width:${Math.max((Number(t.gmv) / maxG) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单${total ? ' · 占 ' + ((Number(t.gmv) / total) * 100).toFixed(0) + '%' : ''}</span></li>`).join('')}</ol>`
+        <span class="trk"><i style="width:${Math.max((m / maxM) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单 · ${mode === 'orders' ? '占订单数' : '占 GMV'} ${pct.toFixed(0)}%</span></li>` }).join('')}</ol>`
       : emptyBox('该周期内暂无成交')}</section>`
+}
+window.dxTopModeSet = (m) => {
+  window.__dxTopMode = m
+  const sec = document.querySelector('[data-dx-top]')
+  if (sec && window.__dxTopCtx) sec.outerHTML = dxTopCard(window.__dxTopCtx.k, window.__dxTopCtx.ins, window.__dxTopCtx.c)
 }
 
 function dxFunnelCard(ins, c) {
@@ -316,7 +343,8 @@ async function dash() {
       api('GET', '/admin/dash/kpi?' + qs),
       api('GET', '/admin/dash/insights?' + qs).catch(() => null),
       api('GET', '/admin/orders?sort=recent').catch(() => []),
-      ['super', 'ops', 'city_partner'].includes(ME?.role)
+      // P-09：未接入的数据卡只对有「集成中心」权限的角色显示/取数
+      ((typeof ADMIN_CAPABILITIES !== 'undefined' && (ADMIN_CAPABILITIES.modules || []).includes('integrations')))
         ? api('GET', '/admin/wxdata/visit-trend?days=' + wxDays).catch(() => ({ mock: true, list: [] }))
         : Promise.resolve({ unavailable: true, list: [] }),
     ])
@@ -325,23 +353,25 @@ async function dash() {
     const c = {
       rangeCn: ({ today: '今日', '7d': '近 7 天', '30d': '近 30 天', '1y': '近一年' })[k.range] || '自定义周期',
       cmp: DX_CMP[k.range] || '上一周期',
-      cityTag: k.scopeCity ? `本城 ${k.scopeCity}` : '全域',
+      cityTag: k.scopeCity ? `本城 ${CITY_CN[k.scopeCity] || k.scopeCity}` : '全域',
       hello: (hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好') + '，' + esc(ME?.displayName || ME?.username || ''),
       todoTotal: ins ? Object.values(ins.pending).reduce((s, n) => s + n, 0) : 0,
     }
     window.__dxPer = { from: k.from, to: k.to } // 下钻用：把当前周期带到明细页
     window.__dxTours = ins ? ins.topTours : []
+    window.__dxTopCtx = { k, ins, c } // P-03：TOP5 口径切换就地重渲染
     app.innerHTML = `<div class="dx">
       ${dxHero(k, c)}
       ${dxLive(k, ins)}
       <div class="dx-zone"><h2>经营分析</h2><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">以下模块统一按上方所选周期统计，标有周期标签的卡片同步变化</span></div>
       ${dxKpis(k, ins, c)}
       <div class="dx-row r-main">${dxTrendCard(k, c)}${dxTopCard(k, ins, c)}</div>
-      <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${dxMiniCard(wxd, c)}</div>
+      <div class="dx-row r-three">${dxFunnelCard(ins, c)}${dxDonutCard(ins, c)}${(typeof ADMIN_CAPABILITIES !== 'undefined' && (ADMIN_CAPABILITIES.modules || []).includes('integrations')) ? dxMiniCard(wxd, c) : ''}</div>
       ${dxOrdersCard(orders.slice(0, 8))}
-      ${operatingScenarioPanel()}
+      <div class="dx-zone"><span class="muted">经营测算与示范案例已移到独立页</span>
+        <button class="btn ghost sm" onclick="go('scenario')">打开经营测算 →</button>
+        <span class="dx-hint">招商讲解工具（示例假设），与真实结算互不混淆</span></div>
     </div>`
-    void mountOperatingScenario(app)
   } catch (e) {
     if (seq !== window.__dashSeq) return
     console.error('dash error:', e.message)

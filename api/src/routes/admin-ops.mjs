@@ -13,6 +13,7 @@ import * as merkleLib from '../domain/merkle.mjs'
 import * as refundPolicy from '../domain/refund-policy.mjs'
 import { sanitizeRich } from '../infra/sanitize.mjs'
 import { grantPublishReward } from '../domain/content-reward.mjs'
+import * as notifyDomain from '../domain/notify.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import * as entities from '../domain/entity-schema.mjs'
 import { buildSvg, svgToPdf, orderReportDoc, beanDayReportDoc, settlementReportDoc } from '../domain/report.mjs'
@@ -194,6 +195,16 @@ const adminEco = {
     return { status: st }
   },
 
+  // X-04：商户回复的管控——通过（reply_status=1，游客可见）或下架（reply_status=2）
+  'POST /admin/reviews/:id/reply-verdict': async (req) => {
+    const a = await requireAdmin(req, 'review.moderate')
+    const show = !!(req.body || {}).show
+    const st = show ? 1 : 2
+    await q('UPDATE review SET reply_status = ? WHERE id = ? AND reply IS NOT NULL', [st, req.params.id])
+    await tx(async (c) => audit(c, 'admin:' + a.name, 'review', show ? 'reply-show' : 'reply-hide', 'review-' + req.params.id, null, { reply_status: st }))
+    return { replyStatus: st }
+  },
+
   // 笔记审核材料：全文（清洗后）、图片、字数、机审结果、作者、被哪些约稿任务引用
   'GET /admin/content/:id': async (req) => {
     const a=await requireAdmin(req, ['super', 'ops', 'review'])
@@ -234,6 +245,11 @@ const adminEco = {
       // 三条发布路径之三：人工审核通过即正式发布，发放发布奖励（失败静默，不阻断审核结论）
       if (passed) await grantPublishReward(c, row.user_id, row.id)
       await audit(c, 'admin:' + a.name, 'content', passed ? 'approve' : 'reject', 'note-' + req.params.id, null, { status: st, reason: reason || null })
+      // X-05：笔记审核结果触达作者（MOCK/真实统一走 notify.sendScene，未配模板记 skipped）
+      notifyDomain.sendScene({ scene: 'note_review', openid: (await c.one('SELECT mini_a_openid FROM user_account WHERE id = ?', [row.user_id]))?.mini_a_openid,
+        bizRef: 'note-' + req.params.id,
+        data: { thing1: { value: passed ? '你的笔记已通过审核' : '笔记未通过审核' }, thing2: { value: passed ? '已发布，去看看' : (reason || '').slice(0, 20) || '请查看驳回原因' } },
+        page: 'package-content/pages/create/index' }).catch(() => {})
       await c.q("UPDATE review_claim SET released_at = NOW(3) WHERE queue_kind = 'note' AND item_id = ? AND released_at IS NULL", [req.params.id])
       // 审核结论入存证：内容是平台对外承诺的一部分，"谁在什么时候放行/驳回"必须可追溯
       await attestDomain.attest('content_review', 'note-' + req.params.id, {
