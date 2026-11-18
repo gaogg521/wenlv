@@ -78,6 +78,8 @@ tbody tr { transition: .1s; }
 tbody tr[onclick]:hover, tbody tr.click-row:hover { background: #f7fafc; } /* 只有真能点的行才有悬停高亮，避免"看着能点实际不能点" */
 tbody tr:last-child td { border-bottom: none; }
 .td-main { font-weight: 600; } .td-sub { font-size:12px; color: var(--sub); }
+/* 项9：表格长文本单行省略，悬停/读屏看全文（title 属性由调用处写入） */
+.ellip { display: inline-block; max-width: 300px; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .num { font-variant-numeric: tabular-nums; }
 .money { color: var(--brand); font-weight: 700; white-space: nowrap; } /* 金额不孤立断行（如 ¥299.00 被拆成两行） */
 .td-actions { white-space: nowrap; display: flex; gap: 4px; }

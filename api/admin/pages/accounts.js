@@ -128,7 +128,7 @@ async function accountsList() {
         <td class="td-sub">${esc(String(u.last_login_at || '').slice(0, 16).replace('T', ' ') || '从未登录')}</td>
         <td class="td-sub" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.note || '—')}</td>
         <td><div class="td-actions">${ops.join('')}</div></td></tr>` }).join('')}</tbody></table>`
-    : emptyBox('暂无账号')}</div>`
+    : emptyBox('暂无后台账号——点右上「新建账号」创建第一个运营账号')}</div>`
 }
 
 // C-01：验证方式弹窗——不离开本页完成绑定 TOTP / 绑手机 / 绑邮箱 / 重置 / 停用，以及豁免与单账号强制；
