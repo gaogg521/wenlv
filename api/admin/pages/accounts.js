@@ -9,7 +9,12 @@ const cityLabelAccounts = (code) => CITY_CN[String(code)] || code || '—'
 async function accounts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   if (window.__accTab === 'rolematrix') return roleMatrixTab()
-  if (window.__accTab === 'roleexplain') return roleExplainTab()
+  if (window.__accTab === 'roleexplain') {
+    await roleExplainTab()
+    // 项9：说明页签此前没有页签栏（切过去就回不来，只能刷新恢复）——补挂同一根页签栏
+    $('#app').insertAdjacentHTML('afterbegin', tabBar('roleexplain'))
+    return
+  }
   return accountsList()
 }
 
