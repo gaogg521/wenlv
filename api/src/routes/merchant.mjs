@@ -350,7 +350,17 @@ const m = {
       else if (action === 'adjust_quota') {
         const quota = Math.floor(Number(value))
         if (!(quota >= Number(s.booked))) continue
-        await q('UPDATE tour_session SET quota = ? WHERE id = ?', [quota, s.id]); applied++
+        // X-03：批量调名额同样走乐观锁 + 版本簿，被并发改过的团期记入 conflicts
+        const done = await tx(async (c) => {
+          const n = await c.upd('UPDATE tour_session SET quota = ?, version = version + 1 WHERE id = ? AND version = ? AND booked <= ?', [quota, s.id, Number(s.version), quota])
+          if (n !== 1) return false
+          await recordVersion(c, { kind: 'session', refId: s.id,
+            snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(s.quota) }, after: { quota } },
+            changedBy: 'merchant-staff:' + u.uid, reason: '商户端批量调名额' })
+          await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + s.id, { quota: Number(s.quota) }, { quota })
+          return true
+        })
+        if (done) applied++; else conflicts.push(s.id)
       } else if (action === 'price') {
         const price = Math.floor(Number(value))
         if (!(price > 0) || (Number(s.early_price) > 0 && price <= Number(s.early_price))) continue
@@ -374,7 +384,7 @@ const m = {
     const u = requireUser(req)
     if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
     const { action, value } = req.body
-    const owned = await one('SELECT s.id, s.booked FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
+    const owned = await one('SELECT s.id, s.booked, s.quota, s.price_adult, s.early_price, s.early_days, s.version FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
     if (!owned) throw new BizError(1004, '团期不存在或不属于本店')
     if (action === 'adjust_quota' && (!Number.isInteger(value) || value < owned.booked)) throw new BizError(1001, '名额必须为整数且不少于已报名人数')
     if (action === 'price' && (!Number.isInteger(value) || value <= 0)) throw new BizError(1001, '价格必须为正整数分')
@@ -394,11 +404,17 @@ const m = {
       return { resumed: true }
     }
     if (action === 'adjust_quota') {
+      // X-03：调名额同样走乐观锁 + 版本簿；报名人数在调整瞬间超过新名额也按冲突处理
+      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(owned.version)
       await tx(async (c) => {
-        await c.upd('UPDATE tour_session SET quota = ? WHERE id = ? AND quota >= booked', [value, req.params.sid])
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + req.params.sid, null, { quota: value })
+        const n = await c.upd('UPDATE tour_session SET quota = ?, version = version + 1 WHERE id = ? AND version = ? AND booked <= ?', [value, req.params.sid, expected, value])
+        if (n !== 1) throw new BizError(2002, '该团期刚被其他端修改或报名人数已变化，请刷新团期后重试')
+        await recordVersion(c, { kind: 'session', refId: req.params.sid,
+          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(owned.quota) }, after: { quota: value } },
+          changedBy: 'merchant-staff:' + u.uid, reason: '商户端调名额' })
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + req.params.sid, { quota: Number(owned.quota) }, { quota: value })
       })
-      return { quota: value }
+      return { quota: value, version: expected + 1 }
     }
     if (action === 'price') {
       // A-07：改现价同步校验——不得低于已设早鸟价，否则早鸟窗口内游客按更高价成交还显示"早鸟价"
@@ -426,9 +442,20 @@ const m = {
       if (value && value.days != null && (!Number.isInteger(days) || days < 0)) throw new BizError(1001, '提前天数必须为非负整数')
       if (price != null && price >= (await one('SELECT price_adult FROM tour_session WHERE id = ?', [req.params.sid])).price_adult)
         throw new BizError(1001, '早鸟价需低于原价')
-      await q('UPDATE tour_session SET early_price = ?, early_days = ? WHERE id = ?', [price, price == null ? null : days, req.params.sid])
-      await tx(async (c) => audit(c, 'merchant:' + u.merchantId, 'supply', 'set_early', 'session-' + req.params.sid, null, { earlyPrice: price, earlyDays: price == null ? null : days }))
-      return { earlyPrice: price, earlyDays: price == null ? null : days }
+      // X-03：早鸟价同样走乐观锁 + 版本簿（与改现价共用同一份变更历史）
+      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(owned.version)
+      const nextDays = price == null ? null : days
+      await tx(async (c) => {
+        const n = await c.upd('UPDATE tour_session SET early_price = ?, early_days = ?, version = version + 1 WHERE id = ? AND version = ?', [price, nextDays, req.params.sid, expected])
+        if (n !== 1) throw new BizError(2002, '该团期刚被其他端修改，请刷新团期后重试')
+        await recordVersion(c, { kind: 'session', refId: req.params.sid,
+          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['early_price', 'early_days'],
+            before: { early_price: owned.early_price == null ? null : Number(owned.early_price), early_days: owned.early_days == null ? null : Number(owned.early_days) },
+            after: { early_price: price, early_days: nextDays } },
+          changedBy: 'merchant-staff:' + u.uid, reason: '商户端设置早鸟价' })
+        await audit(c, 'merchant:' + u.merchantId, 'supply', 'set_early', 'session-' + req.params.sid, null, { earlyPrice: price, earlyDays: nextDays })
+      })
+      return { earlyPrice: price, earlyDays: nextDays, version: expected + 1 }
     }
     throw new BizError(1001, '未知操作')
   },
@@ -447,13 +474,10 @@ const m = {
         JSON_UNQUOTE(JSON_EXTRACT(n.body, CONCAT('$.images[', IFNULL(JSON_EXTRACT(n.body, '$.coverIndex'), 0), ']')))) cover,
       SUBSTRING(JSON_UNQUOTE(JSON_EXTRACT(n.body, '$.text')), 1, 90) excerpt
       FROM content_note n
-      JOIN user_account uu ON uu.id = n.user_id
-      JOIN user_account u ON u.id = u.id
-      LEFT JOIN tour_product p ON p.id = n.related_product_id
-      JOIN user_account u2 ON u2.id = u2.id
-      WHERE n.status = 2 AND n.visibility = 'public'
-        AND n.related_product_id IN (SELECT id FROM tour_product WHERE merchant_id = ?)
-      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`.replace('JOIN user_account u ON u.id = u.id', 'JOIN user_account u ON u.id = n.user_id').replace('JOIN user_account u2 ON u2.id = u2.id', '').replace(/u\.nickname/, 'uu.nickname'),
+      JOIN user_account u ON u.id = n.user_id
+      JOIN tour_product p ON p.id = n.related_product_id
+      WHERE n.status = 2 AND n.visibility = 'public' AND p.merchant_id = ?
+      ORDER BY n.published_at DESC, n.id DESC LIMIT ? OFFSET ?`,
       [u.merchantId, paging.size, paging.offset])
     const total = Number((await one(`SELECT COUNT(*) c FROM content_note n JOIN tour_product p ON p.id = n.related_product_id
       WHERE n.status = 2 AND n.visibility = 'public' AND p.merchant_id = ?`, [u.merchantId])).c)

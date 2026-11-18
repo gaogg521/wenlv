@@ -30,7 +30,7 @@
 <view class="card fade-up" wx:for="{{profits}}" wx:key="id">
   <view class="sec-title">{{item.title}} · {{item.period}}</view>
   <view class="kv"><text>分润基数（对账用）</text><text>¥{{item.baseText}} × {{item.shareText}}</text></view>
-  <view class="kv"><text>规则版本 / 来源结算单</text><text>{{item.version}} 版 · {{item.settlement_id}}</text></view>
+  <view class="kv"><text>对账编号</text><text>{{item.settlement_id}} · 第{{item.version}}版</text></view>
   <view class="kv"><text>本期应付</text><text class="wk-amount">¥{{item.amountText}}</text></view>
   <view class="kv"><text>已登记支付</text><text>¥{{item.paidText}}</text></view>
   <view class="kv"><text>待付 / 有效冲正</text><text>¥{{item.pendingText}} / ¥{{item.adjustText}}</text></view>
