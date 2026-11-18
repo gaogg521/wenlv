@@ -8,7 +8,7 @@
   <view class="fr-amount">满{{item.thresholdText}}减{{item.discountText}}</view>
   <view class="kv"><text>可用时间</text><text>{{item.from}} — {{item.to}}</text></view>
   <view class="kv"><text>适用范围</text><text>{{item.scopeText}}</text></view>
-  <view class="note">官方发放 · 批次 {{item.batchId}} · {{item.reason}}</view>
+  <view class="note">官方发放 · {{item.reason}}</view>
   <button wx:if="{{item.orderNo}}" class="btn ghost sm" bindtap="order" data-no="{{item.orderNo}}">查看使用订单 ›</button>
 </view>
 <view class="card empty" wx:if="{{!rows.length && !loading && !error}}"><view class="e-ico">🎁</view>暂无此类自由豆权益<view class="note">有新的官方补贴时会出现在这里</view></view>

@@ -225,6 +225,46 @@ try {
     await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [cur.price_adult, sid])
   })
 
+  await test('X-03 补充：名额与早鸟价同样走乐观锁并写入同一份版本簿；批量调名额递增版本并留痕', async () => {
+    const sid = session.id
+    const parse = (r) => (typeof r.snapshot === 'string' ? JSON.parse(r.snapshot) : r.snapshot)
+    const lastSnap = async () => parse(await one(`SELECT snapshot FROM master_data_version WHERE kind = 'session' AND ref_id = ? ORDER BY id DESC LIMIT 1`, [sid]))
+    const cur = await one('SELECT version, quota, booked, price_adult, early_price, early_days FROM tour_session WHERE id = ?', [sid])
+    try {
+      const q1 = Number(cur.quota) + 1
+      // 名额：过期版本 → 2002；正确版本 → 成功、版本 +1、版本簿记录 quota 的前后值
+      const stale = await call('POST', '/m/supply/' + sid, { action: 'adjust_quota', value: q1, expectedVersion: Number(cur.version) + 5 }, mTok)
+      assert.equal(stale.code, 2002, '名额并发冲突明确提示')
+      ok(await call('POST', '/m/supply/' + sid, { action: 'adjust_quota', value: q1, expectedVersion: Number(cur.version) }, mTok))
+      const afterQ = await one('SELECT version, quota FROM tour_session WHERE id = ?', [sid])
+      assert.equal(Number(afterQ.version), Number(cur.version) + 1, '改名额后版本 +1')
+      assert.equal(Number(afterQ.quota), q1)
+      let snap = await lastSnap()
+      assert.deepEqual(snap.changedFields, ['quota']); assert.equal(snap.source, 'merchant'); assert.equal(snap.after.quota, q1)
+      // 早鸟价：过期版本 → 2002；正确版本 → 成功、版本 +1、版本簿记录早鸟前后值
+      const ep = Math.max(1, Math.floor(Number(cur.price_adult) / 2))
+      const staleE = await call('POST', '/m/supply/' + sid, { action: 'early', value: { price: ep, days: 3 }, expectedVersion: Number(afterQ.version) + 5 }, mTok)
+      assert.equal(staleE.code, 2002, '早鸟价并发冲突明确提示')
+      ok(await call('POST', '/m/supply/' + sid, { action: 'early', value: { price: ep, days: 3 }, expectedVersion: Number(afterQ.version) }, mTok))
+      const afterE = await one('SELECT version, early_price FROM tour_session WHERE id = ?', [sid])
+      assert.equal(Number(afterE.version), Number(afterQ.version) + 1, '改早鸟价后版本 +1')
+      snap = await lastSnap()
+      assert.deepEqual(snap.changedFields, ['early_price', 'early_days']); assert.equal(snap.after.early_price, ep)
+      // 批量调名额：生效、版本 +1、版本簿 source=merchant
+      const q2 = q1 + 1
+      const batch = ok(await call('POST', '/m/supply/batch', { ids: [sid], action: 'adjust_quota', value: q2 }, mTok))
+      assert.equal(batch.applied, 1); assert.deepEqual(batch.conflicts, [])
+      const afterB = await one('SELECT version, quota FROM tour_session WHERE id = ?', [sid])
+      assert.equal(Number(afterB.version), Number(afterE.version) + 1, '批量调名额后版本 +1')
+      assert.equal(Number(afterB.quota), q2)
+      snap = await lastSnap()
+      assert.deepEqual(snap.changedFields, ['quota']); assert.equal(snap.source, 'merchant')
+    } finally {
+      await q('UPDATE tour_session SET quota = ?, early_price = ?, early_days = ?, version = ? WHERE id = ?',
+        [cur.quota, cur.early_price, cur.early_days, cur.version, sid])
+    }
+  })
+
   /* ---------- X-04 评价闭环 ---------- */
   await test('X-04 评价→商户回复→平台审核→游客可见→下架即消失', async () => {
     const o50 = await mkOrder(50)
