@@ -24,6 +24,12 @@ actual.set('destination-town', destinations[0][1]); actual.set('destination-lake
 const stories = [...html.matchAll(/class="story-image"><img src="([^"]+)"/g)];
 if (stories.length !== 3) fail('Expected three story photographs');
 ['guilin', 'westlake', 'huangshan'].forEach((name, i) => actual.set('story-' + name, stories[i][1]));
+const whyImgs = [...html.matchAll(/<img class="why-photo" src="([^"]+)"/g)];
+if (whyImgs.length !== 3) fail('Expected three why photographs');
+['participate', 'people', 'continue'].forEach((name, i) => actual.set('why-' + name, whyImgs[i][1]));
+const creationPhoto = html.match(/<img class="creation-photo" src="([^"]+)"/);
+if (!creationPhoto) fail('Expected one creation photograph');
+actual.set('creation-share', creationPhoto[1]);
 if (catalog.length !== actual.size) fail('Photograph catalog and showcase slots differ');
 const ids = new Set(), hashes = new Set();
 for (const photo of catalog) {

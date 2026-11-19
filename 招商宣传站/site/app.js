@@ -217,3 +217,31 @@
   }, {threshold: .08});
   document.querySelectorAll('.section-head,.why-columns article,.theme-feature,.destination,.story-card,.creation-bar,.product-tabs,.reward-explain,.trust-card,.ecosystem-heading,.ecosystem-detail,.partner-grid article,.faq-layout,.contact-layout').forEach(el => observer.observe(el));
 })();
+
+/* ==== 数字身份卡面图鉴：系列切换（数据同 api/src/domain/card-tier.mjs 与 admin/pages/web3.js CARD_DEMO） ==== */
+(function(){
+  const identityCards = {
+    traveler: { series: '向往的自由 · 行者系列', en: 'TRAVELER IDENTITY', tier: '白金卡', tierEn: 'PLATINUM', tone: 'silver', name: '探索者', lv: 'Lv.3', sub: '成长区间 1000–2999 · 入会 2026-03', stats: [['12','完成行程'],['5','到访城市'],['3','荣誉徽章']], chips: ['初访古镇','山海行者','夜游达人'] },
+    creator:  { series: '向往的自由 · 创作者系列', en: 'CREATOR IDENTITY', tier: '黑金卡', tierEn: 'BLACK', tone: 'black', name: '优质创作者', lv: 'Lv.3', sub: '内容创作身份', stats: [['36','发布内容'],['8','完成约稿'],['21','真实评价']], chips: [] },
+    promoter: { series: '向往的自由 · 推广服务系列', en: 'PARTNER IDENTITY', tier: '金卡', tierEn: 'GOLD', tone: 'gold', name: '优选服务商', lv: 'Lv.2', sub: '一级推广 · 无层级', stats: [['¥12.8万','有效 GMV'],['4.9','服务分'],['8%','佣金比例']], chips: [] },
+    merchant: { series: '向往的自由 · 商户系列', en: 'MERCHANT IDENTITY', tier: '普卡', tierEn: 'CLASSIC', tone: 'red', name: '新晋商户', lv: 'Lv.1', sub: '朱家角示例门店 · 老板', stats: [['268','有效订单'],['4.8','综合评分'],['6','商户徽章']], chips: [] }
+  };
+  const card = document.querySelector('#identity-card');
+  if (!card) return;
+  const set = (id, text) => { const el = document.querySelector('#' + id); if (el) el.textContent = text; };
+  function renderIdentity(key) {
+    const d = identityCards[key]; if (!d) return;
+    card.dataset.tone = d.tone;
+    set('ic-series', d.series); set('ic-en', d.en);
+    set('ic-tier', d.tier); set('ic-tier-en', d.tierEn);
+    set('ic-name', d.name); set('ic-lv', d.lv); set('ic-sub', d.sub);
+    const stats = document.querySelector('#ic-stats');
+    if (stats) stats.replaceChildren(...d.stats.map(([v, l]) => { const w = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; const s = document.createElement('span'); s.textContent = l; w.append(b, s); return w; }));
+    const chips = document.querySelector('#ic-chips');
+    if (chips) { chips.replaceChildren(...d.chips.map(t => { const sp = document.createElement('span'); sp.textContent = t; return sp; })); chips.style.display = d.chips.length ? '' : 'none'; }
+  }
+  document.querySelectorAll('[data-identity]').forEach(button => button.addEventListener('click', () => {
+    document.querySelectorAll('[data-identity]').forEach(b => { b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button)); });
+    renderIdentity(button.dataset.identity);
+  }));
+})();
