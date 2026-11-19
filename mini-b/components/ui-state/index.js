@@ -18,19 +18,24 @@ Component({
     secondaryText: { type: String, value: '' },      // 次按钮
     secondaryUrl: { type: String, value: '' },
     secondaryOpen: { type: String, value: '' },
+    code: { type: Number, value: 0 },                // 接口错误码；error 态遇 1003（无权限）按 denied 处理：不给重试
     noRetry: { type: Boolean, value: false },        // error 态隐藏重试（极少用）
     compact: { type: Boolean, value: false },        // 内嵌小卡（tab 区内）
   },
-  data: { defaultIcon: '', defaultTitle: '', descLines: [] },
+  data: { k: 'empty', byCode: false, defaultIcon: '', defaultTitle: '', descLines: [] },
   observers: {
-    'kind, icon, title, desc'(kind, icon, title, desc) {
+    'kind, code, icon, title, desc'(kind0, code, icon, title, desc) {
+      const denyByCode = kind0 === 'error' && Number(code) === 1003
+      const kind = denyByCode ? 'denied' : kind0
       const fallback = {
         empty: { icon: '🧭', title: '暂无内容' },
-        denied: { icon: '🔒', title: '暂未开通' },
+        denied: { icon: '🔒', title: denyByCode ? '暂无权限' : '暂未开通' },
         error: { icon: '⚠️', title: '加载失败' },
         loading: { icon: '', title: '' },
       }[kind] || { icon: '', title: '' }
       this.setData({
+        k: kind,
+        byCode: denyByCode,
         defaultIcon: fallback.icon,
         defaultTitle: fallback.title,
         descLines: desc ? String(desc).split('\n') : [],

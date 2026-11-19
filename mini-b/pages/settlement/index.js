@@ -60,7 +60,7 @@ Page({
       // B2：调整净额（待冲抵的按项退款调整，负数=应付减少）；调整后应结 = 应结 + 调整净额
       adjustText: (Number(s.adjust_pending || 0) / 100).toFixed(2),
       hasAdjust: Number(s.adjust_pending || 0) !== 0,
-      payableAfterAdjText: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0)) / 100).toFixed(2) }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, error: e.msg || '加载失败，请重试' }))
+      payableAfterAdjText: ((Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0)) / 100).toFixed(2) }));this.setData({list,loaded:true,error:'',pendingCount:list.filter(s=>s.status===0).length,pendingAmount:list.filter(s=>s.status===0).reduce((sum,s)=>sum+Number(s.payableLabel),0).toFixed(2)});this.applyFilter() }).catch(e => this.setData({ loaded: true, errCode: Number(e.code) || 0, error: e.msg || '加载失败，请重试' }))
   },
   dispute(e) {
     const id = e.currentTarget.dataset.id

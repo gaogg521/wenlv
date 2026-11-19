@@ -29,7 +29,7 @@ Page({
         '&replyStatus=' + this.data.replyStatus + (this.data.rating ? '&rating=' + this.data.rating : ''))
       const items = append ? this.data.items.concat(d.items) : d.items
       this.setData({ items: items.map(x => ({ ...x, stars: '★★★★★'.slice(0, Number(x.rating)) + '☆☆☆☆☆'.slice(0, 5 - Number(x.rating)), replyStateText: Number(x.reply_status) === 1 ? '已展示' : Number(x.reply_status) === 2 ? '被下架' : (x.reply ? '待审核' : '待回复') })), total: d.total, page, loading: false, error: '', hasMore: page * this.data.pageSize < d.total })
-    } catch (e) { this.setData({ loading: false, error: e.msg || '加载失败' }) }
+    } catch (e) { this.setData({ loading: false, errCode: Number(e.code) || 0, error: e.msg || '加载失败' }) }
   },
   loadMore() { if (this.data.hasMore && !this.data.loading) this.fetch(true) },
   filterReply(e) { this.setData({ replyStatus: e.currentTarget.dataset.k }); this.fetch() },

@@ -13,7 +13,7 @@ Page({
       order.subsidyText = subsidy + (state[order.freedom_status] || '')
       this.setData({ order, error: '' })
     } catch (e) {
-      this.setData({ error: e.msg || '加载失败' })
+      this.setData({ errCode: Number(e.code) || 0, error: e.msg || '加载失败' })
     }
   },
   goVerify() { wx.navigateTo({ url: '/pages/verify/index' }) },
