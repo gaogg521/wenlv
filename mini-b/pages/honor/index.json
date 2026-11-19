@@ -1,4 +1,1 @@
-{
-  "navigationBarTitleText": "经营等级与荣誉",
-  "enablePullDownRefresh": true
-}
+{  "navigationBarTitleText": "经营等级与荣誉",  "enablePullDownRefresh": true,  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}

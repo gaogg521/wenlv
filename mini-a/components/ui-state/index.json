@@ -1,0 +1,4 @@
+{
+  "component": true,
+  "options": { "styleIsolation": "apply-shared" }
+}

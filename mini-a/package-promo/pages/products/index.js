@@ -1,12 +1,21 @@
 const api=require('../../../utils/api')
 Page({
- data:{rows:[],page:1,total:0,error:'',loading:false,material:null,qrcode:'',poster:''},
+ data:{rows:[],page:1,total:0,error:'',loading:false,material:null,qrcode:'',poster:'',qual:'',emptyDesc:'可推广的线路由平台运营授权后出现在这里\n授权到期或产品停售时会暂时下架',
+  // 6001=推广资格未生效/暂停（无资格态不给重试，给说明与去处）；其余为普通失败态
+  deniedReasons:[
+   {q:'这是什么',a:'平台授权线路的推广素材库：专属推广码、转发文案、产品海报都在这里获取'},
+   {q:'为什么现在不能用',a:'推广资格未生效或已暂停，暂时取不到可推广的产品'},
+   {q:'怎么开通',a:'点下方按钮联系平台客服咨询；资格生效后，运营授权的产品会自动出现在这里'},
+  ]},
  onShow(){this.load(1)},
  async load(page){
   if(this.data.loading)return
   this.setData({loading:true,error:'',material:null,qrcode:'',poster:''})
-  try{await api.ensureLogin();const d=await api.request('/c/promote/products?page='+page);this.setData({rows:d.rows.map(p=>({...p,rateText:(p.rate.rateBp/100)+'%',sessions:p.sessions.map(s=>({...s,priceText:((s.priceNow||s.price_adult)/100).toFixed(2)}))})),total:d.total,page:d.page,hasNext:d.page*d.pageSize<d.total})}
-  catch(e){this.setData({rows:[],error:e.msg||'加载失败'})}finally{this.setData({loading:false})}
+  try{await api.ensureLogin();const d=await api.request('/c/promote/products?page='+page);this.setData({rows:d.rows.map(p=>({...p,rateText:(p.rate.rateBp/100)+'%',sessions:p.sessions.map(s=>({...s,priceText:((s.priceNow||s.price_adult)/100).toFixed(2)}))})),total:d.total,page:d.page,hasNext:d.page*d.pageSize<d.total,qual:'',error:''})}
+  catch(e){
+   if(Number(e.code)===6001)this.setData({rows:[],qual:'denied',error:''})
+   else this.setData({rows:[],qual:'',error:e.msg||'加载失败，请稍后重试'})
+  }finally{this.setData({loading:false})}
  },
  retry(){this.load(this.data.page)},prev(){if(this.data.page>1)this.load(this.data.page-1)},next(){if(this.data.hasNext)this.load(this.data.page+1)},
  async makeMaterial(e){

@@ -1,8 +1,19 @@
 const api = require('../../../utils/api')
 Page({
-  data: { seg: 'earn', ov: null, scene: null, qrcode: '', customers: [], nameMap: { 1: '基础 5%', 2: '优选 8%', 3: '金牌 12%' } },
+  data: {
+    seg: 'earn', ov: null, scene: null, qrcode: '', customers: [], nameMap: { 1: '基础 5%', 2: '优选 8%', 3: '金牌 12%' }, state: 'loading', error: '',
+    // 无资格态的三问与示例预览（文案数据放 JS，WXML 只做取值）
+    deniedReasons: [
+      { q: '这是什么', a: '推广服务中心：生成专属推广码与海报，好友下单后按你所在档位的费率获得佣金' },
+      { q: '为什么现在不能用', a: '推广资格由平台运营邀请开通，你的账号尚未开通或已暂停' },
+      { q: '怎么开通', a: '点下方按钮联系平台客服咨询；开通后本页会展示收益概览与专属推广码' },
+    ],
+    deniedPreview: [['基础档 · 费率', '5%'], ['优选档 · 费率', '8%'], ['金牌档 · 费率', '12%']],
+    custEmptyDesc: '把推广码或海报分享给好友\n好友到访或下单后会自动归因到这里',
+  },
   onShow() { this.fetch() },
   async fetch() {
+    this.setData({ state: 'loading' })
     try {
       await api.ensureLogin()
       const [ov0, sc, customers] = await Promise.all([
@@ -23,10 +34,10 @@ Page({
         roleLine: '推广服务商 · 当前档位费率 ' + Number(ov0.rateBp || 0) / 100 + '%',
       }) : ov0
       const custs = customers.map((c) => ({ ...c, amountText: c.amount ? '¥' + (Number(c.amount) / 100).toFixed(2).replace(/\.?0+$/, '') : '—' }))
-      this.setData({ ov, roleText: ov && ov.promoter ? ov.roleLine : '推广服务商', scene: sc.promoter ? sc.scene : null, customers: custs, error:'' })
+      const promoter = !!(ov && ov.promoter)
+      this.setData({ ov, roleText: promoter ? ov.roleLine : '推广服务商', scene: sc.promoter ? sc.scene : null, customers: custs, error: '', state: promoter ? 'ready' : 'denied' })
     } catch (e) {
-      this.setData({ ov: null, scene: null, customers: [],error:e.msg || '加载失败，请重试' })
-      wx.showToast({ title: e.msg || '加载失败，请重试', icon: 'none' })
+      this.setData({ ov: null, scene: null, customers: [], error: e.msg || '加载失败，请稍后重试', state: 'error' })
     }
   },
   switchSeg(e) { this.setData({ seg: e.currentTarget.dataset.k }) },

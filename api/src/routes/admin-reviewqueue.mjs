@@ -59,7 +59,7 @@ export const adminReviewQueue = {
     if (!KINDS.includes(kind)) throw new BizError(1001, '队列类型无效')
     const toUid = Number((req.body || {}).toUid || 0)
     if (!toUid) throw new BizError(1001, '请选择被转派人')
-    const target = await one('SELECT id, name, role, status FROM admin_user WHERE id = ?', [toUid])
+    const target = await one('SELECT id, COALESCE(display_name, username) AS name, role, status FROM admin_user WHERE id = ?', [toUid])
     if (!target || Number(target.status) !== 1) throw new BizError(1004, '被转派人不存在或已停用')
     if (!CLAIM_ROLES[kind].includes(target.role)) throw new BizError(1003, '被转派人不具备该队列的审核资格（' + CLAIM_ROLE_CN[kind] + '）')
     await tx(async (c) => {

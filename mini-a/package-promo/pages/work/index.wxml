@@ -1,7 +1,13 @@
 <view class="hero"><view class="hi">合作中心</view><view class="sub2">按授权主体查询项目与分润 · 门店岗位独立授权</view></view>
-<view class="card state-error" wx:if="{{error}}"><view>{{error}}</view><button class="btn ghost sm" bindtap="load">重试</button></view>
-<view class="skeleton" wx:if="{{loading}}" style="height:240rpx"></view>
-<view class="card empty" wx:if="{{!subjects.length && !error && !loading}}"><view class="e-ico">🤝</view>暂无有效合作授权<view class="note">如有合作意向，请联系平台运营开通</view></view>
+<view class="card" wx:if="{{loading && !subjects.length}}"><ui-state kind="loading" /></view>
+<ui-state wx:if="{{error}}" kind="error" title="合作中心加载失败" desc="{{error}}" bind:retry="load" />
+<view class="card" wx:if="{{!subjects.length && !error && !loading}}">
+  <ui-state kind="denied" title="暂无有效的合作主体授权" icon="🤝"
+    reasons="{{deniedReasons}}"
+    preview-title="可以接入的合作类型（示意）"
+    preview-rows="{{deniedPreview}}"
+    action-text="联系平台客服咨询开通" action-open="contact" />
+</view>
 <view class="card fade-up" wx:for="{{subjects}}" wx:key="id" data-id="{{item.id}}" bindtap="choose"><view class="wk-subject">{{item.name}}</view><view class="note">查看此主体的项目与分润 ›</view></view>
 <view class="card fade-up" wx:if="{{current}}">
   <view class="sec-title">当前主体：{{current.name}}</view>
@@ -43,6 +49,9 @@
   <view class="note" wx:if="{{item.note}}">{{item.note}}</view>
   <button wx:if="{{item.hasReceipt}}" class="btn ghost sm" bindtap="receipt" data-id="{{item.id}}">查看回单 ›</button>
 </view>
-<view class="card empty" wx:if="{{current && !profits.length}}"><view class="e-ico">📄</view>暂无本主体分润记录</view>
+<view class="card" wx:if="{{current && !profits.length}}">
+  <ui-state kind="empty" icon="📄" title="暂无本主体分润记录" compact
+    desc="{{profitEmptyDesc}}" />
+</view>
 <view class="chips" wx:if="{{current}}"><button wx:if="{{page>1}}" class="btn ghost sm" bindtap="prev">上一页</button><text class="muted">第{{page}}页 · 分润{{total}}条</text><button wx:if="{{hasNext}}" class="btn ghost sm" bindtap="next">下一页</button></view>
 <view class="card fade-up" wx:for="{{feedback}}" wx:key="id"><view class="kv"><text>对账反馈</text><text>{{item.detail}}</text></view><view class="note">{{item.replyText}}</view></view>

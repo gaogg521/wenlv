@@ -1,9 +1,17 @@
 <view class="hero"><view class="hi">旅行笔记</view><view class="sub2">真实的旅程，由走过的人写下</view></view>
-<view wx:if="{{error}}" class="card"><view class="empty"><view class="e-ico">📓</view>{{error}}<view class="btn ghost" style="margin-top:16rpx" bindtap="retry">重试</view></view></view>
-<block wx:elif="{{loading && !notes.length}}"><view class="skeleton" wx:for="{{[1,2,3]}}" wx:key="*this"></view></block>
+<view class="card" wx:if="{{error}}">
+  <ui-state kind="error" icon="📓" title="笔记加载失败" desc="{{errorDesc}}" bind:retry="retry" />
+</view>
+<view class="card" wx:elif="{{loading && !notes.length}}">
+  <ui-state kind="loading" />
+</view>
 <block wx:else>
-  <view class="card" wx:if="{{!loading && !notes.length}}"><view class="empty"><view class="e-ico">📓</view>还没有人分享旅程<view class="note">去过朱家角或安吉？写下第一篇旅行笔记</view></view></view>
-  <view class="btn" style="margin:16rpx 24rpx" bindtap="goCompose">写一篇旅行笔记</view>
+  <view class="card" wx:if="{{!loading && !notes.length}}">
+    <ui-state kind="empty" icon="📓" title="还没有人分享旅程"
+      desc="{{emptyDesc}}"
+      action-text="写一篇旅行笔记" action-url="/package-content/pages/compose/index" />
+  </view>
+  <view class="btn" wx:if="{{notes.length}}" style="margin:16rpx 24rpx" bindtap="goCompose">写一篇旅行笔记</view>
   <view class="note-list">
     <view class="note-card fade-up" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
       <view class="note-cover-box" wx:if="{{item.cover || item.video}}">
@@ -17,6 +25,6 @@
       <view class="note-meta"><text class="note-author">{{item.author}}</text><text class="note-stats">{{item.likes}} 赞 · {{item.comments}} 评</text></view>
     </view>
   </view>
-  <view class="card" wx:if="{{loading && notes.length}}">加载中…</view>
+  <view class="card" wx:if="{{loading && notes.length}}"><view class="note">正在加载更多…</view></view>
   <view class="card" wx:if="{{!loading && notes.length && !hasMore}}"><view class="note">已经到底啦 · 点上方「写一篇旅行笔记」分享你的旅程</view></view>
 </block>

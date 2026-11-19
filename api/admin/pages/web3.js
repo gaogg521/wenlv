@@ -42,7 +42,7 @@ async function attest() {
         <td class="num">${t}</td>
         <td><div class="att-bar" title="已锚定 ${a} / ${t}"><i style="width:${pct(a, t)}%;background:${bizColor(x.biz_type)}"></i></div><span class="td-sub">${pct(a, t)}%</span></td>
         <td class="num${p ? ' att-warn' : ''}">${p}</td><td class="num">${Number(x.packed || 0)}</td><td class="num">${a}</td></tr>` }).join('')}
-    </tbody></table>` : emptyBox('还没有存证事件')}
+    </tbody></table>` : emptyBox('还没有存证事件——订单/结算等业务发生封存后入队打包')}
   </div>
   <div class="card">
     <div class="card-head"><h3>存证批次（Merkle 根 · 链式前根）</h3><span class="muted">prev_root 指向上批根：改任一批必须改其后所有批次，而最新根在链上</span></div>
@@ -1482,7 +1482,7 @@ async function pointassets() {
       <td class="num">${num(x.userIn)}</td><td class="num">${num(x.userOut)}</td><td class="num" style="color:${net > 0 ? '#17824d' : net < 0 ? '#b42318' : 'inherit'}">${signed(net)}</td><td class="num">${num(x.entries)}</td>
       <td>${Number(x.issued) === Number(x.burned) ? `<span class="pill ok" title="贷 ${num(x.issued)} = 借 ${num(x.burned)}">平衡</span>` : `<span class="pill s70" title="贷 ${num(x.issued)} ≠ 借 ${num(x.burned)}">不平</span>`}</td></tr>` }).join('')}
     <tr class="att-total"><td>合计</td><td class="num">${num(totIn)}</td><td class="num">${num(totOut)}</td><td class="num">${signed(totIn - totOut)}</td><td class="num">${num(totN)}</td><td></td></tr>
-    </tbody></table>` : emptyBox('还没有旅豆流水')}
+    </tbody></table>` : emptyBox('该日期暂无旅豆流水——选择有发放或消费的日期查询')}
   </div>
   <div class="card">
     <div class="card-head"><h3>发行批次</h3><span class="muted">点一行去预算管理</span></div>

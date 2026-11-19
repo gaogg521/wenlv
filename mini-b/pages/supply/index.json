@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "团期库存", "enablePullDownRefresh": true }
+{  "navigationBarTitleText": "团期库存",  "enablePullDownRefresh": true,  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}

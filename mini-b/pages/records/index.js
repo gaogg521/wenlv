@@ -1,7 +1,7 @@
 const api = require('../../utils/api')
 const { day, periodQuery } = require('../../utils/period')
 Page({
-  data: { list: [], loaded: false, periodIndex:0, periodNames:['全部历史','今日','近7天','近30天','指定日期'], customDate:day(), today:day(), page:1, hasMore:false },
+  data: { emptyDesc: '到店核销成功与异常拦截都会留痕\n换个日期范围可查更早的记录',  list: [], loaded: false, periodIndex:0, periodNames:['全部历史','今日','近7天','近30天','指定日期'], customDate:day(), today:day(), page:1, hasMore:false },
   onShow() { this.fetch() },
   onPullDownRefresh() { this.fetch().then(()=>wx.stopPullDownRefresh()) },
   filterPeriod(e) { this.setData({periodIndex:Number(e.detail.value)});this.fetch() },

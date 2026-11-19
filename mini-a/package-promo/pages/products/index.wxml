@@ -1,7 +1,15 @@
 <view class="hero"><view class="hi">可推广产品</view><view class="sub2">人员授权与实时售价 · 首触归因</view></view>
-<view class="card state-error" wx:if="{{error}}"><view>{{error}}</view><button class="btn ghost sm" bindtap="retry">重试</button></view>
-<view class="skeleton" wx:if="{{loading}}" style="height:240rpx"></view>
-<view class="card empty" wx:if="{{!rows.length && !error && !loading}}"><view class="e-ico">🧭</view>暂无有效授权产品<view class="note">可推广的线路由平台运营授权后出现在这里</view></view>
+<view class="card" wx:if="{{loading && !rows.length}}"><ui-state kind="loading" /></view>
+<ui-state wx:if="{{qual === 'denied'}}" kind="denied" title="推广资格未生效或已暂停" icon="🧭"
+  reasons="{{deniedReasons}}"
+  action-text="联系平台客服咨询" action-open="contact"
+  secondary-text="返回推广中心" secondary-url="/package-promo/pages/center/index" />
+<ui-state wx:if="{{error}}" kind="error" title="产品列表加载失败" desc="{{error}}" bind:retry="retry" />
+<view class="card" wx:if="{{!rows.length && !error && !loading && qual !== 'denied'}}">
+  <ui-state kind="empty" icon="🧭" title="暂无可推广的产品" compact
+    desc="{{emptyDesc}}"
+    action-text="返回推广中心" action-url="/package-promo/pages/center/index" />
+</view>
 <view class="card fade-up" wx:for="{{rows}}" wx:key="id">
   <image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" class="wk-cover"/>
   <view class="sec-title">{{item.title}}</view>

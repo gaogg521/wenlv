@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "对账结算" }
+{  "navigationBarTitleText": "对账结算",  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}

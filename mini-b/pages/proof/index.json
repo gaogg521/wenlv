@@ -1,3 +1,1 @@
-{
-  "navigationBarTitleText": "记录复核"
-}
+{  "navigationBarTitleText": "记录复核",  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}

@@ -109,7 +109,7 @@ async function kyc() {
       <td>${st[x.status] || x.status}</td><td class="td-sub">${String(x.created_at).slice(0, 16)}</td>
       <td>${x.status === 0 ? `<button class="btn primary sm" onclick="kycResolve(${x.id},'pass')">通过</button>
         <button class="btn danger sm" onclick="kycResolve(${x.id},'reject')">驳回</button>` : (x.reject_note ? `<span class="td-sub">${esc(x.reject_note)}</span>` : '')}</td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无实名认证申请')}</div>`
+    : emptyBox('暂无实名认证申请——用户在小程序「实名认证」提交后，这里可核对并登记结果')}</div>`
 }
 window.kycResolve = async (id, action) => {
   let note = null

@@ -197,11 +197,10 @@ try {
       ['dprev-' + stamp, 'dprev-' + stamp, 'x'])).insertId
     cleanup.admins.push(target)
     const t2 = await call('POST', `/admin/review-queue/note/${note}/reassign`, { toUid: Number(target) }, aTok('super'))
-    if (t2.code !== 0) { console.log('    （转派未成功，信息：' + t2.code + ' ' + t2.msg + '——跳过断言）') } else {
-      assert.equal(t2.code, 0, '转派成功')
-      const audit2 = await one("SELECT id FROM audit_log WHERE module = 'review' AND action = 'claim-reassign' AND biz_ref = ?", ['note-' + note])
-      assert.ok(audit2, '转派写审计')
-    }
+    // 验收修正：原写法在转派失败（含服务端 9000）时只打印并跳过断言，掩盖了接口查询不存在的 name 列的缺陷
+    assert.equal(t2.code, 0, '转派成功：' + t2.code + ' ' + t2.msg)
+    const audit2 = await one("SELECT id FROM audit_log WHERE module = 'review' AND action = 'claim-reassign' AND biz_ref = ?", ['note-' + note])
+    assert.ok(audit2, '转派写审计')
   })
 
   /* ---------- X-03 改价留痕与并发 ---------- */
@@ -291,6 +290,18 @@ try {
     // 商户筛选：pending（待回复/被下架）
     const pend = ok(await call('GET', '/m/reviews?page=1&pageSize=20&replyStatus=pending', null, mTok))
     assert.ok(pend.items.some((r) => Number(r.id) === rv), '被下架后回到「待回复/被下架」筛选')
+    // 验收补充：筛选条件必须与「只看本店」同时成立（OR 未加括号会把别家被下架回复的评价串进来）
+    const other = await one(`SELECT o.id oid, o.user_id uid, o.product_id pid FROM orders o JOIN tour_product p ON p.id = o.product_id
+      WHERE p.merchant_id <> ? AND NOT EXISTS (SELECT 1 FROM review r WHERE r.order_id = o.id) LIMIT 1`, [merchantId])
+    if (other) {
+      const orv = (await q('INSERT INTO review (order_id, user_id, product_id, rating, content, reply, reply_status) VALUES (?,?,?,?,?,?,2)',
+        [other.oid, other.uid, other.pid, 4, stamp + ' 他店评价', stamp + ' 他店被下架回复'])).insertId
+      cleanup.reviews.push(orv)
+      for (const rs of ['pending', 'replied', 'all']) {
+        const lst = ok(await call('GET', '/m/reviews?page=1&pageSize=100&replyStatus=' + rs, null, mTok))
+        assert.ok(!lst.items.some((r) => Number(r.id) === orv), `replyStatus=${rs} 不得出现他店评价`)
+      }
+    }
   })
 
 

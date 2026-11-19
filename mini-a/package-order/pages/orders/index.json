@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "我的订单", "enablePullDownRefresh": true }
+{"navigationBarTitleText":"我的订单","enablePullDownRefresh":true,"usingComponents":{"ui-state":"/components/ui-state/index"}}

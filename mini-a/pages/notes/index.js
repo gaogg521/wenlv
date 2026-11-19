@@ -2,7 +2,10 @@
 // 数据复用首页作品区同款接口 /c/notes/feed；未登录/失败态不影响页面结构。
 const api = require('../../utils/api')
 Page({
-  data: { notes: [], page: 1, loading: true, error: '', hasMore: false, introShown: false },
+  data: { notes: [], page: 1, loading: true, error: '', hasMore: false, introShown: false,
+    // 三态文案在 JS 备好（WXML 属性串里写 \n 会显示成字面反斜杠）
+    emptyDesc: '去过朱家角或安吉？写下第一篇旅行笔记\n真实的旅程，由走过的人写下',
+    errorDesc: '' },
   onShow() { if (!this.data.notes.length) this.fetch(true) },
   onPullDownRefresh() { this.fetch(true).then(() => wx.stopPullDownRefresh()) },
   retry() { this.fetch(true) },
@@ -24,7 +27,8 @@ Page({
         error: '',
       })
     }).catch((e) => {
-      this.setData({ loading: false, error: e.msg === '未登录' ? '登录后可浏览旅行笔记' : (e.msg || '笔记加载失败，请稍后重试') })
+      const error = e.msg === '未登录' ? '登录后可浏览旅行笔记' : (e.msg || '笔记加载失败，请稍后重试')
+      this.setData({ loading: false, error, errorDesc: error + '\n下拉或点重试即可再试一次' })
     })
   },
   loadMore() { if (!this.data.loading && this.data.hasMore) this.fetch(false) },

@@ -1,4 +1,5 @@
 {
   "navigationBarTitleText": "旅行笔记",
-  "enablePullDownRefresh": true
+  "enablePullDownRefresh": true,
+  "usingComponents": { "ui-state": "/components/ui-state/index" }
 }

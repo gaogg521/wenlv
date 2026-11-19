@@ -1,13 +1,21 @@
 const api = require('../../../utils/api')
 const receipt=require('../../../utils/receipt')
 Page({
-  data:{subjects:[],resources:[],current:null,error:'',note:'',loading:true,projects:[],profits:[],payments:[],feedback:[],page:1,total:0,from:'',to:'',productId:''},
+  data:{subjects:[],resources:[],current:null,error:'',note:'',loading:true,projects:[],profits:[],payments:[],feedback:[],page:1,total:0,from:'',to:'',productId:'',
+    // 无授权主体=无资格态：回答三问并给示例预览（文案放 JS，WXML 只取值）
+    deniedReasons:[
+      { q: '这是什么', a: '合作服务中心：按授权主体查询合作项目、当前合同与逐期分润，并可发起对账反馈' },
+      { q: '为什么现在不能用', a: '你还没有任何有效的合作主体授权，或授权已到期' },
+      { q: '怎么开通', a: '由平台运营与合作主体确认后授权开通，点下方按钮联系平台客服咨询' },
+    ],
+    deniedPreview: [['履约门店 · 项目与分润', '示例'], ['供应商 · 供货与结算', '示例'], ['共创项目 · 内容分成', '示例']],
+    profitEmptyDesc: '合作项目产生结算后，逐期分润与付款回单会出现在这里\n金额以对账后的实际账目为准'},
   onShow(){this.load()},
   async load(){
     this.seq=(this.seq || 0)+1
     this.setData({subjects:[],resources:[],current:null,error:'',note:'',loading:true})
     try {await api.ensureLogin();const d=await api.request('/c/work-contexts');this.setData({subjects:d.subjects});if(d.subjects.length)await this.select(d.subjects[0].id)}
-    catch(e){this.setData({error:e.msg || '加载失败，请重试'})}
+    catch(e){this.setData({error:e.msg || '加载失败，请稍后重试'})}
     finally{this.setData({loading:false})}
   },
   choose(e){this.select(Number(e.currentTarget.dataset.id))},

@@ -24,8 +24,8 @@ async function content() {
       <input class="inp" id="contentKw" placeholder="标题 / 作者" value="${esc(Q.kw)}" style="width:180px;margin-left:8px"> <button class="btn ghost sm" onclick="window.__contentQ.kw=document.getElementById('contentKw').value.trim();window.__contentQ.page=1;content()">搜索</button></div>
     ${adminCan('note.review') ? '' : '<p class="muted">当前账号可查看审核材料；通过、驳回由审核员或超级管理员处理。</p>'}
     ${rows.length ? `<table><thead><tr><th>作者</th><th>标题</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
-    ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main">${esc(n.title || '（无题）')}</td>
-      <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(noteExcerpt(n.body))}</td>
+    ${rows.map((n) => `<tr><td>${esc(n.nickname)}${n.creator_tag && n.creator_tag !== 'none' ? ` <span class="pill ${n.creator_tag === 'star' ? 'ok' : (n.creator_tag === 'limited' ? 's70' : 's40')}">${CREATOR_TAG[n.creator_tag] || ''}</span>` : ''}</td><td class="td-main"><span class="ellip" title="${esc(n.title || '（无题）')}">${esc(n.title || '（无题）')}</span></td>
+      <td class="td-sub" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(noteExcerpt(n.body))}">${esc(noteExcerpt(n.body))}</td>
       <td>${['<span class="pill warn">机审中</span>', '<span class="pill s20">人工审核</span>', '<span class="pill ok">已发布</span>', '<span class="pill s70">已驳回</span>', '<span class="pill off">已下架</span>'][n.status]}${Number(n.status) === 2 && n.visibility === 'private' ? ' <span class="pill s40">仅自己可见</span>' : ''}</td>
       <td class="td-sub">${esc(String(n.created_at).slice(5, 16))}</td>
       <td>${[0, 1].includes(Number(n.status)) && adminCan('note.review') ? `<button class="btn primary sm" onclick="reviewNote(${n.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewNote(${n.id})">查看</button>`}${Number(n.status)===2?`<button class="btn ghost sm" onclick="contentTakedown(${n.id})">下架</button>`:''}</td></tr>`).join('')}
@@ -35,7 +35,7 @@ async function content() {
   <div class="card">
     <div class="card-head"><h2>线路评价管理</h2><span class="muted">游客核销后一单一评 · 文本已过机审 · 可隐藏违规/刷评</span></div>
     ${rvs.length ? `<table><thead><tr><th>用户</th><th>线路</th><th>评分</th><th>内容</th><th>状态</th><th>操作</th></tr></thead><tbody>
-    ${rvs.map((r) => `<tr><td>${esc(r.nickname)}</td><td class="td-main">${esc(r.title)}</td>
+    ${rvs.map((r) => `<tr><td>${esc(r.nickname)}</td><td class="td-main"><span class="ellip" title="${esc(r.title)}">${esc(r.title)}</span></td>
       <td class="num" style="color:var(--brand);font-weight:700">${r.rating} ★</td>
       <td class="td-sub" style="max-width:320px">${esc(r.content)}</td>
       <td><span class="pill ${r.status === 1 ? 'ok' : 'off'}">${r.status === 1 ? '展示中' : '已隐藏'}</span></td>
@@ -165,7 +165,7 @@ async function taskEntries(taskId) {
       <td class="td-sub">${e.note_title ? esc(e.note_title) : '—'}</td>
       <td class="td-sub">${esc(String(e.claimed_at || '').slice(5, 16).replace('T', ' '))}${e.submitted_at ? ' / ' + esc(String(e.submitted_at).slice(5, 16).replace('T', ' ')) : ''}</td>
       <td>${Number(e.status) === 2 ? `<button class="btn primary sm" onclick="reviewEntry(${e.id})">审核</button>` : `<button class="btn ghost sm" onclick="reviewEntry(${e.id})">查看</button>`}</td></tr>`).join('')}</tbody></table>`
-    : emptyBox('还没有人领取'), '')
+    : emptyBox('暂无人领取约稿——把任务分配给创作者后，这里会显示创作进度与送审状态'), '')
 }
 const TASK_CAT = { note: '图文笔记', video: '短视频', strategy: '攻略长文', review: '体验点评' }
 async function taskModal(id) {

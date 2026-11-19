@@ -299,7 +299,7 @@ async function security() {
     ${codes.length ? `<table><thead><tr><th>目标</th><th>通道</th><th>验证码</th><th>用途</th><th>状态</th><th>时间</th></tr></thead><tbody>
     ${codes.map((c3) => `<tr><td>${esc(c3.target)}</td><td>${esc(c3.channel)}</td><td><code>${esc(c3.code)}</code></td><td class="td-sub">${esc(c3.purpose)}</td>
       <td>${c3.used_at ? '<span class="pill off">已用</span>' : (parseDate(c3.expires_at) > new Date() ? '<span class="pill ok">有效</span>' : '<span class="pill s70">过期</span>')}</td>
-      <td class="td-sub">${esc(String(c3.created_at).slice(5, 19))}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无验证码记录')}
+      <td class="td-sub">${esc(String(c3.created_at).slice(5, 19))}</td></tr>`).join('')}</tbody></table>` : emptyBox('暂无验证码记录——账号开启短信/邮箱 MFA 后的验证码留痕在这里')}
   </div>`
 }
 // 通道状态（M-03 五态）：配置齐全 ≠ 已验证可送达——verified 只能由真实发送测试/自然发送产生

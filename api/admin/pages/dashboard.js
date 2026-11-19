@@ -261,7 +261,7 @@ function dxTopCard(k, ins, c) {
       return `<li class="go" ${dxKey} title="查看这条线路本周期的订单" onclick="dxDrill('tour',${i})"><span class="rk" style="${i < 3 ? `background:${medal[i]}1f;color:${medal[i]}` : ''}">${i + 1}</span>
         <span class="nm" title="${esc(t.title)}">${esc(t.title)}${t.cat ? ` <span class="pill s20" style="font-size:11px">${esc(CAT_CN[t.cat] || t.cat)}</span>` : ''}</span><span class="amt">${dxMoney(Number(t.gmv) / 100)}</span>
         <span class="trk"><i style="width:${Math.max((m / maxM) * 100, 3)}%"></i></span><span class="sub">${dxInt(t.orders)} 单 · ${mode === 'orders' ? '占订单数' : '占 GMV'} ${pct.toFixed(0)}%</span></li>` }).join('')}</ol>`
-      : emptyBox('该周期内暂无成交')}</section>`
+      : emptyBox('该周期内暂无成交——切到更长周期，或去「商品与团期」确认在售线路')}</section>`
 }
 window.dxTopModeSet = (m) => {
   window.__dxTopMode = m
@@ -271,7 +271,7 @@ window.dxTopModeSet = (m) => {
 
 function dxFunnelCard(ins, c) {
   const F = ins ? ins.funnel : null
-  if (!F || !F.created) return `<section class="dx-card"><div class="dx-hd"><h3>转化漏斗</h3><span class="dx-tag period">${esc(c.rangeCn)}</span></div>${emptyBox('该周期内暂无下单')}</section>`
+  if (!F || !F.created) return `<section class="dx-card"><div class="dx-hd"><h3>转化漏斗</h3><span class="dx-tag period">${esc(c.rangeCn)}</span></div>${emptyBox('该周期内暂无下单——切到更长周期查看漏斗')}</section>`
   const w = (n) => Math.max((n / F.created) * 100, 6)
   return `<section class="dx-card"><div class="dx-hd"><h3>转化漏斗</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">本周期内下单的订单</span></div>
     <div class="dx-fn">
@@ -288,7 +288,7 @@ function dxDonutCard(ins, c) {
   const groups = DX_STATUS.map(([name, codes, color]) => ({ name, color, codes: codes.join(','), n: mix.filter((m) => codes.includes(m.status)).reduce((s, m) => s + m.count, 0) }))
   const sum = groups.reduce((s, g) => s + g.n, 0)
   const head = `<div class="dx-hd"><h3>订单构成</h3><span class="dx-tag period">${esc(c.rangeCn)}</span><span class="dx-hint">按下单时间 · 当前状态</span></div>`
-  if (!sum) return `<section class="dx-card">${head}${emptyBox('该周期内暂无订单')}</section>`
+  if (!sum) return `<section class="dx-card">${head}${emptyBox('该周期内暂无订单——切到更长周期，或去「订单管理」按日期检索')}</section>`
   const R = 42, C = 2 * Math.PI * R
   let acc = 0
   const segs = groups.filter((g) => g.n).map((g) => {
@@ -324,7 +324,7 @@ function dxOrdersCard(recent) {
       ${recent.map((o) => `<tr style="cursor:pointer" onclick="orderDrawer('${escJs(o.order_no)}')">
         <td class="num">${esc(o.order_no)}</td><td class="td-main">${esc(o.title)}</td><td>${esc(o.nickname)}</td>
         <td class="money num">${fen(o.amount_pay)}</td><td><span class="pill s${o.status}">${ST[o.status]}</span></td>
-        <td class="td-sub">${esc(dxWhen(o.paid_at || o.created_at))}</td></tr>`).join('')}</tbody></table></div>` : emptyBox('还没有订单')}</section>`
+        <td class="td-sub">${esc(dxWhen(o.paid_at || o.created_at))}</td></tr>`).join('')}</tbody></table></div>` : emptyBox('该主体暂无订单——游客在主体门店成交后出现在这里')}</section>`
 }
 
 /* ============ 驾驶舱入口 ============ */
