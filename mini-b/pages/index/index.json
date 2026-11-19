@@ -1,1 +1,1 @@
-{  "navigationBarTitleText": "工作台",  "enablePullDownRefresh": false,  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}
+{  "navigationBarTitleText": "工作台",  "enablePullDownRefresh": true,  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}

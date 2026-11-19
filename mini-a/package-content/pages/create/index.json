@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "创作中心" }
+{ "navigationBarTitleText": "创作中心", "usingComponents": { "app-image": "/components/app-image/index" } }

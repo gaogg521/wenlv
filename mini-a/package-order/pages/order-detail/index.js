@@ -28,6 +28,12 @@ Page({
   },
   onLoad(q) { this.no = q.no; this.loadNotifyTemplates(); this.fetch() },
   onShow() { if (this.no) this.fetch() },
+  // T-02：下拉刷新复用订单加载逻辑，完成后收起转圈
+  onPullDownRefresh() {
+    const done = () => wx.stopPullDownRefresh()
+    if (!this.no) return done()
+    Promise.resolve(this.fetch()).then(done).catch(done)
+  },
   async fetch() {
     try {
       const o = await api.getOrder(this.no)
@@ -52,9 +58,24 @@ Page({
     if (ok == null) return
     try {
       const res = await api.request('/c/orders/' + this.no + '/rebook', 'POST', { sessionId: opts[ok.tapIndex].id })
-      wx.showToast({ title: '改签成功，已出票', icon: 'success' })
+      // M-13 T-07：success 图标下标题超 7 字被截断，改 icon none
+      wx.showToast({ title: '改签成功，已出票', icon: 'none' })
       wx.navigateTo({ url: '/package-order/pages/order-detail/index?no=' + res.orderNo })
     } catch (e) { wx.showToast({ title: e.msg || '改签失败', icon: 'none' }) }
+  },
+
+  // M-13 T-03：单号一键复制
+  copyNo() {
+    if (!this.data.o || !this.data.o.order_no) return
+    wx.setClipboardData({ data: String(this.data.o.order_no), success: () => wx.showToast({ title: '单号已复制', icon: 'none' }) })
+  },
+  // M-13 T-03：完成/退款后的「再次预订」——主题游直达该线路详情，商城单回商城
+  goRebook() {
+    const o = this.data.o
+    if (!o) return
+    if (o.stockOrder) return wx.switchTab({ url: '/pages/shop/index' })
+    if (o.product_id) return wx.navigateTo({ url: '/package-tour/pages/detail?id=' + o.product_id })
+    wx.switchTab({ url: '/pages/home/index' })
   },
 
   callLeader() { place.call(this.data.o.trip && this.data.o.trip.leader_phone) },
@@ -96,7 +117,8 @@ Page({
       const r = await api.postReview(this.no, rating || 5, rvText.trim())
       const got = (r && r.badges) || []
       if (got.length) wx.showModal({ title: '获得新勋章', content: '恭喜点亮「' + got.join('」「') + '」，可在「我的身份」查看。', showCancel: false, confirmText: '好的' })
-      else wx.showToast({ title: '评价成功，感谢分享' })
+      // M-13 T-07：默认 icon 就是 success，超 7 字截断，改 none
+      else wx.showToast({ title: '评价成功，感谢分享', icon: 'none' })
       this.setData({ reviewDone: true })
       this.fetch()
     } catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }

@@ -1,3 +1,10 @@
 .hero{padding:32rpx}.account-role{display:inline-block;font-size:22rpx;color:#e7d5af;border:1rpx solid #e8d5ad3b;border-radius:9rpx;background:#ffffff0d;padding:8rpx 14rpx;margin-top:18rpx}.card>.row{font-size:28rpx;line-height:1.6}.row .v{font-size:22rpx;color:#766b59}.card .sec-title{font-size:28rpx}.card input{background:#f7f1e5;border-color:#e7decc!important;font-size:26rpx}.card .btn{margin:20rpx 0}.card .note{text-align:left;padding-left:0;padding-right:0}.card .row:last-child{border-bottom:0}
 
 button.demo-entry{width:100%;box-sizing:border-box;line-height:1.5;margin:20rpx 0}button.demo-entry::after{border:0}
+
+/* M-02：到单提醒偏好面板（仿岗位说明展开体） */
+.notify-panel{padding:12rpx 0 8rpx}
+.notify-item{display:flex;align-items:center;justify-content:space-between;min-height:88rpx;padding:12rpx 0;border-bottom:1rpx solid var(--line,#efe6d6)}
+.notify-item:last-of-type{border-bottom:0}
+.notify-item .tiny{font-size:22rpx;color:#766b59}
+.notify-item switch{transform:scale(.9)}

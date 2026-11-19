@@ -1,17 +1,21 @@
 // 资源池：景区资源、供应商、资源关联商品
 // 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
 
+window.scenicGo = (n) => { window.__scPage = Math.max(1, Number(n) || 1); scenics() }
 async function scenics() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   window.__kw = window.__kw || {}
-  const all = await api('GET', '/admin/scenics')
   const K = (window.__kw.scenics || '').trim()
-  const rows = K ? all.filter((s) => (s.name + (s.contact_name || '') + (s.city_code || '')).includes(K)) : all
+  window.__scPage = Math.max(1, Number(window.__scPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize }）；关键词改走服务端过滤
+  const raw = await api('GET', '/admin/scenics?' + new URLSearchParams({ ...(K ? { kw: K } : {}), page: window.__scPage }).toString())
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const total = Array.isArray(raw) ? rows.length : Number(raw.total || rows.length)
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>景区资源</h2>
-      <input id="sc_kw" placeholder="搜名称 / 联系人 / 城市码" style="width:200px" value="${esc(window.__kw.scenics || '')}" onchange="window.__kw.scenics=this.value;scenics()">
-      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 家' : '共 ' + all.length + ' 家'}</span>
+      <input id="sc_kw" placeholder="搜名称 / 联系人 / 城市码" style="width:200px" value="${esc(window.__kw.scenics || '')}" onchange="window.__kw.scenics=this.value;window.__scPage=1;scenics()">
+      <span class="muted">${K ? '筛出 ' + Number(total).toLocaleString() + ' 家' : '共 ' + Number(total).toLocaleString() + ' 家'}</span>
       <span class="muted">G端合作台账 · 可在「商品与团期」把线路关联到景区</span>
       ${ME.role === 'super' ? '<button class="btn primary sm" onclick="scenicModal()">＋ 新增景区</button>' : ''}</div>
     ${rows.length ? `<table style="margin-top:10px"><thead><tr><th>景区</th><th>城市</th><th>等级</th><th>合作模式</th><th>票务对接</th><th>联系人</th><th>条款摘要</th><th>关联商品</th><th>状态</th><th></th></tr></thead><tbody>
@@ -23,6 +27,7 @@ async function scenics() {
       <td>${RESOURCE_ST[s.status] || ''}</td>
       <td><button class="btn ghost sm" onclick="scenicProfile(${s.id})">景点数据</button>${['super', 'ops'].includes(ME.role) ? `<button class="btn ghost sm" onclick="editScenic(${s.id})">编辑</button>` : ''}</td></tr>`).join('')}</tbody></table>`
     : emptyBox(K ? '没有匹配的景区：换个关键词试试' : '暂无景区：点右上「新增景区」入库')}
+    ${pager(total, window.__scPage, 20, 'scenicGo')}
   </div>`
 }
 function scenicModal() { return entityEditor('scenic', null, { onSaved: () => scenics() }) }
@@ -38,17 +43,21 @@ async function scenicProfile(id) {
   void mountOperatingScenario($('#modalRoot'))
 }
 async function editScenic(id) { return entityEditor('scenic', id, { onSaved: () => scenics() }) }
+window.supplierGo = (n) => { window.__spPage = Math.max(1, Number(n) || 1); suppliers() }
 async function suppliers() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   window.__kw = window.__kw || {}
-  const all = await api('GET', '/admin/suppliers')
   const K = (window.__kw.suppliers || '').trim()
-  const rows = K ? all.filter((s) => (s.name + (s.contact_name || '') + (s.city_code || '') + (s.category || '')).includes(K)) : all
+  window.__spPage = Math.max(1, Number(window.__spPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize }）；关键词改走服务端过滤
+  const raw = await api('GET', '/admin/suppliers?' + new URLSearchParams({ ...(K ? { kw: K } : {}), page: window.__spPage }).toString())
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const total = Array.isArray(raw) ? rows.length : Number(raw.total || rows.length)
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>供应商</h2>
-      <input id="sp_kw" placeholder="搜名称 / 联系人 / 类目" style="width:200px" value="${esc(window.__kw.suppliers || '')}" onchange="window.__kw.suppliers=this.value;suppliers()">
-      <span class="muted">${K ? '筛出 ' + rows.length + ' / ' + all.length + ' 家' : '共 ' + all.length + ' 家'}</span>
+      <input id="sp_kw" placeholder="搜名称 / 联系人 / 类目" style="width:200px" value="${esc(window.__kw.suppliers || '')}" onchange="window.__kw.suppliers=this.value;window.__spPage=1;suppliers()">
+      <span class="muted">${K ? '筛出 ' + Number(total).toLocaleString() + ' 家' : '共 ' + Number(total).toLocaleString() + ' 家'}</span>
       <span class="muted">资源供给方（门票/住宿/交通/地接/餐饮）· 与履约商户分账本管理</span>
       <button class="btn primary sm" onclick="supplierModal()">＋ 新增供应商</button></div>
     ${rows.length ? `<table style="margin-top:10px"><thead><tr><th>供应商</th><th>城市</th><th>类目</th><th>资质证照号</th><th>联系人</th><th>结算方式</th><th>备注</th><th>关联商品</th><th>状态</th><th></th></tr></thead><tbody>
@@ -61,6 +70,7 @@ async function suppliers() {
       <td class="num">${Number(s.product_count) ? `<a style="cursor:pointer;color:var(--brand)" onclick="resourceProducts('supplier',${s.id},'${escJs(s.name)}')">${s.product_count} 条 ›</a>` : '—'}</td>
       <td>${RESOURCE_ST[s.status] || ''}</td>
       <td><button class="btn ghost sm" onclick="editSupplier(${s.id})">编辑</button></td></tr>`).join('')}</tbody></table>` : emptyBox('暂无供应商：门票/大巴/酒店等资源方在这里入库，商品可关联')}
+    ${pager(total, window.__spPage, 20, 'supplierGo')}
   </div>`
 }
 function supplierModal() { return entityEditor('supplier', null, { onSaved: () => suppliers() }) }
@@ -133,13 +143,22 @@ async function scenicFollowups(scenicId) {
       }
     }
   }
-  bind(panel.querySelector('[data-followup-create]'), values => api('POST', root, {
-    reviewId: Number(values.get('reviewId')), kind: values.get('kind'), purpose: values.get('purpose'),
-    amountFen: values.get('amount') ? Math.round(Number(values.get('amount')) * 100) : null,
-  }))
+  bind(panel.querySelector('[data-followup-create]'), async values => {
+    const c = await uiConfirm({ title: '提交经营跟进申请', target: data.scenic.name, changes: [{ label: '类型', from: '—', to: SCENIC_FOLLOWUP_KINDS[values.get('kind')] || values.get('kind') }], impact: '提交后进入待审批，由有审批权限的管理员批准或退回', confirmText: '提交申请' })
+    if (!c.ok) return
+    return api('POST', root, {
+      reviewId: Number(values.get('reviewId')), kind: values.get('kind'), purpose: values.get('purpose'),
+      amountFen: values.get('amount') ? Math.round(Number(values.get('amount')) * 100) : null,
+    })
+  })
   for (const form of panel.querySelectorAll('[data-followup-action]')) {
-    bind(form, (values, button) => {
+    bind(form, async (values, button) => {
       if (!button?.value) return Promise.reject(new Error('请选择操作'))
+      const ACT_CN = { approve: '批准', reject: '退回', record: '登记办理结果' }
+      const FROM_ST = { approve: SCENIC_FOLLOWUP_STATUS.submitted, reject: '待审批 / 已批准', record: SCENIC_FOLLOWUP_STATUS.approved }
+      const actLabel = ACT_CN[button.value] || button.value
+      const c = await uiConfirm({ title: '处理跟进申请', target: '申请 #' + Number(form.dataset.followupAction), changes: [{ label: '动作', from: FROM_ST[button.value] || '待处理', to: actLabel }], impact: '操作说明（及办理单据编号）随动作留痕，申请人可见', confirmText: actLabel === '批准' ? '确认批准' : actLabel === '退回' ? '确认退回' : '确认登记' })
+      if (!c.ok) return
       return api('POST', root + '/' + Number(form.dataset.followupAction) + '/action',
         { action: button.value, note: values.get('note'), reference: values.get('reference') })
     })

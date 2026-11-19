@@ -1,1 +1,7 @@
-{  "navigationBarTitleText": "门店订单详情",  "usingComponents": {    "ui-state": "/components/ui-state/index"  }}
+{
+  "navigationBarTitleText": "门店订单详情",
+  "usingComponents": {
+    "ui-state": "/components/ui-state/index"
+  },
+  "enablePullDownRefresh": true
+}

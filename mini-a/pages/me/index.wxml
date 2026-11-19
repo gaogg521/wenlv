@@ -4,7 +4,7 @@
     <view class="me-card">
       <view class="me-ring">
         <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-          <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
+          <app-image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
           <view wx:else class="avatar-ph">{{initial}}</view>
         </button>
       </view>
@@ -14,7 +14,7 @@
         <view class="lv-bar" wx:if="{{user.levelHint}}"><view class="lv-fill" style="width:{{user.levelPct}}%"></view></view>
         <view class="me-hint" wx:if="{{user.levelHint}}">{{user.levelHint}}</view>
       </view>
-      <image class="me-crest" wx:if="{{user.levelArt}}" src="{{user.levelArt}}" mode="aspectFit" />
+      <app-image class="me-crest" wx:if="{{user.levelArt}}" src="{{user.levelArt}}" mode="aspectFit" />
     </view>
   </block>
   <block wx:else>

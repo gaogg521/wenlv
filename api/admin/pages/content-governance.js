@@ -30,9 +30,9 @@ async function contentCaseDecide(action) {
   catch(e){if($('#caseError'))$('#caseError').textContent=e.message;else toast(e.message,true)}
 }
 async function contentTakedown(id) {
-  const reason=prompt('下架原因（4—300 字，作者可见）：')
-  if(reason==null)return
-  try{await api('POST',`/admin/content/${id}/takedown`,{reason});toast('已下架，作者可在创作中心申诉');content()}catch(e){toast(e.message,true)}
+  const r=await uiConfirm({title:'笔记下架',target:'笔记 #'+id,impact:'下架后小程序端不可见；原因会展示给作者，作者可在创作中心申诉',needReason:true,reasonPlaceholder:'下架原因（4—300 字，作者可见）',danger:true,confirmText:'确认下架'})
+  if(!r.ok)return
+  try{await api('POST',`/admin/content/${id}/takedown`,{reason:r.reason});toast('已下架，作者可在创作中心申诉');content()}catch(e){toast(e.message,true)}
 }
 async function adminComments() {
   const Q={...(window.__commentsQ ||= {status:'all',kw:'',page:1})}
@@ -72,10 +72,15 @@ async function reviewReplyPanel() {
     : emptyBox('暂无商户回复待审核——商户在小程序端回复评价后，这里会出现待审回复')
 }
 async function reviewReplyVerdict(id, show) {
+  const r = await uiConfirm({ title: show ? '评价回复审核通过' : '下架评价回复', target: '回复 #' + id, changes: [{ label: '回复状态', from: show ? '待审核' : '展示中', to: show ? '通过并展示' : '下架（两端不可见）' }], impact: show ? '通过后游客端可见，商户回复进入平台审核留痕' : '下架后小程序两端同步消失', danger: !show, confirmText: show ? '通过' : '确认下架' })
+  if (!r.ok) return
   try { await api('POST', `/admin/reviews/${id}/reply-verdict`, { show }); toast(show ? '回复已通过，游客端可见' : '回复已下架，两端同步消失'); reviewReplyPanel() }
   catch (e) { toast(e.message, true) }
 }
 async function commentModerate(id,act) {
+  const hide=act==='hide'
+  const r=await uiConfirm({title:hide?'隐藏评论':'恢复评论',target:'评论 #'+id,changes:[{label:'评论状态',from:hide?'展示中':'已隐藏',to:hide?'已隐藏':'展示中'}],impact:hide?'隐藏后小程序评论数同步减少，作者与游客不可见':'恢复后重新展示，评论数同步加回',danger:hide,confirmText:hide?'确认隐藏':'恢复展示'})
+  if(!r.ok)return
   try{await api('POST',`/admin/comments/${id}/${act}`);toast(act==='hide'?'已隐藏，小程序评论数已同步':'已恢复展示');adminComments()}
   catch(e){toast(e.message,true)}
 }

@@ -34,15 +34,24 @@ Page({
   callService() { place.call(this.data.site.service_phone) },
   onShow() {
     this.setData({workAvailable:false,canPromote:false})
+    this.loadPage()
+  },
+  // T-02：页面数据统一下沉为可复用加载（返回 Promise，供下拉刷新等待完成后收起）
+  loadPage() {
     api.request('/c/work-contexts').then(d=>this.setData({workAvailable:d.canCooperate,canPromote:d.canPromote})).catch(()=>{})
-    siteData.get().then((site) => this.setData({ site, serviceLine: site.service_hours ? ' · ' + site.service_hours : '' }))
+    siteData.get().then((site) => this.setData({ site, serviceLine: site.service_hours ? ' · ' + site.service_hours : '' })).catch(() => {})
     this.setData({ user: app.globalData.user })
-    this.loadMe()
+    const tasks = [Promise.resolve(this.loadMe())]
     // A-02：登录后拉取资产摘要与订单快捷计数（未登录不发请求、不报错）
     if (app.globalData.token) {
-      api.request('/c/orders/summary').then((s) => this.setData({ ordersSummary: s })).catch(() => {})
-      api.request('/c/freedom?status=available&page=1&pageSize=1').then((d) => this.setData({ freedomCount: Number(d.total) || 0 })).catch(() => {})
+      tasks.push(api.request('/c/orders/summary').then((s) => this.setData({ ordersSummary: s })).catch(() => {}))
+      tasks.push(api.request('/c/freedom?status=available&page=1&pageSize=1').then((d) => this.setData({ freedomCount: Number(d.total) || 0 })).catch(() => {}))
     } else this.setData({ ordersSummary: null, freedomCount: null })
+    return Promise.all(tasks).then(() => {})
+  },
+  // T-02：下拉刷新重新拉 /c/me 等页面数据，完成后收起转圈
+  onPullDownRefresh() {
+    this.loadPage().then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
   },
   // 等级名与升级进度来自服务端（参数中心「会员等级体系」），页面里不写死
   loadMe() {

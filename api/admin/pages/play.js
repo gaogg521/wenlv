@@ -43,7 +43,8 @@ async function phrases() {
     </div></div>`
 }
 window.clearPhrase = async (id) => {
-  if (!confirm('清除后该线路不再使用暗号核销，确定？')) return
+  const r = await uiConfirm({ title: '清除商品暗号', target: '线路 #' + id, changes: [{ label: '用户暗号 / 商家暗号', from: '已配置', to: '清空' }], impact: '清除后该线路不再使用暗号核销', danger: true, confirmText: '确认清除' })
+  if (!r.ok) return
   try { await api('PUT', '/admin/entities/phrase/' + id, { values: { phrase_user: '', phrase_merchant: '' } }); toast('暗号已清除'); phrases() } catch (e) { toast(e.message, true) }
 }
 // 选择未配置的线路 → 打开完整编辑器
@@ -88,19 +89,25 @@ async function rateov() {
     : emptyBox(Q.kw ? '没有符合条件的覆盖记录' : '暂无单品覆盖，全部走推广商档位 5/8/12%')}</div>`
 }
 window.saveRate = () => entityEditor('rateov', $('#roProd').value, { onSaved: () => rateov() })
+window.kycGo = (n) => { window.__kycPage = Math.max(1, Number(n) || 1); kyc() }
 async function kyc() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const all = await api('GET', '/admin/kyc')
   window.__kycSt = window.__kycSt ?? '' // 卡片点击后只看某一状态
-  const list = window.__kycSt === '' ? all : all.filter((x) => String(x.status) === window.__kycSt)
+  window.__kycPage = Math.max(1, Number(window.__kycPage) || 1)
+  // D-03：服务端分页 + 状态过滤（带 page 参数返回 { items, total, page, pageSize, stats }）；stats 为全量口径（KPI 卡用）
+  const raw = await api('GET', '/admin/kyc?' + new URLSearchParams({ ...(window.__kycSt !== '' ? { status: window.__kycSt } : {}), page: window.__kycPage }).toString())
+  const list = Array.isArray(raw) ? raw : (raw.items || [])
+  const stats = Array.isArray(raw)
+    ? { 0: list.filter((x) => x.status === 0).length, 1: list.filter((x) => x.status === 1).length, 2: list.filter((x) => x.status === 2).length }
+    : (raw.stats || {})
   const st = { 0: '<span class="pill warn">待审</span>', 1: '<span class="pill ok">已通过</span>', 2: '<span class="pill s70">已驳回</span>' }
-  const pending = all.filter((x) => x.status === 0).length
-  const passed = all.filter((x) => x.status === 1).length
+  const pending = Number(stats[0] || 0)
+  const passed = Number(stats[1] || 0)
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi go" ${dxKey} title="只看待审" onclick="window.__kycSt='0';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
-    <div class="kpi go" ${dxKey} title="只看已通过" onclick="window.__kycSt='1';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
-    <div class="kpi go" ${dxKey} title="只看已驳回" onclick="window.__kycSt='2';kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${all.filter((x) => x.status === 2).length}</div><div class="s">资料不符</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看待审" onclick="window.__kycSt='0';window.__kycPage=1;kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdf3e0">📋</div><div><div class="l">待审</div><div class="v">${pending}</div><div class="s">等待人工审核</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看已通过" onclick="window.__kycSt='1';window.__kycPage=1;kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">✓</div><div><div class="l">已通过</div><div class="v">${passed}</div><div class="s">实名认证成功</div></div></div>
+    <div class="kpi go" ${dxKey} title="只看已驳回" onclick="window.__kycSt='2';window.__kycPage=1;kyc()"><i class="go-arrow">↗</i><div class="ico" style="background:#fdecec">✗</div><div><div class="l">已驳回</div><div class="v">${Number(stats[2] || 0)}</div><div class="s">资料不符</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>实名认证审核</h2><span class="muted">身份证号加密落库 · 仅展示脱敏号</span>${window.__kycSt !== '' ? `<span class="src-chip">仅看：${['待审', '已通过', '已驳回'][window.__kycSt]}</span><button class="btn ghost sm" onclick="window.__kycSt='';kyc()">显示全部</button>` : ''}</div>
@@ -109,30 +116,40 @@ async function kyc() {
       <td>${st[x.status] || x.status}</td><td class="td-sub">${String(x.created_at).slice(0, 16)}</td>
       <td>${x.status === 0 ? `<button class="btn primary sm" onclick="kycResolve(${x.id},'pass')">通过</button>
         <button class="btn danger sm" onclick="kycResolve(${x.id},'reject')">驳回</button>` : (x.reject_note ? `<span class="td-sub">${esc(x.reject_note)}</span>` : '')}</td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无实名认证申请——用户在小程序「实名认证」提交后，这里可核对并登记结果')}</div>`
+    : emptyBox('暂无实名认证申请——用户在小程序「实名认证」提交后，这里可核对并登记结果')}
+    ${pager(Array.isArray(raw) ? list.length : Number(raw.total || list.length), window.__kycPage, 20, 'kycGo')}</div>`
 }
 window.kycResolve = async (id, action) => {
-  let note = null
-  if (action === 'reject') {
-    note = prompt('驳回原因：') || '资料不符'
-  }
+  const pass = action === 'pass'
+  const r = await uiConfirm(pass
+    ? { title: '实名审核通过', target: '实名申请 #' + id, changes: [{ label: '审核结论', from: '待审', to: '已通过' }], impact: '通过后该用户完成实名认证，证件号加密落库', confirmText: '通过' }
+    : { title: '驳回实名申请', target: '实名申请 #' + id, changes: [{ label: '审核结论', from: '待审', to: '已驳回' }], impact: '驳回后用户可修改资料重新提交，原因用户可见', needReason: true, reasonPlaceholder: '驳回原因（用户可见）', danger: true, confirmText: '确认驳回' })
+  if (!r.ok) return
+  let note = pass ? null : (r.reason || '资料不符')
   await api('POST', '/admin/kyc/' + id + '/resolve', { action, note })
   go('kyc')
 }
+window.coCreatorGo = (n) => { window.__ccPage = Math.max(1, Number(n) || 1); cocreate() }
+window.coProfitGo = (n) => { window.__cpPage = Math.max(1, Number(n) || 1); cocreate() }
 async function cocreate() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   // P-02：本页不再依赖 /admin/products（历史遗留的死请求让无 products 模块的财务整页打不开）；
   // 登记共创人的线路下拉由 entity-schemas（cocreate 模块）服务端填充，最小引用不含商品管理数据。
   // co-profits 加载失败如实报错并给重试，不再吞成空列表把"应付 0"冒充真实数据。
-  const list = await api('GET', '/admin/co-creators')
-  const profits = await api('GET', '/admin/co-profits')
+  // D-03：两个列表服务端分页（带 page 参数返回 { items, total, page, pageSize, sums }）；sums 为全库口径（KPI 卡用）
+  window.__ccPage = Math.max(1, Number(window.__ccPage) || 1)
+  window.__cpPage = Math.max(1, Number(window.__cpPage) || 1)
+  const rawList = await api('GET', '/admin/co-creators?page=' + window.__ccPage)
+  const rawProfits = await api('GET', '/admin/co-profits?page=' + window.__cpPage)
+  const list = Array.isArray(rawList) ? rawList : (rawList.items || [])
+  const profits = Array.isArray(rawProfits) ? rawProfits : (rawProfits.items || [])
   const canPay = adminCan('coProfit.pay'), canVoid = adminCan('coProfit.void')
-  const totalInvest = list.reduce((s, c) => s + Number(c.invest_amount), 0)
-  const totalPaid = profits.reduce((s, c) => s + Number(c.paid_amount), 0)
-  const totalDue = profits.filter((c) => Number(c.status) !== 2).reduce((s, c) => s + Number(c.amount), 0)
-  const pendingPay = profits.filter((c) => Number(c.status) === 0).reduce((s, c) => s + Number(c.amount) - Number(c.paid_amount), 0)
-  const pendingApprovals = profits.reduce((s, c) => s + Number(c.pending_approvals || 0), 0)
-  const activeCount = list.filter((c) => Number(c.status) === 1).length
+  const totalInvest = Array.isArray(rawList) ? list.reduce((s, c) => s + Number(c.invest_amount), 0) : Number((rawList.sums || {}).invest || 0)
+  const totalPaid = Array.isArray(rawProfits) ? profits.reduce((s, c) => s + Number(c.paid_amount), 0) : Number((rawProfits.sums || {}).paid || 0)
+  const totalDue = Array.isArray(rawProfits) ? profits.filter((c) => Number(c.status) !== 2).reduce((s, c) => s + Number(c.amount), 0) : Number((rawProfits.sums || {}).due || 0)
+  const pendingPay = Array.isArray(rawProfits) ? profits.filter((c) => Number(c.status) === 0).reduce((s, c) => s + Number(c.amount) - Number(c.paid_amount), 0) : Number((rawProfits.sums || {}).pending || 0)
+  const pendingApprovals = Array.isArray(rawProfits) ? profits.reduce((s, c) => s + Number(c.pending_approvals || 0), 0) : Number((rawProfits.sums || {}).approvals || 0)
+  const activeCount = Array.isArray(rawList) ? list.filter((c) => Number(c.status) === 1).length : Number((rawList.sums || {}).active || 0)
   const CO_ST = { 0: '<span class="pill warn">待打款</span>', 1: '<span class="pill ok">已结清</span>', 2: '<span class="pill s70">已作废</span>' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
@@ -152,7 +169,8 @@ async function cocreate() {
       <td class="num"><b>${(Number(x.share_pct) / 100).toFixed(1)}%</b></td>
       <td>${Number(x.status) === 1 ? '<span class="pill ok">生效</span>' : '<span class="pill off">停用</span>'}</td>
       <td><div class="td-actions"><button class="btn ghost sm" onclick="entityEditor('cocreator', ${x.id}, { onSaved: () => cocreate() })">资料</button>${Number(x.status) === 1 ? `<button class="btn ghost sm" onclick="toggleCo(${x.id},${x.status})">停用</button>` : `<button class="btn primary sm" onclick="toggleCo(${x.id},${x.status})">启用</button>`}</div></td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无共创人——点「登记共创人」')}</div>
+    : emptyBox('暂无共创人——点「登记共创人」')}
+    ${pager(Array.isArray(rawList) ? list.length : Number(rawList.total || list.length), window.__ccPage, 20, 'coCreatorGo')}</div>
   <div class="card">
     <div class="card-head" id="coLedger"><h3>共创分润台账</h3><span class="muted">打款走唯一流水登记：${canPay ? '核对后登记真实回单' : '由财务或超级管理员登记打款，当前账号可核对进度'}</span></div>
     ${profits.length ? `<table><thead><tr><th>分润单</th><th>结算期</th><th>共创人</th><th>产品</th><th>应付</th><th>已付</th><th>状态</th><th>最近打款</th><th>操作</th></tr></thead><tbody>
@@ -177,9 +195,15 @@ async function cocreate() {
       <td>${CO_ST[x.status] || x.status}${Number(x.pending_approvals) > 0 ? '<div><span class="pill warn">待复核 ' + x.pending_approvals + '</span></div>' : ''}</td>
       <td class="td-sub">${x.pay_ref ? esc(x.pay_ref) + '<br>' + esc(x.pay_channel || '') + (x.paid_by ? ' · ' + esc(x.paid_by) : '') : '—'}</td>
       <td><div class="td-actions">${actions.join('')}</div></td></tr>`}).join('')}</tbody></table>`
-    : '<div class="empty"><div class="e-ico">📊</div>暂无分润记录——生成结算单后自动入账</div>'}</div>`
+    : '<div class="empty"><div class="e-ico">📊</div>暂无分润记录——生成结算单后自动入账</div>'}
+    ${pager(Array.isArray(rawProfits) ? profits.length : Number(rawProfits.total || profits.length), window.__cpPage, 20, 'coProfitGo')}</div>`
 }
-window.toggleCo = async (id, st) => { await api('POST', '/admin/co-creators/' + id + '/status', { status: st === 1 ? 0 : 1 }); go('cocreate') }
+window.toggleCo = async (id, st) => {
+  const off = st === 1
+  const r = await uiConfirm({ title: off ? '停用共创人合作' : '启用共创人合作', target: '共创人 #' + id, changes: [{ label: '合作状态', from: off ? '生效' : '停用', to: off ? '停用' : '生效' }], impact: off ? '停用后暂停该共创人打款；已生效分润单待处理前需先恢复合作' : '启用后恢复登记打款', needReason: true, reasonPlaceholder: '操作依据（必填，记入审计）', danger: off, confirmText: off ? '确认停用' : '确认启用' })
+  if (!r.ok) return
+  await api('POST', '/admin/co-creators/' + id + '/status', { status: st === 1 ? 0 : 1, reason: r.reason }); go('cocreate')
+}
 // 登记打款（T01）：真实流水号 + 回单附件 + 实付金额；达到审批阈值需超管复核后生效
 window.payCoModal = async (id) => {
   const list = await api('GET', '/admin/co-profits').catch(() => [])
@@ -190,7 +214,7 @@ window.payCoModal = async (id) => {
   modal('登记共创分润打款 · #' + cp.id, `
     <div class="field"><label>共创人 / 产品</label><div>${esc(cp.name)} · ${esc(cp.title)} · 结算期 ${esc(cp.settle_period || cp.period)}</div></div>
     <div class="field"><label>应付 / 未付</label><div class="num">应付 ${fen(cp.amount)} · 已付 ${fen(cp.paid_amount)} · 本次最多 <b>${fen(remaining)}</b></div></div>
-    <div class="field"><label>实付金额（元）*</label><input id="cpAmount" type="number" step="0.01" min="0.01" value="${(remaining / 100).toFixed(2)}"><div class="td-sub">不可超付；分次打款请先登记部分金额</div></div>
+    <div class="field"><label>实付金额（元）*</label><input id="cpAmount" type="number" step="0.01" min="0.01" max="100000000" value="${(remaining / 100).toFixed(2)}"><div class="td-sub">不可超付；分次打款请先登记部分金额</div></div>
     <div class="field"><label>支付渠道 *</label><select id="cpChannel"><option value="bank">银行转账</option><option value="alipay">支付宝</option><option value="wechat">微信</option><option value="cash">现金</option><option value="other">其他</option></select></div>
     <div class="field"><label>支付日期 *</label><input id="cpDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></div>
     <div class="field"><label>真实支付流水号 *</label><input id="cpRef" placeholder="以银行/渠道回单为准，6–64 位"><div class="td-sub">全局唯一：重复流水会被拒绝登记</div></div>
@@ -202,7 +226,10 @@ window.payCoModal = async (id) => {
 window.payCoSubmit = async (id, remaining) => {
   const btn = $('#cpSubmit'); const fail = (m) => { $('#cpErr').textContent = m || '' }
   try {
-    const amount = Math.round(Number($('#cpAmount').value) * 100)
+    // D-02：实付金额提交侧两位小数校验（≤1 亿），不再静默舍入三位小数
+    const amountRaw = String($('#cpAmount').value).trim()
+    if (!/^\d{1,9}(\.\d{1,2})?$/.test(amountRaw) || Number(amountRaw) > 100000000) return fail('实付金额按元填写：最多两位小数、不超过 1 亿元')
+    const amount = Math.round(Number(amountRaw) * 100)
     if (!amount || amount <= 0) return fail('请填写实付金额')
     if (amount > remaining) return fail('实付金额超过未付余额，不可超付')
     const payRef = ($('#cpRef').value || '').trim()
@@ -253,9 +280,17 @@ window.coApprove = (id, payId, pass) => {
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn danger" onclick="coApproveSubmit(${id}, ${payId}, false, document.getElementById('cpRejNote').value.trim())">确认驳回</button>`)
 }
 window.coApproveSubmit = async (id, payId, pass, note) => {
+  if (pass) {
+    // 通过分支无预填表单：统一二次确认（A+），复核意见记入审计
+    const c = await uiConfirm({ title: '打款登记复核通过', target: '分润单 #' + id + ' · 打款流水 #' + payId, impact: '请先核对金额与收款人无误；通过后该笔打款登记生效并计入分润单已付', needReason: true, reasonPlaceholder: '复核意见（如金额、收款人核对情况）', confirmText: '复核通过' })
+    if (!c.ok) return
+    note = c.reason
+  }
   try { const r = await api('POST', '/admin/co-profits/pays/' + payId + '/approve', { pass, note }); closeModal(); toast(pass ? '复核通过，打款登记生效' : '已驳回该笔登记'); coPayHistory(id); cocreate() } catch (e) { const el = document.getElementById('cpRejErr'); if (el && !pass) el.textContent = e.message; else toast(e.message, true) }
 }
 window.coWithdraw = async (id, payId) => {
+  const r = await uiConfirm({ title: '撤回打款登记', target: '分润单 #' + id + ' · 打款流水 #' + payId, changes: [{ label: '流水状态', from: '待复核', to: '已撤回' }], impact: '撤回后该笔登记失效，可重新登记', confirmText: '确认撤回' })
+  if (!r.ok) return
   try { await api('POST', '/admin/co-profits/pays/' + payId + '/withdraw'); toast('已撤回该笔登记'); coPayHistory(id); cocreate() } catch (e) { toast(e.message, true) }
 }
 window.coReverseModal = (id, payId, ref, amount) => {
@@ -301,9 +336,13 @@ window.coViewReceipt = async (payId) => {
 
 
 /* ============ 离线核销冲突队列 ============ */
+window.conflictGo = (n) => { window.__cfPage = Math.max(1, Number(n) || 1); conflicts() }
 async function conflicts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
-  const list = await api('GET', '/admin/verify/conflicts')
+  window.__cfPage = Math.max(1, Number(window.__cfPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize }）
+  const raw = await api('GET', '/admin/verify/conflicts?page=' + window.__cfPage)
+  const list = Array.isArray(raw) ? raw : (raw.items || [])
   const ST = { 0: '<span class="pill warn">待处理</span>', 1: '<span class="pill ok">已确认</span>', 2: '<span class="pill s70">已驳回</span>' }
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>离线核销冲突</h2><span class="muted">断网恢复后二次校验失败的凭证 · 需人工确认或驳回</span></div>
@@ -314,10 +353,15 @@ async function conflicts() {
       <td>${ST[c.status] || c.status}</td>
       <td>${c.status === 0 ? `<button class="btn primary sm" onclick="conflictResolve(${c.id},'pass')">确认核销</button>
         <button class="btn danger sm" onclick="conflictResolve(${c.id},'reject')">驳回</button>` : ''}</td></tr>`).join('')}</tbody></table>`
-    : emptyBox('暂无离线冲突——断网核销恢复后自动入队')}</div>`
+    : emptyBox('暂无离线冲突——断网核销恢复后自动入队')}
+    ${pager(Array.isArray(raw) ? list.length : Number(raw.total || list.length), window.__cfPage, 20, 'conflictGo')}</div>`
 }
 async function conflictResolve(id, action) {
-  let note = null
-  if (action === 'reject') note = prompt('驳回原因：') || '凭证异常'
+  const pass = action === 'pass'
+  const r = await uiConfirm(pass
+    ? { title: '确认离线核销', target: '冲突记录 #' + id, changes: [{ label: '处理结论', from: '待处理', to: '确认核销有效' }], impact: '确认后按有效核销入账，请先核对离线载荷与原因', confirmText: '确认核销' }
+    : { title: '驳回离线核销', target: '冲突记录 #' + id, changes: [{ label: '处理结论', from: '待处理', to: '驳回（凭证无效）' }], impact: '驳回后该笔核销不入账，原因留痕', needReason: true, reasonPlaceholder: '驳回原因（用户可见）', danger: true, confirmText: '确认驳回' })
+  if (!r.ok) return
+  let note = pass ? null : (r.reason || '凭证异常')
   try { await api('POST', '/admin/verify/conflicts/' + id + '/resolve', { action, note }); toast('冲突已处理'); conflicts() } catch (e) { toast(e.message, true) }
 }

@@ -141,27 +141,41 @@ async function doRefund(no, mode) {
   } catch (e) { toast(e.message, true) }
 }
 async function completeOrder(no) {
+  const r = await uiConfirm({ title: '联调模拟完成订单', target: '订单 ' + no, impact: '仅 dev 联调使用：立即结束观察期，返豆与佣金马上入账', confirmText: '确认完成' })
+  if (!r.ok) return
   try { await api('POST', '/admin/dev/complete', { orderNo: no }); toast('观察期结束：返豆与佣金已入账'); orders() }
   catch (e) { toast(e.message, true) }
 }
 
 
 /* ============ 商品与团期 ============ */
+// D-01：商品列表筛选/页码持久化（sessionStorage 'wlq:products'）；重置按钮恢复默认并清持久化
+const FPROD_DEF = { sup: '', scn: '', kw: '', cat: '', city: '', status: '', sort: '', page: 1 }
+window.fprodReset = () => { window.__fprod = { ...FPROD_DEF }; persistQ('products', window.__fprod); products() }
+window.fprodGo = (n) => { window.__fprod = { ...window.__fprod, page: Math.max(1, Number(n) || 1) }; persistQ('products', window.__fprod); products() }
 async function products() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
   // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；带视角参数的写操作网关拒绝）
   // P-05：服务端筛选（关键词/品类/城市/状态），供应商/景区保留前端联动
   const vq = new URLSearchParams(location.hash.split('?')[1] || '')
-  const F = window.__fprod || (window.__fprod = { sup: '', scn: '', kw: '', cat: '', city: '', status: '' })
+  // D-01：入口恢复持久化的筛选与页码（刷新/返回不丢），随后写回
+  window.__fprod = Object.assign({}, FPROD_DEF, window.__fprod || restoreQ('products', {}))
+  const F = window.__fprod
+  persistQ('products', F)
   const pq = new URLSearchParams()
   if (F.kw) pq.set('kw', F.kw)
   if (F.cat) pq.set('cat', F.cat)
   if (F.city) pq.set('cityCode', F.city)
   if (F.status !== '' && F.status != null) pq.set('status', F.status)
+  if (F.sort) pq.set('sort', F.sort)
+  pq.set('page', Math.max(1, Number(F.page) || 1))
   if (vq.get('viewAsType')) { pq.set('viewAsType', vq.get('viewAsType')); pq.set('viewAsId', vq.get('viewAsId') || '') }
   const vqs = vq.get('viewAsType') ? 'viewAsType=' + encodeURIComponent(vq.get('viewAsType')) : ''
-  const [rows, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + (pq.toString() ? '?' + pq.toString() : '')), api('GET', '/admin/merchants'),
+  // D-03：/admin/products 带 page 参数返回 { items, total, page, pageSize }；防御性兼容旧数组形态
+  const [raw, merchantRows, supRows, scenRows, info] = await Promise.all([api('GET', '/admin/products' + (pq.toString() ? '?' + pq.toString() : '')), api('GET', '/admin/merchants'),
     ADMIN_CAPABILITIES.modules.includes('suppliers') ? api('GET', '/admin/suppliers').catch(() => []) : Promise.resolve([]), api('GET', '/admin/scenics').catch(() => []), eeCompleteness('product')])
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const totalRows = Array.isArray(raw) ? rows.length : Number(raw.total || rows.length)
   const supOpts = supRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const scenOpts = scenRows.filter((s) => s.status === 1).map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')
   const frs = rows.filter((p) => (!F.sup || String(p.supplier_id || '') === F.sup) && (!F.scn || String(p.scenic_id || '') === F.scn))
@@ -170,17 +184,20 @@ async function products() {
     <p class="muted" style="margin-bottom:6px">新建线路会打开完整编辑器：基本信息 → 图文 → 行程节点 → 费用须知 → 履约资源 → 分享设置；保存后添加团期，检查无误再上架。</p>
     <div class="row" style="margin:10px 0 0;flex-wrap:wrap">
       <input id="f_prodKw" type="search" placeholder="搜商品标题" value="${esc(F.kw || '')}" style="max-width:200px">
-      <select id="f_cat" onchange="window.__fprod={...window.__fprod,cat:this.value};products()">
+      <select id="f_cat" onchange="window.__fprod={...window.__fprod,cat:this.value,page:1};persistQ('products',window.__fprod);products()">
         <option value="">全部品类</option>${Object.entries(CAT_CN).map(([k, n]) => `<option value="${k}" ${F.cat === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <select id="f_city" onchange="window.__fprod={...window.__fprod,city:this.value};products()">
+      <select id="f_city" onchange="window.__fprod={...window.__fprod,city:this.value,page:1};persistQ('products',window.__fprod);products()">
         <option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${F.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <select id="f_status" onchange="window.__fprod={...window.__fprod,status:this.value};products()">
+      <select id="f_status" onchange="window.__fprod={...window.__fprod,status:this.value,page:1};persistQ('products',window.__fprod);products()">
         <option value="">全部状态</option><option value="1" ${F.status === '1' ? 'selected' : ''}>上架</option><option value="0" ${F.status === '0' ? 'selected' : ''}>下架</option></select>
-      <select id="f_supplier" onchange="window.__fprod={...window.__fprod,sup:this.value};products()">
+      <select id="f_supplier" onchange="window.__fprod={...window.__fprod,sup:this.value,page:1};persistQ('products',window.__fprod);products()">
         <option value="">全部供应商</option>${supRows.map((s) => `<option value="${s.id}" ${F.sup === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <select id="f_scenic" onchange="window.__fprod={...window.__fprod,scn:this.value};products()">
+      <select id="f_scenic" onchange="window.__fprod={...window.__fprod,scn:this.value,page:1};persistQ('products',window.__fprod);products()">
         <option value="">全部景区</option>${scenRows.map((s) => `<option value="${s.id}" ${F.scn === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>
-      <span class="muted">筛选出 ${frs.length}/${rows.length} 条线路</span>
+      <select id="f_sort" onchange="window.__fprod={...window.__fprod,sort:this.value,page:1};persistQ('products',window.__fprod);products()">
+        ${[['', '排序：最新'], ['created_at:asc', '排序：最早'], ['price_from:desc', '价格 高→低'], ['price_from:asc', '价格 低→高']].map(([v, n]) => `<option value="${v}" ${F.sort === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <button class="btn ghost sm" type="button" onclick="fprodReset()">重置</button>
+      <span class="muted">共 ${Number(totalRows).toLocaleString()} 条线路（本页 ${frs.length} 条）</span>
     </div>
     ${frs.length ? `<table><thead><tr><th></th><th>商品</th><th>分类</th><th>城市</th><th>价格</th><th>履约商户</th><th>供给链</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${frs.map((p) => `<tr>
@@ -194,6 +211,7 @@ async function products() {
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="sessionsDrawer(${p.id})">库存 / 时段</button>
           <button class="ghost btn sm" style="border-color:var(--line);color:var(--ink2)" onclick="productMore(${p.id}, ${p.status})">更多 ▾</button></td>
     </tr>`).join('')}</tbody></table>` : emptyBox(F.sup || F.scn ? '筛选条件下暂无线路：清一下筛选再试' : '还没有商品——点右上「新增线路」录入第一条')}
+    ${pager(totalRows, F.page, 20, 'fprodGo')}
   </div>
   <div class="card" style="margin-top:16px">
     <div class="card-head"><h2>供给项台账 · 成本与参考零售价</h2>${['super','ops'].includes(ME?.role) ? `<button class="btn primary sm" onclick="supplyItemEditor()">＋ 新增供给项</button>` : '<span class="muted">供给项维护需运营/超管权限；成本仅平台经营/财务身份可见</span>'}</div>
@@ -208,7 +226,7 @@ async function products() {
   promoDiscountList().catch((e) => { document.getElementById('promoDiscountBox').innerHTML = `<p class="muted">折扣规则加载失败：${esc(e.message)}</p>` })
   supplyItemList().catch((e) => { document.getElementById('supplyItemBox').innerHTML = `<p class="muted">供给项加载失败：${esc(e.message)}</p>` })
   const kwEl = document.getElementById('f_prodKw')
-  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__fprod = { ...window.__fprod, kw: kwEl.value.trim() }; products() }, 400) } }
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__fprod = { ...window.__fprod, kw: kwEl.value.trim(), page: 1 }; persistQ('products', window.__fprod); products() }, 400) } }
 }
 
 // P-05：行内只留「编辑资料 / 库存时段 / 更多」——其余低频操作收进「更多」菜单（两次点击内可达）
@@ -263,14 +281,14 @@ window.supplyItemEditor = async (id) => {
       <option value="per_person" ${r.unit === 'per_person' || !r.unit ? 'selected' : ''}>每人</option>
       <option value="per_order" ${r.unit === 'per_order' ? 'selected' : ''}>每单</option>
       <option value="room_night" ${r.unit === 'room_night' ? 'selected' : ''}>房晚</option></select></div>
-    <div class="field"><label>成本单价（元）* <span class="td-sub">0=真实零成本，必须填依据</span></label><input id="siCost" type="number" step="0.01" min="0" value="${r.unit_cost_fen != null ? (Number(r.unit_cost_fen) / 100).toFixed(2) : ''}"></div>
-    <div class="field"><label>参考零售价（元，选填）</label><input id="siRetail" type="number" step="0.01" min="0" value="${r.ref_retail_fen != null ? (Number(r.ref_retail_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>成本单价（元）* <span class="td-sub">0=真实零成本，必须填依据</span></label><input id="siCost" type="number" step="0.01" min="0" max="100000000" value="${r.unit_cost_fen != null ? (Number(r.unit_cost_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>参考零售价（元，选填）</label><input id="siRetail" type="number" step="0.01" min="0.01" max="100000000" value="${r.ref_retail_fen != null ? (Number(r.ref_retail_fen) / 100).toFixed(2) : ''}"></div>
     <div class="field"><label>提供方类型</label><select id="siPType">
       <option value="" ${!r.provider_type ? 'selected' : ''}>平台/不指定</option>
       <option value="scenic" ${r.provider_type === 'scenic' ? 'selected' : ''}>景区</option>
       <option value="supplier" ${r.provider_type === 'supplier' ? 'selected' : ''}>供应商</option>
       <option value="merchant" ${r.provider_type === 'merchant' ? 'selected' : ''}>商户</option></select></div>
-    <div class="field"><label>提供方ID（按类型填对应资源ID，可空）</label><input id="siPid" type="number" min="1" value="${esc(r.provider_id || '')}"></div>
+    <div class="field"><label>提供方ID（按类型填对应资源ID，可空）</label><input id="siPid" type="number" min="1" step="1" value="${esc(r.provider_id || '')}"></div>
     <div class="field"><label>生效期起（选填）</label><input id="siFrom" type="date" value="${esc(r.valid_from || '')}"></div>
     <div class="field"><label>生效期止（选填）</label><input id="siTo" type="date" value="${esc(r.valid_to || '')}"></div>
     <div class="field"><label>协议版本/编号（选填，≤120字）</label><input id="siAgreement" maxlength="120" value="${esc(r.agreement || '')}"></div>
@@ -280,11 +298,17 @@ window.supplyItemEditor = async (id) => {
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="supplyItemSave(${id || 0})">保存供给项</button>`)
 }
 window.supplyItemSave = async (id) => {
-  const numOrNull = (k) => { const v = document.getElementById(k).value; return v === '' ? null : Math.round(Number(v) * 100) }
+  // D-02：金额提交侧校验——按元填写、最多两位小数、≤1 亿（防 100 倍误差与超限值）
+  const yuanOrNull = (k) => {
+    const raw = document.getElementById(k).value.trim()
+    if (raw === '') return null
+    if (!/^\d{1,9}(\.\d{1,2})?$/.test(raw) || Number(raw) > 100000000) throw new Error('金额按元填写：最多两位小数、不超过 1 亿元')
+    return Math.round(Number(raw) * 100)
+  }
   try {
     await api('POST', '/admin/supply-items', {
       id: id || undefined, name: document.getElementById('siName').value.trim(), kind: Number(document.getElementById('siKind').value),
-      unit: document.getElementById('siUnit').value, unitCostFen: numOrNull('siCost'), refRetailFen: numOrNull('siRetail'),
+      unit: document.getElementById('siUnit').value, unitCostFen: yuanOrNull('siCost'), refRetailFen: yuanOrNull('siRetail'),
       providerType: document.getElementById('siPType').value || null, providerId: document.getElementById('siPid').value || null,
       validFrom: document.getElementById('siFrom').value || null, validTo: document.getElementById('siTo').value || null,
       agreement: document.getElementById('siAgreement').value.trim(), note: document.getElementById('siNote').value.trim(),
@@ -313,7 +337,7 @@ window.productSupplyEditor = async (pid) => {
   window.__siRows = cur.length ? cur : [{ itemId: items.rows[0]?.id, qty: 1 }]
   const rowHtml = () => (window.__siRows || []).map((x, i) => `<div class="row" style="gap:6px;margin:4px 0">
     <select class="inp" onchange="window.__siRows[${i}].itemId=Number(this.value)" style="flex:1;min-width:0">${items.rows.map((it) => `<option value="${it.id}" ${Number(x.itemId) === Number(it.id) ? 'selected' : ''}>#${it.id} ${esc(it.name)}（${fen(it.unit_cost_fen)}/${esc(items.unitCn[it.unit] || it.unit)}）</option>`).join('')}</select>
-    <input class="inp" type="number" min="1" max="9999" value="${x.qty}" onchange="window.__siRows[${i}].qty=Number(this.value)" style="width:76px" title="数量">
+    <input class="inp" type="number" min="1" max="9999" step="1" value="${x.qty}" onchange="window.__siRows[${i}].qty=Number(this.value)" style="width:76px" title="数量">
     <button class="btn ghost sm" onclick="window.__siRows.splice(${i},1);document.getElementById('siRows').innerHTML=siRowHtml()">删</button></div>`).join('')
   window.siRowHtml = rowHtml
   const previewRows = prev.rows.map((s) => `<tr><td>${esc(s.departDate)}</td><td class="money num">${fen(s.unitFen)}</td>
@@ -415,8 +439,8 @@ window.packageItemEditor = async (pid, id) => {
       <option value="1" ${Number(r.kind) === 1 || !r.kind ? 'selected' : ''}>按人凭证（出票、扫码核销）</option>
       <option value="2" ${Number(r.kind) === 2 ? 'selected' : ''}>服务项（商户端履约核销）</option></select></div>
     <div class="field"><label>提供方门店 *（跨店隔离：仅该店可核销）</label><select id="piMerchant">${merchants.filter((m) => m.status === 1).map((m) => `<option value="${m.id}" ${Number(r.merchant_id) === Number(m.id) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
-    <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
-    <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" value="${r.qty_per_unit || 1}"></div>
+    <div class="field"><label>项单价（元）*</label><input id="piPrice" type="number" step="0.01" min="0.01" max="100000000" value="${r.unit_price_fen != null ? (Number(r.unit_price_fen) / 100).toFixed(2) : ''}"></div>
+    <div class="field"><label>每份产品包含数量 *</label><input id="piQty" type="number" min="1" max="99" step="1" value="${r.qty_per_unit || 1}"></div>
     <div class="field"><label>成本来源供给项（选填）</label><select id="piSupply"><option value="">不挂（项级成本不计算）</option>${items.rows.map((x) => `<option value="${x.id}" ${Number(r.supply_item_id) === Number(x.id) ? 'selected' : ''}>#${x.id} ${esc(x.name)}（${fen(x.unit_cost_fen)}）</option>`).join('')}</select></div>
         <div class="field"><label>权益说明（游客可见，≤500字，选填）</label><textarea id="piBenefit" maxlength="500" placeholder="如：含专业讲解 90 分钟 · 每单 1 次">${esc(r.benefit_desc || '')}</textarea>
     </textarea></div>
@@ -426,10 +450,13 @@ window.packageItemEditor = async (pid, id) => {
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="packageItemSave(${pid}, ${id || 0})">保存套餐项</button>`)
 }
 window.packageItemSave = async (pid, id) => {
+  // D-02：项单价提交侧两位小数校验（≤1 亿）
+  const priceRaw = document.getElementById('piPrice').value.trim()
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(priceRaw) || Number(priceRaw) <= 0 || Number(priceRaw) > 100000000) { document.getElementById('piErr').textContent = '单价按元填写：最多两位小数、不超过 1 亿元'; return }
   try {
     await api('POST', `/admin/products/${pid}/package-items`, {
       id: id || undefined, name: document.getElementById('piName').value.trim(), kind: Number(document.getElementById('piKind').value),
-      merchantId: Number(document.getElementById('piMerchant').value), unitPriceFen: Math.round(Number(document.getElementById('piPrice').value) * 100),
+      merchantId: Number(document.getElementById('piMerchant').value), unitPriceFen: Math.round(Number(priceRaw) * 100),
       qtyPerUnit: Number(document.getElementById('piQty').value), benefitDesc: document.getElementById('piBenefit').value.trim(), benefitRules: document.getElementById('piRules').value.trim(), supplyItemId: document.getElementById('piSupply').value || null,
       reason: document.getElementById('piReason').value.trim(),
     })
@@ -507,7 +534,12 @@ window.promoDiscountStatusSubmit = async (id, status) => {
 let EDIT_P = null
 async function editProduct(id) { return entityEditor('product', id, { onSaved: () => products() }) }
 function lines(v) { return v.split('\n').map((s) => s.trim()).filter(Boolean) }
-async function toggleProduct(id, status) { try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) } }
+async function toggleProduct(id, status) {
+  const off = status !== 1
+  const r = await uiConfirm({ title: off ? '下架商品' : '上架商品', target: '商品 #' + id, changes: [{ label: '商品状态', from: off ? '上架' : '下架', to: off ? '下架' : '上架' }], impact: off ? '下架后游客端不可购买（已售订单与团期保留）' : '上架后游客端立即可购买，请先核对团期与库存', danger: off, confirmText: off ? '确认下架' : '确认上架' })
+  if (!r.ok) return
+  try { await api('POST', `/admin/products/${id}/status`, { status }); products() } catch (e) { toast(e.message, true) }
+}
 function sessionModal(pid, priceFen) { return entityEditor('session', null, { parentId: pid, defaults: priceFen ? { price_adult: priceFen / 100 } : {}, onSaved: () => sessionsDrawer(pid) }) }
 /** 团期管理：列出某线路全部团期，逐个用完整编辑器维护 */
 async function sessionsDrawer(pid) {
@@ -535,6 +567,8 @@ async function sessionsDrawer(pid) {
 async function saveShopStock(pid, previous) {
   const input = $('#shopStock')
   if (!input.value || !input.reportValidity()) return
+  const r = await uiConfirm({ title: '保存商城库存', target: '商品 #' + pid, changes: [{ label: '可售库存', from: previous == null ? '未启用（按团期预约）' : previous, to: Number(input.value) }], impact: '库存为 0 时游客端显示售罄；保存后立即生效', confirmText: '保存库存' })
+  if (!r.ok) return
   try {
     await api('PUT', '/admin/products/' + pid + '/stock', { available: Number(input.value), previous })
     await sessionsDrawer(pid)
@@ -543,62 +577,96 @@ async function saveShopStock(pid, previous) {
 }
 
 /* ============ 商户 ============ */
+window.mfilGo = (n) => { window.__mfil = { ...window.__mfil, page: Math.max(1, Number(n) || 1) }; merchants() }
 async function merchants() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   // P-08：筛选状态（关键词/类目/等级/状态/城市），服务端过滤
-  const MF = window.__mfil || (window.__mfil = { kw: '', kind: '', level: '', status: '', city: '' })
+  const MF = Object.assign({ kw: '', kind: '', level: '', status: '', city: '', page: 1 }, window.__mfil || {})
+  window.__mfil = MF
   const pq = new URLSearchParams()
   if (MF.kw) pq.set('kw', MF.kw)
   if (MF.kind) pq.set('kind', MF.kind)
   if (MF.level) pq.set('level', MF.level)
   if (MF.status !== '' && MF.status != null) pq.set('status', MF.status)
   if (MF.city) pq.set('cityCode', MF.city)
-  const [rows, info, mlv] = await Promise.all([api('GET', '/admin/merchants' + (pq.toString() ? '?' + pq.toString() : '')), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
+  pq.set('page', Math.max(1, Number(MF.page) || 1))
+  // D-03：带 page 参数返回 { items, total, page, pageSize }；防御性兼容旧数组形态
+  const [raw, info, mlv] = await Promise.all([api('GET', '/admin/merchants?' + pq.toString()), eeCompleteness('merchant'), api('GET', '/admin/merchant/levels').catch(() => [])])
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const totalRows = Array.isArray(raw) ? rows.length : Number(raw.total || rows.length)
   const lvName = (n) => ((mlv.find((l) => l.lv === Number(n)) || {}).name) || ('Lv' + n)
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户（履约方）</h2>${EXPBTN('merchants', '商户 CSV')}<span class="muted">收付通二级商户进件后填入子商户号</span></div>
     <div class="row" style="margin-top:0;flex-wrap:wrap">
       ${adminCan('entity.merchant.create') ? '<button class="btn primary sm" onclick="addMerchant()">＋ 新增商户</button>' : ''}
       <input id="mfilKw" type="search" placeholder="搜商户名 / 商户号" value="${esc(MF.kw)}" style="max-width:200px">
-      <select id="mfilKind" onchange="window.__mfil={...window.__mfil,kind:this.value};merchants()"><option value="">全部类目</option>${Object.entries(MERCHANT_KIND).map(([k, n]) => `<option value="${k}" ${MF.kind === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <select id="mfilLevel" onchange="window.__mfil={...window.__mfil,level:this.value};merchants()"><option value="">全部等级</option>${mlv.map((l) => `<option value="${l.lv}" ${String(MF.level) === String(l.lv) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
-      <select id="mfilStatus" onchange="window.__mfil={...window.__mfil,status:this.value};merchants()"><option value="">全部状态</option><option value="1" ${MF.status === '1' ? 'selected' : ''}>生效</option><option value="0" ${MF.status === '0' ? 'selected' : ''}>进件中</option></select>
-      <select id="mfilCity" onchange="window.__mfil={...window.__mfil,city:this.value};merchants()"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${MF.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <span class="muted">品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span>
+      <select id="mfilKind" onchange="window.__mfil={...window.__mfil,kind:this.value,page:1};merchants()"><option value="">全部类目</option>${Object.entries(MERCHANT_KIND).map(([k, n]) => `<option value="${k}" ${MF.kind === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <select id="mfilLevel" onchange="window.__mfil={...window.__mfil,level:this.value,page:1};merchants()"><option value="">全部等级</option>${mlv.map((l) => `<option value="${l.lv}" ${String(MF.level) === String(l.lv) ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>
+      <select id="mfilStatus" onchange="window.__mfil={...window.__mfil,status:this.value,page:1};merchants()"><option value="">全部状态</option><option value="1" ${MF.status === '1' ? 'selected' : ''}>生效</option><option value="0" ${MF.status === '0' ? 'selected' : ''}>进件中</option></select>
+      <select id="mfilCity" onchange="window.__mfil={...window.__mfil,city:this.value,page:1};merchants()"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([k, n]) => `<option value="${k}" ${MF.city === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <span class="muted">共 ${Number(totalRows).toLocaleString()} 家 · 品牌门店 · 营业信息 · 资质证照 · 结算账户 · 联系人与合作，新建后进入"进件中"，审核通过方可履约</span>
     </div>
     ${rows.length ? `<table><thead><tr><th></th><th>商户号</th><th>名称</th><th>类目</th><th>城市</th><th>收付通子商户</th><th>评分</th><th>经营等级</th><th>状态</th></tr></thead><tbody>
     ${rows.map((m) => `<tr><td>${eeThumb(info[m.id])}</td><td class="num">${esc(m.merchant_no)}</td><td><div class="td-main">${esc(m.name)}</div>${eeBar(info[m.id])}</td><td><span class="pill off">${esc(MERCHANT_KIND[m.kind] || '其他')}</span></td><td>${esc(CITY_CN[m.city_code] || m.city_code)}</td>
       <td class="num">${esc(m.wxpay_sub_mchid || '—')}</td><td>评分 ${Number(m.score) > 0 ? Number(m.score).toFixed(1) : '—'}</td><td><img src="/badge-art/mlevel/${Number(m.level) || 1}.svg" width="28" height="28" style="vertical-align:middle" alt=""> ${esc(lvName(m.level))}</td>
       <td><span class="pill ${m.status === 1 ? 'ok' : 'warn'}">${m.status === 1 ? '生效' : '进件中'}</span><div style="margin-top:4px"><button class="btn primary sm" onclick="merchantProfile(${m.id})">全景</button> ${adminCan('entity.merchant.edit') ? `<button class="btn ghost sm" onclick="editMerchant(${m.id},'${escJs(m.name)}','${escJs(m.city_code)}','${escJs(m.wxpay_sub_mchid || '')}','${escJs(m.kind || 'other')}')">编辑</button>` : ''}</div><div style="margin-top:4px">${m.status === 0 && adminCan('merchant.approve') ? `<button class="btn primary sm" onclick="approveMerchant(${m.id})">审批通过</button>` : (m.status === 0 ? '<span class="td-sub">待运营/超管审批</span>' : '')}</div></td></tr>`).join('')}</tbody></table>` : emptyBox('筛选条件下暂无商户：清一下筛选再试')}
+    ${pager(totalRows, Math.max(1, Number(MF.page) || 1), 20, 'mfilGo')}
   </div>`
   const kwEl = document.getElementById('mfilKw')
-  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__mfil = { ...window.__mfil, kw: kwEl.value.trim() }; merchants() }, 400) } }
+  if (kwEl) { let kwT = null; kwEl.oninput = () => { clearTimeout(kwT); kwT = setTimeout(() => { window.__mfil = { ...window.__mfil, kw: kwEl.value.trim(), page: 1 }; merchants() }, 400) } }
 }
 async function addMerchant() { return entityEditor('merchant', null, { onSaved: () => merchants() }) }
 
 /* ============ 结算 ============ */
+// D-01/D-03/D-04：结算列表筛选（状态/商户关键词）、排序与页码持久化（sessionStorage 'wlq:settlements'）+ 重置
+const SETL_DEF = { status: '', kw: '', sort: '', page: 1 }
+window.setlGo = (n) => { window.__setlQ = { ...window.__setlQ, page: Math.max(1, Number(n) || 1) }; persistQ('settlements', window.__setlQ); settlements() }
+window.setlReset = () => { window.__setlQ = { ...SETL_DEF }; persistQ('settlements', window.__setlQ); settlements() }
 async function settlements() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
+  // D-01：入口恢复持久化的筛选/页码，随后写回
+  window.__setlQ = Object.assign({}, SETL_DEF, window.__setlQ || restoreQ('settlements', {}))
+  const Q = window.__setlQ
+  persistQ('settlements', Q)
   // R-01：主体只读代看下钻进入时透传视角参数（服务端按主体行级过滤；写按钮一并隐藏）
   const vqS = new URLSearchParams(location.hash.split('?')[1] || '')
-  const vqs = vqS.get('viewAsType') ? '?viewAsType=' + encodeURIComponent(vqS.get('viewAsType')) + '&viewAsId=' + encodeURIComponent(vqS.get('viewAsId') || '') : ''
-  const rows = await api('GET', '/admin/settlements' + vqs)
+  const pq = new URLSearchParams()
+  pq.set('page', Math.max(1, Number(Q.page) || 1))
+  if (Q.status !== '' && Q.status != null) pq.set('status', Q.status)
+  if (Q.kw) pq.set('kw', Q.kw)
+  if (Q.sort) pq.set('sort', Q.sort)
+  if (vqS.get('viewAsType')) { pq.set('viewAsType', vqS.get('viewAsType')); pq.set('viewAsId', vqS.get('viewAsId') || '') }
+  const vqs = vqS.get('viewAsType') ? ' · 只读代看' : ''
+  // D-03：带 page 参数时服务端返回 { items, total, page, pageSize }；防御性兼容旧数组形态
+  const raw = await api('GET', '/admin/settlements?' + pq.toString())
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const totalRows = Array.isArray(raw) ? rows.length : Number(raw.total || rows.length)
   const COLORS = ['#2563eb', '#0ea5e9', '#d97706', '#7c3aed', '#64748b']
   const NAMES = ['履约结算', '平台服务费', '推广服务费', '权益预算', '留存毛利']
   $('#app').innerHTML = `<div class="card">
-    <div class="card-head"><h2>商户周结算${vqs ? ' · 只读代看' : ''}</h2>${EXPBTN('settlements', '结算 CSV')}
+    <div class="card-head"><h2>商户周结算${vqs}</h2>${EXPBTN('settlements', '结算 CSV')}
       ${vqs ? '<span class="muted">只读代看模式下不能办理结算</span>' : (adminCan('settle.pay') ? '<button class="btn primary sm" onclick="genSettlements()">生成本周结算单</button>' : '<span class="muted">结算生成与回单登记由超级管理员或财务办理</span>')}</div>
     <p class="muted" style="margin:-8px 0 14px">商户确认 → 财务复核 → 实际支付 → 回单登记。当前为人工回单模式，复核不会自动划款。
       退改手续费按商户资料「退改手续费分成」或参数中心 <code>settlement.refund_fee_merchant_pct</code> 计入，生成时快照比例。</p>
+    <div class="row" style="margin:0 0 12px;flex-wrap:wrap">
+      <select id="setlStatus" onchange="window.__setlQ={...window.__setlQ,status:this.value,page:1};persistQ('settlements',window.__setlQ);settlements()">
+        <option value="">全部状态</option>${[[0, '待商户确认'], [1, '待财务复核'], [2, '待实际支付'], [3, '已登记支付回单'], [4, '异议处理中']].map(([v, n]) => `<option value="${v}" ${String(Q.status) === String(v) ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <input id="setlKw" type="search" placeholder="搜商户名" style="max-width:200px" value="${esc(Q.kw)}" onkeydown="if(event.key==='Enter'){event.preventDefault();window.__setlQ={...window.__setlQ,kw:this.value.trim(),page:1};persistQ('settlements',window.__setlQ);settlements()}">
+      <select id="setlSort" onchange="window.__setlQ={...window.__setlQ,sort:this.value,page:1};persistQ('settlements',window.__setlQ);settlements()">
+        ${[['', '排序：最新'], ['id:asc', '排序：最早'], ['total_amount:desc', '金额 高→低'], ['total_amount:asc', '金额 低→高']].map(([v, n]) => `<option value="${v}" ${Q.sort === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <button class="btn primary sm" type="button" onclick="window.__setlQ={...window.__setlQ,kw:document.getElementById('setlKw').value.trim(),page:1};persistQ('settlements',window.__setlQ);settlements()">查询</button>
+      <button class="btn ghost sm" type="button" onclick="setlReset()">重置</button>
+      <span class="muted">共 ${Number(totalRows).toLocaleString()} 张结算单</span>
+    </div>
     ${rows.length && rows[0].scenic_net_fen != null ? `<table><thead><tr><th>周期</th><th>商户</th><th>状态</th><th>本景区行净额</th><th>本景区口径履约应付</th><th>待冲抵调整</th></tr></thead><tbody>
-      ${rows.map((s) => `<tr><td>${esc(s.period)}</td><td>${esc(s.merchant_name)}</td><td>${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status] || s.status}</td><td class="num">${fen(s.scenic_net_fen)}</td><td class="num">${fen(s.scenic_payable_fen)}</td><td class="num">${fen(s.adjust_pending || 0)}</td></tr>`).join('')}</tbody></table>
+      ${rows.map((s) => `<tr><td>${esc(s.period)}<div class="td-sub">结算单 #${s.id}${copyCell('结算单号', String(s.id), 1)}</div></td><td>${esc(s.merchant_name)}</td><td>${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status] || s.status}</td><td class="num">${fen(s.scenic_net_fen)}</td><td class="num">${fen(s.scenic_payable_fen)}</td><td class="num">${fen(s.adjust_pending || 0)}</td></tr>`).join('')}</tbody></table>
       <p class="muted">景区口径：仅统计本景区商品订单的结算行净额与按该单比例快照的履约应付；整单五口径、内部成本与他店份额不在此页展示。</p>`
      : `${rows.length ? rows.map((s) => {
       const parts = [Number(s.amt_fulfill), Number(s.amt_service), Number(s.amt_promoter), Number(s.amt_beanbudget), Number(s.amt_retained)]
       const total = Number(s.total_amount) || 1 // 只有手续费、无订单的结算单 total=0，按 1 防除零
       return `<div style="padding:14px 0;border-bottom:1px solid #f1f4f8">
       <div class="row" style="justify-content:space-between;margin:0 0 10px">
-        <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单</span></div>
+        <div><b>${esc(s.merchant_name)}</b> <span class="muted">${esc(s.period)} · ${s.order_count} 单 · 结算单 #${s.id}${copyCell('结算单号', String(s.id), 1)}</span></div>
         <div><span class="money" style="font-size:16px">${fen(s.total_amount)}</span>
           <span class="pill ${s.status === 3 ? 'ok' : s.status === 4 ? 'warn' : 'off'}" style="margin-left:10px">${['待商户确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status]}</span>
           ${!vqs && s.status === 1 && adminCan('settle.pay') ? `<button class="btn primary sm" style="margin-left:10px" onclick="confirmSettle(${s.id})">财务复核</button>` : ''}${!vqs && s.status === 2 && adminCan('settle.pay') ? `<button class="btn primary sm" onclick="paymentReceipt(${s.id})">登记支付回单</button>` : ''}${!vqs && s.status === 4 && adminCan('settle.pay') ? `<button class="btn ghost sm" style="margin-left:10px" onclick="resolveDispute(${s.id})">处理异议</button>` : ''}</div>
@@ -615,6 +683,7 @@ async function settlements() {
       <div class="payable-line">应付商户 <b>${fen(Number(s.amt_fulfill) + Number(s.fee_merchant || 0) + Number(s.adjust_pending || 0))}</b><span class="muted">= 履约结算 ${fen(s.amt_fulfill)}${Number(s.fee_merchant) ? ' + 手续费分成 ' + fen(s.fee_merchant) : ''}${Number(s.adjust_pending) ? ' + 已出账后调整 ' + fen(s.adjust_pending) : ''}</span></div>
       ${adminCan('settle.pay') ? `<p class="muted" style="margin:6px 0 0"><a href="javascript:void(0)" onclick="settleAdjustments(${s.id})" style="color:var(--ink2)">查看调整明细</a></p>` : ''}
     </div>` }).join('') : emptyBox('暂无结算单——有已完成订单后点右上角生成')}`}
+    ${pager(totalRows, Math.max(1, Number(Q.page) || 1), 20, 'setlGo')}
   </div>`
 }
 // 修复4：已出账/已付款结算单的调整明细（按项退款冲减 / 确认成本更正），逐条可溯源
@@ -627,20 +696,24 @@ async function settleAdjustments(id) {
   } catch (e) { toast(e.message, true) }
 }
 async function genSettlements() {
+  const r0 = await uiConfirm({ title: '生成本周结算单', target: '本周商户结算', impact: '按周批量生成本周结算单（资金出账依据）；同周已出过账的商户出补充单，生成即进入待商户确认', needReason: true, reasonPlaceholder: '生成依据（必填，如本期对账安排，记入审计）', confirmText: '生成结算单' })
+  if (!r0.ok) return
   try {
-    const r = await api('POST', '/admin/settlements/generate', {})
+    const r = await api('POST', '/admin/settlements/generate', { reason: r0.reason })
     const n = (r.created || []).length
     toast(n ? `已生成 ${n} 份结算单（${r.period}；同周已出过账的商户出补充单）` : `没有新的可结算订单或手续费（${r.period}）`)
     settlements()
   } catch (e) { toast(e.message, true) }
 }
 async function resolveDispute(id) {
-  const note = prompt('异议处理说明（处理后交回商户重新确认）：', '')
-  if (!note || !note.trim()) return
-  try { await api('POST', '/admin/settlements/' + id + '/dispute', { note }); toast('异议已处理'); settlements() } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '处理结算异议', target: '结算单 #' + id, changes: [{ label: '单据状态', from: '异议处理中', to: '已处理（交回商户重新确认）' }], impact: '处理后结算单交回商户重新确认，说明随单留痕', needReason: true, reasonPlaceholder: '异议处理说明（处理后交回商户重新确认）', confirmText: '提交处理' })
+  if (!r.ok) return
+  try { await api('POST', '/admin/settlements/' + id + '/dispute', { note: r.reason }); toast('异议已处理'); settlements() } catch (e) { toast(e.message, true) }
 }
 async function confirmSettle(id) {
-  try { await api('POST', `/admin/settlements/${id}/confirm`, {}); toast('复核通过，待实际支付并登记回单'); settlements() } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '财务复核确认结算', target: '结算单 #' + id, impact: '复核通过后进入「待实际支付」（人工回单模式，不会自动划款）', needReason: true, reasonPlaceholder: '复核意见（必填，记入审计）', confirmText: '复核通过' })
+  if (!r.ok) return
+  try { await api('POST', `/admin/settlements/${id}/confirm`, { reason: r.reason }); toast('复核通过，待实际支付并登记回单'); settlements() } catch (e) { toast(e.message, true) }
 }
 
 function paymentReceipt(id) {
@@ -665,7 +738,7 @@ window.rescheduleModal = async (orderNo) => {
     <div class="field"><label>目标团期 *（同商品、在售、名额足够）</label>
       <select id="rsTo" class="inp" onchange="rescheduleDiff(${o.product_id})">${others.map((s) => `<option value="${s.id}" data-price="${s.price_adult}">${esc(String(s.depart_date).slice(0, 10))} · 剩 ${Number(s.quota) - Number(s.booked)} 位 · ¥${(Number(s.price_adult) / 100).toFixed(0)}</option>`).join('')}</select></div>
     <p class="td-sub" id="rsDiff">价差以选择后计算为准。</p>
-    <div class="field"><label>游客旅豆抵扣补款（分，选填；不超过需补款价差）</label><input id="rsBean" type="number" min="0" value="0"></div>
+    <div class="field"><label>游客旅豆抵扣补款（分，选填；不超过需补款价差）</label><input id="rsBean" type="number" min="0" step="1" value="0"></div>
     <div class="field"><label>改期原因 *（4–300 字，进入审计与时间线）</label><input id="rsReason" maxlength="300" placeholder="例如：游客临时行程变化，申请换至下周同款团期"></div>
     <p class="td-sub">流程：提交申请 → 另一位超级管理员审批 → 执行换团（执行时再校验名额与订单状态）。需补款/应退差在执行后如实登记，走财务流程，不在系统内虚构到账。</p>
     <div id="rsErr" class="td-sub" style="color:var(--red)"></div>`,
@@ -723,10 +796,13 @@ window.rescheduleVerdictSubmit = async (id, pass, orderNo) => {
   } catch (e) { $('#rsVerdictErr').textContent = e.message }
 }
 window.rescheduleExec = async (id, orderNo) => {
-  if (!confirm('执行换团会转移名额并按价差调整订单金额（旅豆抵扣同时扣减）；失败会整体回滚。确定执行？')) return
-  try { const r = await api('POST', `/admin/reschedules/${id}/execute`); toast(r.status === 3 ? '已执行换团' : '已处理'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '执行换团', target: '改期申请 #' + id + ' · 订单 ' + orderNo, impact: '执行换团会转移名额并按价差调整订单金额（旅豆抵扣同时扣减）；失败会整体回滚', confirmText: '执行换团' })
+  if (!r.ok) return
+  try { const res = await api('POST', `/admin/reschedules/${id}/execute`); toast(res.status === 3 ? '已执行换团' : '已处理'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
 }
 window.rescheduleCancel = async (id, orderNo) => {
+  const r = await uiConfirm({ title: '撤回改期申请', target: '改期申请 #' + id + ' · 订单 ' + orderNo, changes: [{ label: '申请状态', from: '待审批', to: '已撤回' }], impact: '撤回后申请终态，如需再改请重新发起', confirmText: '确认撤回' })
+  if (!r.ok) return
   try { await api('POST', `/admin/reschedules/${id}/cancel`); toast('已撤回'); rescheduleDrawer(orderNo) } catch (e) { toast(e.message, true) }
 }
 

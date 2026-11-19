@@ -16,6 +16,7 @@ import { sanitizeRich } from '../infra/sanitize.mjs'
 import { whereMobile, sealMobile, openMobile } from '../infra/mobile.mjs'
 import { bizDay, settlementPeriod } from '../infra/bizdate.mjs'
 import { merchantRange, merchantPaging } from '../infra/merchant-range.mjs'
+import { invalidateStaffRole } from '../infra/staff-role.mjs'
 import { orderStatusText } from '../domain/dict.mjs'
 import { recordVersion } from '../domain/master-version.mjs'
 import * as notifyDomain from '../domain/notify.mjs'
@@ -43,6 +44,33 @@ async function levelBrief(mid, req) {
   const mr = await one("SELECT level FROM merchant WHERE id = ?", [mid]), lvs = await merchantLevel.levels()
   const cur = lvs.find((l) => l.lv === Number(mr && mr.level)) || lvs[0]
   return { lv: cur.lv, name: cur.name, art: apiImg('/badge-art/mlevel/' + cur.lv + '.png?v=merchant-vivid-20261108', req) }
+}
+
+// M-07：团期卡「最近改价」——master_data_version（kind=session）里最近一次 price_adult 变更（谁、几点、旧→新）。
+// 改价留痕由商户端改价/批量改价写入（snapshot.changedFields 含 price_adult）；PC 侧改的是商品档不写 session 版本。
+async function lastPriceChanges(sessionIds, fmt) {
+  const ids = [...new Set(sessionIds.map(Number).filter(Boolean))]
+  if (!ids.length) return {}
+  const rows = await q(`SELECT ref_id, snapshot, changed_by, created_at FROM master_data_version
+    WHERE kind = 'session' AND ref_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY ref_id, version_no DESC`, ids)
+  const hits = new Map()
+  for (const r of rows) {
+    if (hits.has(r.ref_id)) continue
+    let snap = null
+    try { snap = typeof r.snapshot === 'string' ? JSON.parse(r.snapshot) : r.snapshot } catch { snap = null }
+    if (!snap || !(snap.changedFields || []).includes('price_adult')) continue
+    hits.set(r.ref_id, { changedBy: r.changed_by, at: r.created_at, from: snap.before ? snap.before.price_adult : null, to: snap.after ? snap.after.price_adult : null })
+  }
+  if (!hits.size) return {}
+  const uids = [...new Set([...hits.values()].map((h) => String(h.changedBy || '').split(':')[1]).filter(Boolean))]
+  const names = uids.length ? new Map((await q(`SELECT id, nickname FROM user_account WHERE id IN (${uids.map(() => '?').join(',')})`, uids)).map((r) => [String(r.id), r.nickname])) : new Map()
+  const out = {}
+  for (const [sid, h] of hits) {
+    const uid = String(h.changedBy || '').split(':')[1]
+    out[sid] = { by: (uid && names.get(uid)) || '店员', at: fmt(h.at), from: h.from, to: h.to }
+  }
+  return out
 }
 
 const m = {
@@ -124,7 +152,8 @@ const m = {
 
   'GET /m/qrcode': async (req) => {
     const u = requireUser(req)
-    if (u.end !== 'm') throw new BizError(1003, '商户端凭证')
+    if (u.end !== 'm' || !u.merchantId) throw new BizError(1003, '商户端凭证')
+    if (Number(u.role) < 2) throw new BizError(1003, '需要店长及以上权限') // M-03：门店码与邀请码同为店长及以上，说明文案与此同源
     const scene = 'm' + Number(u.merchantId).toString(36) // 门店码：扫码进入首页带商户归因
     const { buffer, mock } = await wxapi.getUnlimitedQRCode(scene, 'pages/home/index')
     return { scene, mock, image: buffer ? buffer.toString('base64') : null }
@@ -326,11 +355,17 @@ const m = {
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
       WHERE ${where.join(' AND ')}
       ORDER BY (s.depart_date >= CURDATE()) DESC, s.depart_date, p.id, s.id`
-    if (!paged) return await q(sql, args)
+    if (!paged) {
+      const rows = await q(sql, args)
+      // M-07：非分页旧形态（回归测试）同样带最近改价
+      const changes = await lastPriceChanges(rows.map((r) => r.id), (d) => String(d).slice(5, 16).replace('T', ' '))
+      return rows.map((r) => ({ ...r, priceChange: changes[r.id] || null }))
+    }
     const paging = merchantPaging(req.query, 60)
     const total = await count(`SELECT COUNT(*) c FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE ${where.join(' AND ')}`, args)
     const items = await q(sql + ' LIMIT ? OFFSET ?', [...args, paging.size, paging.offset])
-    return { items, total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size, hasMore: paging.offset + items.length < total }
+    const changes = await lastPriceChanges(items.map((r) => r.id), (d) => String(d).slice(5, 16).replace('T', ' '))
+    return { items: items.map((r) => ({ ...r, priceChange: changes[r.id] || null })), total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size, hasMore: paging.offset + items.length < total }
   },
 
   // C-02 批量操作：ids 内逐条校验归属门店，返回实际生效条数（前端先展示影响范围再提交）
@@ -340,6 +375,8 @@ const m = {
     const { ids, action, value } = req.body || {}
     if (!Array.isArray(ids) || !ids.length || ids.length > 200) throw new BizError(1001, '请选择 1-200 个团期')
     if (!['adjust_quota', 'price', 'stop_sell'].includes(action)) throw new BizError(1001, '不支持的批量操作')
+    // M-12：批量>5 条属 A+，前端强制填原因，这里留痕入审计
+    const batchReason = String((req.body || {}).reason || '').trim().slice(0, 200)
     const rows = await q(`SELECT s.id, s.quota, s.booked, s.price_adult, s.early_price, s.status, s.version FROM tour_session s
       JOIN tour_product p ON p.id = s.product_id WHERE p.merchant_id = ? AND s.id IN (${ids.map(() => '?').join(',')})`, [u.merchantId, ...ids.map(Number)])
     const allowed = rows.filter((s) => Number(s.status) !== 4)
@@ -356,7 +393,7 @@ const m = {
           if (n !== 1) return false
           await recordVersion(c, { kind: 'session', refId: s.id,
             snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(s.quota) }, after: { quota } },
-            changedBy: 'merchant-staff:' + u.uid, reason: '商户端批量调名额' })
+            changedBy: 'merchant-staff:' + u.uid, reason: batchReason ? '商户端批量调名额 · ' + batchReason : '商户端批量调名额' })
           await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + s.id, { quota: Number(s.quota) }, { quota })
           return true
         })
@@ -370,7 +407,7 @@ const m = {
           if (n !== 1) return false
           await recordVersion(c, { kind: 'session', refId: s.id,
             snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: price } },
-            changedBy: 'merchant-staff:' + u.uid, reason: '商户端批量改价' })
+            changedBy: 'merchant-staff:' + u.uid, reason: batchReason ? '商户端批量改价 · ' + batchReason : '商户端批量改价' })
           await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + s.id, { price_adult: Number(s.price_adult) }, { price_adult: price })
           return true
         })
@@ -384,6 +421,8 @@ const m = {
     const u = requireUser(req)
     if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
     const { action, value } = req.body
+    // M-12：价差超 ±30% 等 A+ 情形前端强制填原因，这里留痕进版本簿与审计
+    const changeReason = String((req.body || {}).reason || '').trim().slice(0, 200)
     const owned = await one('SELECT s.id, s.booked, s.quota, s.price_adult, s.early_price, s.early_days, s.version FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
     if (!owned) throw new BizError(1004, '团期不存在或不属于本店')
     if (action === 'adjust_quota' && (!Number.isInteger(value) || value < owned.booked)) throw new BizError(1001, '名额必须为整数且不少于已报名人数')
@@ -411,7 +450,7 @@ const m = {
         if (n !== 1) throw new BizError(2002, '该团期刚被其他端修改或报名人数已变化，请刷新团期后重试')
         await recordVersion(c, { kind: 'session', refId: req.params.sid,
           snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(owned.quota) }, after: { quota: value } },
-          changedBy: 'merchant-staff:' + u.uid, reason: '商户端调名额' })
+          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端调名额 · ' + changeReason : '商户端调名额' })
         await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + req.params.sid, { quota: Number(owned.quota) }, { quota: value })
       })
       return { quota: value, version: expected + 1 }
@@ -428,7 +467,7 @@ const m = {
         if (n !== 1) throw new BizError(2002, '该团期价格刚被其他端修改，请刷新团期后重试')
         await recordVersion(c, { kind: 'session', refId: req.params.sid,
           snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: value } },
-          changedBy: 'merchant-staff:' + u.uid, reason: '商户端改价' })
+          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端改价 · ' + changeReason : '商户端改价' })
         await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + req.params.sid, { price_adult: Number(s.price_adult) }, { price_adult: value })
       })
       return { price: value, version: expected + 1 }
@@ -452,7 +491,7 @@ const m = {
           snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['early_price', 'early_days'],
             before: { early_price: owned.early_price == null ? null : Number(owned.early_price), early_days: owned.early_days == null ? null : Number(owned.early_days) },
             after: { early_price: price, early_days: nextDays } },
-          changedBy: 'merchant-staff:' + u.uid, reason: '商户端设置早鸟价' })
+          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端设置早鸟价 · ' + changeReason : '商户端设置早鸟价' })
         await audit(c, 'merchant:' + u.merchantId, 'supply', 'set_early', 'session-' + req.params.sid, null, { earlyPrice: price, earlyDays: nextDays })
       })
       return { earlyPrice: price, earlyDays: nextDays, version: expected + 1 }
@@ -590,9 +629,11 @@ const mSite = {
     const sec = await getSecrets(['WX_A_APPID']).catch(() => ({}))
     return { notice: v.merchant_notice || '', joinTip: v.merchant_join_tip || '', servicePhone: v.service_phone || '', serviceHours: v.service_hours || '',
       miniAAppId: sec.WX_A_APPID || process.env.WX_A_APPID || null,
-      roleGuide: { 1: '核销员：到店扫码/暗号核销、查看核销记录。订单、库存与结算不可见。',
-        2: '店长：核销员全部 + 订单查看、团期改价/名额/停售、对账单查看、评价回复。',
-        3: '老板：店长全部 + 店员角色管理、门店码、店员邀请码。' } }
+      // M-03：岗位说明与真实权限同源（/m/qrcode、/m/invite 门槛都是 role>=2；/m/staff 是 role>=3）——
+      // test/merchant-role-guide.mjs 按此断言，改门槛必须同步改这里，反之亦然。
+      roleGuide: { 1: '核销员：到店扫码/暗号核销、查看核销记录、服务项履约。订单、库存、改价与结算不可见。',
+        2: '店长：核销员全部 + 订单查看、团期改价/名额/停售、对账单查看与确认、评价回复、门店码、店员邀请码（邀请进来的默认是核销员）。',
+        3: '老板：店长全部 + 店员角色管理（改岗位、停用/启用）。' } }
   },
 
   // X-05：商户侧订阅模板 ID（新订单/退款申请/结算待确认；未配置返回 null，前端跳过且不报错）
@@ -603,6 +644,52 @@ const mSite = {
     return { newOrder: s.WX_TMPL_NEW_ORDER || process.env.WX_TMPL_NEW_ORDER || null,
       refundApply: s.WX_TMPL_REFUND_APPLY || process.env.WX_TMPL_REFUND_APPLY || null,
       settlementPending: s.WX_TMPL_SETTLE_PENDING || process.env.WX_TMPL_SETTLE_PENDING || null }
+  },
+
+  // M-02：员工级提醒偏好（新订单/退款申请/结算待确认）。本人可改（核销员也能自行打开）；
+  // 老板/店长默认开、核销员默认关由 V93 回填，notifyMerchant 发送前按此过滤。
+  'GET /m/notify/prefs': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm' || !u.merchantId) throw new BizError(1003, '商户端凭证')
+    const row = await one(`SELECT role, notify_new_order, notify_refund_apply, notify_settlement_pending, notify_onboarded
+      FROM merchant_staff WHERE user_id = ? AND merchant_id = ?`, [u.uid, u.merchantId])
+    if (!row) throw new BizError(1003, '尚未加入门店')
+    // 偏好三态解析：NULL=按岗位默认（老板/店长开、核销员关）
+    const eff = (v) => (v == null ? Number(row.role) >= 2 : !!Number(v))
+    return { newOrder: eff(row.notify_new_order), refundApply: eff(row.notify_refund_apply),
+      settlementPending: eff(row.notify_settlement_pending), onboarded: !!Number(row.notify_onboarded) }
+  },
+
+  'POST /m/notify/prefs': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm' || !u.merchantId) throw new BizError(1003, '商户端凭证')
+    const b = req.body || {}
+    const sets = [], args = []
+    for (const [key, col] of [['newOrder', 'notify_new_order'], ['refundApply', 'notify_refund_apply'], ['settlementPending', 'notify_settlement_pending']]) {
+      if (b[key] != null) { sets.push(col + ' = ?'); args.push(b[key] ? 1 : 0) }
+    }
+    if (b.onboarded != null) { sets.push('notify_onboarded = ?'); args.push(b.onboarded ? 1 : 0) }
+    if (!sets.length) throw new BizError(1001, '没有要保存的提醒偏好')
+    const n = await q(`UPDATE merchant_staff SET ${sets.join(', ')} WHERE user_id = ? AND merchant_id = ?`, [...args, u.uid, u.merchantId])
+    if (n.affectedRows !== 1) throw new BizError(1004, '尚未加入门店，无法保存提醒偏好')
+    return { saved: true }
+  },
+
+  // M-02/M-09：工作台 30 秒轮询的轻量接口——新支付订单（按 lastSeen 之后计）+ 待核销凭证数。
+  // 不依赖微信授权，是订阅消息之外的应用内兜底提醒数据源。
+  'GET /m/notify/poll': async (req) => {
+    const u = requireUser(req)
+    if (u.end !== 'm' || !u.merchantId) throw new BizError(1003, '商户端凭证')
+    const after = Number(req.query.after || 0)
+    const pendingVerify = await count(`SELECT COUNT(*) c FROM travel_pass tp JOIN orders o ON o.id = tp.order_id
+      WHERE o.merchant_id = ? AND tp.status = 1`, [u.merchantId])
+    const out = { pendingVerify }
+    if (Number(u.role) >= 2 && after >= 0) {
+      const r = await one(`SELECT COALESCE(MAX(id),0) latest, COUNT(*) n FROM orders
+        WHERE merchant_id = ? AND status >= 20 AND status <= 40 AND paid_at IS NOT NULL AND id > ?`, [u.merchantId, after])
+      out.latestId = Number(r.latest); out.newPaid = Number(r.n)
+    }
+    return out
   },
 
   // R-05：商户端岗位说明（mini-b「我的」角色说明卡按本人岗位高亮）
@@ -697,7 +784,8 @@ const mApply = {
   'GET /m/staff': async req => {
     const u = requireUser(req)
     if (u.role < 3) throw new BizError(1003, '仅老板可管理店员')
-    return q('SELECT s.id,s.user_id,s.role,s.status,u.nickname FROM merchant_staff s JOIN user_account u ON u.id=s.user_id WHERE s.merchant_id=? ORDER BY s.id', [u.merchantId])
+    // M-06：补加入时间（V93 回填自账号创建时间，新员工为真实加入时刻）
+    return q('SELECT s.id,s.user_id,s.role,s.status,u.nickname,DATE_FORMAT(s.created_at, \'%Y-%m-%d\') joined_at FROM merchant_staff s JOIN user_account u ON u.id=s.user_id WHERE s.merchant_id=? ORDER BY s.id', [u.merchantId])
   },
   'POST /m/staff/:id': async req => {
     const u = requireUser(req)
@@ -706,7 +794,13 @@ const mApply = {
     if (![1,2].includes(role) || ![0,1].includes(status)) throw new BizError(1001, '店员角色或状态无效')
     const result = await q('UPDATE merchant_staff SET role=?,status=? WHERE id=? AND merchant_id=? AND role<>3 AND user_id<>?', [role,status,req.params.id,u.merchantId,u.uid])
     if (result.affectedRows !== 1) throw new BizError(1003, '不可修改老板或其他门店员工')
-    return { saved: true }
+    // M-01：改岗/停用立即生效——失效该员工的角色缓存，同一 token 下一个请求即按新角色行事
+    const target = await one('SELECT user_id FROM merchant_staff WHERE id = ? AND merchant_id = ?', [req.params.id, u.merchantId])
+    if (target) invalidateStaffRole(target.user_id, u.merchantId)
+    // M-06：停用员工（A+）必填原因入审计
+    const reason = String((req.body || {}).reason || '').trim().slice(0, 200)
+    await tx(async (c) => audit(c, 'merchant:' + u.merchantId, 'staff', 'update', 'staff-' + req.params.id, null, { role, status, by: 'staff:' + u.uid, reason: reason || null }))
+    return { saved: true, roleText: ['', '核销员', '店长'][role] || '', statusText: status === 1 ? '在职' : '已停用' }
   },
   'POST /m/apply': async (req) => {
     const u = requireUser(req)

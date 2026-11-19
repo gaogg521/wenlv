@@ -2,4 +2,6 @@
 .tb-item { flex: 1; text-align: center; padding: 12rpx 0 8rpx; color: #766b59; }
 .tb-item.on { color: #ad603d; }
 .tb-img { width: 44rpx; height: 44rpx; margin: 0 auto; display: block; }
+.tb-icon-wrap { position: relative; width: 44rpx; height: 44rpx; margin: 0 auto; }
+.tb-dot { position: absolute; top: -6rpx; right: -10rpx; width: 16rpx; height: 16rpx; border-radius: 50%; background: #d4553a; border: 2rpx solid #fffdf8; }
 .tb-txt { font-size:22rpx; }

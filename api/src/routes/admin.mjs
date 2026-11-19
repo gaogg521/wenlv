@@ -311,7 +311,8 @@ const admin = {
   // ===== 安全中心（系统工作区）：绑定 MFA / 发送测试 / 最近验证码（MOCK 通道演示用）=====
   'GET /admin/security/accounts': async (req) => {
     await requireAdmin(req, ['super'])
-    return await q('SELECT id, username, role, display_name, mfa_enabled, mfa_channel, mobile, email, mfa_exempt, mfa_force, last_login_at, status FROM admin_user ORDER BY id')
+    // D-03：安全账号列表是小表——只加 LIMIT 200 安全上限，不做分页 UI
+    return await q('SELECT id, username, role, display_name, mfa_enabled, mfa_channel, mobile, email, mfa_exempt, mfa_force, last_login_at, status FROM admin_user ORDER BY id LIMIT 200')
   },
   'POST /admin/security/mfa/setup': async (req) => {
     const a = await requireAdmin(req, ['super'])
@@ -817,13 +818,30 @@ const admin = {
     if (['0', '1'].includes(String(req.query.status))) condsPX.push(['p.status = ?', Number(req.query.status)])
     const wherePX = condsPX.map(([w]) => ' AND ' + w).join('')
     const argsPX = condsPX.map(([, v]) => v)
-    return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name,
-      COALESCE((SELECT SUM(s2.quota - s2.booked) FROM tour_session s2 WHERE s2.product_id = p.id AND s2.depart_date IS NULL), 0) AS stock_left
-      FROM tour_product p
+    // D-04：排序白名单——只映射到固定 SQL 片段（防注入）；缺省保持原 p.id DESC
+    const SORT_P = { 'created_at:desc': 'p.created_at DESC, p.id DESC', 'created_at:asc': 'p.created_at ASC, p.id ASC',
+      'price_from:desc': 'p.price_from DESC, p.id DESC', 'price_from:asc': 'p.price_from ASC, p.id ASC' }
+    const sortP = SORT_P[req.query.sort] || 'p.id DESC'
+    const fromP = `FROM tour_product p
       LEFT JOIN merchant m ON m.id = p.merchant_id
       LEFT JOIN supplier sup ON sup.id = p.supplier_id
       LEFT JOIN scenic_spot sc ON sc.id = p.scenic_id
-      WHERE 1=1 ${sc.sql}${subSql}${wherePX} ORDER BY p.id DESC`, [...sc.params, ...subParams, ...argsPX])
+      WHERE 1=1 ${sc.sql}${subSql}${wherePX}`
+    const argsP = [...sc.params, ...subParams, ...argsPX]
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态（下拉选择器等旧调用兼容）
+    const paged = req.query.page != null && req.query.page !== ''
+    if (!paged) {
+      return await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name,
+      COALESCE((SELECT SUM(s2.quota - s2.booked) FROM tour_session s2 WHERE s2.product_id = p.id AND s2.depart_date IS NULL), 0) AS stock_left
+      ${fromP} ORDER BY ${sortP}`, argsP)
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${fromP}`, argsP)).n)
+    const items = await q(`SELECT p.*, m.name merchant_name, sup.name supplier_name, sc.name scenic_name,
+      COALESCE((SELECT SUM(s2.quota - s2.booked) FROM tour_session s2 WHERE s2.product_id = p.id AND s2.depart_date IS NULL), 0) AS stock_left
+      ${fromP} ORDER BY ${sortP} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, argsP)
+    return { items, total, page, pageSize }
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
@@ -1064,9 +1082,18 @@ const admin = {
     const cityM = String(req.query.cityCode || '').trim()
     if (cityM) { condsM.push('city_code = ?'); argsM.push(cityM) }
     const whereM = condsM.length ? ' AND ' + condsM.join(' AND ') : ''
-    // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
-    return (await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + whereM + ' ORDER BY id', [...sc.params, ...argsM]))
-      .map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态（下拉选择器等旧调用兼容）
+    const paged = req.query.page != null && req.query.page !== ''
+    const maskRows = (list) => list.map(({ apply_mobile, apply_mobile_enc, ...r }) => ({ ...r, apply_mobile: maskApplyMobile({ apply_mobile, apply_mobile_enc }) }))
+    if (!paged) {
+      // 申请电话只给脱敏值（红线 11：任何接口响应不放完整号码）；密文列不下发
+      return maskRows(await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + whereM + ' ORDER BY id', [...sc.params, ...argsM]))
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one('SELECT COUNT(*) n FROM merchant WHERE 1=1 ' + sc.sql + whereM, [...sc.params, ...argsM])).n)
+    const items = await q('SELECT * FROM merchant WHERE 1=1 ' + sc.sql + whereM + ` ORDER BY id LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, [...sc.params, ...argsM])
+    return { items: maskRows(items), total, page, pageSize }
   },
   // ===== 实体表单引擎（字段定义见 domain/entity-schema.mjs）=====
   'GET /admin/entity-schemas/:kind': async (req) => {
@@ -1140,7 +1167,8 @@ const admin = {
   // ===== 参数中心（§4.2：分组/双人复核/影响预览/版本回滚）=====
   'GET /admin/config': async (req) => {
     await requireAdmin(req)
-    const rows = await q('SELECT k, v, group_name, `sensitive`, memo, updated_by, updated_at FROM rule_config ORDER BY group_name, k')
+    // D-03：参数中心是小表——只加 LIMIT 200 安全上限，不做分页 UI
+    const rows = await q('SELECT k, v, group_name, `sensitive`, memo, updated_by, updated_at FROM rule_config ORDER BY group_name, k LIMIT 200')
     return rows.map(r => ({ ...r, name: configName(r.k, r.memo), v: typeof r.v === 'string' ? r.v : JSON.stringify(r.v) }))
   },
   'POST /admin/config/proposal': async (req) => {
@@ -1220,7 +1248,17 @@ const admin = {
   },
 
   // 旅豆预算 / 推广 / 结算 / 风控 / 审计
-  'GET /admin/budgets': async (req) => { await requireAdmin(req, ['super', 'ops', 'finance']); return await q('SELECT * FROM bean_budget ORDER BY id DESC') },
+  'GET /admin/budgets': async (req) => {
+    await requireAdmin(req, ['super', 'ops', 'finance'])
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize, sums }（sums 为全库口径，KPI 卡用）；无 page 保持旧数组形态
+    if (req.query.page == null || req.query.page === '') return await q('SELECT * FROM bean_budget ORDER BY id DESC')
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one('SELECT COUNT(*) n FROM bean_budget')).n)
+    const items = await q(`SELECT * FROM bean_budget ORDER BY id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    const sums = await one('SELECT COALESCE(SUM(total),0) total, COALESCE(SUM(granted),0) granted FROM bean_budget')
+    return { items, total, page, pageSize, sums: { total: Number(sums.total), granted: Number(sums.granted) } }
+  },
   'POST /admin/budgets': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
     const { name, total, periodStart, periodEnd, bizOwner, remark } = req.body
@@ -1234,7 +1272,14 @@ const admin = {
   },
   'GET /admin/promoters': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'finance'])
-    return await q(`SELECT p.*, u.nickname FROM promoter p JOIN user_account u ON u.id = p.user_id ORDER BY p.user_id`)
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态（订单筛选下拉等旧调用兼容）
+    const base = 'FROM promoter p JOIN user_account u ON u.id = p.user_id'
+    if (req.query.page == null || req.query.page === '') return await q(`SELECT p.*, u.nickname ${base} ORDER BY p.user_id`)
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${base}`)).n)
+    const items = await q(`SELECT p.*, u.nickname ${base} ORDER BY p.user_id LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    return { items, total, page, pageSize }
   },
   'POST /admin/promoters/register': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -1244,17 +1289,42 @@ const admin = {
     const a = await requireAdmin(req)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     const sc = scopeFilter(a, 'm.city_code')
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }（含状态/商户关键词筛选与排序）；无 page 保持旧数组形态
+    const paged = req.query.page != null && req.query.page !== ''
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    // D-04：排序白名单——只映射到固定 SQL 片段（防注入）；缺省保持原 s.id DESC
+    const SORT_S = { 'id:desc': 's.id DESC', 'id:asc': 's.id ASC', 'total_amount:desc': 's.total_amount DESC, s.id DESC', 'total_amount:asc': 's.total_amount ASC, s.id ASC' }
+    const sortS = SORT_S[req.query.sort] || 's.id DESC'
+    // D-01：结算列表筛选——状态白名单 + 商户名关键词
+    const stS = req.query.status == null || req.query.status === '' ? null : Number(req.query.status)
+    if (stS != null && ![0, 1, 2, 3, 4].includes(stS)) throw new BizError(1001, '结算状态无效')
+    const kwS = String(req.query.kw || '').trim()
+    const condsS = []
+    if (stS != null) condsS.push('s.status = ' + stS)
+    if (kwS) condsS.push('m.name LIKE ' + JSON.stringify('%' + kwS + '%'))
+    const whereS = condsS.length ? ' AND ' + condsS.join(' AND ') : ''
     // V82 主体方行级隔离：商户主体方只看本店结算；景区主体方只看其景区关联商户的结算
     const sub = subjectScope(a)
     let subSql = '', subParams = []
     if (a.role === 'merchant_partner') {
-      if (!sub.merchantId) return []
+      if (!sub.merchantId) return paged ? { items: [], total: 0, page, pageSize } : []
       subSql = ' AND s.merchant_id = ?'; subParams = [sub.merchantId]
     } else if (a.role === 'scenic_partner') {
-      if (!sub.scenicId) return []
+      if (!sub.scenicId) return paged ? { items: [], total: 0, page, pageSize } : []
       // V82/Codex复验 R2 二次修复：按授权结算行决定账单可见性——只显示包含本景区订单行的结算单；
       // 订单数按本景区行复算；调整按本景区行且未冲抵过滤；整单 order_count/五口径/成本不下发
-      return promo.scenicSettlementRows(sub.scenicId)
+      // （本主体结算单数量有限：筛选/排序在内存完成，再按 page 切片，口径与整单分支一致）
+      const allS = await promo.scenicSettlementRows(sub.scenicId)
+      const filteredS = allS.filter((r) => (stS == null || Number(r.status) === stS) && (!kwS || String(r.merchant_name || '').includes(kwS)))
+      const sortedS = filteredS.sort((x, y) => {
+        if (req.query.sort === 'id:asc') return Number(x.id) - Number(y.id)
+        if (req.query.sort === 'total_amount:desc') return Number(y.scenic_net_fen || 0) - Number(x.scenic_net_fen || 0) || Number(y.id) - Number(x.id)
+        if (req.query.sort === 'total_amount:asc') return Number(x.scenic_net_fen || 0) - Number(y.scenic_net_fen || 0) || Number(x.id) - Number(y.id)
+        return Number(y.id) - Number(x.id)
+      })
+      if (!paged) return sortedS
+      return { items: sortedS.slice((page - 1) * pageSize, page * pageSize), total: sortedS.length, page, pageSize }
     }
     // R-01：超管只读代看主体——结算列表同一套行级过滤（写操作已在网关拒绝）
     const vatS = String(req.query.viewAsType || '').trim()
@@ -1266,14 +1336,22 @@ const admin = {
       subParams.push(viS)
     }
     // 修复4：附调整合计（负数=应付减少；调整挂在被调结算单 settlement_id 上）与调整后应付
+    const sqlFrom = `FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql}${subSql}${whereS}`
+    const sqlArgs = [...sc.params, ...subParams]
+    const markPayable = (rows) => { for (const r of rows) { r.payable_after_adjust = Number(r.amt_fulfill || 0) + Number(r.fee_merchant || 0) + Number(r.adjust_pending || 0) } return rows }
+    if (!paged) {
+      const rows = await q(`SELECT s.*, m.name merchant_name,
+        (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1 AND x.applied_settlement_id IS NULL) AS adjust_pending,
+        (SELECT COALESCE(SUM(x.cost_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 2) AS cost_adjust
+      ${sqlFrom} ORDER BY ${sortS}`, sqlArgs)
+      return markPayable(rows)
+    }
+    const total = Number((await one(`SELECT COUNT(*) n ${sqlFrom}`, sqlArgs)).n)
     const rows = await q(`SELECT s.*, m.name merchant_name,
         (SELECT COALESCE(SUM(x.amount_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 1 AND x.applied_settlement_id IS NULL) AS adjust_pending,
         (SELECT COALESCE(SUM(x.cost_fen),0) FROM settlement_adjustment x WHERE x.settlement_id = s.id AND x.type = 2) AS cost_adjust
-      FROM settlement s JOIN merchant m ON m.id = s.merchant_id WHERE 1=1 ${sc.sql}${subSql} ORDER BY s.id DESC`, [...sc.params, ...subParams])
-    for (const r of rows) {
-      r.payable_after_adjust = Number(r.amt_fulfill || 0) + Number(r.fee_merchant || 0) + Number(r.adjust_pending || 0)
-    }
-    return rows
+      ${sqlFrom} ORDER BY ${sortS} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, sqlArgs)
+    return { items: markPayable(rows), total, page, pageSize }
   },
   // 修复4：已出账/已付款订单的确认成本更正（finance 专用）——只改利润复算口径并留调整记录，不动商户应付五口径
   'POST /admin/settlements/cost-adjust': async (req) => {
@@ -1474,6 +1552,24 @@ const admin = {
         (SELECT COUNT(*) FROM content_note c WHERE c.user_id = u.id AND c.status = 2) published_count,
         (SELECT COUNT(*) FROM review r WHERE r.user_id = u.id) review_count
         FROM user_account u WHERE u.creator_tag <> 'none' ORDER BY u.id`)
+    } else if (what === 'users') {
+      // D-07：用户基础台账（红线 11/隐私口径：不含手机号与任何密文列；能力 export.users 限定 super/ops/finance）
+      rows = await q(`SELECT u.id, u.nickname, u.member_level, u.creator_tag, u.growth_value, u.status, u.created_at
+        FROM user_account u ORDER BY u.id LIMIT 5000`)
+    } else if (what === 'reviews') {
+      // D-07：评价导出——内容截前 200 字，关联线路标题与订单号；不导游客手机号
+      rows = await q(`SELECT r.id, p.title, r.rating, LEFT(r.content, 200) content, r.reply_status, r.status, r.created_at, o.order_no
+        FROM review r
+        JOIN tour_product p ON p.id = r.product_id
+        LEFT JOIN orders o ON o.id = r.order_id
+        ORDER BY r.id LIMIT 5000`)
+    } else if (what === 'attest') {
+      // D-07：存证导出按事件粒度（批次只带 seq / 根前 16 位指纹 / 状态；载荷内容不上报）
+      rows = await q(`SELECT e.id, e.biz_type, e.biz_ref, e.status, e.created_at, b.seq batch_seq,
+        LEFT(b.merkle_root, 16) batch_root16, b.status batch_status
+        FROM attest_event e
+        LEFT JOIN attest_batch b ON b.id = e.batch_id
+        ORDER BY e.id LIMIT 5000`)
     } else throw new BizError(1004, '未知报表类型')
     const csv = toCsv(rows)
     return { name, filename: name + '-' + new Date().toISOString().slice(0, 10) + '.csv', csv }
@@ -1690,7 +1786,13 @@ const admin = {
   'GET /admin/verify/conflicts': async (req) => {
     await requireAdmin(req)
     const status = req.query.status != null ? Number(req.query.status) : 0
-    return await q('SELECT * FROM verify_offline_conflict WHERE status = ? ORDER BY id DESC LIMIT 100', [status])
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态
+    if (req.query.page == null || req.query.page === '') return await q('SELECT * FROM verify_offline_conflict WHERE status = ? ORDER BY id DESC LIMIT 100', [status])
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one('SELECT COUNT(*) n FROM verify_offline_conflict WHERE status = ?', [status])).n)
+    const items = await q(`SELECT * FROM verify_offline_conflict WHERE status = ? ORDER BY id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, [status])
+    return { items, total, page, pageSize }
   },
   'POST /admin/verify/conflicts/:id/resolve': async (req) => {
     const a = await requireAdmin(req)

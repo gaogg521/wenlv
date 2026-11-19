@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "我的数字身份" }
+{ "navigationBarTitleText": "我的数字身份", "usingComponents": { "app-image": "/components/app-image/index" } }

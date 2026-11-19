@@ -1,1 +1,1 @@
-{"navigationBarTitleText": "向往的自由", "navigationBarBackgroundColor": "#f8f6f1", "navigationBarTextStyle": "black", "enablePullDownRefresh": true}
+{"navigationBarTitleText": "向往的自由", "navigationBarBackgroundColor": "#f8f6f1", "navigationBarTextStyle": "black", "enablePullDownRefresh": true, "usingComponents": { "app-image": "/components/app-image/index" }}

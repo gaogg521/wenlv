@@ -4,7 +4,7 @@
     <view class="sub2">{{lex.did}} · Travel ID</view>
     <view class="hi" style="font-size:44rpx">{{d.profile.nickname}}</view>
     <view class="sub2">{{d.profile.levelName}} · 成长值 {{d.profile.growth}}</view>
-    <image class="hero-crest" wx:if="{{d.profile.level.art}}" src="{{d.profile.level.art}}" mode="aspectFit" />
+    <app-image class="hero-crest" wx:if="{{d.profile.level.art}}" src="{{d.profile.level.art}}" mode="aspectFit" />
   </view>
   <view class="sec-title" wx:if="{{d.badges.length}}">{{lex.badge}}墙 <text class="more">已点亮 {{ownedCount}}/{{d.badges.length}}</text></view>
   <block wx:for="{{groups}}" wx:key="key" wx:for-item="g">
@@ -13,7 +13,7 @@
     <view class="badge-wall">
       <view class="bdg {{item.owned ? 'on' : ''}} r-{{item.rarity}}" wx:for="{{g.items}}" wx:key="id" bindtap="showBadge" data-id="{{item.id}}" style="{{item.bcStyle}}">
         <view class="bdg-seal" wx:if="{{item.proof && item.proof.sealed}}">✓</view>
-        <image class="bdg-img" src="{{item.iconImg || item.art}}" mode="aspectFit" />
+        <app-image class="bdg-img" src="{{item.iconImg || item.art}}" mode="aspectFit" />
         <view class="bdg-name">{{item.name}}</view>
         <view class="bdg-r" wx:if="{{item.owned}}">{{item.rarityLabel}}{{item.expired ? ' · 已过期' : ''}}</view>
         <view class="bdg-prog" wx:if="{{!item.owned && item.progress}}"><view class="bdg-prog-fill" style="width:{{item.progress.pct}}%"></view></view>

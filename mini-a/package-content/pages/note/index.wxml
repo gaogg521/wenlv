@@ -6,7 +6,7 @@
   <view wx:if="{{hasGallery}}" class="note-gallery">
     <swiper class="gallery-swiper" current="{{current}}" bindchange="onSwiper">
       <swiper-item wx:for="{{n.imagesFull}}" wx:key="url">
-        <image class="gallery-img" src="{{item.url}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
+        <app-image class="gallery-img" src="{{item.url}}" mode="aspectFit" data-i="{{index}}" bindtap="previewImage" />
         <view wx:if="{{item.motion}}" class="live-play" catchtap="playLive" data-motion="{{item.motion}}">▶ 实况</view>
       </swiper-item>
     </swiper>
@@ -17,7 +17,7 @@
   <view class="body-card">
     <!-- 作者行 -->
     <view class="author-row">
-      <image wx:if="{{n.authorAvatar}}" class="author-avatar" src="{{n.authorAvatar}}" mode="aspectFill" />
+      <app-image wx:if="{{n.authorAvatar}}" class="author-avatar" src="{{n.authorAvatar}}" mode="aspectFill" />
       <view wx:else class="author-avatar author-ph">旅</view>
       <view class="author-main">
         <view class="author-name">{{n.author}}</view>
@@ -33,7 +33,7 @@
       <block wx:if="{{n.blocksReady}}">
         <block wx:for="{{n.blocksReady}}" wx:key="index">
           <rich-text wx:if="{{item.isText}}" class="article-block" nodes="{{item.html}}" />
-          <image wx:else class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
+          <app-image wx:else class="article-block" src="{{item.url}}" mode="widthFix" data-url="{{item.url}}" bindtap="previewImage" />
         </block>
       </block>
       <block wx:else>
@@ -68,12 +68,12 @@
     </block>
     <block wx:else>
       <view class="c-item" wx:for="{{comments}}" wx:key="id">
-        <image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
+        <app-image wx:if="{{item.avatar}}" class="c-avatar" src="{{item.avatar}}" mode="aspectFill" />
         <view wx:else class="c-avatar c-avatar-ph">{{item.avatarChar}}</view>
         <view class="c-main">
           <view class="c-name">{{item.author}}<text wx:if="{{item.byAuthor}}" class="c-tag">作者</text></view>
           <view class="c-content">{{item.body}}</view>
-          <image wx:if="{{item.hasImage}}" class="c-img" src="{{item.mediaUrl}}" mode="aspectFill" data-url="{{item.mediaUrl}}" bindtap="previewCommentImage" />
+          <app-image wx:if="{{item.hasImage}}" class="c-img" src="{{item.mediaUrl}}" mode="aspectFill" data-url="{{item.mediaUrl}}" bindtap="previewCommentImage" />
           <view wx:if="{{item.isAudio}}" class="c-audio {{item.audioOn ? 'on' : ''}}" data-url="{{item.mediaUrl}}" bindtap="playCommentAudio">{{item.audioOn ? '■ 停止语音' : '▶ 播放语音'}}</view>
           <view wx:if="{{item.mediaPending}}" class="c-media-state">{{item.mediaStateText}}</view>
           <view class="c-foot">
@@ -87,7 +87,7 @@
             <view class="c-reply" wx:for="{{item.replies}}" wx:for-item="r" wx:key="id">
               <view class="c-rname">{{r.author}}<text wx:if="{{r.byAuthor}}" class="c-tag">作者</text><text wx:if="{{r.replyAuthor}}" class="c-rto">回复 @{{r.replyAuthor}}</text></view>
               <view class="c-content">{{r.body}}</view>
-              <image wx:if="{{r.hasImage}}" class="c-img" src="{{r.mediaUrl}}" mode="aspectFill" data-url="{{r.mediaUrl}}" bindtap="previewCommentImage" />
+              <app-image wx:if="{{r.hasImage}}" class="c-img" src="{{r.mediaUrl}}" mode="aspectFill" data-url="{{r.mediaUrl}}" bindtap="previewCommentImage" />
               <view wx:if="{{r.isAudio}}" class="c-audio {{r.audioOn ? 'on' : ''}}" data-url="{{r.mediaUrl}}" bindtap="playCommentAudio">{{r.audioOn ? '■ 停止语音' : '▶ 播放语音'}}</view>
               <view wx:if="{{r.mediaPending}}" class="c-media-state">{{r.mediaStateText}}</view>
               <view class="c-foot">
@@ -139,7 +139,7 @@
     <button class="ab-mini" bindtap="cancelReply">取消</button>
   </view>
   <view wx:if="{{pendingImage || pendingAudio}}" class="ab-context ab-attachment">
-    <image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" />
+    <app-image wx:if="{{pendingImage}}" class="ab-pending" src="{{pendingImage.src}}" mode="aspectFill" />
     <text class="ab-context-label">{{pendingImage ? '已选图片' : '已录语音'}}</text>
     <button wx:if="{{pendingImage}}" class="ab-mini" bindtap="removePendingImage">移除</button>
     <button wx:else class="ab-mini" bindtap="removePendingAudio">移除</button>

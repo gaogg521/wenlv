@@ -47,7 +47,7 @@ async function attest() {
   <div class="card">
     <div class="card-head"><h3>存证批次（Merkle 根 · 链式前根）</h3><span class="muted">prev_root 指向上批根：改任一批必须改其后所有批次，而最新根在链上</span></div>
     ${(d.batches || []).length ? `<table><thead><tr><th>seq</th><th>业务日</th><th>Merkle 根</th><th>前根</th><th>叶数</th><th>尝试</th><th>链上编号</th><th>状态</th></tr></thead><tbody>
-      ${d.batches.map((b) => `<tr class="click-row" ${dxKey} title="点开看这一批的事件，并逐条验证" onclick="openBlock(${Number(b.id)})"><td class="num">#${b.seq}${Number(b.is_day_close) ? ' <span class="pill off">账本日终</span>' : ''}</td>
+      ${d.batches.map((b) => `<tr class="click-row" ${dxKey} title="点开看这一批的事件，并逐条验证" onclick="openBlock(${Number(b.id)})"><td class="num">#${b.seq}${copyCell('批次号', String(b.seq), 1)}${Number(b.is_day_close) ? ' <span class="pill off">账本日终</span>' : ''}</td>
         <td>${esc(String(b.biz_date).slice(0, 10))}</td>
         <td>${hashCopy(b.merkle_root, String(b.merkle_root).slice(0, 20) + '…')}</td>
         <td class="td-sub">${b.prev_root ? hashCopy(b.prev_root, String(b.prev_root).slice(0, 12) + '…') : '链起点'}</td>
@@ -156,7 +156,7 @@ async function vcPage() {
   <div class="card">
     <div class="card-head"><h3>代用户签发（演示 / 客服）</h3><span class="muted">签完可直接复制凭证去验签台验证</span></div>
     <div class="row">
-      <input id="vcUid" type="number" placeholder="用户 id" style="width:120px">
+      <input id="vcUid" type="number" min="1" step="1" placeholder="用户 id" style="width:120px">
       <select id="vcScope"><option value="travel">旅行身份（含行程/城市/徽章）</option><option value="basic">基础身份（仅等级/入会）</option><option value="creator">创作者</option><option value="promoter">推广服务商</option><option value="merchant">商户</option></select>
       <button class="btn primary sm" onclick="issueVc()">签发</button>
       <button class="btn ghost sm" onclick="openVerifyVc()">用当前凭证打开验签台</button>
@@ -446,6 +446,8 @@ async function issueVc() {
   const userId = Number(document.getElementById('vcUid').value)
   const scope = document.getElementById('vcScope').value
   if (!userId) return toast('请填用户 id', true)
+  const r0 = await uiConfirm({ title: '签发数字凭证', target: '用户 #' + userId, changes: [{ label: '凭证范围', from: '—', to: scope || '默认' }], impact: '签发后生成 DID 与 JWT 数字凭证并写存证/审计', confirmText: '确认签发' })
+  if (!r0.ok) return
   try {
     const r = await api('POST', '/admin/web3/vc/issue', { userId, scope })
     window.__vcLast = r.jwt
@@ -470,12 +472,7 @@ function copyVc() {
   navigator.clipboard?.writeText(t).then(() => toast('已复制')).catch(() => toast('复制失败，请手动选择', true))
 }
 
-/** 复制任意文本（哈希太长，靠手选容易漏字符；证据类数字必须能整串带走） */
-function copyText(t) {
-  const s = String(t || '')
-  if (!s) return toast('没有可复制的内容', true)
-  navigator.clipboard?.writeText(s).then(() => toast('已复制 ' + (s.length > 16 ? s.slice(0, 10) + '…' : s))).catch(() => toast('复制失败，请手动选择', true))
-}
+// copyText 已上移到 core.js（window.copyText，clipboard API + execCommand 降级）——hashCell/hashCopy/copyVc 共用全局实现
 
 function openVerifyVc() {
   const t = window.__vcLast || ''
@@ -483,9 +480,9 @@ function openVerifyVc() {
 }
 
 async function revokeVc(id) {
-  const reason = prompt('吊销原因（会写进审计）', '违规或用户申请')
-  if (!reason) return
-  try { await api('POST', '/admin/web3/vc/' + id + '/revoke', { reason }); toast('已吊销'); vcPage() }
+  const r0 = await uiConfirm({ title: '吊销数字凭证', target: '凭证 #' + id, impact: '吊销后该凭证立即失效（不可恢复），原因写入审计', needReason: true, reasonPlaceholder: '吊销原因（如：违规或用户申请）', danger: true, confirmText: '确认吊销' })
+  if (!r0.ok) return
+  try { await api('POST', '/admin/web3/vc/' + id + '/revoke', { reason: r0.reason }); toast('已吊销'); vcPage() }
   catch (e) { toast(e.message, true) }
 }
 
@@ -520,7 +517,7 @@ async function chainAssetsPage() {
     <div class="row${canIssue ? '' : ' row-off'}">
       <select id="akKind">${(d.kinds || []).map((k) => `<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select>
       <select id="akChannel">${(d.channels || []).map((c) => `<option value="${c.id}" ${c.allowed ? '' : 'disabled'}>${esc(c.label)}${c.allowed ? '' : '（禁止）'}</option>`).join('')}</select>
-      <input id="akUid" type="number" placeholder="用户 id" style="width:110px">
+      <input id="akUid" type="number" min="1" step="1" placeholder="用户 id" style="width:110px">
       <input id="akToken" placeholder="tokenId（可空）" style="width:140px">
       <input id="akName" placeholder="名称，如「瑜伽修行者」" style="width:200px">
       <button class="btn primary sm" onclick="issueAsset()" ${canIssue ? '' : 'disabled title="当前链不支持发行资产"'}>发行</button>
@@ -575,8 +572,10 @@ async function issueAsset() {
   const tokenId = document.getElementById('akToken').value.trim() || null
   const name = document.getElementById('akName').value.trim() || '数字徽章'
   if (!userId) return toast('请填用户 id', true)
+  const r0 = await uiConfirm({ title: '发行资产', target: name + ' → 用户 #' + userId, changes: [{ label: '类型 / 渠道', from: '—', to: kind + ' · ' + channel }].concat(tokenId ? [{ label: 'tokenId', from: '自动分配', to: tokenId }] : []), impact: '发行后写入资产台账并上链（微信渠道被硬禁）', needReason: true, reasonPlaceholder: '发行依据（必填，记入审计）', confirmText: '确认发行' })
+  if (!r0.ok) return
   try {
-    const r = await api('POST', '/admin/web3/assets/issue', { kind, channel, userId, tokenId, meta: { name } })
+    const r = await api('POST', '/admin/web3/assets/issue', { kind, channel, userId, tokenId, meta: { name }, reason: r0.reason })
     document.getElementById('akOut').innerHTML = r.status === 1
       ? `<div class="card" style="margin-top:12px;background:#f0faf7"><span class="pill ok">已发行</span>
          <span class="muted">txRef ${esc(String(r.txRef).slice(0, 18))}… · tokenId ${esc(r.tokenId || '—')}</span></div>`
@@ -587,6 +586,8 @@ async function issueAsset() {
 }
 
 async function retryAsset(id) {
+  const r0 = await uiConfirm({ title: '补发资产', target: '发行记录 #' + id, impact: '对失败/待发行的记录重新提交发行（当前链需支持资产）', confirmText: '补发' })
+  if (!r0.ok) return
   try { const r = await api('POST', '/admin/web3/assets/' + id + '/retry'); toast(r.status === 1 ? '已补发' : (r.reason || r.err || '未完成')); chainAssetsPage() }
   catch (e) { toast(e.message, true) }
 }
@@ -906,6 +907,14 @@ if (typeof window.addEventListener === 'function' && !window.__chainResizeBound)
 async function web3dash(opt = {}) {
   if (!opt.silent) $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   if (window.__chainTimer) { clearInterval(window.__chainTimer); window.__chainTimer = null }
+  // D-01：存证总览的检索词与链路页码持久化（sessionStorage 'wlq:web3'）——非静默进入时恢复；
+  // 静默自动刷新不走恢复（保留现场），但把当前值写回
+  if (!opt.silent) {
+    const w3q = restoreQ('web3', {})
+    if (window.__attestQ == null && w3q.attestQ != null) window.__attestQ = w3q.attestQ
+    if (window.__chainPage == null && w3q.chainPage != null) window.__chainPage = Math.max(0, Number(w3q.chainPage) || 0)
+  }
+  persistQ('web3', { attestQ: String(window.__attestQ || ''), chainPage: Math.max(0, Number(window.__chainPage) || 0) })
   const demo = !!window.__demoChain
   const page = demo ? 0 : Math.max(0, Number(window.__chainPage) || 0)
   const [d, c] = await Promise.all([api('GET', '/admin/web3/overview'), api('GET', '/admin/attest/center?batchLimit=' + chainFetchLimit(page))])
@@ -937,7 +946,7 @@ async function web3dash(opt = {}) {
   const chainBad = batches.filter((b) => [3, 4].includes(Number(b.status))).length
   $('#app').innerHTML = `
   <div class="card chain-ov">
-    <div class="card-head"><h2>链上总览</h2><span class="muted">${esc(d.chainMode)} · 小程序内=旅豆积分，对外=链上权益凭证</span></div>
+    <div class="card-head"><h2>链上总览</h2><span class="muted">${esc(d.chainMode)} · 小程序内=旅豆积分，对外=链上权益凭证</span>${EXPBTN('attest', '导出存证事件')}</div>
     <div class="as-bar">
       <input id="attestQ" class="as-input" value="${esc(typed)}" placeholder="订单号 / 批次 #12 / 交易哈希 / Merkle 根 / 凭证号 / 手机号 / 用户ID / DID"
         onkeydown="if(event.key==='Enter')attestSearch()">
@@ -1550,34 +1559,43 @@ async function badges() {
 }
 async function createBadge() { return entityEditor('badge', null, { onSaved: () => badges() }) }
 async function backfillBadge(id) {
-  if (!confirm('按当前规则与阈值，对所有已达标但尚未获得的用户补发此勋章？')) return
-  try { const r = await api('POST', '/admin/web3/badges/' + id + '/backfill', {}); toast(`达标 ${r.eligible} 人，本次发放 ${r.granted} 枚${r.capped ? '（已达发行上限，部分未发）' : ''}`); badges() }
+  const r0 = await uiConfirm({ title: '按规则批量补发勋章', target: '勋章 #' + id, impact: '按当前规则与阈值，对所有已达标但尚未获得的用户批量补发（受发行上限约束）', needReason: true, reasonPlaceholder: '补发依据（必填，记入审计）', confirmText: '批量补发' })
+  if (!r0.ok) return
+  try { const r = await api('POST', '/admin/web3/badges/' + id + '/backfill', { reason: r0.reason }); toast(`达标 ${r.eligible} 人，本次发放 ${r.granted} 枚${r.capped ? '（已达发行上限，部分未发）' : ''}`); badges() }
   catch (e) { toast(e.message, true) }
 }
 async function grantBadge(id, isMerchant) {
-  const userId = prompt(isMerchant ? '发放给商户 ID：' : '发放给用户 ID：')
-  if (!userId) return
-  const reason = prompt('授予原因（可选）：') || ''
+  const r0 = await uiConfirm({ title: '发放勋章', target: '勋章 #' + id, impact: '在下方输入框先填目标 ' + (isMerchant ? '商户' : '用户') + ' ID，空格后接授予原因（可选）', needReason: true, reasonPlaceholder: (isMerchant ? '商户' : '用户') + ' ID + 授予原因（如：1024 连续打卡 30 天）', confirmText: '发放' })
+  if (!r0.ok) return
+  const m = String(r0.reason).match(/^\s*(\d+)\s*([\s\S]*)$/)
+  const oid = m ? Number(m[1]) : undefined
+  const reason = m ? (m[2] || '').trim() : r0.reason
   try {
-    const r = await api('POST', '/admin/web3/badges/' + id + '/grant', isMerchant ? { merchantId: Number(userId), reason } : { userId: Number(userId), reason })
+    const r = await api('POST', '/admin/web3/badges/' + id + '/grant', isMerchant ? { merchantId: oid, reason } : { userId: oid, reason })
     toast('已发放「' + r.badge + '」并入存证队列'); badges()
   } catch (e) { toast(e.message, true) }
 }
+window.walletGo = (n) => { window.__wPage = Math.max(1, Number(n) || 1); wallets() }
 async function wallets() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   const kw = (document.getElementById('wkw') && document.getElementById('wkw').value.trim()) || ''
-  const d = await api('GET', '/admin/web3/wallets' + (kw ? '?kw=' + encodeURIComponent(kw) : ''))
+  window.__wPage = Math.max(1, Number(window.__wPage) || 1)
+  // D-03：权益账户服务端分页（带 page 参数返回 { items, total, page, pageSize }）
+  const raw = await api('GET', '/admin/web3/wallets?' + new URLSearchParams({ ...(kw ? { kw } : {}), page: window.__wPage }).toString())
+  const d = Array.isArray(raw) ? raw : (raw.items || [])
+  const total = Array.isArray(raw) ? d.length : Number(raw.total || d.length)
   $('#app').innerHTML = `
   <div class="card">
     <div class="card-head"><h2>权益账户</h2>${['super','ops','finance'].includes(ME.role)?'<button class="btn primary sm" onclick="freedomPanel()">自由豆补贴</button>':''}
-      <div class="row" style="margin:0"><input id="wkw" placeholder="昵称 / 用户ID" style="width:180px" value="${esc(kw)}">
-      <button class="btn ghost sm" onclick="wallets()">查询</button></div></div>
+      <div class="row" style="margin:0"><input id="wkw" placeholder="昵称 / 用户ID" style="width:180px" value="${esc(kw)}" onkeydown="if(event.key==='Enter'){event.preventDefault();window.__wPage=1;wallets()}">
+      <button class="btn ghost sm" onclick="window.__wPage=1;wallets()">查询</button></div></div>
     <table><thead><tr><th>用户</th><th>积分余额</th><th>等级</th><th>成长值</th><th>勋章</th><th>存证事件</th><th></th></tr></thead><tbody>
     ${d.map((w) => `<tr><td>${esc(w.nickname || '用户' + w.user_id)}</td><td class="num"><b>${Number(w.balance)}</b></td>
       <td><span class="pill off">Lv${w.member_level}</span></td><td class="num">${Number(w.growth_value)}</td>
       <td class="num">${Number(w.badges)}</td><td class="num">${Number(w.attest_n)}</td>
       <td><button class="btn ghost sm" onclick="walletDetail(${w.user_id})">账户明细 ›</button></td></tr>`).join('') || '<tr><td colspan="7" class="td-sub">暂无账户</td></tr>'}
     </tbody></table>
+    ${pager(total, window.__wPage, 20, 'walletGo')}
   </div>
   <div id="wdetail"></div>`
 }

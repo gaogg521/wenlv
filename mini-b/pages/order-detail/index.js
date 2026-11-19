@@ -3,6 +3,8 @@ Page({
   // X-01：状态文案由服务端字典下发（order.statusText），页面不再自建状态表
   data: { order: null, error: '' },
   onLoad(q) { this.no = q.no; this.fetch() },
+  // M-05：下拉刷新
+  onPullDownRefresh() { this.fetch().catch(() => {}).then(() => wx.stopPullDownRefresh()) },
   async fetch() {
     try {
       const order = await api.request('/m/orders/' + this.no)

@@ -2,7 +2,7 @@
 <view wx:elif="{{!t}}" class="skeleton" style="height:360rpx;margin-top:20rpx"></view>
 <block wx:else>
   <view class="reject-tip" wx:if="{{t.rejectReason}}"><view class="reject-h">上次投稿未通过</view>{{t.rejectReason}}<view class="reject-sub">按意见修改后，回到「创作中心」重新选择作品提交</view></view>
-  <image wx:if="{{t.cover_img}}" class="gallery" src="{{t.cover_img}}" mode="aspectFill" bindtap="previewCover" />
+  <app-image wx:if="{{t.cover_img}}" class="gallery" src="{{t.cover_img}}" mode="aspectFill" bindtap="previewCover" />
   <view class="book-bar dt-head" style="{{t.cover_img ? '' : 'margin-top:24rpx'}}">
     <view class="dt-title">{{t.title}}</view>
     <view class="dt-meta">
@@ -38,7 +38,7 @@
   <view class="sec-title" wx:if="{{t.references.length}}">参考范例</view>
   <view class="card" wx:if="{{t.references.length}}">
     <view class="tk-ref" wx:for="{{t.references}}" wx:key="index" bindtap="openRef" data-url="{{item.url}}">
-      <image wx:if="{{item.image}}" src="{{item.image}}" mode="aspectFill" class="tk-ref-img" />
+      <app-image wx:if="{{item.image}}" src="{{item.image}}" mode="aspectFill" class="tk-ref-img" />
       <view style="flex:1">{{item.title}}<view class="muted2" wx:if="{{item.url}}">点击复制链接</view></view>
     </view>
   </view>

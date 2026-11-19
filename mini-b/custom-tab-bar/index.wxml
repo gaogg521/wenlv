@@ -3,7 +3,10 @@
     <view wx:if="{{index === 0 || index === 3 || role >= 2}}"
       class="tb-item {{selected === index ? 'on' : ''}}" bindtap="tap"
       data-path="{{item.path}}" data-index="{{index}}">
-      <image class="tb-img {{selected === index ? 'on' : ''}}" src="{{selected === index ? item.imgOn : item.img}}" mode="aspectFit" />
+      <view class="tb-icon-wrap">
+        <image class="tb-img {{selected === index ? 'on' : ''}}" src="{{selected === index ? item.imgOn : item.img}}" mode="aspectFit" />
+        <view wx:if="{{dots[index]}}" class="tb-dot"></view>
+      </view>
       <view class="tb-txt">{{item.text}}</view>
     </view>
   </block>

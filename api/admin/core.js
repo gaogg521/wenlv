@@ -85,6 +85,47 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // 这里把引号/反斜线/尖括号/&/换行全部转成 \xNN：HTML 层看到的是普通文本，JS 层是合法转义——
 // 参数按原文到达函数（round-trip），注入的代码不会执行。
 const escJs = (s) => String(s ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+
+// ===== M-14 小细节 =====
+// D-01：筛选/页码状态持久化（sessionStorage，key 统一带 'wlq:' 前缀；解析失败/非对象一律回退默认值）。
+// 页面函数入口 restoreQ 恢复、筛选/翻页变化时 persistQ 保存；刷新和返回后筛选不丢。
+const persistQ = (key, obj) => { try { sessionStorage.setItem('wlq:' + key, JSON.stringify(obj || {})) } catch { /* 存储不可用（隐私模式等）时静默 */ } }
+const restoreQ = (key, fallback) => {
+  try {
+    const raw = sessionStorage.getItem('wlq:' + key)
+    if (!raw) return fallback
+    const v = JSON.parse(raw)
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback
+  } catch { return fallback }
+}
+// D-03：通用分页条——复用 .pagination / .pagination-actions 样式与既有文案；onGo 是全局函数名（字符串），
+// 上一页/下一页按钮 onclick="onGo(n)"，调用方自行把 n 收敛到合法区间后重拉列表。
+const pager = (total, page, pageSize, onGo) => {
+  total = Math.max(0, Number(total) || 0); page = Math.max(1, Number(page) || 1); pageSize = Math.max(1, Number(pageSize) || 20)
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  return `<div class="pagination"><span>共 ${total.toLocaleString()} 条 · 第 ${page} / ${pages} 页</span><div class="pagination-actions">
+    <button class="btn ghost sm" ${page <= 1 ? 'disabled' : ''} onclick="${onGo}(${page - 1})">上一页</button>
+    <button class="btn ghost sm" ${page >= pages ? 'disabled' : ''} onclick="${onGo}(${page + 1})">下一页</button></div></div>`
+}
+// D-05：一键复制。clipboard API 优先，非安全上下文（http）降级 execCommand；
+// copyCell('标签', 值, 1) 在模板里渲染 ⧉ 小按钮（onclick 里经 escJs 转义），用户点击时 copyCell('标签','值') → copyText 复制。
+const fallbackCopy = (s, done) => {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.setAttribute('readonly', '')
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done()
+  } catch { toast('复制失败，请手动选择', true) }
+}
+window.copyText = (t) => {
+  const s = String(t ?? '')
+  if (!s) return toast('没有可复制的内容', true)
+  const done = () => toast('已复制')
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(s).then(done).catch(() => fallbackCopy(s, done))
+  else fallbackCopy(s, done)
+}
+window.copyCell = (label, value, render) => render
+  ? `<span class="copy-chip" title="${esc('复制' + (label || '内容'))}" onclick="event.stopPropagation();copyCell('${escJs(label)}','${escJs(value)}')">⧉</span>`
+  : copyText(value)
 const fen = (f) => '¥' + (Number(f || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 // 统一的日期解析：后端下发 "YYYY-MM-DD HH:mm:ss"（空格分隔），Safari 的 Date 构造器不认，
 // 必须把空格换成 T 再解析；非法输入返回 Invalid Date，由调用方按需兜底。
@@ -99,14 +140,65 @@ function toast(msg, err) {
   $('#toastWrap').appendChild(d)
   setTimeout(() => d.remove(), 2600)
 }
-function modal(title, bodyHtml, foots) {
+function modal(title, bodyHtml, foots, guard) {
+  // D-06：guard=true 的弹窗（参数中心编辑）由 closeModal 守卫——有未保存修改时先二次确认
+  window.__modalGuard = !!guard
   const root = $('#modalRoot')
   root.innerHTML = `<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal"><div class="modal-head"><h3>${title}</h3><button class="modal-x" onclick="closeModal()">✕</button></div>
     <div class="modal-body">${bodyHtml}</div>
     <div class="modal-foot">${foots}</div></div></div>`
 }
-function closeModal() { $('#modalRoot').innerHTML = '' }
+function closeModal() {
+  // M-12：uiConfirm 的弹窗被关闭（点空白/✕/Esc）时，把挂起的 Promise 以「取消」结清，不让调用方永久等待
+  if (window.uiConfirmResolve) { const r = window.uiConfirmResolve; window.uiConfirmResolve = null; setTimeout(() => r({ ok: false, reason: '' }), 0) }
+  // D-06：带守卫的弹窗且有未保存修改 → 先弹确认；「放弃修改」才真正关闭，「留下」恢复原弹窗（含已输入的值）。
+  // uiConfirm 自身也走 modal()（会把 __modalGuard 重置为 false），所以这里先摘守卫防递归，结束再按结果恢复。
+  if (window.__modalGuard && window.__cfgDirty) {
+    const root = $('#modalRoot')
+    const snapshot = root.innerHTML
+    const vals = [...root.querySelectorAll('input:not([type=hidden]),textarea,select')].map((el) => el.value)
+    window.__modalGuard = false
+    window.uiConfirm({ title: '有未保存的修改', impact: '离开将丢失修改', confirmText: '放弃修改', danger: true }).then((r) => {
+      if (r.ok) { window.__modalGuard = false; closeModal() }
+      else {
+        root.innerHTML = snapshot
+        ;[...root.querySelectorAll('input:not([type=hidden]),textarea,select')].forEach((el, i) => { if (vals[i] != null) el.value = vals[i] })
+        window.__modalGuard = true
+      }
+    })
+    return
+  }
+  $('#modalRoot').innerHTML = ''
+}
+// ===== M-12：三端统一「修改二次确认」——PC 端标准确认框（Promise 化） =====
+// uiConfirm({title, target, changes:[{label,from,to}], impact, needReason, danger, confirmText})
+//   - 确认 → resolve({ok:true, reason})；取消/关闭 → resolve({ok:false, reason:''})
+//   - needReason=true（A+ 高危：金额变动超 ±30%、批量超 5 条、资金类、停用/冻结、参数中心）必须填原因，随结果返回，调用方传给接口入审计
+//   - 按钮用具体文案（confirmText，如「确认改价」），不用「确定」
+let _uiConfirmResolve = null
+window.uiConfirmResolve = null
+window.uiConfirm = function (opts) {
+  opts = opts || {}
+  const lines = []
+  if (opts.target) lines.push('<b>' + esc(opts.target) + '</b>')
+  for (const c of opts.changes || []) lines.push(esc((c.label ? c.label + '：' : '') + c.from + ' → ' + c.to))
+  if (opts.impact) lines.push('<span class="ui-confirm-impact">' + esc(opts.impact) + '</span>')
+  const body = '<div class="ui-confirm-body">' + lines.map((l) => '<div>' + l + '</div>').join('') + '</div>'
+    + (opts.needReason ? '<div class="ui-confirm-reason"><textarea id="uiConfirmReason" rows="2" maxlength="200" placeholder="' + esc(opts.reasonPlaceholder || '变更原因（必填，至少 2 个字，记入审计）') + '"></textarea></div>' : '')
+  modal(opts.title || '请确认', body, [
+    '<button class="btn ghost" onclick="uiConfirmCancel()">取消</button>',
+    '<button class="btn ' + (opts.danger ? 'danger' : 'primary') + '" onclick="uiConfirmOk()">' + esc(opts.confirmText || '确认') + '</button>',
+  ].join(''))
+  return new Promise((resolve) => { window.uiConfirmResolve = resolve })
+}
+window.uiConfirmOk = function () {
+  const el = document.getElementById('uiConfirmReason')
+  const reason = el ? el.value.trim() : ''
+  if (el && reason.length < 2) { toast('请填写变更原因（至少 2 个字）', true); return }
+  const r = window.uiConfirmResolve; window.uiConfirmResolve = null; closeModal(); r({ ok: true, reason })
+}
+window.uiConfirmCancel = function () { const r = window.uiConfirmResolve; window.uiConfirmResolve = null; closeModal(); r({ ok: false, reason: '' }) }
 function drawer(title, bodyHtml) {
   const root = $('#modalRoot')
   root.innerHTML = `<div class="drawer-overlay" onclick="closeModal()"></div>
@@ -179,6 +271,8 @@ function logout() {
 async function boot() {
   if (!TOKEN) { $('#login').style.display = 'flex'; $('#frame').style.display = 'none'; return }
   $('#login').style.display = 'none'; $('#frame').style.display = 'flex'
+  // D-08：会话过期被动登出时 api() 在 reload 前写入的提示，重新登录进入后台后补 toast 并清键
+  try { const pt = sessionStorage.getItem('postLoginToast'); if (pt) { sessionStorage.removeItem('postLoginToast'); setTimeout(() => toast(pt, true), 300) } } catch { /* sessionStorage 不可用时忽略 */ }
   try {
     ADMIN_CAPABILITIES = await api('GET', '/admin/capabilities')
     ME = { ...ME, role: ADMIN_CAPABILITIES.role, scopeCity: ADMIN_CAPABILITIES.scopeCity }

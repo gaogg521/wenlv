@@ -1,4 +1,5 @@
 const api = require('../../../utils/api')
+const { confirmChange } = require('../../../utils/confirm')
 Page({
   data: {
     seg: 'earn', ov: null, scene: null, qrcode: '', customers: [], nameMap: { 1: '基础 5%', 2: '优选 8%', 3: '金牌 12%' }, state: 'loading', error: '',
@@ -66,9 +67,13 @@ Page({
   },
   async withdraw() {
     if (!this.data.ov || !this.data.ov.canWithdraw) return
-    const ok = await new Promise((r) => wx.showModal({ title: '申请提现', content: '可提现金额将全数申请，提交后等待财务核对，实际付款以登记结果为准', success: r }))
-    if (!ok.confirm) return
-    try { await api.request('/c/promote/withdraw', 'POST', { note: '小程序申请' }); wx.showToast({ title: '已提交，等待财务审批' }); this.fetch() }
+    // M-12：统一二次确认（A 级资金动作）——写清金额与影响
+    const c = await confirmChange({ title: '申请提现确认', target: '推广佣金提现',
+      changes: [{ label: '提现金额', from: '可提现 ¥' + this.data.ov.withdrawableYuan, to: '全数申请' }],
+      impact: '提交后等待财务核对，实际付款以登记结果为准；待审期间金额占用，可撤销',
+      confirmText: '确认提现' })
+    if (!c.ok) return
+    try { await api.request('/c/promote/withdraw', 'POST', { note: '小程序申请' }); wx.showToast({ title: '已提交，等待财务审批', icon: 'none' }); this.fetch() }
     catch (e) { wx.showToast({ title: e.msg || '失败', icon: 'none' }) }
   },
 })

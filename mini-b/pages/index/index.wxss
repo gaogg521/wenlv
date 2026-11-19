@@ -21,3 +21,12 @@ button::after{border:0}button{font-weight:400}.scan-action{display:flex;align-it
 .todo-num.todo-hot { color: #b45309; }
 .todo-label { font-size: 22rpx; color: #4c4470; font-weight: 600; }
 .todo-cap { font-size: 18rpx; color: #68707c; line-height: 1.4; }
+
+/* M-02/M-09：到单提醒状态条 + 新订单提示条（不依赖微信授权的应用内兜底） */
+.notify-bar{display:flex;align-items:center;gap:12rpx;min-height:64rpx;padding:8rpx 24rpx;margin:0 24rpx 16rpx;background:#fffaf0;border:1rpx solid #e8dfd0;border-radius:16rpx;font-size:24rpx;color:#766b59}
+.notify-bar.on{background:#f2f7ee;border-color:#dbe7d3;color:#5a6b4f}
+.notify-bar-dot{width:12rpx;height:12rpx;border-radius:50%;background:#b5915a}
+.notify-bar.on .notify-bar-dot{background:#7fa05f}
+.order-banner{display:flex;align-items:center;justify-content:space-between;margin:0 24rpx 16rpx;padding:8rpx 24rpx;min-height:88rpx;box-sizing:border-box;background:#fdf1e6;border:1rpx solid #e8c9a8;border-radius:16rpx;font-size:26rpx;color:#8a4d2b}
+.order-banner-actions{display:flex;align-items:center;gap:16rpx;font-size:24rpx;color:#766b59;min-height:88rpx;padding-left:20rpx}
+.order-banner-go{color:#ad603d;font-weight:600}

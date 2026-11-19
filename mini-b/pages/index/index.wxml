@@ -12,6 +12,8 @@
     <button class="welcome-button" bindtap="goLogin">登录 / 绑定门店　→</button>
   </view>
   <block wx:else>
+    <view wx:if="{{notifyBar}}" class="notify-bar {{notifyBar.key}}" bindtap="goNotifyBar"><view class="notify-bar-dot"></view><text>{{notifyBar.label}}</text></view>
+    <view wx:if="{{newOrderBanner}}" class="order-banner" bindtap="goBannerOrders"><text>🔔 有 {{newOrderBanner.count}} 笔新支付订单</text><view class="order-banner-actions"><text catchtap="dismissOrderBanner">忽略</text><text class="order-banner-go">查看 ›</text></view></view>
     <view class="overview" wx:if="{{wb}}">
       <view class="overview-head"><text>{{periodLabel}}经营</text><text class="overview-caption">仅本店数据</text></view>
       <view class="overview-money" wx:if="{{role >= 2}}"><text class="currency">¥</text>{{wb.todayGmv}}<text class="money-label">所选期间流水</text></view>

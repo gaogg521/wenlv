@@ -8,7 +8,7 @@
       <view class="bn-num">{{bean ? bean.balance : '--'}}</view>
       <view class="bn-sub" wx:if="{{bean}}">约可抵 ¥{{bean.yuan}} · 100 豆抵 ¥10</view>
     </view>
-    <image class="bn-coin" wx:if="{{bean.coinArt}}" src="{{bean.coinArt}}" mode="aspectFit" />
+    <app-image class="bn-coin" wx:if="{{bean.coinArt}}" src="{{bean.coinArt}}" mode="aspectFit" />
   </view>
   <view class="bn-chips" wx:if="{{bean}}">
     <view class="bn-chip"><view class="bn-cv">+{{bean.monthIn}}</view><view class="bn-cl">本月获得</view></view>
@@ -28,7 +28,7 @@
 <view class="sec-title" wx:if="{{levels.length}}">会员等级 <text class="more">成长值来自消费与有效贡献</text></view>
 <view class="card fade-up bn-level" wx:if="{{levels.length}}">
   <view class="bn-lv-top">
-    <image class="bn-crest" src="{{levelArt}}" mode="aspectFit" />
+    <app-image class="bn-crest" src="{{levelArt}}" mode="aspectFit" />
     <view class="bn-lv-info">
       <view class="bn-lv-name">{{levelName}}</view>
       <view class="bn-lv-hint">{{levelHint}}</view>
@@ -36,7 +36,7 @@
     </view>
   </view>
   <view class="bn-lv-row {{level >= item.lv ? 'on' : ''}}" wx:for="{{levels}}" wx:key="lv">
-    <image class="bn-lv-ico" src="{{item.art}}" mode="aspectFit" />
+    <app-image class="bn-lv-ico" src="{{item.art}}" mode="aspectFit" />
     <view class="bn-lv-txt">
       <view><text class="bn-lv-n">{{item.name}}</text><text class="muted2" style="margin-left:12rpx">{{item.need}}</text></view>
       <view class="muted2" wx:if="{{item.perkText}}">{{item.perkText}}</view>
@@ -45,7 +45,7 @@
   </view>
 </view>
 
-<view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">最近收支 · 每笔可查</text></view>
+<view class="sec-title" wx:if="{{ledger.length}}">旅豆账本 <text class="more">共 {{ledgerTotal}} 笔 · 每笔可查</text></view>
 <view class="card fade-up" wx:if="{{ledger.length}}">
   <view class="bn-led" wx:for="{{ledger}}" wx:key="tx_no">
     <view class="bn-ico {{item.direction === 1 ? 'in' : 'out'}}">{{glyph[item.biz_type] || '豆'}}</view>
@@ -55,6 +55,8 @@
     </view>
     <text class="bn-led-amt {{item.direction === 1 ? 'in' : 'out'}}">{{item.direction === 1 ? '+' : '−'}}{{item.amount}}</text>
   </view>
+  <view wx:if="{{ledgerHasMore}}" class="more-ledger" bindtap="loadMoreLedger">查看更多（已显示 {{ledger.length}}/{{ledgerTotal}} 笔）⌄</view>
+  <view wx:elif="{{ledgerTotal}}" class="more-ledger">已显示全部 {{ledgerTotal}} 笔</view>
 </view>
 <view class="note">{{bean ? bean.rule : '加载中…'}}</view>
 

@@ -20,4 +20,11 @@ Page({
     // 复用主题游列表页并带城市参数（列表页已支持 cat/kw，此处带 city 走同一筛选入口）
     wx.switchTab({ url: '/pages/tour-list/index' })
   },
+  // T-02：下拉刷新复用目的地聚合加载，完成后收起转圈
+  onPullDownRefresh() {
+    Promise.resolve(this.fetch()).then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
+  },
+  // T-05：分享（本页为城市聚合列表，无单一当前目的地，标题用页面口径）
+  onShareAppMessage() { return { title: '向往的自由 · 目的地', path: '/pages/destination/index' } },
+  onShareTimeline() { return { title: '向往的自由 · 目的地' } }
 })

@@ -13,7 +13,7 @@
   <view class="wf-col">
     <view class="wf-card" wx:for="{{leftItems}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
       <view class="wf-cover-box">
-        <image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" />
         <view wx:else class="wf-cover wf-ph"><text class="wf-ph-text">{{item.excerpt}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wf-play">▶</view>
       </view>
@@ -22,7 +22,7 @@
         <text class="wf-topic" wx:for="{{item.cardTopics}}" wx:for-item="t" wx:key="*this" catchtap="goTopic" data-topic="{{t}}">#{{t}}</text>
       </view>
       <view class="wf-meta">
-        <image wx:if="{{item.avatar}}" class="wf-avatar" src="{{item.avatar}}" mode="aspectFill" />
+        <app-image wx:if="{{item.avatar}}" class="wf-avatar" src="{{item.avatar}}" mode="aspectFill" />
         <view wx:else class="wf-avatar wf-avatar-ph">{{item.authorChar}}</view>
         <text class="wf-author">{{item.author}}</text>
         <text class="wf-like" catchtap="like" data-id="{{item.id}}" data-liked="{{item.liked}}">{{item.liked ? '♥' : '♡'}} {{item.likeCount}}</text>
@@ -32,7 +32,7 @@
   <view class="wf-col">
     <view class="wf-card" wx:for="{{rightItems}}" wx:key="id" data-id="{{item.id}}" bindtap="goNote">
       <view class="wf-cover-box">
-        <image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.cover}}" class="wf-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" />
         <view wx:else class="wf-cover wf-ph"><text class="wf-ph-text">{{item.excerpt}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wf-play">▶</view>
       </view>
@@ -41,7 +41,7 @@
         <text class="wf-topic" wx:for="{{item.cardTopics}}" wx:for-item="t" wx:key="*this" catchtap="goTopic" data-topic="{{t}}">#{{t}}</text>
       </view>
       <view class="wf-meta">
-        <image wx:if="{{item.avatar}}" class="wf-avatar" src="{{item.avatar}}" mode="aspectFill" />
+        <app-image wx:if="{{item.avatar}}" class="wf-avatar" src="{{item.avatar}}" mode="aspectFill" />
         <view wx:else class="wf-avatar wf-avatar-ph">{{item.authorChar}}</view>
         <text class="wf-author">{{item.author}}</text>
         <text class="wf-like" catchtap="like" data-id="{{item.id}}" data-liked="{{item.liked}}">{{item.liked ? '♥' : '♡'}} {{item.likeCount}}</text>

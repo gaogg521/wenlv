@@ -74,7 +74,7 @@ Page({
     const topic = this.data.topic || ''
     const scenic = this.data.scenicId || 0
     const qs = 'page=' + page + '&pageSize=' + this.data.pageSize + '&topic=' + encodeURIComponent(topic) + '&scenic=' + scenic
-    api.request('/c/notes/feed?' + qs).then((d) => {
+    return api.request('/c/notes/feed?' + qs).then((d) => {
       if (topic !== (this.data.topic || '') || scenic !== (this.data.scenicId || 0)) return // 已切话题，丢弃旧响应
       const raw = (reset ? d.items : this.all().concat(d.items)).map((x) => ({
         ...x, productText: x.productTitle ? ' · ' + x.productTitle : '',
@@ -99,4 +99,20 @@ Page({
   },
   goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   goCreate() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
+  // T-02：下拉刷新回到第一页重新加载，完成后收起转圈
+  onPullDownRefresh() {
+    Promise.resolve(this.fetch(true)).then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
+  },
+  // T-05：分享（带当前话题/景区过滤参数）
+  onShareAppMessage() {
+    const topic = this.data.topic || ''
+    const scenic = this.data.scenicId || 0
+    let path = '/package-content/pages/square/index'
+    if (topic || scenic) {
+      path += '?topic=' + encodeURIComponent(topic) + '&scenic=' + scenic
+      if (this.data.scenicName) path += '&scenicName=' + encodeURIComponent(this.data.scenicName)
+    }
+    return { title: '旅行笔记广场', path }
+  },
+  onShareTimeline() { return { title: '旅行笔记广场' } }
 })

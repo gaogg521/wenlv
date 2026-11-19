@@ -18,7 +18,7 @@ Page({
   goDetail(e) { wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + e.currentTarget.dataset.id }) },
   fetch() {
     this.setData({ loading: true, error: '' })
-    api.request('/c/tours?cat=' + this.data.active + '&kw=' + encodeURIComponent(this.data.kw || '') + (this.city ? '&city=' + this.city : '')).then(list => {
+    return api.request('/c/tours?cat=' + this.data.active + '&kw=' + encodeURIComponent(this.data.kw || '') + (this.city ? '&city=' + this.city : '')).then(list => {
       // D01：列表同源价格——priceNow 为折扣/早鸟后最低有效单价；priceText/showPromo 预计算（wxml 只做取值）
       const tours = (list || []).map(t => {
         const cover = api.coverFor(t)
@@ -40,5 +40,16 @@ Page({
         this.setData({ tours: [], loading: false, demo: false, error: e.msg || '加载失败，请检查网络后重试' })
       }
     })
-  }
+  },
+  // T-02：下拉刷新复用列表加载逻辑，加载完成后收起转圈
+  onPullDownRefresh() {
+    Promise.resolve(this.fetch()).then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
+  },
+  // T-05：分享（标题带当前筛选主题）
+  onShareAppMessage() {
+    const cat = (this.data.cats || []).find((c) => c.k === this.data.active)
+    const label = cat && cat.k !== 'all' && cat.n ? ' · ' + cat.n : ''
+    return { title: '向往的自由 · 主题游' + label, path: '/pages/tour-list/index' }
+  },
+  onShareTimeline() { return { title: '向往的自由 · 主题游' } }
 })

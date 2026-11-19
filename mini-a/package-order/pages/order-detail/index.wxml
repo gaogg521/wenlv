@@ -3,7 +3,7 @@
 <block wx:else>
   <view class="hero">
     <view class="hi">{{o.title}}</view>
-    <view class="sub2">{{o.days_desc}} · {{o.qty}} {{o.stockOrder ? '件' : '人'}} · 单号 {{o.order_no}}</view>
+    <view class="sub2">{{o.days_desc}} · {{o.qty}} {{o.stockOrder ? '件' : '人'}} · 单号 {{o.order_no}}<text class="copy-no" catchtap="copyNo">复制</text></view>
     <view style="margin-top:14rpx"><text style="font-size:44rpx;font-weight:600">¥{{o.amountPayLabel}}</text>
       <text class="st-tag">{{o.stockOrder && o.status === 30 ? '待履约' : (o.statusText || stName[o.status] || '—')}}</text></view>
   </view>
@@ -18,7 +18,7 @@
     <view wx:if="{{o.status === 30}}" class="btn ghost sm" style="margin-top:12rpx" bindtap="askDepartRemind">订阅出行前一天提醒</view>
   </view>
   <view class="card place-card" wx:if="{{o.merchantContact && o.merchantContact.name}}">
-    <image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />
+    <app-image wx:if="{{o.merchantContact.logo}}" class="place-img logo" src="{{o.merchantContact.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0"><view class="place-name">{{o.merchantContact.name}}</view><view class="muted2" wx:if="{{o.merchantContact.address}}">{{o.merchantContact.address}}</view></view>
     <view class="mc-ops"><text wx:if="{{o.merchantContact.phone}}" bindtap="callMerchant">📞</text><text wx:if="{{o.merchantContact.geo}}" bindtap="navMerchant">🧭</text></view>
   </view>
@@ -56,9 +56,11 @@
         wx:if="{{o.status === 10}}" bindtap="refund">取消订单</view>
   <view class="btn ghost" style="color:var(--red);border-color:var(--red)"
         wx:if="{{o.status === 20 || o.status === 30}}" bindtap="refund">申请退款</view>
-  <view class="note" wx:if="{{o.status === 40}}">凭证已核销。如对服务有异议，请在「我的 - 常见问题」联系客服处理售后。</view>
+  <view class="note" wx:if="{{o.status === 40}}">凭证已核销。如对服务有异议，可点下方「联系客服」处理售后。</view>
   <view class="btn ghost" style="color:#1a9c6b;border-color:#1a9c6b"
         wx:if="{{o.canRebook}}" bindtap="rebook">未成团 · 免费改签 ›</view>
+  <view class="btn ghost" wx:if="{{o.status === 40 || o.status === 50 || o.status === 70}}" bindtap="goRebook">再次预订 ›</view>
+  <button class="contact-btn" open-type="contact">联系客服</button>
 
   <!-- 写评价：核销完成后 · 一单一评 -->
   <view class="card" wx:if="{{o.status === 50 && !o.reviewed && !reviewDone}}">

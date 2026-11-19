@@ -22,7 +22,7 @@ Page({
   async claim() {
     try {
       await api.request('/c/tasks/' + this.id + '/claim', 'POST', {})
-      wx.showToast({ title: '已领取，去创作吧' })
+      wx.showToast({ title: '已领取，去创作吧', icon: 'none' })
       setTimeout(() => wx.navigateBack(), 800)
     } catch (e) { wx.showToast({ title: e.msg || '领取失败', icon: 'none' }) }
   },

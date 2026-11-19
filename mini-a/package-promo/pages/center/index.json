@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "推广中心", "usingComponents": { "ui-state": "/components/ui-state/index" } }
+{ "navigationBarTitleText": "推广中心", "usingComponents": { "ui-state": "/components/ui-state/index", "app-image": "/components/app-image/index" } }

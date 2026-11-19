@@ -5,8 +5,10 @@
 async function content() {
   $('#app').innerHTML = `<div class="card">${skel(4)}</div>`
   // T03/T10：服务端检索 + 分页契约 { rows, total, page, pageSize, statusCounts }
-  window.__contentQ = window.__contentQ || { page: 1, status: '', kw: '' }
+  // D-01：筛选/页码持久化（sessionStorage 'wlq:content'）——入口恢复 + 写回
+  window.__contentQ = Object.assign({ page: 1, status: '', kw: '' }, window.__contentQ || restoreQ('content', {}))
   const Q = window.__contentQ
+  persistQ('content', Q)
   const search = new URLSearchParams()
   if (Q.status !== '') search.set('status', Q.status)
   if (Q.kw) search.set('kw', Q.kw)
@@ -33,7 +35,7 @@ async function content() {
     <div class="pagination"><span>共 ${Number(data.total).toLocaleString()} 条 · 第 ${data.page} / ${pages} 页</span><div><button class="btn ghost sm" ${data.page <= 1 ? 'disabled' : ''} onclick="window.__contentQ.page--;content()">上一页</button> <button class="btn ghost sm" ${data.page >= pages ? 'disabled' : ''} onclick="window.__contentQ.page++;content()">下一页</button></div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>线路评价管理</h2><span class="muted">游客核销后一单一评 · 文本已过机审 · 可隐藏违规/刷评</span></div>
+    <div class="card-head"><h2>线路评价管理</h2><span class="muted">游客核销后一单一评 · 文本已过机审 · 可隐藏违规/刷评</span>${EXPBTN('reviews', '导出评价')}</div>
     ${rvs.length ? `<table><thead><tr><th>用户</th><th>线路</th><th>评分</th><th>内容</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${rvs.map((r) => `<tr><td>${esc(r.nickname)}</td><td class="td-main"><span class="ellip" title="${esc(r.title)}">${esc(r.title)}</span></td>
       <td class="num" style="color:var(--brand);font-weight:700">${r.rating} ★</td>
@@ -47,6 +49,8 @@ async function content() {
 }
 async function toggleReview(id, show) {
   if (!adminCan('review.moderate')) return toast('评价展示由审核员或超级管理员处理', true)
+  const r = await uiConfirm({ title: show ? '恢复评价展示' : '隐藏评价', target: '评价 #' + id, changes: [{ label: '评价状态', from: show ? '已隐藏' : '展示中', to: show ? '展示中' : '已隐藏' }], impact: show ? '恢复后游客端重新可见' : '隐藏后游客端不再展示（处理违规/刷评用）', danger: !show, confirmText: show ? '恢复展示' : '确认隐藏' })
+  if (!r.ok) return
   try { await api('POST', `/admin/reviews/${id}/hide`, { show }); content() } catch (e) { toast(e.message, true) }
 }
 
@@ -122,16 +126,18 @@ async function tasks() {
 }
 async function taskStatus(id, status) {
   if (!adminCan('task.status')) return toast('任务上下线由运营或超级管理员处理', true)
-  if (status === 4 && !confirm('下线后游客不能再领取；已领取的人仍可投稿，审核照常。确定下线？')) return
+  const off = status === 4
+  const r = await uiConfirm({ title: off ? '下线约稿任务' : '重新上线约稿任务', target: '任务 #' + id, changes: [{ label: '任务状态', from: off ? '招募中' : '已下线', to: off ? '已下线' : '招募中' }], impact: off ? '下线后游客不能再领取；已领取的人仍可投稿，审核照常' : '重新上线后游客可继续领取', danger: off, confirmText: off ? '确认下线' : '确认上线' })
+  if (!r.ok) return
   try { await api('POST', `/admin/content-tasks/${id}/status`, { status }); toast(status ? '已下线' : '已重新上线'); tasks() } catch (e) { toast(e.message, true) }
 }
 async function taskCashPaid(entryId, amount) {
   if (!adminCan('task.cashPaid')) return toast('请由财务或超级管理员在「资金结算 → 现金加奖打款」登记实际打款', true)
   const source = location.hash
-  const ref = prompt(`登记现金加奖打款 ${amount}\n请输入打款流水号（银行/支付平台流水，唯一）：`)
-  if (!ref) return
+  const r = await uiConfirm({ title: '登记现金打款', target: '现金加奖投稿 #' + entryId, changes: [{ label: '打款金额', from: '待打款', to: amount }], impact: '请先完成实际支付，再登记银行/支付平台流水号（唯一，留痕可追溯）', needReason: true, reasonPlaceholder: '打款流水号（银行/支付平台流水，唯一）', confirmText: '登记' })
+  if (!r.ok) return
   try {
-    await api('POST', `/admin/task-entries/${entryId}/cash-paid`, { ref: ref.trim() })
+    await api('POST', `/admin/task-entries/${entryId}/cash-paid`, { ref: r.reason })
     toast('已登记打款')
     if (location.hash === source) await (source === '#taskcash' ? taskCash() : tasks())
   } catch (e) { toast(e.message, true) }
@@ -261,7 +267,10 @@ function rvSync() {
 async function entryVerdict(id, pass, fails = 0, taskId, next) {
   const reason = (document.getElementById('rvReason')?.value || '').trim()
   if (!pass && reason.length < 4) { toast('请填写驳回原因（至少 4 个字），作者会看到它', true); document.getElementById('rvReason')?.focus(); return }
-  if (pass && fails && !confirm(`有 ${fails} 项自动核对未通过，确定仍然通过？`)) return
+  if (pass && fails) {
+    const c = await uiConfirm({ title: '仍要通过投稿？', target: '投稿 #' + id, impact: `有 ${fails} 项自动核对未通过；通过后立即发放奖励，判定进入审核记录`, danger: true, confirmText: '仍通过' })
+    if (!c.ok) return
+  }
   const rules = [...document.querySelectorAll('[data-rule]')].map((b) => b.checked)
   try {
     const r = await api('POST', '/admin/task-entries/' + id + '/verdict', { pass, reason, rules })
@@ -314,7 +323,8 @@ async function noteVerdict(id, pass, revision, next) {
 }
 async function deleteTask(id) {
   if (!adminCan('task.delete')) return toast('任务删除由运营或超级管理员处理', true)
-  if (!confirm('删除该任务？')) return
+  const r = await uiConfirm({ title: '删除约稿任务', target: '任务 #' + id, impact: '仅无参与记录的任务可删除；删除后不可恢复', danger: true, confirmText: '确认删除' })
+  if (!r.ok) return
   try { await api('POST', '/admin/content-tasks/' + id + '/delete', {}); toast('任务已删除'); tasks() } catch (e) { toast(e.message, true) }
 }
 
@@ -383,9 +393,15 @@ async function faqs() {
   </div>`
 }
 async function faqModal(id) { return entityEditor('faq', id || null, { onSaved: () => faqs() }) }
-async function toggleFaq(id, status) { await api('POST', '/admin/faqs/' + id + '/update', { status }); faqs() }
+async function toggleFaq(id, status) {
+  const off = status !== 1
+  const r = await uiConfirm({ title: off ? '下架 FAQ' : '上架 FAQ', target: '常见问题 #' + id, changes: [{ label: '状态', from: off ? '上架' : '下架', to: off ? '下架' : '上架' }], impact: off ? '下架后小程序「常见问题」不再展示该条' : '上架后恢复展示', danger: off, confirmText: off ? '确认下架' : '确认上架' })
+  if (!r.ok) return
+  await api('POST', '/admin/faqs/' + id + '/update', { status }); faqs()
+}
 async function delFaq(id) {
-  if (!confirm('确认删除该问题？')) return
+  const r = await uiConfirm({ title: '删除 FAQ', target: '常见问题 #' + id, impact: '删除后小程序不再展示，且不可恢复', danger: true, confirmText: '确认删除' })
+  if (!r.ok) return
   await api('POST', '/admin/faqs/' + id + '/delete', {}); toast('已删除'); faqs()
 }
 async function banners() {
@@ -410,9 +426,15 @@ async function banners() {
   </div>`
 }
 async function bannerModal(id) { return entityEditor('banner', id || null, { onSaved: () => banners() }) }
-async function toggleBanner(id, status) { await api('POST', '/admin/banners/' + id + '/update', { status }); banners() }
+async function toggleBanner(id, status) {
+  const off = status !== 1
+  const r = await uiConfirm({ title: off ? '下架轮播' : '上架轮播', target: '轮播 #' + id, changes: [{ label: '状态', from: off ? '上架' : '下架', to: off ? '下架' : '上架' }], impact: off ? '下架后小程序首页轮播位不再展示该条' : '上架后按投放窗口展示', danger: off, confirmText: off ? '确认下架' : '确认上架' })
+  if (!r.ok) return
+  await api('POST', '/admin/banners/' + id + '/update', { status }); banners()
+}
 async function delBanner(id) {
-  if (!confirm('确认删除该轮播？')) return
+  const r = await uiConfirm({ title: '删除轮播', target: '轮播 #' + id, impact: '删除后小程序首页不再展示，且不可恢复', danger: true, confirmText: '确认删除' })
+  if (!r.ok) return
   await api('POST', '/admin/banners/' + id + '/delete', {}); toast('已删除'); banners()
 }
 

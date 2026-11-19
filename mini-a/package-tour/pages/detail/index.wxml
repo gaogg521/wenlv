@@ -6,7 +6,7 @@
   <view class="dt-cover">
     <swiper class="gallery" indicator-dots="{{gallery.length > 1}}" circular bindchange="onSwiper" current="{{gIdx}}">
       <swiper-item wx:for="{{gallery}}" wx:key="index">
-        <image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy-load bindtap="preview" data-i="{{index}}" />
+        <app-image src="{{item}}" mode="aspectFill" style="width:100%;height:100%" lazy="{{true}}" bindtap="preview" data-i="{{index}}" />
       </swiper-item>
     </swiper>
     <view class="g-count">{{galleryCountText}}</view>
@@ -68,7 +68,7 @@
         <view class="iti-time" wx:if="{{item.time}}">{{item.time}}</view>
         <view class="iti-title">{{item.title}}</view>
         <view class="iti-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
-        <image wx:if="{{item.image}}" class="iti-img" src="{{item.image}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.image}}" class="iti-img" src="{{item.image}}" mode="aspectFill" lazy="{{true}}" />
       </view>
     </view>
     <view class="muted2" wx:if="{{extra.transport}}" style="margin-top:12rpx">🚌 {{extra.transport}}</view>
@@ -89,7 +89,7 @@
   <!-- 合作景区 / 履约商户：资料来自后台资料编辑器（只含公开字段） -->
   <view class="sec-title" wx:if="{{scenic || merchant}}">{{p.purchase ? '商户信息' : '在哪里玩 · 谁来接待'}}</view>
   <view class="card place-card" wx:if="{{scenic}}" bindtap="goPlace" data-kind="scenic" data-id="{{scenic.id}}">
-    <image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
+    <app-image wx:if="{{scenic.cover}}" class="place-img" src="{{scenic.cover}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{scenic.name}} <text class="tag" wx:if="{{scenic.scenic_level}}">{{scenic.scenic_level}}</text></view>
       <view class="muted2" wx:if="{{scenic.open_hours}}">🕘 {{scenic.open_hours}}</view>
@@ -97,14 +97,14 @@
     </view><text class="pl-link">›</text>
   </view>
   <view class="card place-card" wx:if="{{merchant}}" bindtap="goPlace" data-kind="merchant" data-id="{{p.merchant_id}}">
-    <image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
+    <app-image wx:if="{{merchant.logo}}" class="place-img logo" src="{{merchant.logo}}" mode="aspectFill" />
     <view style="flex:1;min-width:0">
       <view class="place-name">{{merchant.short_name || merchant.name}} <text class="tag">{{merchant.kind_label || '履约商户'}}</text></view>
       <view class="muted2" wx:if="{{merchant.hoursText}}">🕘 {{merchant.hoursText}}</view>
       <view class="mh-row" wx:if="{{merchant.honor}}">
-        <image class="mh-crest" src="{{merchant.honor.art}}" mode="aspectFit" />
+        <app-image class="mh-crest" src="{{merchant.honor.art}}" mode="aspectFit" />
         <text class="mh-lv">{{merchant.honor.name}}</text>
-        <image class="mh-b" wx:for="{{merchant.honor.badges}}" wx:key="name" src="{{item.art}}" mode="aspectFit" />
+        <app-image class="mh-b" wx:for="{{merchant.honor.badges}}" wx:key="name" src="{{item.art}}" mode="aspectFit" />
       </view>
       <view class="dt-meta" wx:if="{{merchant.tags.length}}"><text class="tag blue" wx:for="{{merchant.tags}}" wx:key="*this">{{item}}</text></view>
     </view><text class="pl-link">›</text>
@@ -115,7 +115,7 @@
     <view class="sec-title">{{p.purchase ? '商品相关笔记' : '走过这条线路的笔记'}}</view>
     <view class="pl-notes">
       <view class="pl-note" wx:for="{{lineNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
-        <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" />
         <view wx:else class="pl-note-cover pl-note-text"><text>{{item.excerpt}}</text></view>
         <view class="pl-note-title">{{item.title}}</view>
       </view>
@@ -125,7 +125,7 @@
     <view class="sec-title">同景区笔记</view>
     <view class="pl-notes">
       <view class="pl-note" wx:for="{{scenicNotes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
-        <image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.cover}}" class="pl-note-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" />
         <view wx:else class="pl-note-cover pl-note-text"><text>{{item.excerpt}}</text></view>
         <view class="pl-note-title">{{item.title}}</view>
       </view>

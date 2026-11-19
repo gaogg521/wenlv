@@ -11,3 +11,8 @@
 .tl-item .t { font-weight: 600; font-size: 26rpx; }
 .tl-item .d { font-size: 22rpx; color: var(--sub); }
 .tl-item .d:first-of-type { margin-left: 10rpx; font-weight: 400; }
+
+/* M-13 T-03：单号复制 + 联系客服按钮 */
+.copy-no{display:inline-flex;align-items:center;vertical-align:middle;margin-left:12rpx;padding:0 20rpx;font-size:22rpx;color:#e87722;border:1rpx solid #e8c9a8;border-radius:999rpx;min-height:88rpx}
+.contact-btn{margin:20rpx 0 0;background:#fff;border:1rpx solid #e2ddd2;color:#5c5c5c;font-size:28rpx;border-radius:18rpx;line-height:2.5;min-height:88rpx}
+.contact-btn::after{border:0}

@@ -2,6 +2,7 @@
 // 注意：下面展开的顺序决定路由匹配顺序（index.mjs 按插入顺序取第一个匹配），不要随意调整。
 import { one, BizError } from './db.mjs'
 import { requireUser } from './auth.mjs'
+import { staffRoleOf } from './infra/staff-role.mjs'
 import { handlePayNotify } from './routes/_shared.mjs'
 import { c, cWithdraw, lexicon, cPromo, cNotes, cPhraseKyc, cIdentity } from './routes/tourist.mjs'
 import { m, mSite, mPhrase, mApply, mPkg } from './routes/merchant.mjs'
@@ -56,6 +57,9 @@ for (const [key, handler] of Object.entries(routes)) {
 }
 // 商户权限在每次请求重新校验，停用员工及变更角色立即生效，禁止跨端 JWT 复用。
 // A-17：复核账号本体状态——账号被冻结后，商户令牌也立即失效（此前只查 staff/merchant）。
+// M-01：role 以 merchant_staff 当前库值为准（短缓存 30s + 员工管理写入即失效），
+// 同一 token 改岗/停用后立即按新角色行事——不再踢下线（此前 1002「角色已变更」），
+// 负责人 2026-11-19 指令：老板与店长都能改价（撤销旧「仅老板可调价」闸，核销员仍被 manager 门槛拒）。
 // 注意：/m/apply、/m/applications、/m/auth/phone-login 是游客端（c 令牌）可用的入驻流程，
 // 端校验只对门店业务路由生效——此前 c 令牌调 /m/apply 一律被"请使用商户账号登录"挡死，入驻自助化名存实亡。
 const M_C_END_ROUTES = new Set(['POST /m/auth/join', 'POST /m/apply', 'POST /m/auth/phone-login', 'GET /m/applications', 'GET /m/site'])
@@ -69,13 +73,11 @@ for (const [key, handler] of Object.entries(routes)) {
     if (key === 'GET /m/auth/stores' || key === 'POST /m/auth/switch') return handler(req, res)
     if (!M_C_END_ROUTES.has(key)) {
       if (u.end !== 'm') throw new BizError(1003, '请使用商户账号登录')
-      const staff = await one(`SELECT s.role FROM merchant_staff s JOIN merchant m ON m.id = s.merchant_id
-        WHERE s.user_id = ? AND s.merchant_id = ? AND s.status = 1 AND m.status = 1`, [u.uid, u.merchantId])
-      if (!staff) throw new BizError(1003, '尚未加入门店或账号已停用')
-      if (Number(staff.role) !== Number(u.role)) throw new BizError(1002, '角色已变更，请重新登录')
+      const staff = await staffRoleOf(u.uid, u.merchantId)
+      if (!staff.status) throw new BizError(1003, '尚未加入门店或账号已停用')
+      u.role = staff.role // 以库为准：后续 handler 内的 role 门槛全部按实时角色判定
       const manager = /\/settlements|\/supply|\/invite|\/stats|\/orders/.test(key)
       if (manager && staff.role < 2) throw new BizError(1003, '需要店长及以上权限')
-      if (key === 'POST /m/supply/:sid' && req.body.action === 'price' && staff.role < 3) throw new BizError(1003, '仅老板可调整价格')
     }
     return handler(req, res)
   }

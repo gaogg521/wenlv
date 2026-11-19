@@ -72,7 +72,7 @@ async function scenicCalculator(id, dialog, merchantId) {
         </div>
         <h4>测算假设</h4>
         <div class="scenic-calc-fields">
-          ${fields.map(([key, label, scale]) => `<label>${label}<input required name="${key}" type="number" min="0" step="${1 / scale}" value="${data.example[key] / scale}"></label>`).join('')}
+          ${fields.map(([key, label, scale]) => `<label>${label}<input required name="${key}" type="number" min="0" max="100000000" step="${1 / scale}" value="${data.example[key] / scale}"></label>`).join('')}
         </div>
         <div class="scenic-calc-actions">
           <button class="btn primary" type="submit">按最新数据重算</button>

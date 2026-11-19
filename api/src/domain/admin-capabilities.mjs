@@ -31,6 +31,10 @@ export const ADMIN_ACTIONS = {
   'export.scenics': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.suppliers': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'export.creators': { roles: ['super', 'ops', 'review'], label: '超级管理员、运营或审核员' },
+  // D-07：用户台账 / 评价 / 存证事件导出——照 export.merchants 口径（超管/运营/财务；城市账号不放导出）
+  'export.users': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
+  'export.reviews': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
+  'export.attest': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   // P-04：办理按钮与后端动作共用同一权限来源——只读观察者等角色不再看到可点击的办理入口
   'order.complete': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务（联调按钮，生产禁用）' },
   'settle.pay': { roles: ['super', 'finance'], label: '超级管理员或财务' },

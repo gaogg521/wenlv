@@ -18,6 +18,8 @@ Page({
   emptyAction:w?'返回推广中心':'去选可推广的产品'})},
  queryInput(e){this.setData({[e.currentTarget.dataset.field]:e.detail.value})},applyQuery(){this.load(1)},
  retry(){this.load(this.data.page)},prev(){if(this.data.page>1)this.load(this.data.page-1)},next(){if(this.data.hasNext)this.load(this.data.page+1)},filter(e){this.setData({status:e.currentTarget.dataset.id});this.load(1)},
+ // T-02：下拉刷新回到第一页重新加载，完成后收起转圈
+ onPullDownRefresh(){Promise.resolve(this.load(1)).then(()=>wx.stopPullDownRefresh()).catch(()=>wx.stopPullDownRefresh())},
  async load(page){
   const seq=this.seq=(this.seq||0)+1;this.setData({loading:true,error:'',rows:[],detail:null})
   try{await api.ensureLogin();const d=await api.request('/c/promote/'+this.data.kind+'?page='+page+'&status='+this.data.status+'&from='+encodeURIComponent(this.data.from)+'&to='+encodeURIComponent(this.data.to)+'&productId='+encodeURIComponent(this.data.productId));if(seq!==this.seq)return
