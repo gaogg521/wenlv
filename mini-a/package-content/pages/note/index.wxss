@@ -20,10 +20,10 @@ page { background: #fff; }
 .body-card { padding: 32rpx 32rpx 36rpx; }
 .author-row { display: flex; align-items: center; gap: 16rpx; padding-bottom: 20rpx; }
 .author-avatar { width: 72rpx; height: 72rpx; border-radius: 50%; flex-shrink: 0; background: #f0f0f0; }
-.author-ph { display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 30rpx; }
+.author-ph { display: flex; align-items: center; justify-content: center; color: #68707c; font-size: 30rpx; }
 .author-main { flex: 1; min-width: 0; }
 .author-name { font-size: 28rpx; font-weight: 600; color: #1f2937; }
-.author-time { font-size: 22rpx; color: #9ca3af; margin-top: 4rpx; }
+.author-time { font-size: 22rpx; color: #68707c; margin-top: 4rpx; }
 .author-product { max-width: 240rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 22rpx; color: var(--brand, #e87722); background: var(--brand-soft, #fdf1e3); padding: 8rpx 16rpx; border-radius: 999rpx; }
 .detail-title { font-size: 38rpx; font-weight: 700; color: #111; line-height: 1.4; margin-bottom: 16rpx; }
@@ -43,11 +43,11 @@ page { background: #fff; }
 .c-item { display: flex; gap: 16rpx; padding: 24rpx 0 16rpx; }
 .c-item + .c-item { border-top: 1rpx solid #efede9; }
 .c-avatar { width: 60rpx; height: 60rpx; border-radius: 50%; flex-shrink: 0; background: #f0f0f0; }
-.c-avatar-ph { display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 26rpx; }
+.c-avatar-ph { display: flex; align-items: center; justify-content: center; color: #68707c; font-size: 26rpx; }
 .c-main { flex: 1; min-width: 0; }
 .c-name { font-size: 27rpx; font-weight: 600; color: #343831; display: flex; align-items: center; gap: 10rpx; }
 .c-tag { font-size: 20rpx; color: var(--brand, #e87722); border: 1rpx solid var(--brand, #e87722); border-radius: 6rpx; padding: 0 8rpx; }
-.c-rto { font-size: 24rpx; color: #9ca3af; }
+.c-rto { font-size: 24rpx; color: #68707c; }
 .c-content { font-size: 28rpx; color: #1f2937; line-height: 1.6; margin: 6rpx 0; word-break: break-word; }
 .c-img { width: 240rpx; height: 240rpx; border-radius: 12rpx; margin: 8rpx 0; }
 .c-foot { display: flex; align-items: center; gap: 24rpx; margin-top: 6rpx; }

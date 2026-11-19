@@ -6,7 +6,7 @@ page { padding-bottom: 40rpx; }
 .wk-picker { color: var(--brand, #d9622f); font-weight: 500; }
 .wk-input { border: 1rpx solid var(--line, #e8e2d6); border-radius: 16rpx; padding: 18rpx 24rpx; margin: 16rpx 0; font-size: 26rpx; }
 .wk-amount { font-weight: 600; color: #b76b24; }
-.wk-state { font-size: 24rpx; color: var(--muted, #8a919c); margin: 8rpx 0; }
+.wk-state { font-size: 24rpx; color: var(--muted, #68707c); margin: 8rpx 0; }
 .wk-actions { display: flex; flex-wrap: wrap; gap: 14rpx; margin-top: 16rpx; }
 .wk-project { margin-bottom: 20rpx; padding-bottom: 16rpx; border-bottom: 1rpx dashed var(--line, #e8e2d6); }
 .wk-project:last-child { border-bottom: none; margin-bottom: 0; }

@@ -8,13 +8,13 @@ page { padding-bottom: 160rpx; }
 .bk-fee-title{font-size:26rpx;color:var(--ink,#263c34);line-height:1.5;font-weight:500;white-space:nowrap;flex-shrink:0}
 .bk-benefit-top picker{flex-shrink:0}
 .bk-benefit-picker{display:flex;align-items:center;gap:14rpx;min-height:60rpx;padding:0 4rpx 0 20rpx;color:#3b7357;font-size:24rpx;white-space:nowrap}
-.bk-benefit-arrow{font-size:38rpx;line-height:1;color:#8c9e90}
+.bk-benefit-arrow{font-size:38rpx;line-height:1;color:#68707c}
 .bk-benefit-detail{display:flex;justify-content:space-between;align-items:flex-start;gap:20rpx;margin-top:14rpx}
 .bk-benefit-copy{min-width:0;flex:1}
 .bk-benefit-rule{display:flex;flex-wrap:wrap;gap:4rpx 8rpx;font-size:28rpx;font-weight:600;color:#385b45;line-height:1.6}
 .bk-benefit-rule text{white-space:nowrap}
 .bk-benefit-amount{font-size:32rpx;font-weight:600;line-height:1.6;color:#2f7d5b;white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
-.bk-fee-hint{font-size:22rpx;color:#8a948a;line-height:1.7;margin-top:8rpx;white-space:normal;word-break:normal}
+.bk-fee-hint{font-size:22rpx;color:#766b59;line-height:1.7;margin-top:8rpx;white-space:normal;word-break:normal}
 .bk-benefit-error{font-size:24rpx;color:#b95338;line-height:1.6;margin-top:12rpx}
 .bk-bean-row{display:flex;align-items:center;justify-content:space-between;gap:20rpx;padding:22rpx 0;border-bottom:1rpx solid var(--line)}
 .bk-bean-copy{flex:1;min-width:0}.bk-bean-row switch{flex-shrink:0}
@@ -28,11 +28,11 @@ page { padding-bottom: 160rpx; }
 
 /* ===== B1 实付解释：底栏优惠原因/算价状态/金额变动脉冲 + 明细应付合计 ===== */
 .dt-pay-reason { font-size: 20rpx; color: #1a9c6b; max-width: 380rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dt-pricing { font-size: 20rpx; color: #9a8a74; margin-left: 8rpx; }
+.dt-pricing { font-size: 20rpx; color: #766b59; margin-left: 8rpx; }
 .dt-pricing-err { display: block; font-size: 20rpx; color: #c2410c; margin-top: 2rpx; }
 .pay-pulse { animation: payBump .7s ease; display: inline-block; }
 @keyframes payBump { 0% { transform: scale(1); } 40% { transform: scale(1.12); color: #1a9c6b; } 100% { transform: scale(1); } }
 .bk-adjust-hint { font-size: 20rpx; color: var(--brand, #e87722); margin-top: 2rpx; }
 .bk-total-row { border-top: 1rpx dashed #e5ded2; margin-top: 8rpx; padding-top: 14rpx; }
-.bk-calc-line { font-size: 20rpx; color: #9a8a74; margin-top: 6rpx; line-height: 1.5; }
+.bk-calc-line { font-size: 20rpx; color: #766b59; margin-top: 6rpx; line-height: 1.5; }
 .bk-calc-err { color: #c2410c; }

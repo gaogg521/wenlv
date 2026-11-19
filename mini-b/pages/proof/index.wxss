@@ -8,9 +8,9 @@
 .pf-mark{width:60rpx;height:60rpx;line-height:60rpx;text-align:center;border-radius:50%;background:#60754d;color:#fff;font-size:32rpx;font-weight:600}
 .pf-result.bad .pf-mark{background:#c4552d}.pf-result.wait .pf-mark{background:#a09376}
 .pf-result-t{font-size:32rpx;font-weight:600;color:#3c4836}
-.pf-result text{font-size:24rpx;color:#7d8872;line-height:1.6}
+.pf-result text{font-size:24rpx;color:#766b59;line-height:1.6}
 .pf-row{display:flex;justify-content:space-between;gap:20rpx;padding:20rpx 0;border-bottom:1rpx dashed #eee7db;font-size:28rpx;color:#3c4836}
 .pf-row:last-child{border-bottom:none}
-.pf-row text{color:#8a919c;flex:none}
+.pf-row text{color:#68707c;flex:none}
 .pf-row view{text-align:right;word-break:break-all}
 .pf-link{margin:12rpx 28rpx;background:#eee8d9;color:#60754d;font-size:26rpx;border-radius:18rpx}

@@ -11,7 +11,7 @@ page { background: #fff; }
 .entry-card:active { background: var(--brand-soft, #fdf1e3); }
 .e-ico { font-size: 44rpx; }
 .e-name { font-size: 32rpx; font-weight: 600; color: #1f2937; }
-.e-sub { margin-left: auto; font-size: 24rpx; color: #9ca3af; }
+.e-sub { margin-left: auto; font-size: 24rpx; color: #68707c; }
 
 /* 图集轮播 */
 .media-area { padding: 20rpx 24rpx 0; }
@@ -56,13 +56,13 @@ page { background: #fff; }
   border-top: 1rpx solid #f5f5f5; border-bottom: 1rpx solid #f5f5f5; }
 .kv-line.off { opacity: .5; }
 .kv-k { font-size: 28rpx; color: #1f2937; }
-.kv-v { font-size: 26rpx; color: #9ca3af; max-width: 480rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv-v { font-size: 26rpx; color: #68707c; max-width: 480rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .edit-tip { margin-top: 20rpx; font-size: 24rpx; color: #b45309; background: var(--brand-soft, #fdf1e3); border-radius: 12rpx; padding: 16rpx 20rpx; }
 
 /* ✨ 写作建议面板 */
 .idea-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; background: #fff;
   border-radius: 28rpx 28rpx 0 0; padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; }
-.idea-sub { font-size: 24rpx; color: #9ca3af; margin-bottom: 20rpx; }
+.idea-sub { font-size: 24rpx; color: #68707c; margin-bottom: 20rpx; }
 .idea-intent { width: 100%; min-height: 120rpx; box-sizing: border-box; padding: 20rpx; border: 1rpx solid #e5e7eb;
   border-radius: 14rpx; font-size: 27rpx; margin-bottom: 20rpx; }
 .idea-gen { background: var(--brand, #e87722); color: #fff; font-size: 30rpx; font-weight: 600;
@@ -72,7 +72,7 @@ page { background: #fff; }
 .idea-result { margin-top: 24rpx; padding: 24rpx; background: #faf7f2; border-radius: 16rpx; }
 .ir-title { font-size: 32rpx; font-weight: 700; color: #111; margin-bottom: 12rpx; }
 .ir-text { font-size: 28rpx; line-height: 1.8; color: #1f2937; white-space: pre-line; }
-.ir-reason { margin-top: 12rpx; font-size: 22rpx; color: #9ca3af; }
+.ir-reason { margin-top: 12rpx; font-size: 22rpx; color: #68707c; }
 .ir-apply { margin-top: 20rpx; background: #111; color: #fff; font-size: 28rpx; border-radius: 999rpx; height: 72rpx; line-height: 72rpx; }
 .ir-apply::after { border: none; }
 
@@ -123,7 +123,7 @@ page { background: #fff; }
 .ve-input { flex: 1; min-width: 0; background: #f3f4f6; border-radius: 12rpx; padding: 12rpx 20rpx; font-size: 25rpx; }
 .ve-cap { display: flex; align-items: center; gap: 12rpx; width: 100%; margin: 6rpx 0; }
 .ve-cap-text { flex: 1; min-width: 0; }
-.ve-cap-del { flex-shrink: 0; color: #9ca3af; font-size: 28rpx; padding: 0 10rpx; }
+.ve-cap-del { flex-shrink: 0; color: #68707c; font-size: 28rpx; padding: 0 10rpx; }
 .ve-add-cap { width: 100%; text-align: center; font-size: 23rpx; color: var(--brand, #e87722); padding: 8rpx 0; }
 .ve-error { font-size: 24rpx; color: #dc2626; margin: 10rpx 0; }
 .ve-actions { display: flex; gap: 20rpx; margin-top: 20rpx; }

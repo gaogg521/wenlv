@@ -1,5 +1,5 @@
 .tb { display: flex; background: #fffdf8; border-top: 1rpx solid #e8dfd0; padding-bottom: env(safe-area-inset-bottom); }
-.tb-item { flex: 1; text-align: center; padding: 12rpx 0 8rpx; color: #a29682; }
+.tb-item { flex: 1; text-align: center; padding: 12rpx 0 8rpx; color: #766b59; }
 .tb-item.on { color: #ad603d; }
 .tb-img { width: 44rpx; height: 44rpx; margin: 0 auto; display: block; }
 .tb-txt { font-size:22rpx; }
