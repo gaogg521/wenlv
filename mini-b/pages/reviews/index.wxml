@@ -19,7 +19,7 @@
     <view wx:if="{{hasMore}}" class="btn ghost" bindtap="loadMore">加载更多</view>
     <view wx:else class="list-end">共 {{total}} 条评价</view>
   </view>
-  <view wx:else class="card"><ui-state kind="empty" icon="💬" title="暂无符合条件的评价" desc="{{emptyDesc}}" /></view>
+  <view wx:elif="{{!error && !loading}}" class="card"><ui-state kind="empty" icon="💬" title="暂无符合条件的评价" desc="{{emptyDesc}}" /></view>
 </block>
 <block wx:else>
   <view wx:if="{{notes.length}}" class="review-list">
@@ -31,5 +31,5 @@
     <view wx:if="{{hasMore}}" class="btn ghost" bindtap="loadMore">加载更多</view>
     <view wx:else class="list-end">共 {{notesTotal}} 篇笔记</view>
   </view>
-  <view wx:else class="card"><ui-state kind="empty" icon="📓" title="还没有关于本店的游客笔记" desc="{{emptyNotesDesc}}" /></view>
+  <view wx:elif="{{!error && !loading}}" class="card"><ui-state kind="empty" icon="📓" title="还没有关于本店的游客笔记" desc="{{emptyNotesDesc}}" /></view>
 </block>

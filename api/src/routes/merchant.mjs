@@ -278,8 +278,8 @@ const m = {
     const rating = Number(req.query.rating || 0)
     if (rating >= 1 && rating <= 5) { where.push('r.rating = ?'); args.push(rating) }
     const rs = String(req.query.replyStatus || 'all')
-    if (rs === 'pending') where.push('r.reply IS NULL OR r.reply_status = 2')
-    else if (rs === 'replied') where.push('r.reply IS NOT NULL AND r.reply_status = 1')
+    if (rs === 'pending') where.push('(r.reply IS NULL OR r.reply_status = 2)')
+    else if (rs === 'replied') where.push('(r.reply IS NOT NULL AND r.reply_status = 1)')
     const from = `FROM review r JOIN tour_product p ON p.id = r.product_id JOIN user_account u ON u.id = r.user_id JOIN orders o ON o.id = r.order_id`
     const W = where.join(' AND ')
     const rows = await q(`SELECT r.id, r.product_id, r.rating, r.content, r.reply, r.reply_at, r.reply_status, r.status review_status,
