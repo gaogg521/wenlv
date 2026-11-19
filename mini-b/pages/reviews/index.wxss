@@ -4,16 +4,19 @@
 .review-card { margin-bottom: 20rpx; }
 .rv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10rpx; }
 .rv-stars { color: #d97706; font-size: 28rpx; letter-spacing: 4rpx; }
-.rv-state { font-size: 22rpx; color: var(--muted, #8a919c); }
+.rv-state { font-size: 22rpx; color: var(--muted, #68707c); }
 .rv-content { font-size: 28rpx; line-height: 1.6; color: var(--ink, #1f2a2e); }
-.rv-meta { margin: 12rpx 0; font-size: 22rpx; color: var(--muted, #8a919c); display: flex; flex-wrap: wrap; gap: 8rpx; }
-.rv-no { color: var(--muted, #8a919c); }
+.rv-meta { margin: 12rpx 0; font-size: 22rpx; color: var(--muted, #68707c); display: flex; flex-wrap: wrap; gap: 8rpx; }
+.rv-no { color: var(--muted, #68707c); }
 .rv-reply { background: var(--brand-soft, #f7f3ea); border-radius: 12rpx; padding: 14rpx 18rpx; font-size: 26rpx; line-height: 1.6; margin-bottom: 14rpx; }
 .rv-reply.off { opacity: 0.55; }
 .rv-reply-tag { display: block; font-size: 20rpx; color: var(--brand, #57704f); margin-bottom: 4rpx; }
-.list-end { text-align: center; color: var(--muted, #8a919c); font-size: 22rpx; padding: 16rpx 0 8rpx; }
+.list-end { text-align: center; color: var(--muted, #68707c); font-size: 22rpx; padding: 16rpx 0 8rpx; }
 .nt-head { display: flex; justify-content: space-between; gap: 12rpx; margin-bottom: 8rpx; }
 .nt-title { font-size: 28rpx; font-weight: 600; }
-.nt-date { font-size: 20rpx; color: var(--muted, #8a919c); }
+.nt-date { font-size: 20rpx; color: var(--muted, #68707c); }
 .nt-excerpt { font-size: 24rpx; color: var(--ink, #1f2a2e); line-height: 1.6; }
-.nt-meta { margin-top: 10rpx; font-size: 22rpx; color: var(--muted, #8a919c); }
+.nt-meta { margin-top: 10rpx; font-size: 22rpx; color: var(--muted, #68707c); }
+/* 筛选项：沿用库存页 filter-chip 的视觉（此前 .chip 只有触控高度，没有底色边框，显示成纯文字） */
+.chip { font-size: 22rpx; color: #766b59; padding: 12rpx 18rpx; background: #f8f4eb; border-radius: 11rpx; border: 1rpx solid #eee7d9; box-sizing: border-box; display: inline-flex; align-items: center; }
+.chip.on { background: #e7ecde; border-color: #d2dcc4; color: #59704c; }

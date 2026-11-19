@@ -24,7 +24,7 @@
 .wk-badge.off { background: rgba(90,98,110,.85); }
 .wk-title { padding: 10rpx 14rpx 4rpx; font-size: 24rpx; color: #1f2937; font-weight: 600;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
-.wk-meta { display: flex; gap: 16rpx; padding: 2rpx 14rpx 12rpx; font-size: 20rpx; color: #9ca3af; }
+.wk-meta { display: flex; gap: 16rpx; padding: 2rpx 14rpx 12rpx; font-size: 20rpx; color: #68707c; }
 
 /* 三期：云草稿行 */
 .draft-row { display: flex; justify-content: space-between; align-items: center; padding: 14rpx 0; }

@@ -94,7 +94,7 @@
     <checkbox-group bindchange="toggleAgree" style="transform:scale(.75);transform-origin:left center">
       <checkbox value="agree" checked="{{agree}}" style="transform:scale(.9)" />
     </checkbox-group>
-    <view style="font-size:22rpx;color:var(--sub,#8a919c);line-height:1.6">已阅读并同意
+    <view style="font-size:22rpx;color:var(--sub,#68707c);line-height:1.6">已阅读并同意
       <text style="color:var(--brand,#e87722)" data-type="terms" bindtap="goDoc">《服务条款》</text>与
       <text style="color:var(--brand,#e87722)" data-type="privacy" bindtap="goDoc">《隐私政策》</text>，同意将所填信息用于订单履约及所选服务。</view>
   </view>
