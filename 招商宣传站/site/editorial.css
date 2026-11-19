@@ -209,43 +209,25 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .cv-order .cv-auto{margin-left:auto;font-size:11px;color:#7f97c6}
 .cv-steps{list-style:none;margin:14px 0 0;padding:0;display:flex;position:relative}
 .cv-step{flex:1;min-width:0;position:relative;text-align:center;padding:0 4px 4px}
-.cv-step:not(:last-child):after{content:"";position:absolute;top:44px;left:calc(50% + 36px);width:calc(100% - 72px);border-top:1px dashed rgba(126,163,255,.35)}
+.cv-step:not(:last-child):after{content:"";position:absolute;top:40px;left:calc(50% + 34px);width:calc(100% - 68px);border-top:1px dashed rgba(126,163,255,.35)}
 /* 立方体：CSS 真 3D（口径对齐后台 cube3d：六面 + 二进制纹理 + 扫描亮带 + 反向旋转内核） */
-.cv-cube{position:relative;display:block;width:80px;height:84px;margin:0 auto;--edge:var(--cube);--fill:color-mix(in srgb,var(--cube) 13%,transparent);--core-c:color-mix(in srgb,var(--cube) 55%,transparent);--glow:color-mix(in srgb,var(--cube) 50%,transparent);--s:44px;perspective:340px}
-.cv-box{position:absolute;left:50%;top:46%;width:var(--s);height:var(--s);margin:calc(var(--s)/-2) 0 0 calc(var(--s)/-2);transform-style:preserve-3d;transform:rotateX(-26deg) rotateY(-38deg);animation:cvTurn 18s linear infinite}
-.cv-fc{position:absolute;inset:0;border:1.5px solid var(--edge);box-shadow:0 0 8px var(--glow),inset 0 0 14px var(--glow);background:linear-gradient(var(--fill),var(--fill)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cg fill='%23dbeaff' fill-opacity='.42' font-family='monospace' font-size='6'%3E%3Ctext x='1' y='6'%3E0110%3C/text%3E%3Ctext x='17' y='6'%3E1001%3C/text%3E%3Ctext x='1' y='14'%3E1010%3C/text%3E%3Ctext x='17' y='14'%3E0101%3C/text%3E%3Ctext x='1' y='22'%3E0011%3C/text%3E%3Ctext x='17' y='22'%3E1100%3C/text%3E%3Ctext x='1' y='30'%3E1001%3C/text%3E%3Ctext x='17' y='30'%3E0110%3C/text%3E%3C/g%3E%3C/svg%3E") 0 0/16px 16px}
-.cv-fc::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 0%,transparent 40%,rgba(255,255,255,.5) 50%,transparent 60%,transparent 100%) 0 0/100% 300%;mix-blend-mode:screen;opacity:.5;animation:cvFaceScan 3.2s linear infinite}
-.cv-fc:nth-child(1){transform:translateZ(calc(var(--s)/2))}
-.cv-fc:nth-child(2){transform:rotateY(180deg) translateZ(calc(var(--s)/2))}
-.cv-fc:nth-child(3){transform:rotateY(90deg) translateZ(calc(var(--s)/2))}
-.cv-fc:nth-child(4){transform:rotateY(-90deg) translateZ(calc(var(--s)/2))}
-.cv-fc:nth-child(5){transform:rotateX(90deg) translateZ(calc(var(--s)/2))}
-.cv-fc:nth-child(6){transform:rotateX(-90deg) translateZ(calc(var(--s)/2))}
-.cv-core{position:absolute;left:30%;top:30%;width:40%;height:40%;transform-style:preserve-3d;animation:cvCoreTurn 9s linear infinite}
-.cv-core i{position:absolute;inset:0;border:1px solid var(--edge);background:var(--core-c);box-shadow:0 0 10px var(--glow)}
-.cv-core i:nth-child(1){transform:translateZ(calc(var(--s)*.2))}
-.cv-core i:nth-child(2){transform:rotateY(180deg) translateZ(calc(var(--s)*.2))}
-.cv-core i:nth-child(3){transform:rotateY(90deg) translateZ(calc(var(--s)*.2))}
-.cv-core i:nth-child(4){transform:rotateY(-90deg) translateZ(calc(var(--s)*.2))}
-.cv-core i:nth-child(5){transform:rotateX(90deg) translateZ(calc(var(--s)*.2))}
-.cv-core i:nth-child(6){transform:rotateX(-90deg) translateZ(calc(var(--s)*.2))}
-@keyframes cvTurn{from{transform:rotateX(-26deg) rotateY(-38deg)}to{transform:rotateX(-26deg) rotateY(322deg)}}
-@keyframes cvCoreTurn{from{transform:rotateX(0) rotateY(0)}to{transform:rotateX(360deg) rotateY(-360deg)}}
-@keyframes cvFaceScan{from{background-position:0 100%}to{background-position:0 -200%}}
-/* 特效层：涟漪 / 轨道 / HUD 角标（全部是 .cv-box 的兄弟节点，不参与 preserve-3d） */
-.fx-orbit{position:absolute;left:50%;top:46%;width:calc(var(--s)*1.9);height:calc(var(--s)*1.9);margin:calc(var(--s)*-.95) 0 0 calc(var(--s)*-.95);border-radius:50%;pointer-events:none;border:1px solid var(--edge);opacity:.32;box-shadow:0 0 10px var(--glow),inset 0 0 10px var(--glow);transform:rotateX(72deg);animation:cvOrbit 6s linear infinite}
-.fx-orbit i{position:absolute;left:50%;top:-4px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff,0 0 14px var(--edge),0 0 22px var(--glow)}
-@keyframes cvOrbit{from{transform:rotateX(72deg) rotateZ(0)}to{transform:rotateX(72deg) rotateZ(360deg)}}
+/* 立方体：静态 SVG 十二边线框 + 顶面高亮（保留原版形体，叠加环境特效） */
+.cv-cube{display:block;width:76px;height:76px;margin:0 auto;color:var(--cube);--s:44px;--edge:var(--cube);--glow:color-mix(in srgb,var(--cube) 50%,transparent);position:relative}
+.cv-cube svg{width:100%;height:100%;fill:color-mix(in srgb,var(--cube) 10%,transparent);stroke:var(--cube);stroke-width:1.6;stroke-linejoin:round;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--cube) 65%,transparent)) drop-shadow(0 0 18px color-mix(in srgb,var(--cube) 28%,transparent));animation:cvFloat 4.5s ease-in-out infinite;animation-delay:calc(var(--i,0)*.45s)}
+.cv-cube .cv-face{fill:color-mix(in srgb,var(--cube) 24%,transparent)}
+.cv-cube .cv-wire{fill:none}
+.cv-step:nth-child(1) .cv-cube svg{--i:0}.cv-step:nth-child(2) .cv-cube svg{--i:1}.cv-step:nth-child(3) .cv-cube svg{--i:2}.cv-step:nth-child(4) .cv-cube svg{--i:3}.cv-step:nth-child(5) .cv-cube svg{--i:4}.cv-step:nth-child(6) .cv-cube svg{--i:5}
+@keyframes cvFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.cv-step:hover .cv-cube svg{animation-duration:2.8s;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--cube) 90%,transparent)) drop-shadow(0 0 26px color-mix(in srgb,var(--cube) 45%,transparent))}
+/* 特效层：涟漪 / HUD 角标 */
 .fx-ripple{position:absolute;left:50%;bottom:2px;width:calc(var(--s)*1.6);height:14px;margin-left:calc(var(--s)*-.8);border-radius:50%;border:1px solid var(--edge);pointer-events:none;opacity:0;animation:cvRipple 2.8s ease-out infinite}
 .fx-ripple.r2{animation-delay:1.4s}
 @keyframes cvRipple{0%{opacity:.7;transform:scale(.35)}100%{opacity:0;transform:scale(1.25)}}
 .fx-hud{position:absolute;left:50%;top:46%;width:calc(var(--s)*1.7);height:calc(var(--s)*1.7);margin:calc(var(--s)*-.85) 0 0 calc(var(--s)*-.85);pointer-events:none;opacity:.35;transition:.35s;background:linear-gradient(var(--edge),var(--edge)) 0 0/12px 1.5px,linear-gradient(var(--edge),var(--edge)) 0 0/1.5px 12px,linear-gradient(var(--edge),var(--edge)) 100% 0/12px 1.5px,linear-gradient(var(--edge),var(--edge)) 100% 0/1.5px 12px,linear-gradient(var(--edge),var(--edge)) 0 100%/12px 1.5px,linear-gradient(var(--edge),var(--edge)) 0 100%/1.5px 12px,linear-gradient(var(--edge),var(--edge)) 100% 100%/12px 1.5px,linear-gradient(var(--edge),var(--edge)) 100% 100%/1.5px 12px;background-repeat:no-repeat}
 .cv-step:hover .fx-hud{opacity:1;transform:scale(.86);filter:drop-shadow(0 0 4px var(--glow))}
-.cv-step:hover .fx-orbit{opacity:.6}
-.cv-step:hover .cv-box{animation-duration:6s}
 /* 连线数据包：光点沿虚线从上一步跑向下一步，逐步错相位 */
-.cv-step:not(:last-child)::before{content:"";position:absolute;top:43px;left:calc(50% + 36px);width:56px;height:2px;border-radius:4px;pointer-events:none;background:linear-gradient(90deg,transparent,#bfe0ff 55%,#fff);box-shadow:0 0 8px #7fb0ff,0 0 14px rgba(127,176,255,.6);opacity:0;animation:cvPacket 3.2s cubic-bezier(.5,0,.5,1) infinite;animation-delay:calc(var(--i)*.53s)}
-@keyframes cvPacket{0%{left:calc(50% + 36px);opacity:0}12%{opacity:1}80%{opacity:1}100%{left:calc(150% - 92px);opacity:0}}
+.cv-step:not(:last-child)::before{content:"";position:absolute;top:39px;left:calc(50% + 34px);width:56px;height:2px;border-radius:4px;pointer-events:none;background:linear-gradient(90deg,transparent,#bfe0ff 55%,#fff);box-shadow:0 0 8px #7fb0ff,0 0 14px rgba(127,176,255,.6);opacity:0;animation:cvPacket 3.2s cubic-bezier(.5,0,.5,1) infinite;animation-delay:calc(var(--i)*.53s)}
+@keyframes cvPacket{0%{left:calc(50% + 34px);opacity:0}12%{opacity:1}80%{opacity:1}100%{left:calc(150% - 88px);opacity:0}}
 .cv-step:nth-child(1){--i:0}.cv-step:nth-child(2){--i:1}.cv-step:nth-child(3){--i:2}.cv-step:nth-child(4){--i:3}.cv-step:nth-child(5){--i:4}.cv-step:nth-child(6){--i:5}
 /* 背景星域漂移 + 面板顶部扫光 */
 .chain-demo:after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background-image:radial-gradient(1px 1px at 22px 34px,rgba(255,255,255,.5),transparent 100%),radial-gradient(1px 1px at 96px 84px,rgba(159,182,232,.4),transparent 100%),radial-gradient(1.5px 1.5px at 170px 150px,rgba(255,255,255,.35),transparent 100%),radial-gradient(1px 1px at 260px 64px,rgba(255,255,255,.4),transparent 100%),radial-gradient(1px 1px at 318px 210px,rgba(143,176,255,.45),transparent 100%),radial-gradient(1px 1px at 60px 200px,rgba(255,255,255,.3),transparent 100%);background-size:360px 260px;background-repeat:repeat;animation:cvDrift 120s linear infinite}
@@ -264,10 +246,7 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .cv-foot b{color:#c9d8f7}
 /* 链上面板是招商门面：即便系统开了"减少动态效果"（全局会 animation:none!important），本面板特效局部保留（放慢速度，降低动效强度） */
 @media(prefers-reduced-motion:reduce){
-.chain-demo .cv-box{animation:cvTurn 22s linear infinite!important}
-.chain-demo .cv-core{animation:cvCoreTurn 12s linear infinite!important}
-.chain-demo .cv-fc:after{animation:cvFaceScan 3.6s linear infinite!important}
-.chain-demo .fx-orbit{animation:cvOrbit 8s linear infinite!important}
+.chain-demo .cv-cube svg{animation:cvFloat 6s ease-in-out infinite!important}
 .chain-demo .fx-ripple{animation:cvRipple 3s ease-out infinite!important}
 .chain-demo .fx-ripple.r2{animation-delay:1.5s!important}
 .chain-demo .cv-step:not(:last-child):before{animation:cvPacket 3.6s cubic-bezier(.5,0,.5,1) infinite!important}
