@@ -9,6 +9,7 @@
 |---|---|
 | manager-workbench-guide | M-02：店长首次进工作台的提醒引导弹窗（可跳过） |
 | manager-workbench-statusbar | M-09：工作台顶部提醒状态条（与「我的」同源） |
+| manager-workbench-neworder-banner | M-02：30s 轮询发现新支付订单后的顶部提示条（🔔 有 1 笔新支付订单 · 忽略/查看），订单 tab 红点同屏（320px 下为 8px 小点）；数据层旁证 poll 直查 newPaid=1。复跑 = test/walk-mn-banner.mjs |
 | manager-me-notify-panel | M-02：三个偏好开关 + 状态行（店长默认开） |
 | manager-supply | M-01：店长改价入口可见（role>=2） |
 | manager-supply-price-confirm-reason | M-12/M-01：改价确认（旧→新，价差超 ±30% 强制填原因）——真实 `confirmPriceChange` 触发 |
