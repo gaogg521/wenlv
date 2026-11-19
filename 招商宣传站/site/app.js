@@ -29,6 +29,8 @@
     if (!paused && heroVisible && !document.hidden && !focusHeld) heroTimer = setInterval(() => showSlide(heroIndex + 1), 6500);
   }
   heroDots.forEach((dot, index) => dot.addEventListener('click', () => { showSlide(index); paused = true; updatePlayback(); }));
+  document.querySelector('[data-hero-prev]').addEventListener('click', () => { showSlide(heroIndex - 1); paused = true; updatePlayback(); });
+  document.querySelector('[data-hero-next]').addEventListener('click', () => { showSlide(heroIndex + 1); paused = true; updatePlayback(); });
   playButton.addEventListener('click', () => { paused = !paused; focusHeld = false; updatePlayback(); });
   hero.addEventListener('focusin', () => { focusHeld = true; updatePlayback(); });
   hero.addEventListener('focusout', () => setTimeout(() => { focusHeld = hero.contains(document.activeElement); updatePlayback(); }, 0));
@@ -71,6 +73,25 @@
     proof: ['VERIFIABLE RECORD / 可信证明', '不只展示一张图，也能核对依据。', [['签发来源', '核对由谁签发'], ['内容完整性', '检查签名是否匹配'], ['当前有效性', '检查有效期与撤销状态']], '可信凭证的价值是核验来源、完整性与当前有效状态；关键业务记录可关联存证核验。技术用于减少“只凭截图或口头承诺”的信息差，不替代服务质量和售后责任。']
   };
   document.querySelectorAll('[data-credential]').forEach(button => button.addEventListener('click', () => { const [kind, title, fields, copy] = credentials[button.dataset.credential]; markChoice('[data-credential]', button); document.querySelector('#credential-kind').textContent = kind; document.querySelector('#credential-title').textContent = title; document.querySelector('#credential-copy').textContent = copy; const rows = fields.map(([label, value]) => { const row = document.createElement('div'); const name = document.createElement('span'); const detail = document.createElement('b'); name.textContent = label; detail.textContent = value; row.append(name, detail); return row; }); document.querySelector('#credential-fields').replaceChildren(...rows); }));
+
+
+  const ecosystemRoles = {
+    traveler: ['FOR TRAVELERS', '因为喜欢而出发，\n带着收获再回来。', '从真实内容中发现兴趣，选择合适的主题体验。把旅行作品、旅豆权益与个人履历留下，成为下一次出发的理由。', ['主题体验', '清楚的权益规则', '属于自己的旅行记录']],
+    creator: ['FOR CREATORS', '让值得分享的内容，\n连接真实的旅行。', '在广场展示作品，参与约稿与内容共创，让目的地被更多人看见。创作奖励与推广计酬分别按任务规则、资格和有效交易办理。', ['作品展示与互动', '约稿与创作任务', '规则清楚的贡献记录']],
+    merchant: ['FOR LOCAL BUSINESS', '认真接待每一位来客，\n让经营有据可循。', '用商品、预约与在地体验承接旅行需求。游客实付、权益补贴与结算分列，订单履约、库存和差异处理有清晰的入口。', ['供给与预约管理', '订单核销与留痕', '清晰对账和结算']],
+    partner: ['FOR CITY PARTNERS', '连接一座城的资源，\n让协作持续发生。', '连接本地供给、内容与渠道，围绕真实服务和有效交易协作。在授权范围内查看归因与经营记录，按合作方案明确分工与结算。', ['在地资源协作', '渠道与内容连接', '按规则归因和对账']]
+  };
+  document.querySelectorAll('[data-eco-role]').forEach(button => button.addEventListener('click', () => {
+    const role = button.dataset.ecoRole;
+    const [label, title, copy, benefits] = ecosystemRoles[role];
+    document.querySelectorAll('[data-eco-role]').forEach(node => { const selected = node === button; node.classList.toggle('active', selected); node.setAttribute('aria-pressed', String(selected)); });
+    document.querySelector('.ecosystem-map').dataset.activeRole = role;
+    document.querySelectorAll('[data-edge]').forEach(edge => edge.classList.toggle('is-active', edge.dataset.edge === role));
+    document.querySelector('#eco-detail-label').textContent = label;
+    document.querySelector('#eco-detail-title').textContent = title;
+    document.querySelector('#eco-detail-copy').textContent = copy;
+    document.querySelector('#eco-detail-benefits').replaceChildren(...benefits.map(text => { const span = document.createElement('span'); span.textContent = text; return span; }));
+  }));
 
   const menuButton = document.querySelector('.menu-toggle');
   const nav = document.querySelector('#main-nav');
