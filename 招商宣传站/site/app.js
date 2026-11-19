@@ -205,3 +205,15 @@
     catch { toast('请长按或选择电话号码复制：' + button.dataset.copy); }
   }));
 })();
+/* Progressive entry effects: no hiding content, and reduced motion stays static. */
+(() => {
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  if (motion.matches || !('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      entry.target.classList.add('editorial-enter');
+      observer.unobserve(entry.target);
+    }
+  }, {threshold: .08});
+  document.querySelectorAll('.section-head,.why-columns article,.theme-feature,.destination,.story-card,.creation-bar,.product-tabs,.reward-explain,.trust-card,.ecosystem-heading,.ecosystem-detail,.partner-grid article,.faq-layout,.contact-layout').forEach(el => observer.observe(el));
+})();
