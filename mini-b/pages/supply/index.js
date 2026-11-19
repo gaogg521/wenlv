@@ -33,7 +33,7 @@ Page({
       const list = append ? this.data.list.concat(d.items || []) : (d.items || [])
       this.setData({ list, page, total: d.total || list.length, hasMore: !!d.hasMore, loaded: true })
       this.applyFilters(); done && done()
-    }).catch(e => { if (requestId !== this._requestId) { if (done) done(); return }; this.setData({ loaded: true, list: append ? this.data.list : [], hasMore: false, error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
+    }).catch(e => { if (requestId !== this._requestId) { if (done) done(); return }; this.setData({ loaded: true, list: append ? this.data.list : [], hasMore: false, errCode: Number(e.code) || 0, error: e.msg || '库存加载失败' }); this.applyFilters(); done && done() })
   },
   // 服务端翻页：追加下一页团期（请求量按页）
   loadMoreSessions() { if (this.data.hasMore && !this._loadingMore) { this._loadingMore = true; this.fetch(() => { this._loadingMore = false }, true) } },

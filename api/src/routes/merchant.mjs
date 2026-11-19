@@ -286,7 +286,7 @@ const m = {
       DATE_FORMAT(r.created_at, '%Y-%m-%d %H:%i') created_at, u.nickname, p.title product_title, o.order_no
       ${from} WHERE ${W} ORDER BY r.id DESC LIMIT ? OFFSET ?`, [...args, paging.size, paging.offset])
     const total = await count(`SELECT COUNT(*) c ${from} WHERE ${W}`, args)
-    return { items: rows, total: Number(total.c), page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size }
+    return { items: rows, total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size }
   },
 
   'POST /m/reviews/:id/reply': async (req) => {

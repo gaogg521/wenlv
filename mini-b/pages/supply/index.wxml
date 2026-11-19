@@ -6,7 +6,7 @@
   <view class="filter-chips"><view wx:for="{{statusOptions}}" wx:key="k" class="filter-chip {{status === item.k ? 'active' : ''}}" bindtap="filterStatus" data-k="{{item.k}}">{{item.n}}</view></view>
 </view>
 <view class="list-summary"><text>{{productCount || 0}} 项商品 · {{filteredCount || 0}} 个团期</text><text>可售余量 {{availableSeats || 0}} 席</text></view>
-<view wx:if="{{error}}" class="card"><ui-state kind="error" title="库存加载失败" desc="{{error}}" bind:retry="fetch" /></view>
+<view wx:if="{{error}}" class="card"><ui-state kind="error" code="{{errCode}}" title="库存加载失败" desc="{{error}}" bind:retry="fetch" /></view>
 <view class="product-group" wx:for="{{groups}}" wx:key="key" wx:for-item="g">
   <view class="group-heading" bindtap="toggleProduct" data-key="{{g.key}}">
     <view class="group-initial">{{g.count}}<text>团期</text></view>

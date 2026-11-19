@@ -274,6 +274,7 @@ try {
     const list = ok(await call('GET', '/m/reviews?page=1&pageSize=20', null, mTok))
     const item = list.items.find((r) => Number(r.id) === rv)
     assert.ok(item, '商户端评价列表含本单')
+    assert.ok(Number.isInteger(list.total) && list.total >= list.items.length, '评价列表 total 必须是整数（count() 已返回数字，曾误取 .c 得 null，导致「共 null 条」且无加载更多）')
     // 商户回复 → 待审（游客不可见）
     ok(await call('POST', `/m/reviews/${rv}/reply`, { content: stamp + ' 感谢您的好评，欢迎再来' }, mTok))
     let pub = ok(await call('GET', '/c/tours/' + prod.id + '/reviews'))

@@ -17,6 +17,6 @@ Page({
       if(requestId!==this._requestId)return
       const rows = list.map(r => ({ ...r, codeText: r.order_no || ('凭证 #' + r.pass_id) }))
       this.setData({list:append?this.data.list.concat(rows):rows,page,loaded:true,loading:false,hasMore:list.length===20})
-    }catch(e){if(requestId===this._requestId)this.setData({loaded:true,loading:false,error:e.msg||'记录加载失败，请重试'})}
+    }catch(e){if(requestId===this._requestId)this.setData({loaded:true,loading:false,errCode: Number(e.code) || 0, error:e.msg||'记录加载失败，请重试'})}
   },
 })

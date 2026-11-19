@@ -30,7 +30,7 @@ Page({
       const mapped = rows.map(x => Object.assign({}, x, { isDemo:String(x.contact_name || '').startsWith('演示样例'), contactLabel:String(x.contact_name || '').startsWith('演示样例') ? '演示游客' : x.contact_name || '游客', priceLabel: money(x.amount_pay), statusText: x.statusText || '处理中' }))
       const orders = append ? this.data.orders.concat(mapped) : mapped
       this.setData({ orders, page, hasMore: rows.length === 12, loadingMore: false, waitingCount: orders.filter(o => [20,30].includes(Number(o.status))).length, loaded: true, error: '' }); this.applyFilters()
-    } catch (e) { if (requestId === this._requestId) { this.setData({ loaded: true, loadingMore: false, error: e.msg || '订单加载失败' }); if (!append) { this.setData({orders:[]}); this.applyFilters() } } }
+    } catch (e) { if (requestId === this._requestId) { this.setData({ loaded: true, loadingMore: false, errCode: Number(e.code) || 0, error: e.msg || '订单加载失败' }); if (!append) { this.setData({orders:[]}); this.applyFilters() } } }
   },
   applyFilters() { const v = orderView(this.data.orders, this.data.kw, this.data.status, this.data.orders.length); this.setData({visibleOrders:v.visibleOrders,matchedCount:v.matchedCount}) },
   onSearch(e) { this.setData({ kw: e.detail.value }); clearTimeout(this._searchTimer); this._searchTimer=setTimeout(()=>this.fetch(),250) },

@@ -3,7 +3,7 @@
 <view class="filter-panel"><view class="search-field"><text>⌕</text><input value="{{kw}}" bindinput="onSearch" placeholder="搜索商品、订单号或联系人" /></view><view class="filter-chips"><view wx:for="{{filters}}" wx:key="k" class="filter-chip {{status === item.k ? 'active' : ''}}" bindtap="filterStatus" data-k="{{item.k}}">{{item.n}}</view></view></view>
 <view class="order-date-filter"><picker range="{{periodNames}}" value="{{periodIndex}}" bindchange="filterPeriod"><view class="range-picker">{{periodNames[periodIndex]}}　⌄</view></picker><picker wx:if="{{periodIndex === 4}}" mode="date" value="{{customDate}}" end="{{today}}" bindchange="selectDate"><view>{{customDate}}　⌄</view></picker><view wx:if="{{presetDepart}}" class="range-picker preset-chip" bindtap="clearPreset">出发日 {{presetDepart}} ✕</view></view>
 <view class="list-summary"><text>已加载 {{matchedCount || 0}} 笔</text><text>其中待接待 {{waitingCount || 0}} 笔</text></view>
-<view wx:if="{{error}}" class="card"><ui-state kind="error" title="订单加载失败" desc="{{error}}" bind:retry="retry" /></view>
+<view wx:if="{{error}}" class="card"><ui-state kind="error" code="{{errCode}}" title="订单加载失败" desc="{{error}}" bind:retry="retry" /></view>
 <view class="order-paper" wx:for="{{visibleOrders}}" wx:key="order_no" bindtap="goDetail" data-no="{{item.order_no}}">
   <view class="order-top"><text class="order-number">{{item.order_no}}</text><text class="status-label status-{{item.status}}">{{item.statusText}}</text></view>
   <view class="order-title">{{item.title}}</view>
