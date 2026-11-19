@@ -49,5 +49,11 @@ chmod -R a+rX "$target"
 if command -v selinuxenabled >/dev/null && selinuxenabled; then chcon -R -t httpd_sys_content_t "$base/releases"; fi
 nginx -t
 nginx -s reload
-curl --fail --silent --show-error --resolve ziyou.1work.vip:443:127.0.0.1 https://ziyou.1work.vip/version.json
+# nginx reload is asynchronous; allow the new TLS virtual host to become ready.
+verified=0
+for attempt in {1..12}; do
+    if curl --fail --silent --show-error --resolve ziyou.1work.vip:443:127.0.0.1 https://ziyou.1work.vip/version.json; then verified=1; break; fi
+    sleep 1
+done
+[[ "$verified" == 1 ]]
 printf '\nRelease: %s\nBackup: %s\nPrevious: %s\n' "$release" "$backup" "$previous"
