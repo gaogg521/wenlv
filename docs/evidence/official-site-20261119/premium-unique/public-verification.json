@@ -1,0 +1,238 @@
+{
+  "version": {
+    "release": "20261119-163319-fdbbe09",
+    "sourceCommit": "fdbbe09b86d2f735790d13124d16c834555d239d",
+    "builtAt": "2026-11-19T16:33:19.676007+08:00",
+    "files": {
+      "404.html": "359f82e432fa8ed9c357d3ea5637e087f693d4a85a3abed107706bc420f2bd80",
+      "app.js": "83b27df46cf469b26ab4f933b3f6d880f929a240737e99797974c5344576ed64",
+      "assets/app-icon.webp": "6f8267502bcaaf3dbe72d68222770cd039ab0b47d10677849949e21cdbdc343b",
+      "assets/hero-canal-hd.webp": "52e8f3374057b33d7adaf94633d4cc16fe8cab1ef7dc81d88e100d86f51798c4",
+      "assets/hero-canal-medium.webp": "f92718a900ef5018a79467af784e24dea7e230c21b79a5c36e2394faddfbc84b",
+      "assets/hero-culture-hd.webp": "38dd3795ddc6f7f581d64ff74753ca4e2ad054fee7d2aca4c06b81072f4d5c5f",
+      "assets/hero-wall-hd.webp": "691e9773f1db38ca64fb8af28bb40ad4306036a0df265d98e4bdd6beff95646a",
+      "assets/hero-wall-medium.webp": "2294d242d901a34768c7d3cc6f43ec63205120c873a7cdb1a4af2ff6268c88f0",
+      "assets/hero-wuzhen-hd.webp": "600e8327deeb056ccacf60e189a3714c88a205f543c2cbf4791460ec0de14812",
+      "assets/hero-wuzhen.webp": "a047cc0a1aa8f90c05ed8ab9e73e2c3304eccd7a6664f3e8d3b73eb57dcd94f8",
+      "assets/logo.webp": "9a55fb1bf7024968568c8c4d60168fc84706417023a48b53bd3743e45f7d1909",
+      "assets/merchant.webp": "5c6a969394924eaadc0cd20a75a81e00912ff46b301fbfd33e2949c3a7aa3afc",
+      "assets/photo-31314824.webp": "0d47f9f1e197f81742b042ef5bd0fcb80d41e13c12cead4f9d2f516247db3bcf",
+      "assets/photo-33970873.webp": "50d0a04ae9652759427c791706d068dc3c57df473b2c1267c787c9e068ec01ce",
+      "assets/scene-destination-town-34494754.webp": "a77edff4f18206243149abf25caab3d172b9e90afd67d335ced73eab082b3daa",
+      "assets/scene-story-guilin-36204297.webp": "f1c3e1e1a7228940b606ac7e69e5a69585214f9ff9019fc1bf2528dca21fbc97",
+      "assets/scene-story-huangshan-33921415.webp": "2c8df5a03d41b77960f2e377f2aec04e4c3037e9a4d660b245b66680a1a7f1a6",
+      "assets/scene-story-westlake-37254292.webp": "ef2e4937c1d366ba7d46b794b20ba1d165f68b785cde066dfc3ef5823ac54a55",
+      "assets/scene-theme-culture-40530663.webp": "72c8baef6d9ef85964898378a3d4589a63acea34882d297a750d5291df10589e",
+      "assets/scene-theme-explore-36535763.webp": "61f2006f632bbfe03eec8e64460f5b626bb04f415b17e9a0c4b42ae14f82d9cf",
+      "assets/scene-theme-family-31829081.webp": "22bd2ded3956f7328f92567aedbb525d20f09d45c095ab7025be96bda6ea7258",
+      "assets/scene-theme-friends-28770560.webp": "2810999b0c3ea452458c68ef21e9a2b4fda1f1f5b361727037d3688ef1ed87f5",
+      "assets/scene-theme-mystery-14553043.webp": "a02dc396930ba3af057010547459f1115a7d913450de70d04cae65b9d6de78ca",
+      "assets/scene-theme-sport-6513728.webp": "3a5bdb0e2fa2bdb87e860a191dc71b362d44d62c4d386e231a7e214aa7a1407b",
+      "assets/scene-theme-wellness-36849810.webp": "127b91bf1157d22f9314ad523a08d1d331c90e261c02284f92ec16302102c015",
+      "assets/scene-theme-women-34486996.webp": "475d2e649f402856373812830f39e766cbc40bb782c35721611bfe6702113bf4",
+      "assets/visitor.webp": "e35573a9a8666e600e5e0e26927e552af7c39087da4991a7c066cb2764f5ee3a",
+      "assets/workspace.webp": "05cc8f6222d2d5d6102d1227688d1cfae3f1c885758f196aa887de31caffaf5c",
+      "index.html": "7baa73b82f22aaf7ea230c15dcee2154883be76044a65e6dbe969935200a87a8",
+      "photography.json": "792f5bde01f2a96f5092557c2cea0534fd90da79438c38486ad55eb0d18ec799",
+      "premium.css": "ee37cc42e25f0346eba7d7fab7791621673781ff3ee52a1a90ee1a3f60fe20e6",
+      "robots.txt": "f37e8e84a198b87122752a82e5cbe156a4569b1d9d77568bba8e115d0a7521b1",
+      "sitemap.xml": "4083e23c2028a2a65257f148a3c7a3d8d2246b6c72b2e59f59748544e4169bcf",
+      "styles.css": "46cfed40fd3afbcdd843812be78ca999cce7f7e55c51b9c4b0bf2d121bdc35ec"
+    }
+  },
+  "files": [
+    {
+      "path": "404.html",
+      "status": 404,
+      "matches": true
+    },
+    {
+      "path": "app.js",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/app-icon.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-canal-hd.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-canal-medium.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-culture-hd.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-wall-hd.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-wall-medium.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-wuzhen-hd.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-wuzhen.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/logo.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/merchant.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/photo-31314824.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/photo-33970873.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-destination-town-34494754.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-story-guilin-36204297.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-story-huangshan-33921415.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-story-westlake-37254292.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-culture-40530663.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-explore-36535763.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-family-31829081.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-friends-28770560.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-mystery-14553043.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-sport-6513728.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-wellness-36849810.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/scene-theme-women-34486996.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/visitor.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/workspace.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "photography.json",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "premium.css",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "robots.txt",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "sitemap.xml",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "styles.css",
+      "status": 200,
+      "matches": true
+    }
+  ],
+  "services": [
+    {
+      "url": "https://ziyou.1work.vip/",
+      "status": 200
+    },
+    {
+      "url": "https://api.1work.vip/c/health",
+      "status": 200
+    },
+    {
+      "url": "https://api.1work.vip/admin-ui",
+      "status": 200
+    },
+    {
+      "url": "https://1work.vip",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8080/c/health",
+      "status": 200
+    }
+  ],
+  "uniquePhotographs": 17
+}
