@@ -1,0 +1,128 @@
+{
+  "version": {
+    "release": "20261119-152820-71e6811",
+    "sourceCommit": "71e68119237143f6f2237bcc87cc914712d72f07",
+    "builtAt": "2026-11-19T15:28:20.221675+08:00",
+    "files": {
+      "404.html": "359f82e432fa8ed9c357d3ea5637e087f693d4a85a3abed107706bc420f2bd80",
+      "app.js": "7d7c1659bdf1a2bef062dedca59707b22a400a9aa8924f401386dea6cfd8f0cc",
+      "assets/app-icon.webp": "6f8267502bcaaf3dbe72d68222770cd039ab0b47d10677849949e21cdbdc343b",
+      "assets/canal.webp": "41c0756b09beb9acbc934e65fcd9e2020eda33b2579b8dc96b83ce516e317863",
+      "assets/great-wall.webp": "eb84e691ad8911181de096f2cdf4afd13710a5fb3007a5fe294975ec3d51f78f",
+      "assets/logo.webp": "9a55fb1bf7024968568c8c4d60168fc84706417023a48b53bd3743e45f7d1909",
+      "assets/merchant.webp": "5c6a969394924eaadc0cd20a75a81e00912ff46b301fbfd33e2949c3a7aa3afc",
+      "assets/visitor.webp": "e35573a9a8666e600e5e0e26927e552af7c39087da4991a7c066cb2764f5ee3a",
+      "assets/water-town.webp": "a59d9fbe53e778ac75aeef18f60c464a0d2d62730ffb7040aa4fd1c5da728825",
+      "assets/west-lake.webp": "f040be0f1427d614fde66c416ab508e0a1988da441df3fadc5a5de8132532862",
+      "assets/workspace.webp": "05cc8f6222d2d5d6102d1227688d1cfae3f1c885758f196aa887de31caffaf5c",
+      "index.html": "0bf9b4161adb523dfeba75226266bfa1e878e937b54393f485b175b5d18edbdd",
+      "robots.txt": "f37e8e84a198b87122752a82e5cbe156a4569b1d9d77568bba8e115d0a7521b1",
+      "sitemap.xml": "4083e23c2028a2a65257f148a3c7a3d8d2246b6c72b2e59f59748544e4169bcf",
+      "styles.css": "1acb2b6f306c4ed2e3f24c4ae3e980a03170779f0040245b2bd16146ad9d42dd"
+    }
+  },
+  "files": [
+    {
+      "path": "404.html",
+      "status": 404,
+      "matches": true
+    },
+    {
+      "path": "app.js",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/app-icon.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/canal.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/great-wall.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/logo.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/merchant.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/visitor.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/water-town.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/west-lake.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/workspace.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "robots.txt",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "sitemap.xml",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "styles.css",
+      "status": 200,
+      "matches": true
+    }
+  ],
+  "services": [
+    {
+      "url": "http://ziyou.1work.vip/",
+      "status": 200,
+      "finalUrl": "https://ziyou.1work.vip/"
+    },
+    {
+      "url": "https://api.1work.vip/c/health",
+      "status": 200,
+      "finalUrl": "https://api.1work.vip/c/health"
+    },
+    {
+      "url": "https://api.1work.vip/admin-ui",
+      "status": 200,
+      "finalUrl": "https://api.1work.vip/admin-ui"
+    },
+    {
+      "url": "https://1work.vip",
+      "status": 200,
+      "finalUrl": "https://1work.vip"
+    },
+    {
+      "url": "http://127.0.0.1:8080/c/health",
+      "status": 200,
+      "finalUrl": "http://127.0.0.1:8080/c/health"
+    }
+  ]
+}
