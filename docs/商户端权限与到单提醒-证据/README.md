@@ -45,7 +45,7 @@
 
 ```bash
 # 隔离库 + 服务（PORT=18240）就绪后（夹具务必在 test:db 全绿之后再插，避免污染选单类断言）：
-mysql -uroot -proot wanderlust_qa_mn < api/scripts/mn-fixtures.sql
+mysql -uroot -proot wanderlust_qa_mn < api/scripts/mn-fixtures.sql  # 库名按实际隔离库调整
 cd api && DB_NAME=wanderlust_qa_mn PORT=18240 API_BASE=http://127.0.0.1:18240 node test/walk-mn-mini-b.mjs docs/商户端权限与到单提醒-证据/mini-b
 # mini-a / pc 同理（模拟器 auto-port 9421/9422；PC 用系统 Chrome/Edge headless 连 18240/admin-ui）
 ```
