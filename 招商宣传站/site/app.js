@@ -238,7 +238,7 @@
     const stats = document.querySelector('#ic-stats');
     if (stats) stats.replaceChildren(...d.stats.map(([v, l]) => { const w = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; const s = document.createElement('span'); s.textContent = l; w.append(b, s); return w; }));
     const chips = document.querySelector('#ic-chips');
-    if (chips) { chips.replaceChildren(...d.chips.map(t => { const sp = document.createElement('span'); sp.textContent = t; return sp; })); chips.style.display = d.chips.length ? '' : 'none'; }
+    if (chips) { chips.replaceChildren(...d.chips.map(t => { const sp = document.createElement('span'); sp.textContent = t; return sp; })); chips.classList.toggle('is-empty', !d.chips.length); }
   }
   document.querySelectorAll('[data-identity]').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('[data-identity]').forEach(b => { b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button)); });

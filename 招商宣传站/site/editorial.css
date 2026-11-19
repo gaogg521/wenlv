@@ -181,6 +181,7 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .ic-stats span{display:block;font-size:11px;opacity:.75;margin-top:3px}
 .ic-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .ic-chips span{border:1px solid currentColor;border-radius:99px;padding:4px 12px;font-size:11px;opacity:.9}
+.ic-chips.is-empty{display:none}
 .ic-foot{margin-top:auto;padding-top:14px;display:flex;justify-content:space-between;gap:12px;font-size:10.5px;opacity:.72}
 .trust-card .identity-note{margin:16px 2px 0;font-size:13px;line-height:1.8;color:#7d6c5b}
 @media(max-width:800px){
@@ -244,6 +245,14 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .cv-cube svg{width:100%;height:100%;fill:color-mix(in srgb,var(--cube) 10%,transparent);stroke:var(--cube);stroke-width:1.6;stroke-linejoin:round;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--cube) 65%,transparent)) drop-shadow(0 0 18px color-mix(in srgb,var(--cube) 28%,transparent));animation:cvFloat 4.5s ease-in-out infinite;animation-delay:calc(var(--i,0)*.45s)}
 .cv-cube .cv-face{fill:color-mix(in srgb,var(--cube) 24%,transparent)}
 .cv-cube .cv-wire{fill:none}
+/* 立方体颜色由 CSS 按序定义：线上 nginx 下发 CSP style-src 'self'，内联 style 会被拦截，
+   靠在 li 上写 style="--cube:…" 会导致六面填充退回默认黑色、描边与光晕全部失效 */
+.cv-steps .cv-step:nth-child(1){--cube:#e8eeff}
+.cv-steps .cv-step:nth-child(2){--cube:#ffd257}
+.cv-steps .cv-step:nth-child(3){--cube:#5aa9ff}
+.cv-steps .cv-step:nth-child(4){--cube:#b18cff}
+.cv-steps .cv-step:nth-child(5){--cube:#4dd6c1}
+.cv-steps .cv-step:nth-child(6){--cube:#ff9558}
 .cv-step:nth-child(1) .cv-cube svg{--i:0}.cv-step:nth-child(2) .cv-cube svg{--i:1}.cv-step:nth-child(3) .cv-cube svg{--i:2}.cv-step:nth-child(4) .cv-cube svg{--i:3}.cv-step:nth-child(5) .cv-cube svg{--i:4}.cv-step:nth-child(6) .cv-cube svg{--i:5}
 @keyframes cvFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .cv-step:hover .cv-cube svg{animation-duration:2.8s;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--cube) 90%,transparent)) drop-shadow(0 0 26px color-mix(in srgb,var(--cube) 45%,transparent))}
