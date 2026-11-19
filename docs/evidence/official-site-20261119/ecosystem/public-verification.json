@@ -1,0 +1,129 @@
+{
+  "version": {
+    "release": "20261119-155838-6181afb",
+    "sourceCommit": "6181afbbe80c3f19c632e455c5b358befc635869",
+    "builtAt": "2026-11-19T15:58:38.281551+08:00",
+    "files": {
+      "404.html": "359f82e432fa8ed9c357d3ea5637e087f693d4a85a3abed107706bc420f2bd80",
+      "app.js": "519731a697e2fe47fb14297da1851cbe02eeec53c4c1e97d849605b26eb196e9",
+      "assets/app-icon.webp": "6f8267502bcaaf3dbe72d68222770cd039ab0b47d10677849949e21cdbdc343b",
+      "assets/canal.webp": "41c0756b09beb9acbc934e65fcd9e2020eda33b2579b8dc96b83ce516e317863",
+      "assets/great-wall.webp": "eb84e691ad8911181de096f2cdf4afd13710a5fb3007a5fe294975ec3d51f78f",
+      "assets/hero-wuzhen.webp": "a047cc0a1aa8f90c05ed8ab9e73e2c3304eccd7a6664f3e8d3b73eb57dcd94f8",
+      "assets/logo.webp": "9a55fb1bf7024968568c8c4d60168fc84706417023a48b53bd3743e45f7d1909",
+      "assets/merchant.webp": "5c6a969394924eaadc0cd20a75a81e00912ff46b301fbfd33e2949c3a7aa3afc",
+      "assets/photo-31314824.webp": "0d47f9f1e197f81742b042ef5bd0fcb80d41e13c12cead4f9d2f516247db3bcf",
+      "assets/photo-33970873.webp": "50d0a04ae9652759427c791706d068dc3c57df473b2c1267c787c9e068ec01ce",
+      "assets/visitor.webp": "e35573a9a8666e600e5e0e26927e552af7c39087da4991a7c066cb2764f5ee3a",
+      "assets/workspace.webp": "05cc8f6222d2d5d6102d1227688d1cfae3f1c885758f196aa887de31caffaf5c",
+      "index.html": "0aa35362271edc1487c56330369e7fe24acb82426372a245bc1a77620216adea",
+      "robots.txt": "f37e8e84a198b87122752a82e5cbe156a4569b1d9d77568bba8e115d0a7521b1",
+      "sitemap.xml": "4083e23c2028a2a65257f148a3c7a3d8d2246b6c72b2e59f59748544e4169bcf",
+      "styles.css": "46cfed40fd3afbcdd843812be78ca999cce7f7e55c51b9c4b0bf2d121bdc35ec"
+    }
+  },
+  "files": [
+    {
+      "path": "404.html",
+      "status": 404,
+      "matches": true
+    },
+    {
+      "path": "app.js",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/app-icon.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/canal.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/great-wall.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/hero-wuzhen.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/logo.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/merchant.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/photo-31314824.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/photo-33970873.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/visitor.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "assets/workspace.webp",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "robots.txt",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "sitemap.xml",
+      "status": 200,
+      "matches": true
+    },
+    {
+      "path": "styles.css",
+      "status": 200,
+      "matches": true
+    }
+  ],
+  "services": [
+    {
+      "url": "https://ziyou.1work.vip/",
+      "status": 200
+    },
+    {
+      "url": "https://api.1work.vip/c/health",
+      "status": 200
+    },
+    {
+      "url": "https://api.1work.vip/admin-ui",
+      "status": 200
+    },
+    {
+      "url": "https://1work.vip",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8080/c/health",
+      "status": 200
+    }
+  ]
+}
