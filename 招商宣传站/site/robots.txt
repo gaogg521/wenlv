@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ziyou.1work.vip/sitemap.xml
