@@ -1,0 +1,156 @@
+{
+  "license": "Pexels License",
+  "rule": "One original photograph per showcase slot; detail views reuse their own cover.",
+  "photos": [
+    {
+      "slot": "hero-wuzhen",
+      "photoId": 33626219,
+      "asset": "assets/hero-wuzhen.webp",
+      "source": "https://www.pexels.com/photo/33626219/"
+    },
+    {
+      "slot": "hero-culture",
+      "photoId": 31314824,
+      "asset": "assets/photo-31314824.webp",
+      "source": "https://www.pexels.com/photo/31314824/"
+    },
+    {
+      "slot": "hero-canal",
+      "photoId": 39041260,
+      "asset": "assets/hero-canal-medium.webp",
+      "source": "https://www.pexels.com/photo/39041260/"
+    },
+    {
+      "slot": "hero-wall",
+      "photoId": 2981806,
+      "asset": "assets/hero-wall-medium.webp",
+      "source": "https://www.pexels.com/photo/2981806/"
+    },
+    {
+      "slot": "theme-mystery",
+      "photoId": 14553043,
+      "asset": "assets/scene-theme-mystery-14553043.webp",
+      "source": "https://www.pexels.com/photo/14553043/",
+      "size": [
+        1920,
+        2880
+      ]
+    },
+    {
+      "slot": "theme-women",
+      "photoId": 34486996,
+      "asset": "assets/scene-theme-women-34486996.webp",
+      "source": "https://www.pexels.com/photo/34486996/",
+      "size": [
+        1920,
+        1281
+      ]
+    },
+    {
+      "slot": "theme-friends",
+      "photoId": 28770560,
+      "asset": "assets/scene-theme-friends-28770560.webp",
+      "source": "https://www.pexels.com/photo/28770560/",
+      "size": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "slot": "theme-wellness",
+      "photoId": 36849810,
+      "asset": "assets/scene-theme-wellness-36849810.webp",
+      "source": "https://www.pexels.com/photo/36849810/",
+      "size": [
+        1920,
+        2560
+      ]
+    },
+    {
+      "slot": "theme-sport",
+      "photoId": 6513728,
+      "asset": "assets/scene-theme-sport-6513728.webp",
+      "source": "https://www.pexels.com/photo/6513728/",
+      "size": [
+        1920,
+        1281
+      ]
+    },
+    {
+      "slot": "theme-family",
+      "photoId": 31829081,
+      "asset": "assets/scene-theme-family-31829081.webp",
+      "source": "https://www.pexels.com/photo/31829081/",
+      "size": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "slot": "theme-culture",
+      "photoId": 40530663,
+      "asset": "assets/scene-theme-culture-40530663.webp",
+      "source": "https://www.pexels.com/photo/40530663/",
+      "size": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "slot": "theme-explore",
+      "photoId": 36535763,
+      "asset": "assets/scene-theme-explore-36535763.webp",
+      "source": "https://www.pexels.com/photo/36535763/",
+      "size": [
+        1920,
+        1081
+      ]
+    },
+    {
+      "slot": "destination-town",
+      "photoId": 34494754,
+      "asset": "assets/scene-destination-town-34494754.webp",
+      "source": "https://www.pexels.com/photo/34494754/",
+      "size": [
+        1920,
+        1440
+      ]
+    },
+    {
+      "slot": "story-guilin",
+      "photoId": 36204297,
+      "asset": "assets/scene-story-guilin-36204297.webp",
+      "source": "https://www.pexels.com/photo/36204297/",
+      "size": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "slot": "story-westlake",
+      "photoId": 37254292,
+      "asset": "assets/scene-story-westlake-37254292.webp",
+      "source": "https://www.pexels.com/photo/37254292/",
+      "size": [
+        1920,
+        1440
+      ]
+    },
+    {
+      "slot": "story-huangshan",
+      "photoId": 33921415,
+      "asset": "assets/scene-story-huangshan-33921415.webp",
+      "source": "https://www.pexels.com/photo/33921415/",
+      "size": [
+        1920,
+        1280
+      ]
+    },
+    {
+      "slot": "destination-lake",
+      "photoId": 33970873,
+      "asset": "assets/photo-33970873.webp",
+      "source": "https://www.pexels.com/photo/33970873/"
+    }
+  ]
+}
