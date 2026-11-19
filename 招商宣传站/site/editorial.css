@@ -194,6 +194,34 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .ic-stats b{font-size:18px}
 .ic-foot{font-size:9.5px;flex-direction:column;gap:2px}
 }
+
+/* ==== 2026-11-19 可信凭证区布局重设计：卡册式左栏 + 台阶右栏顶部对齐 ==== */
+/* 根因修复：卡面不再锁 aspect-ratio（窄栏下会把统计/徽章/脚注裁掉），改自然高度 + 最小高度 */
+.trust-section .trust-layout{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:52px;align-items:start}
+.trust-card{position:sticky;top:96px;align-self:start;display:flex;flex-direction:column}
+.identity-card{order:1;aspect-ratio:auto;min-height:340px;padding:24px 26px 20px;border-radius:20px;border:1px solid rgba(255,255,255,.20);box-shadow:0 20px 46px rgba(60,40,20,.18),inset 0 1px 0 rgba(255,255,255,.28)}
+.identity-tabs{order:2;justify-content:center;gap:8px;margin:18px 0 0}
+.identity-tabs button{flex:0 0 auto;min-height:38px;padding:6px 16px;font-size:12.5px;background:#fffdf9;border-color:#e4d6c6}
+.trust-card .identity-note{order:3;margin:18px 0 0;padding:0 0 0 14px;border-left:2px solid #e2cfb4;font-size:12.5px;line-height:1.85;color:#8b7967}
+/* 卡内节奏：品牌与姓名在上，数据与徽章贴底，中间留呼吸 */
+.ic-main{margin-top:18px}
+.ic-sub{margin-top:8px}
+.ic-stats{gap:30px;margin-top:auto;padding-top:20px}
+.ic-chips{margin-top:14px}
+.ic-foot{margin-top:14px;padding-top:12px;border-top:1px solid;border-color:currentColor;font-size:10px;gap:10px;align-items:flex-end}
+@media(max-width:1100px){
+.trust-section .trust-layout{gap:34px}
+.identity-card{min-height:320px;padding:22px 22px 18px}
+.ic-stats{gap:22px}
+}
+@media(max-width:800px){
+.trust-section .trust-layout{grid-template-columns:1fr;gap:30px}
+.trust-card{position:static}
+.identity-card{min-height:0;padding:22px 20px 18px}
+.identity-tabs{margin-top:16px;justify-content:flex-start;gap:8px}
+.identity-tabs button{flex:1 1 calc(50% - 4px);margin:0;text-align:center}
+.ic-foot{flex-direction:column;align-items:flex-start;gap:2px}
+}
 /* ---- 链上视图（一单六步）深色面板 ---- */
 .chain-demo{margin-top:44px;background:radial-gradient(120% 140% at 50% -20%,#12295a 0%,#0a1a3c 42%,#060f24 100%);border:1px solid rgba(126,163,255,.18);border-radius:22px;padding:28px 34px 30px;color:#dbe6ff;position:relative;overflow:hidden}
 .chain-demo:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(126,163,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(126,163,255,.05) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;mask-image:radial-gradient(90% 80% at 50% 40%,#000 30%,transparent 100%);-webkit-mask-image:radial-gradient(90% 80% at 50% 40%,#000 30%,transparent 100%)}
