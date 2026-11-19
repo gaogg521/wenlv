@@ -151,6 +151,46 @@
       "photoId": 33970873,
       "asset": "assets/photo-33970873.webp",
       "source": "https://www.pexels.com/photo/33970873/"
+    },
+    {
+      "slot": "why-participate",
+      "photoId": 36695442,
+      "asset": "assets/scene-why-participate-36695442.webp",
+      "source": "https://www.pexels.com/photo/36695442/",
+      "size": [
+        1600,
+        1063
+      ]
+    },
+    {
+      "slot": "why-people",
+      "photoId": 34402264,
+      "asset": "assets/scene-why-people-34402264.webp",
+      "source": "https://www.pexels.com/photo/34402264/",
+      "size": [
+        1600,
+        1064
+      ]
+    },
+    {
+      "slot": "why-continue",
+      "photoId": 19678497,
+      "asset": "assets/scene-why-continue-19678497.webp",
+      "source": "https://www.pexels.com/photo/19678497/",
+      "size": [
+        1600,
+        1067
+      ]
+    },
+    {
+      "slot": "creation-share",
+      "photoId": 33255917,
+      "asset": "assets/scene-creation-share-33255917.webp",
+      "source": "https://www.pexels.com/photo/33255917/",
+      "size": [
+        1600,
+        2400
+      ]
     }
   ]
 }
