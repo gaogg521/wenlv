@@ -14,7 +14,7 @@ Page({
   loadItems() {
     if (this.data.loading) return
     this.setData({ loading: true, error: '' })
-    api.getTours('shop').then((items) => {
+    return api.getTours('shop').then((items) => {
       // D01：商城同样使用列表同源注价（priceNow 已含早鸟/折扣，无优惠时等于原价）
       this.setData({ items: (items || []).map(t => {
         const cover = api.coverFor(t)
@@ -40,5 +40,12 @@ Page({
   buy(e) {
     const id = e.currentTarget.dataset.id
     wx.navigateTo({ url: '/package-tour/pages/detail/index?id=' + id })
-  }
+  },
+  // T-02：下拉刷新复用商品加载逻辑，加载完成后收起转圈
+  onPullDownRefresh() {
+    Promise.resolve(this.loadItems()).then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
+  },
+  // T-05：分享
+  onShareAppMessage() { return { title: '向往的自由 · 心意好物', path: '/pages/shop/index' } },
+  onShareTimeline() { return { title: '向往的自由 · 心意好物' } }
 })

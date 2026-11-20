@@ -149,9 +149,22 @@
       ${B('link', '', '🔗 链接', '插入链接')}<label class="ee-rt-img" title="插入图片">🖼 图片<input type="file" accept="image/png,image/jpeg,image/webp" onchange="eeRtImg(this,'${id}')"></label>${B('insertHorizontalRule', '', '— 分割线', '分割线')}${B('removeFormat', '', '清除格式', '清除格式')}
     </div><div id="${id}" class="ee-rt-body" contenteditable="true" oninput="eeRtCount(this)">${html}</div><div class="ee-rt-foot"><span>0</span> 字</div></div>`
   }
-  window.eeRt = (e, cmd, val) => {
+  window.eeRt = async (e, cmd, val) => {
     e.preventDefault()
-    if (cmd === 'link') { const u = prompt('链接地址（https:// 开头）'); if (!u) return; if (!/^https?:\/\//.test(u)) return toast('链接需以 http(s):// 开头', true); document.execCommand('createLink', false, u) }
+    if (cmd === 'link') {
+      // 统一二次确认的输入框当 URL 输入用；先存正文选区——弹窗会夺走焦点，插入前恢复
+      const body = e.target?.closest('.ee-rich')?.querySelector('.ee-rt-body')
+      const selSave = []
+      const sel = window.getSelection()
+      for (let i = 0; i < sel.rangeCount; i++) selSave.push(sel.getRangeAt(i).cloneRange())
+      const r = await uiConfirm({ title: '插入链接', impact: '确认后把链接插入正文当前光标处（http/https 开头）', needReason: true, reasonPlaceholder: '粘贴链接 https://…', confirmText: '插入' })
+      if (!r.ok) return
+      const u = r.reason
+      if (!/^https?:\/\//.test(u)) return toast('链接需以 http(s):// 开头', true)
+      if (body) body.focus()
+      const sel2 = window.getSelection(); sel2.removeAllRanges(); for (const rg of selSave) sel2.addRange(rg)
+      document.execCommand('createLink', false, u)
+    }
     else document.execCommand(cmd, false, val || null)
     eeDirty()
   }

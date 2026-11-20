@@ -137,7 +137,8 @@ function pay(payParams) {
   })
 }
 
-async function getOrders() { return await request('/c/orders') }
+// M-13 T-01：带 query 时走服务端分页（/c/orders?page=N&pageSize=M → {items,total,hasMore}）；不带参数保持旧形态
+async function getOrders(query) { return await request('/c/orders' + (query ? '?' + query : '')) }
 async function getOrder(no) { return await request('/c/orders/' + no) }
 async function getPassCode(passId) { return await request('/c/pass/' + passId + '/code') }
 async function getMe() { return await request('/c/me') }

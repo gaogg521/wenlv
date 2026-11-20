@@ -136,7 +136,8 @@ const adminSys = {
 
   'GET /admin/features': async (req) => {
     await requireAdmin(req)
-    const rows = await q("SELECT k, v, memo FROM rule_config WHERE group_name = 'feature' ORDER BY k")
+    // D-03：功能开关是小表——只加 LIMIT 200 安全上限，不做分页 UI
+    const rows = await q("SELECT k, v, memo FROM rule_config WHERE group_name = 'feature' ORDER BY k LIMIT 200")
     return rows.map((r) => ({ key: r.k, on: String(r.v).includes('on'), memo: r.memo }))
   },
   'POST /admin/features/:key/toggle': async (req) => {
@@ -280,7 +281,14 @@ const adminEco = {
   },
   'GET /admin/agreements': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'finance'])
-    return await q('SELECT ac.*, m.name merchant_name FROM agreement_change ac JOIN merchant m ON m.id = ac.merchant_id ORDER BY ac.id DESC')
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态
+    const base = 'FROM agreement_change ac JOIN merchant m ON m.id = ac.merchant_id'
+    if (req.query.page == null || req.query.page === '') return await q(`SELECT ac.*, m.name merchant_name ${base} ORDER BY ac.id DESC`)
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${base}`)).n)
+    const items = await q(`SELECT ac.*, m.name merchant_name ${base} ORDER BY ac.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    return { items, total, page, pageSize }
   },
   'POST /admin/agreements/:id/verdict': async (req) => {
     const a = await requireAdmin(req, ['super', 'finance'])
@@ -320,13 +328,27 @@ const adminEdit = {
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
     // V82（Codex复验 R2）：景区主体方只看绑定景区；同城不同主体不可见
     const subS = subjectScope(a)
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }（含 kw 检索：名称/联系人/城市码）；无 page 保持旧数组形态
+    const paged = req.query.page != null && req.query.page !== ''
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const kwS = String(req.query.kw || '').trim()
+    const kwCond = kwS && paged ? ' AND (s.name LIKE ? OR s.contact_name LIKE ? OR CAST(s.city_code AS CHAR) LIKE ?)' : ''
+    const kwArgs = kwS && paged ? ['%' + kwS + '%', '%' + kwS + '%', '%' + kwS + '%'] : []
     if (a.role === 'scenic_partner') {
-      if (!subS.scenicId) return []
-      return await q('SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id) product_count FROM scenic_spot s WHERE s.id = ? ORDER BY s.id DESC', [subS.scenicId])
+      if (!subS.scenicId) return paged ? { items: [], total: 0, page, pageSize } : []
+      const rowsS = await q('SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id) product_count FROM scenic_spot s WHERE s.id = ? ORDER BY s.id DESC', [subS.scenicId])
+      return paged ? { items: rowsS, total: rowsS.length, page, pageSize } : rowsS
     }
     const sc = scopeFilter(a, 's.city_code'), ps = scopeFilter(a, 'p.city_code')
-    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id${ps.sql}) product_count
+    if (!paged) {
+      return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id${ps.sql}) product_count
       FROM scenic_spot s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, [...ps.params, ...sc.params])
+    }
+    const total = Number((await one(`SELECT COUNT(*) n FROM scenic_spot s WHERE 1=1 ${sc.sql}${kwCond}`, [...sc.params, ...kwArgs])).n)
+    const items = await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.scenic_id = s.id${ps.sql}) product_count
+      FROM scenic_spot s WHERE 1=1 ${sc.sql}${kwCond} ORDER BY s.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, [...ps.params, ...sc.params, ...kwArgs])
+    return { items, total, page, pageSize }
   },
   'POST /admin/scenics': async (req) => {
     const a = await requireAdmin(req, ['super'])
@@ -362,9 +384,22 @@ const adminEdit = {
   'GET /admin/suppliers': async (req) => {
     const a = await requireAdmin(req)
     if (a.role === 'city_partner' && !a.scopeCity) throw new BizError(1003, '城市账号未绑定城市')
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }（含 kw 检索：名称/联系人/类目）；无 page 保持旧数组形态
+    const paged = req.query.page != null && req.query.page !== ''
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const kwS = String(req.query.kw || '').trim()
+    const kwCond = kwS && paged ? ' AND (s.name LIKE ? OR s.contact_name LIKE ? OR s.category LIKE ?)' : ''
+    const kwArgs = kwS && paged ? ['%' + kwS + '%', '%' + kwS + '%', '%' + kwS + '%'] : []
     const sc = scopeFilter(a)
-    return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
+    if (!paged) {
+      return await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
       FROM supplier s WHERE 1=1 ${sc.sql} ORDER BY s.id DESC`, sc.params)
+    }
+    const total = Number((await one(`SELECT COUNT(*) n FROM supplier s WHERE 1=1 ${sc.sql}${kwCond}`, [...sc.params, ...kwArgs])).n)
+    const items = await q(`SELECT s.*, (SELECT COUNT(*) FROM tour_product p WHERE p.supplier_id = s.id) product_count
+      FROM supplier s WHERE 1=1 ${sc.sql}${kwCond} ORDER BY s.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, [...sc.params, ...kwArgs])
+    return { items, total, page, pageSize }
   },
   'POST /admin/suppliers': async (req) => {
     const a = await requireAdmin(req, ['super'])
@@ -525,9 +560,21 @@ const adminNew = {
   'GET /admin/kyc': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
     const status = req.query.status != null ? Number(req.query.status) : null
-    return await q(`SELECT k.id, k.user_id, k.real_name, k.id_no_mask, k.status, k.reject_note, k.created_at,
-      k.reviewed_at, u.nickname FROM kyc_application k JOIN user_account u ON u.id = k.user_id
-      ${status != null ? 'WHERE k.status = ' + status : ''} ORDER BY k.id DESC LIMIT 200`)
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize, stats }（stats 为全量状态计数，KPI 卡用）；无 page 保持旧数组形态
+    const paged = req.query.page != null && req.query.page !== ''
+    const statusSql = status != null ? 'WHERE k.status = ' + Number(status) : ''
+    const base = 'FROM kyc_application k JOIN user_account u ON u.id = k.user_id'
+    const cols = 'k.id, k.user_id, k.real_name, k.id_no_mask, k.status, k.reject_note, k.created_at, k.reviewed_at, u.nickname'
+    if (!paged) {
+      return await q(`SELECT ${cols} ${base} ${statusSql} ORDER BY k.id DESC LIMIT 200`)
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${base} ${statusSql}`)).n)
+    const items = await q(`SELECT ${cols} ${base} ${statusSql} ORDER BY k.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    const statsRaw = await q('SELECT status, COUNT(*) n FROM kyc_application GROUP BY status')
+    const stats = Object.fromEntries(statsRaw.map((r) => [Number(r.status), Number(r.n)]))
+    return { items, total, page, pageSize, stats }
   },
   'POST /admin/kyc/:id/resolve': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops'])
@@ -547,8 +594,17 @@ const adminNew = {
   // 共创人登记（资金商/商品商）
   'GET /admin/co-creators': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'finance'])
-    return await q(`SELECT cc.*, p.title FROM co_creator cc JOIN tour_product p ON p.id = cc.product_id
-      ORDER BY cc.id DESC LIMIT 200`)
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize, sums }（sums 为全库口径，KPI 卡用）；无 page 保持旧数组形态
+    const base = 'FROM co_creator cc JOIN tour_product p ON p.id = cc.product_id'
+    if (req.query.page == null || req.query.page === '') {
+      return await q(`SELECT cc.*, p.title ${base} ORDER BY cc.id DESC LIMIT 200`)
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${base}`)).n)
+    const items = await q(`SELECT cc.*, p.title ${base} ORDER BY cc.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    const sumRow = await one('SELECT COALESCE(SUM(invest_amount),0) invest, SUM(status = 1) active FROM co_creator')
+    return { items, total, page, pageSize, sums: { invest: Number(sumRow.invest), active: Number(sumRow.active) } }
   },
   'POST /admin/co-creators': async (req) => {
     await requireAdmin(req, ['super', 'ops'])
@@ -572,14 +628,26 @@ const adminNew = {
   // 唯一事实源是 co_profit_pay（每笔真实支付一行，流水号全局唯一）；co_profit.paid_amount/status 由有效流水重算。
   'GET /admin/co-profits': async (req) => {
     await requireAdmin(req, ['super', 'ops', 'finance'])
-    return await q(`SELECT cp.*, cc.co_no, cc.name, cc.status co_status, p.title, p.city_code,
-        s.period settle_period,
-        (SELECT COUNT(*) FROM co_profit_pay y WHERE y.co_profit_id = cp.id AND y.status = 0) pending_approvals
-      FROM co_profit cp
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize, sums }（sums 为全库口径，KPI 卡用）；无 page 保持旧数组形态
+    const base = `FROM co_profit cp
       JOIN co_creator cc ON cc.id = cp.co_creator_id
       JOIN tour_product p ON p.id = cp.product_id
-      LEFT JOIN settlement s ON s.id = cp.settlement_id
-      ORDER BY cp.id DESC LIMIT 200`)
+      LEFT JOIN settlement s ON s.id = cp.settlement_id`
+    const selectCp = `SELECT cp.*, cc.co_no, cc.name, cc.status co_status, p.title, p.city_code,
+        s.period settle_period,
+        (SELECT COUNT(*) FROM co_profit_pay y WHERE y.co_profit_id = cp.id AND y.status = 0) pending_approvals`
+    if (req.query.page == null || req.query.page === '') {
+      return await q(`${selectCp} ${base} ORDER BY cp.id DESC LIMIT 200`)
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one('SELECT COUNT(*) n FROM co_profit cp')).n)
+    const items = await q(`${selectCp} ${base} ORDER BY cp.id DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    const sumRow = await one(`SELECT COALESCE(SUM(paid_amount),0) paid,
+        COALESCE(SUM(CASE WHEN status <> 2 THEN amount ELSE 0 END),0) due,
+        COALESCE(SUM(CASE WHEN status = 0 THEN amount - paid_amount ELSE 0 END),0) pending FROM co_profit`)
+    const approvals = Number((await one('SELECT COUNT(*) n FROM co_profit_pay WHERE status = 0')).n)
+    return { items, total, page, pageSize, sums: { paid: Number(sumRow.paid), due: Number(sumRow.due), pending: Number(sumRow.pending), approvals } }
   },
   // 分润打款回单附件：存 static/receipts（/uploads 静态服务不覆盖该目录，URL 不对外）
   'POST /admin/co-profits/receipt-upload': async (req) => {

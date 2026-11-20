@@ -1,4 +1,5 @@
 const api = require('../../utils/api')
+const { confirmChange } = require('../../utils/confirm')
 // 本单分账比例：新结算单出账时锁定了比例（split_snapshot，单位万分比）；
 // 比例快照上线前生成的旧单没有记录，按各栏金额占订单总额推算并注明
 function splitInfo(s) {
@@ -37,6 +38,8 @@ Page({
     } catch (err) { wx.showToast({ title: err.msg || '加载失败', icon: 'none' }) }
   },
   onShow() { this.fetch() },
+  // M-05：下拉刷新（开关在 index.json）
+  onPullDownRefresh() { this.fetch(); setTimeout(() => wx.stopPullDownRefresh(), 600) },
   fetch() {
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [], visibleList: [] }); return }
     api.request('/m/settlements').then((l) => { const list=l.map(s => ({ ...s, ...splitInfo(s), totalLabel:(Number(s.total_amount)/100).toFixed(2), periodTitle: periodTitle(s.period), statusText: ['待确认', '待财务复核', '待实际支付', '已登记支付回单', '异议处理中'][s.status],
@@ -70,18 +73,21 @@ Page({
       catch (e) { wx.showToast({ title: e.msg || '提交失败', icon: 'none' }) }
     } })
   },
-  // 商户确认结算（待确认 → 已确认，财务复核后完成）
+  // 商户确认结算（待确认 → 已确认，财务复核后完成）——M-12 统一确认：写清对象与影响
   confirm(e) {
     const id = e.currentTarget.dataset.id
-    wx.showModal({
-      title: '确认结算单', content: '确认本期对账无误？确认后进入财务复核打款流程。',
-      success: (r) => {
-        if (!r.confirm) return
-        api.request('/m/settlements/' + id + '/confirm', 'POST', {}).then(() => {
-          wx.showToast({ title: '已确认，待财务复核' })
-          this.fetch()
-        }).catch((err) => wx.showToast({ title: err.msg || '确认失败', icon: 'none' }))
-      },
+    const s = this.data.list.find(x => Number(x.id) === Number(id))
+    confirmChange({
+      title: '确认结算单',
+      target: (s ? s.periodTitle + '（¥' + s.payableLabel + '）' : '结算单 #' + id),
+      impact: '确认表示本期对账无误，进入财务复核打款流程；确认≠银行到账',
+      confirmText: '确认结算',
+    }).then((c) => {
+      if (!c.ok) return
+      api.request('/m/settlements/' + id + '/confirm', 'POST', {}).then(() => {
+        wx.showToast({ title: '已确认，待财务复核' })
+        this.fetch()
+      }).catch((err) => wx.showToast({ title: err.msg || '确认失败', icon: 'none' }))
     })
   },
 })

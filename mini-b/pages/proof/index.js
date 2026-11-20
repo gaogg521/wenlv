@@ -33,6 +33,11 @@ Page({
   },
   onInput(e) { this.setData({ input: e.detail.value }) },
   submit() { return this.check(this.data.input) },
+  // M-05：下拉刷新（已查过的编号重新核对一次）
+  onPullDownRefresh() {
+    Promise.resolve(this.data.code ? this.check(this.data.code) : null)
+      .catch(() => {}).then(() => wx.stopPullDownRefresh())
+  },
   async check(raw) {
     const code = String(raw || '').replace(/\s+/g, '').toUpperCase()
     if (!CODE_RE.test(code)) return this.setData({ tried: true, records: [], code: '', err: '记录编号是 8 位数字或字母（0-9、A-F），例如 DEF45B80' })

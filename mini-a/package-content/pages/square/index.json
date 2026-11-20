@@ -1,1 +1,1 @@
-{}
+{ "navigationBarTitleText": "笔记广场", "enablePullDownRefresh": true, "usingComponents": { "app-image": "/components/app-image/index" } }

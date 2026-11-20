@@ -90,12 +90,17 @@
       <div class="row" style="margin-top:8px">${ADMIN_CAPABILITIES.role === 'super' ? `<button class="btn primary" onclick="chSave('${id}')">加密保存</button>` : ''}<span class="muted">保存后立即生效；所有修改写入审计日志</span></div>`)
   }
   window.chPreset = async (id) => {
+    const p = hub.providers.find((x) => x.id === id)
+    const r0 = await uiConfirm({ title: '套用链接口模板预设', target: p ? p.label : id, impact: '模板只填路径、请求体、字段位置与签名算法的常见形态，套用后务必按对方签发的接口文档逐项核对', confirmText: '套用' })
+    if (!r0.ok) return
     try { const r = await api('POST', '/admin/chain/preset/' + id, { preset: $('#ch_preset').value }); toast('已套用 ' + r.applied.length + ' 项'); hub = await api('GET', '/admin/chain/hub'); chConfig(id) }
     catch (e) { toast(e.message, true) }
   }
   window.chSave = async (id) => {
     const p = hub.providers.find((x) => x.id === id)
     const values = Object.fromEntries(p.keys.map((k) => [k.key, (document.getElementById('chk_' + k.key)?.value || '').trim()]).filter(([, v]) => v !== ''))
+    const r0 = await uiConfirm({ title: '加密保存链凭据', target: p ? p.label : id, changes: [{ label: '本次填写项', from: '—', to: Object.keys(values).length + ' 项' }], impact: '凭据 AES-256-GCM 加密落库，保存后立即生效并写入审计日志', confirmText: '加密保存' })
+    if (!r0.ok) return
     try {
       const r = await api('POST', '/admin/chain/creds/' + id, { values })
       toast(r.saved ? `已加密保存 ${r.saved} 项` + (r.status.mode === 'real' ? ' · 凭据已齐' : ' · 仍缺 ' + r.status.missing.join(' / ')) : '没有修改')

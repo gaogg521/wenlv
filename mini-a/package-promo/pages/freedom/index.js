@@ -11,6 +11,8 @@ Page({
   },
   filters:[{id:'available',name:'可用'},{id:'locked',name:'待支付占用'},{id:'used',name:'已用'},{id:'expired',name:'过期'},{id:'revoked',name:'撤销'}]},
  onShow(){this.load(1)},
+ // T-02：下拉刷新回到第一页重新加载，完成后收起转圈
+ onPullDownRefresh(){Promise.resolve(this.load(1)).then(()=>wx.stopPullDownRefresh()).catch(()=>wx.stopPullDownRefresh())},
  filter(e){this.setData({status:e.currentTarget.dataset.id});this.load(1)},
  retry(){this.load(this.data.page)},prev(){if(this.data.page>1)this.load(this.data.page-1)},next(){if(this.data.hasNext)this.load(this.data.page+1)},
  // 空态文案随当前筛选切换（WXML 只做取值：变量键索引 emptyMap[status] 会炸分包编译，故在这里算好）

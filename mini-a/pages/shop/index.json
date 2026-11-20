@@ -1,1 +1,1 @@
-{"navigationBarTitleText": "旅行商城", "enablePullDownRefresh": true}
+{"navigationBarTitleText": "旅行商城", "enablePullDownRefresh": true, "usingComponents": { "app-image": "/components/app-image/index" }}

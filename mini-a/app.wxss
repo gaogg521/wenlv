@@ -353,7 +353,8 @@ page { --brand: #d9622f; --brand-deep: #a93f1e; --brand-soft: #fff1e6; --ink: #1
 .mh-lv-lg { font-size:32rpx; font-weight:600; color: var(--ink, #2a2118); }
 .mh-badges { display: flex; gap: 12rpx; margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx solid var(--line); }
 .mh-bd { flex: 1; text-align: center; min-width: 0; }
-.mh-bd image { width: 84rpx; height: 84rpx; }
+/* T-04：image 标签改为 app-image 组件——宽高从标签选择器改为宿主 class 选择器 */
+.mh-bd .mh-b-img { width: 84rpx; height: 84rpx; }
 .mh-bn { font-size:22rpx; font-weight:600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mh-br { font-size:20rpx; color: var(--sub); }
 

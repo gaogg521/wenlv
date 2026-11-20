@@ -18,7 +18,7 @@
       <swiper class="media-swiper" current="{{current}}" bindchange="onSwiper">
         <swiper-item wx:for="{{images}}" wx:key="key">
           <view class="media-cell">
-            <image class="media-img" src="{{item.src}}" mode="aspectFit" data-i="{{index}}" bindtap="previewCurrent" />
+            <app-image class="media-img" src="{{item.src}}" mode="aspectFit" data-i="{{index}}" bindtap="previewCurrent" />
             <view wx:if="{{item.isCover}}" class="cover-badge">封面</view>
             <view wx:if="{{item.isLive}}" class="live-badge" catchtap="toggleLive" data-i="{{index}}">▶ 实况 · 点击移除</view>
             <view wx:if="{{item.uploading}}" class="media-flag">上传中…</view>
@@ -41,7 +41,7 @@
         <view wx:for="{{thumbs}}" wx:key="key"
           class="thumb thumb-photo {{item.isDragging ? 'dragging' : ''}} {{item.isTarget ? 'target' : ''}}"
           data-i="{{item.i}}" bindtap="openGallery" catchlongpress="thumbLongPress" catchtouchmove="thumbMove" catchtouchend="thumbEnd">
-          <image class="thumb-img" src="{{item.src}}" mode="aspectFill" />
+          <app-image class="thumb-img" src="{{item.src}}" mode="aspectFill" />
           <view wx:if="{{item.isCover}}" class="thumb-tag">封面</view>
           <view wx:if="{{item.isLive}}" class="thumb-live">▶</view>
           <view wx:if="{{item.uploading}}" class="thumb-state">上传中</view>
@@ -197,12 +197,12 @@
     <scroll-view class="guide-content" scroll-y>
       <input class="guide-input" placeholder="攻略标题（选填）" maxlength="20" value="{{guideTitle}}" data-field="guideTitle" bindinput="editGuide" disabled="{{guideBusy}}" />
       <textarea class="guide-input guide-text" placeholder="每行写一个路线、景点或建议" maxlength="240" value="{{guideText}}" data-field="guideText" bindinput="editGuide" disabled="{{guideBusy}}" />
-      <view wx:if="{{guidePhoto}}" class="guide-photo-row"><image class="guide-photo" src="{{guidePhoto}}" mode="aspectFill" /><button bindtap="clearGuidePhoto" disabled="{{guideBusy}}">移除照片</button></view>
+      <view wx:if="{{guidePhoto}}" class="guide-photo-row"><app-image class="guide-photo" src="{{guidePhoto}}" mode="aspectFill" /><button bindtap="clearGuidePhoto" disabled="{{guideBusy}}">移除照片</button></view>
       <button wx:else class="guide-photo-button" bindtap="pickGuidePhoto" disabled="{{guideBusy}}">＋ 添加照片</button>
       <view class="guide-styles">
         <button wx:for="{{guideStyles}}" wx:key="name" class="guide-style {{item.selected ? 'selected' : ''}}" style="background:{{item.background}};color:{{item.ink}}" data-index="{{index}}" bindtap="selectGuideStyle" disabled="{{guideBusy}}">{{item.name}}</button>
       </view>
-      <image wx:if="{{guideImage}}" class="guide-preview" src="{{guideImage}}" mode="widthFix" />
+      <app-image wx:if="{{guideImage}}" class="guide-preview" src="{{guideImage}}" mode="widthFix" />
     </scroll-view>
     <view class="guide-actions">
       <button class="ve-btn" bindtap="generateGuide" disabled="{{guideBusy}}" loading="{{guideBusy}}">{{guideImage ? '重新生成' : '生成预览'}}</button>

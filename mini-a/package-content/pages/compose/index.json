@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "发布笔记" }
+{ "navigationBarTitleText": "发布笔记", "usingComponents": { "app-image": "/components/app-image/index" } }

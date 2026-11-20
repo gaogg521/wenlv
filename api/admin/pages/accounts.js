@@ -82,16 +82,22 @@ function tabBar(active) {
     <button class="cfg-tab ${active === 'roleexplain' ? 'on' : ''}" onclick="window.__accTab='roleexplain';accounts()">角色说明</button></div>`
 }
 
+window.accountGo = (n) => { window.__accPage = Math.max(1, Number(n) || 1); accounts() }
 async function accountsList() {
-  const rows = await api('GET', '/admin/accounts')
-  const active = rows.filter((r) => Number(r.status) === 1)
-  const cityAccounts = rows.filter((r) => r.role === 'city_partner')
+  window.__accPage = Math.max(1, Number(window.__accPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize, stats }）；stats 为全量口径（KPI 卡用）
+  const raw = await api('GET', '/admin/accounts?page=' + window.__accPage)
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const stats = Array.isArray(raw)
+    ? { total: rows.length, active: rows.filter((r) => Number(r.status) === 1).length, city: rows.filter((r) => r.role === 'city_partner').length, mfa: rows.filter((r) => Number(r.mfa_enabled) === 1).length }
+    : (raw.stats || {})
+  const activeN = Number(stats.active || 0), cityN = Number(stats.city || 0), mfaN = Number(stats.mfa || 0), totalN = Number(stats.total || rows.length)
   const MFA_CH_CN = { totp: '验证器 App', sms: '短信', email: '邮箱' }
   $('#app').innerHTML = `
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🧑‍💼</div><div><div class="l">有效账号</div><div class="v">${active.length}/${rows.length}</div><div class="s">停用后旧会话立即失效</div></div></div>
-    <div class="kpi"><div class="ico" style="background:#e8effd">🏙</div><div><div class="l">城市合伙人账号</div><div class="v">${cityAccounts.length}</div><div class="s">必绑城市 · 只看本城</div></div></div>
-    <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${rows.filter((r) => Number(r.mfa_enabled) === 1).length}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
+    <div class="kpi"><div class="ico" style="background:var(--brand-soft)">🧑‍💼</div><div><div class="l">有效账号</div><div class="v">${activeN}/${totalN}</div><div class="s">停用后旧会话立即失效</div></div></div>
+    <div class="kpi"><div class="ico" style="background:#e8effd">🏙</div><div><div class="l">城市合伙人账号</div><div class="v">${cityN}</div><div class="s">必绑城市 · 只看本城</div></div></div>
+    <div class="kpi go" ${dxKey} title="去安全中心管理全局策略" onclick="go('security')"><i class="go-arrow">↗</i><div class="ico" style="background:#e3f6ec">🔐</div><div><div class="l">MFA 已绑定</div><div class="v">${mfaN}</div><div class="s">本页「验证方式」即可绑定；全局策略在安全中心</div></div></div>
   </div>
   <div class="card">
     <div class="card-head"><h2>后台账号</h2><span class="muted">创建 / 资料 / 角色 / 城市 / 权限 / 验证方式（MFA）/ 停用恢复 / 重置密码 · 全部操作留审计</span></div>
@@ -128,7 +134,8 @@ async function accountsList() {
         <td class="td-sub">${esc(String(u.last_login_at || '').slice(0, 16).replace('T', ' ') || '从未登录')}</td>
         <td class="td-sub" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.note || '—')}</td>
         <td><div class="td-actions">${ops.join('')}</div></td></tr>` }).join('')}</tbody></table>`
-    : emptyBox('暂无后台账号——点右上「新建账号」创建第一个运营账号')}</div>`
+    : emptyBox('暂无后台账号——点右上「新建账号」创建第一个运营账号')}
+    ${pager(Array.isArray(raw) ? rows.length : Number(raw.total || rows.length), window.__accPage, 20, 'accountGo')}</div>`
 }
 
 // C-01：验证方式弹窗——不离开本页完成绑定 TOTP / 绑手机 / 绑邮箱 / 重置 / 停用，以及豁免与单账号强制；
@@ -162,9 +169,14 @@ window.accountMfaDialog = async (id, username) => {
 }
 // C-03：豁免 / 单账号强制（写审计、旧会话失效）；完成后刷新账号页
 window.accountMfaFlags = async (id, patch) => {
+  const isForce = patch.force !== undefined
+  const setting = isForce ? patch.force === 1 : patch.exempt === 1
+  const label = isForce ? '单账号强制' : '豁免'
+  const r = await uiConfirm({ title: (setting ? '设为' : '取消') + label, target: '后台账号 #' + id, changes: [{ label: 'MFA 策略', from: setting ? ('非' + label) : label, to: setting ? label : ('非' + label) }], impact: '策略调整写审计；该账号旧会话立即失效，需重新登录', danger: setting && isForce, confirmText: setting ? '确认设置' : '确认取消' })
+  if (!r.ok) return
   try {
-    const r = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
-    toast(r.note || '已调整')
+    const res = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
+    toast(res.note || '已调整')
     closeModal(); accounts()
   } catch (e) { toast(e.message, true) }
 }
@@ -231,7 +243,7 @@ window.accountCreateModal = () => {
     <div class="field"><label>角色 *</label><select id="acRole" onchange="document.getElementById('acCityRow').style.display=this.value==='city_partner'?'block':'none';document.getElementById('acSubjectRow').style.display=(this.value==='merchant_partner'||this.value==='scenic_partner')?'block':'none'">
       ${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
     <div class="field" id="acCityRow" style="display:none"><label>城市范围 *（城市合伙人必填）</label><select id="acCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}">${esc(n)}（${c}）</option>`).join('')}</select></div>
-    <div class="field" id="acSubjectRow" style="display:none"><label>绑定主体ID *（商户/景区主体方必填：商户管理或景区资源里的编号）</label><input id="acSubject" type="number" min="1" placeholder="如 12"></div>
+    <div class="field" id="acSubjectRow" style="display:none"><label>绑定主体ID *（商户/景区主体方必填：商户管理或景区资源里的编号）</label><input id="acSubject" type="number" min="1" step="1" placeholder="如 12"></div>
     <div class="field"><label>初始密码 *（8–64 位，只显示一次）</label><div class="row"><input id="acPwd" style="flex:1"><button class="btn ghost sm" onclick="document.getElementById('acPwd').value=genTmpPwd()">随机生成</button></div></div>
     <div class="field"><label>备注 / 所属责任人</label><input id="acNote" maxlength="200"></div>
     <div id="acErr" class="td-sub" style="color:var(--red)"></div>`,
@@ -264,7 +276,7 @@ window.accountRoleModal = (id, username, role, city) => {
     <p class="td-sub">变更影响：该账号已登录的全部会话<b>立即失效</b>，需重新登录；城市账号的可见数据范围随之变化。变更原因进入审计。</p>
     <div class="field"><label>角色 *</label><select id="acRRole">${Object.entries(ACCOUNT_ROLE_CN).map(([k, v]) => `<option value="${k}" ${k === role ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
     <div class="field"><label>城市范围（城市合伙人必填，其他角色清空）</label><select id="acRCity">${CITY_DICT_ACCOUNTS.map(([c, n]) => `<option value="${c}" ${String(c) === String(city) ? 'selected' : ''}>${esc(n)}（${c}）</option>`).join('')}</select></div>
-    <div class="field"><label>绑定主体ID（商户/景区主体方必填，其他角色清空）</label><input id="acRSubject" type="number" min="1"></div>
+    <div class="field"><label>绑定主体ID（商户/景区主体方必填，其他角色清空）</label><input id="acRSubject" type="number" min="1" step="1"></div>
     <div class="field"><label>变更原因 *（4–200 字，进入审计）</label><input id="acRReason" maxlength="200"></div>
     <div id="acRErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="accountRoleSubmit(${id})">确认变更</button>`)

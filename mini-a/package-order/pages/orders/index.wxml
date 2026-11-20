@@ -20,5 +20,8 @@
       </view>
     </view>
   </view>
+  <view wx:if="{{loadingMore}}" class="note">正在加载更多…</view>
+  <view wx:elif="{{hasMore}}" class="note">上拉加载更多（已显示 {{orders.length}}/{{total}} 单）</view>
+  <view wx:elif="{{total}}" class="note">已加载全部 {{total}} 单</view>
 </block>
 <view class="note">点订单看进度时间线 · 待出行订单可出示核销码</view>

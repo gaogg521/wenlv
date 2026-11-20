@@ -2,6 +2,7 @@
 // 三期新增：话题/景区可点聚合跳转；评论骨架屏（初始+展开回复）；语音评论（录制/试听/播放）；私密笔记媒体走登录态下载
 // 数据全在 JS 预计算（含播放态/媒体态等值比较），wxml 只做取值与单三元（分包 WXML 铁律）
 const api = require('../../../utils/api')
+const { confirmChange } = require('../../../utils/confirm')
 Page({
   data: {
     n: null, loadTxt: '加载中…', showSquareBack: false,
@@ -339,7 +340,8 @@ Page({
       }
       const n = this.data.n
       if (n) this.setData({ n: { ...n, commentCount: Number(n.commentCount || 0) + 1 } })
-      wx.showToast({ title: r.pending ? (attachKind === 'audio' ? '语音审核中，通过后展示' : '图片审核中，通过后展示') : '评论已发布', icon: 'success' })
+      // T-07：审核中文案超 7 字，success 图标会截断——改 none（文案保留）
+      wx.showToast({ title: r.pending ? (attachKind === 'audio' ? '语音审核中，通过后展示' : '图片审核中，通过后展示') : '评论已发布', icon: 'none' })
     } catch (e) { this.setData({ commentMsg: e.msg || '评论失败，请重试' }) }
     finally { this.setData({ commentBusy: false }) }
   },
@@ -360,8 +362,8 @@ Page({
   },
   deleteComment(e) {
     const id = e.currentTarget.dataset.id
-    wx.showModal({ title: '删除评论？', content: '删除后不可恢复。', success: async m => {
-      if (!m.confirm) return
+    confirmChange({ title: '删除评论', target: '评论 #' + id, impact: '删除后不可恢复', confirmText: '确认删除', danger: true }).then(async r => {
+      if (!r.ok) return
       try {
         await api.request(`/c/notes/${this.id}/comments/${id}`, 'DELETE')
         const strip = c => {
@@ -371,10 +373,10 @@ Page({
         }
         this.setData({ comments: this.deriveAll(this.data.comments.map(strip).filter(Boolean)), commentTotal: Math.max(0, this.data.commentTotal - 1) })
         const n = this.data.n
-        if (n) this.setData({ n: { ...n, commentCount: Math.max(0, Number(n.commentCount || 0) - 1) } })
+        if (n) this.setData({ n: { ...n, commentCount: Math.max(0, Number(n.commentCount) - 1) } })
         wx.showToast({ title: '已删除' })
       } catch (err) { wx.showToast({ title: err.msg || '删除失败', icon: 'none' }) }
-    } })
+    })
   },
   onShareAppMessage() {
     if (this.data.n && this.data.n.isPrivate) return { title: '旅行笔记', path: '/package-content/pages/square/index' }

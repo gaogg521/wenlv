@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "目的地" }
+{ "navigationBarTitleText": "目的地", "enablePullDownRefresh": true, "usingComponents": { "app-image": "/components/app-image/index" } }

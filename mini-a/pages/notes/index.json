@@ -1,5 +1,5 @@
 {
   "navigationBarTitleText": "旅行笔记",
   "enablePullDownRefresh": true,
-  "usingComponents": { "ui-state": "/components/ui-state/index" }
+  "usingComponents": { "ui-state": "/components/ui-state/index", "app-image": "/components/app-image/index" }
 }

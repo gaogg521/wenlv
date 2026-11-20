@@ -5,31 +5,51 @@ Page({
   retry() { this.onShow() },
   onShow() {
     this.setData({ error: '' })
-    siteData.get().then((s) => this.setData({ beanIntro: s.bean_intro || '' }))
-    // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试；冻结（1003）原样提示
-    api.getBean().then(bean => this.setData({ bean })).catch((e) => {
-      if (api.demoAllowed()) { this.setData({ bean: api.FALLBACK.bean, demo: true, error: '' }); wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' }) }
-      else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
-    })
-    // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）
-    api.getMe().then((m) => this.fillMember(m)).catch((e) => {
-      if (api.demoAllowed()) { this.fillMember(api.FALLBACK.member); this.setData({ demo: true }) }
-      else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
-    })
-    api.request('/c/member/contribution').then(result => {
-      const labels = { 1: '成交贡献', 2: '内容采纳', 3: '景区复购' }
-      const states = { pending: '待发', limited: '受月上限限制', credited: '已发', revoked: '已冲回' }
-      this.setData({ contribution: result.rows.filter(r => r.growth_state !== 'legacy').slice(0, 8).map(r => ({
-        id: r.id, label: labels[r.kind], state: states[r.growth_state], score: Number(r.cs).toFixed(2),
-        growth: (Number(r.growth_active) / 100).toFixed(2), reason: r.growth_state === 'revoked' ? r.reason : '',
-      })) })
-    }).catch(() => this.setData({ contribution: [] }))
-    api.request('/c/bean/ledger').then((ledger) => this.setData({ ledger: (ledger || []).slice(0, 20) }))
-      .catch((e) => {
-        if (api.demoAllowed()) this.setData({ ledger: api.FALLBACK.ledger, demo: true })
-        else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
-      })
+    this.loadAccount()
   },
+  // T-02：账户+流水统一下沉为可复用加载（返回 Promise，供下拉刷新等待完成后收起）
+  loadAccount() {
+    return Promise.all([
+      siteData.get().then((s) => this.setData({ beanIntro: s.bean_intro || '' })).catch(() => {}),
+      // A-18：演示兜底仅限开发环境且常驻标识；正式版错误态 + 重试；冻结（1003）原样提示
+      api.getBean().then(bean => this.setData({ bean })).catch((e) => {
+        if (api.demoAllowed()) { this.setData({ bean: api.FALLBACK.bean, demo: true, error: '' }); wx.showToast({ title: '演示模式（后端未连接）', icon: 'none' }) }
+        else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+      }),
+      // 等级、门槛、加成与权益都来自服务端（参数中心「会员等级体系」）
+      api.getMe().then((m) => this.fillMember(m)).catch((e) => {
+        if (api.demoAllowed()) { this.fillMember(api.FALLBACK.member); this.setData({ demo: true }) }
+        else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+      }),
+      api.request('/c/member/contribution').then(result => {
+        const labels = { 1: '成交贡献', 2: '内容采纳', 3: '景区复购' }
+        const states = { pending: '待发', limited: '受月上限限制', credited: '已发', revoked: '已冲回' }
+        this.setData({ contribution: result.rows.filter(r => r.growth_state !== 'legacy').slice(0, 8).map(r => ({
+          id: r.id, label: labels[r.kind], state: states[r.growth_state], score: Number(r.cs).toFixed(2),
+          growth: (Number(r.growth_active) / 100).toFixed(2), reason: r.growth_state === 'revoked' ? r.reason : '',
+        })) })
+      }).catch(() => this.setData({ contribution: [] })),
+      // M-13 T-01：旅豆流水分页（此前 slice(0,20) 无「查看更多」）——每页 20 条，触底/点按加载
+      api.request('/c/bean/ledger?page=1&pageSize=20').then((d) => this.setData({ ledger: d.items || [], ledgerTotal: d.total || 0, ledgerHasMore: !!d.hasMore, ledgerPage: 1 }))
+        .catch((e) => {
+          if (api.demoAllowed()) this.setData({ ledger: api.FALLBACK.ledger, demo: true })
+          else this.setData({ demo: false, error: e.msg || '加载失败，请检查网络后重试' })
+        }),
+    ]).then(() => {})
+  },
+  // T-02：下拉刷新重新拉账户与流水，完成后收起转圈
+  onPullDownRefresh() {
+    this.loadAccount().then(() => wx.stopPullDownRefresh()).catch(() => wx.stopPullDownRefresh())
+  },
+  // M-13 T-01：流水加载更多（点按 + onReachBottom 同一入口）
+  loadMoreLedger() {
+    if (!this.data.ledgerHasMore || this.data.demoMode) return
+    const page = (this.data.ledgerPage || 1) + 1
+    api.request('/c/bean/ledger?page=' + page + '&pageSize=20').then((d) => this.setData({
+      ledger: this.data.ledger.concat(d.items || []), ledgerTotal: d.total || 0, ledgerHasMore: !!d.hasMore, ledgerPage: page,
+    })).catch(() => wx.showToast({ title: '加载失败，请稍后再试', icon: 'none' }))
+  },
+  onReachBottom() { this.loadMoreLedger() },
   fillMember(m) {
     const lv = (m && m.level) || {}
     this.setData({

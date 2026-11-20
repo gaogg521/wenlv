@@ -459,13 +459,22 @@ const web3 = {
   'GET /admin/web3/wallets': async (req) => {
     await requireAdmin(req)
     const kw = String(req.query.kw || '').trim()
-    const rows = await q(`SELECT a.id account_id, a.user_id, a.balance, u.nickname, u.member_level, u.growth_value,
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize }；无 page 保持旧数组形态
+    const paged = req.query.page != null && req.query.page !== ''
+    const base = 'FROM bean_account a JOIN user_account u ON u.id = a.user_id'
+    const kwWhere = kw ? ' WHERE (u.nickname LIKE ? OR CAST(a.user_id AS CHAR) = ?)' : ''
+    const kwArgs = kw ? ['%' + kw + '%', kw] : []
+    const cols = `SELECT a.id account_id, a.user_id, a.balance, u.nickname, u.member_level, u.growth_value,
       (SELECT COUNT(*) FROM user_badge ub WHERE ub.user_id = a.user_id) badges,
-      (SELECT COUNT(DISTINCT e.biz_ref) FROM attest_event e WHERE e.biz_type = 'order' AND e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = a.user_id)) attest_n
-      FROM bean_account a JOIN user_account u ON u.id = a.user_id
-      ${kw ? 'WHERE u.nickname LIKE ? OR CAST(a.user_id AS CHAR) = ?' : ''}
-      ORDER BY a.balance DESC LIMIT 30`, kw ? ['%' + kw + '%', kw] : [])
-    return rows
+      (SELECT COUNT(DISTINCT e.biz_ref) FROM attest_event e WHERE e.biz_type = 'order' AND e.biz_ref IN (SELECT order_no FROM orders WHERE user_id = a.user_id)) attest_n`
+    if (!paged) {
+      return await q(`${cols} ${base}${kwWhere} ORDER BY a.balance DESC LIMIT 30`, kwArgs)
+    }
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one(`SELECT COUNT(*) n ${base}${kwWhere}`, kwArgs)).n)
+    const items = await q(`${cols} ${base}${kwWhere} ORDER BY a.balance DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`, kwArgs)
+    return { items, total, page, pageSize }
   },
   'GET /admin/web3/wallets/:userId': async (req) => {
     await requireAdmin(req)
@@ -486,9 +495,10 @@ const web3 = {
   },
 
   // ---- 常见问题 / 轮播管理（小程序内容运营位，V13）----
+  // D-03：小表只加 LIMIT 200 安全上限，不做分页 UI
   'GET /admin/faqs': async (req) => {
     await requireAdmin(req)
-    return await q('SELECT * FROM faq ORDER BY sort, id')
+    return await q('SELECT * FROM faq ORDER BY sort, id LIMIT 200')
   },
   'POST /admin/faqs': async (req) => {
     await requireAdmin(req)
@@ -513,7 +523,7 @@ const web3 = {
   },
   'GET /admin/banners': async (req) => {
     await requireAdmin(req)
-    return await q('SELECT * FROM banner ORDER BY sort, id')
+    return await q('SELECT * FROM banner ORDER BY sort, id LIMIT 200') // D-03：小表只加安全上限
   },
   'POST /admin/banners': async (req) => {
     await requireAdmin(req)

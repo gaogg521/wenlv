@@ -58,7 +58,7 @@ window.caseCreateModal = (preset = {}) => {
   const isCity = ADMIN_CAPABILITIES.role === 'city_partner'
   modal('新建风险案件', `
     <div class="field"><label>案件标题 *（1–120 字）</label><input id="rcTitle" maxlength="120" value="${esc(preset.title || '')}"></div>
-    <div class="field"><label>关联用户 ID（可选，用于冻结/解冻引用）</label><input id="rcUser" type="number" value="${esc(preset.userId || '')}"></div>
+    <div class="field"><label>关联用户 ID（可选，用于冻结/解冻引用）</label><input id="rcUser" type="number" min="1" step="1" value="${esc(preset.userId || '')}"></div>
     <div class="field"><label>严重度</label><select id="rcSev"><option value="2">中</option><option value="1">高</option><option value="3">低</option></select></div>
     <div class="field"><label>${isCity ? '协查说明 *（4–500 字，说明疑点与请求事项）' : '研判说明 *（4–500 字）'}</label><textarea id="rcNote" rows="3" maxlength="500"></textarea></div>
     <div id="rcErr" class="td-sub" style="color:var(--red)"></div>`,

@@ -21,6 +21,11 @@ Page({
     this.syncList()
     this.watchNetwork()
   },
+  // M-05：下拉刷新（重新同步离线名单与服务项待办）
+  onPullDownRefresh() {
+    Promise.all([this.syncList(), this.loadSvcItems().catch(() => {})]).catch(() => {})
+      .then(() => { this.refreshOfflineBar(); wx.stopPullDownRefresh() })
+  },
   onHide() { if (this._watched) { wx.offNetworkStatusChange(this._onNet); this._watched = false } },
 
   // B03：套餐服务项待履约清单（本店范围，跨店隔离由服务端校验）

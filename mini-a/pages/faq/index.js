@@ -19,4 +19,7 @@ Page({
     this.setData({ shown, open: first && shown.length ? shown[0].id : this.data.open })
   },
   toggle(e) { const id = e.currentTarget.dataset.id; this.setData({ open: this.data.open === id ? 0 : id }) },
+  // T-05：分享
+  onShareAppMessage() { return { title: '常见问题 · 出行前必读', path: '/pages/faq/index' } },
+  onShareTimeline() { return { title: '常见问题 · 出行前必读' } }
 })

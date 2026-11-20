@@ -1,0 +1,2 @@
+<image wx:if="{{!failed && src}}" class="ai-img" src="{{src}}" mode="{{mode}}" lazy-load="{{lazy}}" binderror="onError" />
+<view wx:else class="ai-fallback"><text class="ai-fallback-ico">🖼</text></view>

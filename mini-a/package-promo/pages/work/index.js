@@ -11,6 +11,8 @@ Page({
     deniedPreview: [['履约门店 · 项目与分润', '示例'], ['供应商 · 供货与结算', '示例'], ['共创项目 · 内容分成', '示例']],
     profitEmptyDesc: '合作项目产生结算后，逐期分润与付款回单会出现在这里\n金额以对账后的实际账目为准'},
   onShow(){this.load()},
+  // T-02：下拉刷新复用主体加载逻辑，完成后收起转圈
+  onPullDownRefresh(){Promise.resolve(this.load()).then(()=>wx.stopPullDownRefresh()).catch(()=>wx.stopPullDownRefresh())},
   async load(){
     this.seq=(this.seq || 0)+1
     this.setData({subjects:[],resources:[],current:null,error:'',note:'',loading:true})

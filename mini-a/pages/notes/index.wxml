@@ -15,7 +15,7 @@
   <view class="note-list">
     <view class="note-card fade-up" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
       <view class="note-cover-box" wx:if="{{item.cover || item.video}}">
-        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" binderror="onCoverError" data-id="{{item.id}}" />
+        <app-image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" data-id="{{item.id}}" />
         <view class="note-cover note-cover-placeholder" wx:else>视频笔记</view>
         <view class="note-video-flag" wx:if="{{item.video}}">▶ 视频</view>
       </view>

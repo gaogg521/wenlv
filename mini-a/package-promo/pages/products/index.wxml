@@ -11,7 +11,7 @@
     action-text="返回推广中心" action-url="/package-promo/pages/center/index" />
 </view>
 <view class="card fade-up" wx:for="{{rows}}" wx:key="id">
-  <image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" class="wk-cover"/>
+  <app-image wx:if="{{item.cover}}" src="{{item.cover}}" mode="aspectFill" class="wk-cover"/>
   <view class="sec-title">{{item.title}}</view>
   <view class="kv"><text>当前费率</text><text>{{item.rateText}}</text></view>
   <view class="note">授权 {{item.valid_from}} — {{item.valid_to}}</view>
@@ -24,10 +24,10 @@
   <view class="sec-title">{{material.title}}</view>
   <view>{{material.text}}</view>
   <view class="note">{{material.note}}</view>
-  <image wx:if="{{qrcode}}" src="{{qrcode}}" mode="aspectFit" class="wk-qr"/>
+  <app-image wx:if="{{qrcode}}" src="{{qrcode}}" mode="aspectFit" class="wk-qr"/>
   <view class="wk-actions"><button class="btn primary sm" open-type="share">分享给好友</button><button class="btn ghost sm" bindtap="copy">复制转发文案</button></view>
   <button wx:if="{{qrcode}}" class="btn ghost sm" bindtap="makePoster">制作产品海报</button>
-  <image wx:if="{{poster}}" src="{{poster}}" mode="widthFix" style="width:100%;border-radius:16rpx;margin-top:16rpx"/>
+  <app-image wx:if="{{poster}}" src="{{poster}}" mode="widthFix" style="width:100%;border-radius:16rpx;margin-top:16rpx"/>
   <button wx:if="{{poster}}" class="btn primary sm" bindtap="save">保存海报到相册</button>
 </view>
 <canvas canvas-id="poster" style="position:fixed;left:-2000px;width:600px;height:800px"/>

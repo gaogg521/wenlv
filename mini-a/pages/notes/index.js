@@ -39,4 +39,7 @@ Page({
   goCompose() { wx.navigateTo({ url: '/package-content/pages/compose/index' }) },
   goNote(e) { wx.navigateTo({ url: '/package-content/pages/note/index?id=' + e.currentTarget.dataset.id }) },
   goLogin() { wx.navigateTo({ url: '/pages/me/index' }) },
+  // T-05：分享
+  onShareAppMessage() { return { title: '旅行笔记 · 真实的出行记录', path: '/pages/notes/index' } },
+  onShareTimeline() { return { title: '旅行笔记 · 真实的出行记录' } }
 })

@@ -29,11 +29,14 @@ const stat = (label, value, sub, go, tip) => `<div class="pstat${go ? ' go' : ''
 
 /* ============ 用户中心 ============ */
 const USER_SEGS = [['', '全部'], ['new7', '近 7 日新增'], ['buyer', '下单用户'], ['repeat', '复购用户'], ['sleeping', '沉睡（90 天未下单）'], ['creator', '创作者'], ['promoter', '推广服务商'], ['staff', '商户员工'], ['kyc', '已实名'], ['risk', '风险标记'], ['frozen', '已冻结']]
-window.__userQ = window.__userQ || { seg: '', kw: '', sort: '', page: 1 }
+// D-01：用户中心筛选/页码持久化（sessionStorage 'wlq:users'）——入口恢复 + 写回；页内重置按钮把状态清空后自然覆盖持久化
+const USERQ_DEF = { seg: '', kw: '', sort: '', page: 1 }
+window.__userQ = Object.assign({}, USERQ_DEF, window.__userQ || restoreQ('users', {}))
 async function users() {
   $('#app').innerHTML = `<div class="card">${skel(5)}</div>`
   await levelNames()
   const Q = window.__userQ
+  persistQ('users', Q)
   const [st, list] = await Promise.all([
     api('GET', '/admin/users/stats'),
     api('GET', `/admin/users?seg=${encodeURIComponent(Q.seg)}&kw=${encodeURIComponent(Q.kw)}&sort=${encodeURIComponent(Q.sort)}&page=${Q.page}`)])
@@ -63,7 +66,7 @@ async function users() {
       <div class="td-sub" style="margin-top:10px">会员等级：${(st.levels || []).map((l) => `${LEVEL_CN[l.lv] || 'Lv' + l.lv} ${l.n}`).join(' · ') || '—'}</div></div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>用户列表</h2><span class="muted">共 ${list.total} 人 · 点击行查看用户画像</span></div>
+    <div class="card-head"><h2>用户列表</h2><span class="muted">共 ${list.total} 人 · 点击行查看用户画像</span>${EXPBTN('users', '用户')}</div>
     <form class="orders-search" onsubmit="event.preventDefault();window.__userQ.kw=this.kw.value.trim();window.__userQ.page=1;users()">
       <input name="kw" type="search" value="${esc(Q.kw)}" placeholder="昵称 / 用户 ID / 11 位手机号">
       <select name="sort" onchange="window.__userQ.sort=this.value;window.__userQ.page=1;users()">${[['', '最新注册'], ['gmv', '消费金额'], ['orders', '订单数'], ['last', '最近下单'], ['growth', '成长值']].map(([v, n]) => `<option value="${v}" ${Q.sort === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
@@ -74,7 +77,7 @@ async function users() {
     ${list.rows.length ? `<table><thead><tr>${selHead}<th>用户</th><th>注册时间</th><th>等级 / 成长值</th><th>订单</th><th>消费金额</th><th>最近下单</th><th>旅豆</th><th>身份</th><th>状态 / 管理</th></tr></thead><tbody>
     ${list.rows.map((u) => `<tr class="click-row" onclick="userProfile(${u.id})">
       ${canBulkTag ? `<td><input type="checkbox" aria-label="选择用户 ${u.id}" ${window.__userSel.has(Number(u.id)) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="userSel(${Number(u.id)}, this.checked)"></td>` : ''}
-      <td><div class="puser">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}<div><div class="td-main">${esc(u.nickname || '未命名')}</div><div class="td-sub">ID ${u.id}${PN(u.has_mobile) ? ' · 已绑手机' : ''}</div></div></div></td>
+      <td><div class="puser">${u.avatar_url ? `<img src="${esc(u.avatar_url)}" alt="">` : `<i>${esc(String(u.nickname || '?').slice(0, 1))}</i>`}<div><div class="td-main">${esc(u.nickname || '未命名')}</div><div class="td-sub">ID ${u.id}${copyCell('用户ID', String(u.id), 1)}${PN(u.has_mobile) ? ' · 已绑手机' : ''}</div></div></div></td>
       <td class="td-sub">${dt(u.created_at, 10)}</td>
       <td>${LEVEL_CN[u.member_level] || 'Lv' + u.member_level}<div class="td-sub">${PN(u.growth_value)}</div></td>
       <td class="num">${PN(u.order_cnt)}</td><td class="money num">${PN(u.gmv) ? fen(u.gmv) : '—'}</td>
@@ -176,7 +179,7 @@ async function userProfile(id) {
         ${kv('手机号', esc(u.mobile) || '未绑定')}${kv('小程序绑定', [u.bind.miniA ? '游客端' : '', u.bind.miniB ? '商户端' : '', u.bind.unionid ? 'UnionID' : ''].filter(Boolean).join(' · '))}
         ${kv('实名认证', p.kyc ? `${KYC_CN[p.kyc.status] || ''} ${esc(p.kyc.real_name)} ${esc(p.kyc.id_no_mask || '')}` : '未提交')}
         ${p.kyc && p.kyc.reject_note ? kv('驳回原因', esc(p.kyc.reject_note)) : ''}
-        ${kv('数字身份', u.did ? `<code>${esc(u.did)}</code>` : '未签发')}${kv('最近更新', dt(u.updated_at))}</div>
+        ${kv('数字身份', u.did ? `<code>${esc(u.did)}</code>${copyCell('数字身份DID', u.did, 1)}` : '未签发')}${kv('最近更新', dt(u.updated_at))}</div>
       <div class="rv-box"><div class="rv-h">交易</div>
         ${kv('首单 / 最近', `${dt(t.first_at, 10)} / ${dt(t.last_at, 10)}`)}${kv('退款金额', fen(t.refund_amount) + (t.refund_fee ? `（扣手续费 ${fen(t.refund_fee)}）` : ''))}
         ${kv('常去城市', (p.favCities || []).map((x) => `${esc(CITY_CN[x.city_code] || x.city_code)} ${x.n}`).join(' · '))}
@@ -208,13 +211,20 @@ async function userProfile(id) {
   </div>`, '')
 }
 async function userSetStatus(id, status) {
-  const reason = status === 0 ? prompt('冻结原因（必填，会记入审计；冻结后该用户小程序所有操作被拒）：') : (confirm('确定解除冻结？') ? '解除冻结' : null)
-  if (reason == null) return
+  const freeze = status === 0
+  const r = await uiConfirm(freeze
+    ? { title: '冻结用户账号', target: '用户 #' + id, changes: [{ label: '账号状态', from: '正常', to: '已冻结' }], impact: '冻结后该用户小程序所有操作被拒', needReason: true, reasonPlaceholder: '冻结原因（必填，记入审计）', danger: true, confirmText: '确认冻结' }
+    : { title: '解除冻结', target: '用户 #' + id, changes: [{ label: '账号状态', from: '已冻结', to: '正常' }], impact: '解冻后该用户恢复小程序全部功能', confirmText: '确认解冻' })
+  if (!r.ok) return
+  const reason = freeze ? r.reason : '解除冻结'
   try { await api('POST', `/admin/users/${id}/status`, { status, reason }); toast(status ? '已解除冻结' : '已冻结'); userProfile(id); if (typeof users === 'function' && location.hash === '#users') users() } catch (e) { toast(e.message, true) }
 }
 async function userSetRisk(id, flag) {
-  const reason = flag ? prompt('风险标记原因（必填，会记入审计）：') : '取消风险标记'
-  if (reason == null) return
+  const r = await uiConfirm(flag
+    ? { title: '标记风险用户', target: '用户 #' + id, changes: [{ label: '风险标记', from: '无', to: '已标记' }], impact: '标记后进入风控名单，影响该用户的下单与提现', needReason: true, reasonPlaceholder: '风险标记原因（必填，记入审计）', danger: true, confirmText: '确认标记' }
+    : { title: '取消风险标记', target: '用户 #' + id, changes: [{ label: '风险标记', from: '已标记', to: '无' }], impact: '取消后该用户退出风控名单', confirmText: '确认取消' })
+  if (!r.ok) return
+  const reason = flag ? r.reason : '取消风险标记'
   try { await api('POST', `/admin/users/${id}/risk`, { flag: !!flag, reason }); toast(flag ? '已标记风险' : '已取消风险标记'); userProfile(id) } catch (e) { toast(e.message, true) }
 }
 
@@ -309,7 +319,7 @@ window.entitlementModal = (userId, nickname, growth, beanBalance) => {
     <div class="field"><label>调整类型 *</label><select id="eqKind" onchange="document.getElementById('eqBadgeRow').style.display=['badge_grant','badge_revoke'].includes(this.value)?'block':'none'">
       <option value="bean_grant">旅豆补发</option><option value="bean_deduct">旅豆扣回</option>
       <option value="growth_fix">成长值更正</option><option value="badge_grant">徽章补发</option><option value="badge_revoke">徽章撤回</option></select></div>
-    <div class="field" id="eqAmtRow"><label>数量 *（旅豆个数为正整数；成长值可为负用于冲正多记）</label><input id="eqAmount" type="number" step="1"></div>
+    <div class="field" id="eqAmtRow"><label>数量 *（旅豆个数为正整数；成长值可为负用于冲正多记）</label><input id="eqAmount" type="number" min="1" step="1" max="100000000"></div>
     <div class="field" id="eqBadgeRow" style="display:none"><label>徽章 *</label><select id="eqBadge"><option value="">加载中…</option></select></div>
     <div class="field"><label>业务依据与原因 *（4–500 字，进入审计）</label><textarea id="eqReason" rows="2" maxlength="500"></textarea></div>
     <div id="eqErr" class="td-sub" style="color:var(--red)"></div>`,
@@ -380,6 +390,8 @@ window.eqApproveSubmit = async (id, pass) => {
   } catch (e) { $('#eqAErr').textContent = e.message }
 }
 window.eqWithdraw = async (id) => {
+  const r = await uiConfirm({ title: '撤回权益调整申请', target: '权益申请 #' + id, changes: [{ label: '申请状态', from: '待审批', to: '已撤回' }], impact: '撤回后本申请作废，可重新发起', confirmText: '确认撤回' })
+  if (!r.ok) return
   try { await api('POST', '/admin/entitlements/' + id + '/withdraw'); toast('已撤回'); entitlements() } catch (e) { toast(e.message, true) }
 }
 

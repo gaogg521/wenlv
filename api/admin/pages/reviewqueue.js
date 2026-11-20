@@ -108,7 +108,7 @@ window.rqClaim = async (kind, itemId) => {
 window.rqReassign = (kind, itemId) => {
   modal('转派待办 #' + itemId, `
     <p class="td-sub">当前认领会先释放，目标审核员即刻获得认领；操作写入审计。被转派人需具备该队列的审核资格。</p>
-    <div class="field"><label>被转派人账号 ID *</label><input id="rqToUid" type="number" placeholder="在「后台账号」页查看审核员的数字 ID"></div>
+    <div class="field"><label>被转派人账号 ID *</label><input id="rqToUid" type="number" min="1" step="1" placeholder="在「后台账号」页查看审核员的数字 ID"></div>
     <div id="rqReErr" class="td-sub" style="color:var(--red)"></div>`,
     `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="rqReassignSubmit('${kind}', ${itemId})">确认转派</button>`)
 }

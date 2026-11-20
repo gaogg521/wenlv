@@ -2,10 +2,15 @@
 // 普通脚本（非模块）：与 core.js 共享全局作用域，加载顺序见 index.html
 
 /* ============ 旅豆预算 ============ */
+window.budgetGo = (n) => { window.__bgPage = Math.max(1, Number(n) || 1); budgets() }
 async function budgets() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/budgets')
-  const totalSum = rows.reduce((s, b) => s + Number(b.total), 0), grantedSum = rows.reduce((s, b) => s + Number(b.granted), 0)
+  window.__bgPage = Math.max(1, Number(window.__bgPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize, sums }）；sums 为全库口径
+  const raw = await api('GET', '/admin/budgets?page=' + window.__bgPage)
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
+  const totalSum = Array.isArray(raw) ? rows.reduce((s, b) => s + Number(b.total), 0) : Number((raw.sums || {}).total || 0)
+  const grantedSum = Array.isArray(raw) ? rows.reduce((s, b) => s + Number(b.granted), 0) : Number((raw.sums || {}).granted || 0)
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>旅豆预算池</h2><span class="muted">发放双闸：批次 ≤ 总额+回流 且 全局 ≤ 600 万豆/年（严禁超发红线）</span></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
@@ -20,14 +25,19 @@ async function budgets() {
       <td class="num">${Number(b.returned).toLocaleString()}</td><td class="num">${left.toLocaleString()}</td>
       <td><span class="pill ${b.status === 1 ? 'ok' : 'off'}">${b.status === 1 ? '生效' : '停用'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('budget', ${b.id}, { onSaved: () => budgets() })">编辑</button> <button class="btn ghost sm" onclick="toggleBudget(${b.id}, ${b.status})">${b.status === 1 ? '停用' : '启用'}</button></div></td>
       <td class="td-sub">${esc(String(b.period_start || '').slice(0, 10))} ~ ${esc(String(b.period_end || '').slice(0, 10))}</td></tr>` }).join('')}</tbody></table>` : emptyBox('暂无旅豆预算批次——点右上「新建预算」创建后开始发放')}
+    ${pager(Array.isArray(raw) ? rows.length : Number(raw.total || rows.length), window.__bgPage, 20, 'budgetGo')}
   </div>`
 }
 function budgetModal() { return entityEditor('budget', null, { onSaved: () => budgets() }) }
 
 /* ============ 推广服务商 ============ */
+window.promoterGo = (n) => { window.__pmPage = Math.max(1, Number(n) || 1); promoters() }
 async function promoters() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/promoters')
+  window.__pmPage = Math.max(1, Number(window.__pmPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize }）
+  const raw = await api('GET', '/admin/promoters?page=' + window.__pmPage)
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>推广服务商</h2><span class="muted">一级 CPS · 三档 5% / 8% / 12% 封顶（数据库 CHECK 焊死，无层级字段）</span></div>
     <div class="row"><button class="btn primary sm" onclick="promoterModal()">＋ 开通推广资格</button><button class="btn ghost sm" onclick="salesPanel()">产品销售授权</button>
@@ -37,6 +47,7 @@ async function promoters() {
       <td>${['', '基础', '优选', '金牌'][p.tier]}</td><td><b>${p.rate_bp / 100}%</b></td>
       <td class="money num">${fen(p.valid_gmv_90d)}</td><td>⭐ ${p.service_score}</td>
       <td><span class="pill ${p.status === 1 ? 'ok' : 'off'}">${p.status === 1 ? '生效' : '冻结'}</span><div style="margin-top:4px"><button class="btn ghost sm" onclick="entityEditor('promoter', ${p.user_id}, { onSaved: () => promoters() })">资料</button> <button class="btn ghost sm" onclick="togglePromoter(${p.user_id}, ${p.status})">${p.status === 1 ? '冻结' : '解冻'}</button> <button class="btn ghost sm" onclick="changePromoterTier(${p.user_id}, ${p.tier})">调档</button></div></td></tr>`).join('')}</tbody></table>` : emptyBox('还没有推广服务商——在推广服务商页为用户开通资格后出现在这里')}
+    ${pager(Array.isArray(raw) ? rows.length : Number(raw.total || rows.length), window.__pmPage, 20, 'promoterGo')}
   </div>`
 }
 function promoterModal() {
@@ -105,16 +116,22 @@ async function withdrawals() {
   </div>`
 }
 async function approveWithdraw(id, pass) {
-  const payRef = pass ? prompt('请先完成实际支付，填写回单中的真实打款流水号：', '') : null
-  if (pass && !payRef) return
-  try { await api('POST', '/admin/withdrawals/' + id + '/verdict', { pass, payRef }); toast(pass ? '已打款并留痕' : '已驳回'); withdrawals() } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm(pass
+    ? { title: '提现打款登记', target: '提现申请 #' + id, changes: [{ label: '审批结论', from: '待审', to: '通过 · 已实际打款' }], impact: '请先完成实际支付，再按回单登记真实打款流水号（资金出口，流水唯一留痕）', needReason: true, reasonPlaceholder: '填打款流水号（回单中的真实流水号）', confirmText: '登记打款' }
+    : { title: '驳回提现申请', target: '提现申请 #' + id, changes: [{ label: '审批结论', from: '待审', to: '已驳回' }], impact: '驳回后申请终态，用户可看到驳回记录', needReason: true, danger: true, confirmText: '确认驳回' })
+  if (!r.ok) return
+  try { await api('POST', '/admin/withdrawals/' + id + '/verdict', { pass, payRef: pass ? r.reason : null }); toast(pass ? '已打款并留痕' : '已驳回'); withdrawals() } catch (e) { toast(e.message, true) }
 }
 
 
 /* ============ 协议变更 ============ */
+window.agreeGo = (n) => { window.__agPage = Math.max(1, Number(n) || 1); agreements() }
 async function agreements() {
   $('#app').innerHTML = `<div class="card">${skel(3)}</div>`
-  const rows = await api('GET', '/admin/agreements')
+  window.__agPage = Math.max(1, Number(window.__agPage) || 1)
+  // D-03：服务端分页（带 page 参数返回 { items, total, page, pageSize }）
+  const raw = await api('GET', '/admin/agreements?page=' + window.__agPage)
+  const rows = Array.isArray(raw) ? raw : (raw.items || [])
   $('#app').innerHTML = `<div class="card">
     <div class="card-head"><h2>商户协议变更</h2><span class="muted">生效即重算五口径分账 · 财务审批</span></div>
     ${rows.length ? `<table><thead><tr><th>商户</th><th>科目</th><th>变更</th><th>理由</th><th>状态</th><th>操作</th></tr></thead><tbody>
@@ -125,8 +142,11 @@ async function agreements() {
       <td>${a.status === 0 ? `<button class="btn primary sm" onclick="verdict('agreements', ${a.id}, true)">同意</button>
         <button class="btn danger sm" onclick="verdict('agreements', ${a.id}, false)">驳回</button>` : ''}</td></tr>`).join('')}
     </tbody></table>` : emptyBox('暂无协议变更申请（商户端小程序 B 发起）')}
+    ${pager(Array.isArray(raw) ? rows.length : Number(raw.total || rows.length), window.__agPage, 20, 'agreeGo')}
   </div>`
 }
 async function verdict(kind, id, pass) {
+  const r = await uiConfirm({ title: pass ? '协议变更通过' : '驳回协议变更', target: '协议变更 #' + id, changes: [{ label: '审批结论', from: '待审', to: pass ? '生效（重算五口径分账）' : '已驳回' }], impact: pass ? '生效即按新约定重算五口径分账，请先核对金额' : '驳回后商户可修改后重新发起', danger: !pass, confirmText: pass ? '确认通过' : '确认驳回' })
+  if (!r.ok) return
   try { await api('POST', `/admin/${kind}/${id}/verdict`, { pass }); toast(pass ? '已通过' : '已驳回'); kind === 'content' ? content() : agreements() } catch (e) { toast(e.message, true) }
 }

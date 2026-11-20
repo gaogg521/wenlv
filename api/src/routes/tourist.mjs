@@ -611,11 +611,21 @@ const c = {
 
   // X-01：三端统一状态文案——订单行带 statusText（游客视角），小程序不再自建状态表
   // A-02：reviewed 标记供「待评价」筛选与快捷入口计数同口径
-  'GET /c/orders': async (req) => requireUser(req) && (await q(
-    `SELECT o.order_no, o.status, o.amount_pay, o.qty, o.created_at, p.title, p.days_desc,
+  // M-13 T-01：服务端分页（带 page 时返回 {items,total,...} 供触底加载；不带 page 的旧调用保持数组形态）。
+  // 此前写死 LIMIT 50，超 50 单的游客看不到老订单。
+  'GET /c/orders': async (req) => {
+    const u = requireUser(req)
+    const base = `SELECT o.order_no, o.status, o.amount_pay, o.qty, o.created_at, p.title, p.days_desc,
       EXISTS(SELECT 1 FROM review rw WHERE rw.order_id = o.id) AS reviewed
-     FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 50`, [requireUser(req).uid]))
-    .map((o) => ({ ...o, statusText: orderStatusText(o.status, 'c'), reviewed: !!Number(o.reviewed) })),
+     FROM orders o JOIN tour_product p ON p.id = o.product_id WHERE o.user_id = ?`
+    const map = (rows) => rows.map((o) => ({ ...o, statusText: orderStatusText(o.status, 'c'), reviewed: !!Number(o.reviewed) }))
+    if (req.query.page == null) return map(await q(base + ' ORDER BY o.id DESC LIMIT 50', [u.uid]))
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 10)))
+    const total = await count(`SELECT COUNT(*) c FROM orders o WHERE o.user_id = ?`, [u.uid])
+    const items = await q(base + ' ORDER BY o.id DESC LIMIT ? OFFSET ?', [u.uid, pageSize, (page - 1) * pageSize])
+    return { items: map(items), total, page, pageSize, hasMore: page * pageSize < total }
+  },
 
   // X-02：三端统一字典（城市/品类/订单状态文案）。公开只读、无内部字段，小程序启动时拉取缓存。
   'GET /c/dicts': async () => dictsForClient(),
@@ -720,9 +730,15 @@ const c = {
 
   'GET /c/bean/ledger': async (req) => {
     const u = requireUser(req)
-    const rows = await q(`SELECT l.tx_no, l.direction, l.amount, l.biz_type, l.biz_ref, l.created_at
-      FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ? ORDER BY l.id DESC LIMIT 50`, [u.uid])
-    return rows
+    // M-13 T-01：旅豆流水分页（带 page → {items,total,...}；不带 page 保持旧数组形态）
+    const base = `SELECT l.tx_no, l.direction, l.amount, l.biz_type, l.biz_ref, l.created_at
+      FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ?`
+    if (req.query.page == null) return await q(base + ' ORDER BY l.id DESC LIMIT 50', [u.uid])
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = await count(`SELECT COUNT(*) c FROM bean_ledger l JOIN bean_account a ON a.id = l.account_id WHERE a.user_id = ?`, [u.uid])
+    const items = await q(base + ' ORDER BY l.id DESC LIMIT ? OFFSET ?', [u.uid, pageSize, (page - 1) * pageSize])
+    return { items, total, page, pageSize, hasMore: page * pageSize < total }
   },
 
   // 隐私授权（逐项可撤回）：签署即入存证 —— 这是"用户知不知道规则"唯一拿得出手的证据

@@ -20,7 +20,7 @@ async function fund() {
   ${showEcon ? `<div class="card"><div class="card-head"><h2>经营看板 · 商品毛利与已知费用后收益</h2><span class="muted">实际成交口径（退款冲减）· 支付时间统计</span><button class="btn ghost sm" onclick="econBridge()">资金桥表</button></div>
     <div class="row" style="margin:8px 0">
       <input id="ecFrom" type="date" value="${econDefaultFrom()}"> <span class="td-sub">—</span> <input id="ecTo" type="date" value="${econDefaultTo()}">
-      <input id="ecProduct" type="number" min="1" placeholder="产品ID（可空）" style="width:130px">
+      <input id="ecProduct" type="number" min="1" step="1" placeholder="产品ID（可空）" style="width:130px">
       <input id="ecCity" type="text" placeholder="城市代码（可空）" maxlength="6" style="width:110px">
       <button class="btn primary sm" onclick="economicsBoard()">查询</button>
     </div>

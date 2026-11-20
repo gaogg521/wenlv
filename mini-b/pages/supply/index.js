@@ -1,5 +1,6 @@
 const api = require('../../utils/api')
-const { stockView, businessDay } = require('../../utils/catalog-view')
+const { stockView, businessDay, money } = require('../../utils/catalog-view')
+const { confirmChange } = require('../../utils/confirm')
 Page({
   data: { list: [], groups: [], loaded: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
   onShow() {
@@ -40,6 +41,12 @@ Page({
   applyFilters() {
     const view = stockView(this.data.list, this.data), limit = this.data.sessionLimit || 6
     view.groups = view.groups.map(g => Object.assign({}, g, { sessions: g.expanded ? g.sessions.slice(0, limit) : [], hasMore: g.expanded && g.sessions.length > limit }))
+    // M-07：最近改价展示（谁、几点、旧→新）——金额换算在 JS 预计算（WXML 不做算术，红线）
+    for (const g of view.groups) for (const s of g.sessions) {
+      s.priceChangeText = s.priceChange && s.priceChange.from != null && s.priceChange.to != null
+        ? ('最近改价：' + s.priceChange.by + ' · ' + s.priceChange.at + ' · ¥' + money(s.priceChange.from) + '→¥' + money(s.priceChange.to))
+        : ''
+    }
     this.setData(view)
   },
   moreSessions() { this.setData({ sessionLimit: (this.data.sessionLimit || 6) + 6 }); this.applyFilters() },
@@ -48,7 +55,7 @@ Page({
   filterRange(e) { const i = Number(e.detail.value); this.setData({ rangeIndex: i, range: ['future','week','month','past','all'][i] }); this.fetch() },
   resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.fetch() },
   toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },
-  // C-02 批量操作：对本商品当前筛选下的团期批量改价/调名额/停售；先展示影响范围再提交
+  // C-02 批量操作：对本商品当前筛选下的团期批量改价/调名额/停售；先输入、再过 M-12 统一确认（旧→新 + 影响范围；批量>5 条或价差超 ±30% 需填原因）
   batchProduct(e) {
     if (this.data.role < 2) return
     const key = e.currentTarget.dataset.key
@@ -59,24 +66,36 @@ Page({
       const act = ['price', 'adjust_quota', 'stop_sell'][r.tapIndex]
       const titles = { price: '输入新价格（元），应用到所选团期', adjust_quota: '输入新名额总数，应用到所选团期', stop_sell: '' }
       if (act === 'stop_sell') {
-        wx.showModal({ title: '批量停售确认', content: '将停售「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期，停售后游客无法报名', success: m => {
-          if (!m.confirm) return
-          this.batchSubmit(rows.map(s => s.id), act, null, rows.length)
-        } })
+        confirmChange({ title: '批量停售确认', target: '「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期',
+          changes: [{ label: '状态', from: '在售', to: '停售' }], impact: '停售后游客无法报名这些团期，可逐团恢复',
+          needReason: rows.length > 5, confirmText: '确认停售', danger: true })
+          .then(c => { if (c.ok) this.batchSubmit(rows.map(s => s.id), act, null, rows.length, c.reason) })
         return
       }
       wx.showModal({ title: '批量' + (act === 'price' ? '改价' : '调名额'), editable: true, placeholderText: titles[act], success: m => {
         if (!m.confirm || !m.content) return
-        const val = act === 'price' ? Math.round(Number(m.content) * 100) : Math.floor(Number(m.content))
+        // M-01：价格最多两位小数；名额为非负整数
+        const raw = String(m.content).trim()
+        if (act === 'price' && !/^\d+(\.\d{1,2})?$/.test(raw)) return wx.showToast({ title: '价格最多两位小数', icon: 'none' })
+        if (act === 'adjust_quota' && !/^\d+$/.test(raw)) return wx.showToast({ title: '名额须为非负整数', icon: 'none' })
+        const val = act === 'price' ? Math.round(Number(raw) * 100) : Math.floor(Number(raw))
         if (!(val > 0)) return wx.showToast({ title: '数值无效', icon: 'none' })
-        wx.showModal({ title: '影响范围确认', content: '将把「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期' + (act === 'price' ? '价格改为 ¥' + m.content : '名额调整为 ' + m.content), success: c => {
-          if (c.confirm) this.batchSubmit(rows.map(s => s.id), act, val, rows.length)
-        } })
+        const avgFrom = rows.reduce((sum, s) => sum + Number(s.price_adult || 0), 0) / rows.length
+        const pct = avgFrom > 0 && act === 'price' ? Math.round((val - avgFrom) / avgFrom * 100) : 0
+        confirmChange({
+          title: '批量' + (act === 'price' ? '改价' : '调名额') + '确认',
+          target: '「' + (g ? g.title : '') + '」当前筛选下 ' + rows.length + ' 个团期',
+          changes: act === 'price'
+            ? [{ label: '价格', from: '均价 ' + money(Math.round(avgFrom)), to: '¥' + (val / 100).toFixed(2) + (pct ? '（' + (pct > 0 ? '涨' : '降') + Math.abs(pct) + '%）' : '') }]
+            : [{ label: '名额', from: '各团期现名额', to: String(val) + ' 个' }],
+          impact: '影响 ' + rows.length + ' 个团期；被并发改过的团期会提示冲突，不静默覆盖',
+          needReason: rows.length > 5 || (act === 'price' && Math.abs(pct) > 30), confirmText: act === 'price' ? '确认改价' : '确认调整', danger: Math.abs(pct) > 30,
+        }).then(c => { if (c.ok) this.batchSubmit(rows.map(s => s.id), act, val, rows.length, c.reason) })
       } })
     } })
   },
-  batchSubmit(ids, action, value, scope) {
-    api.request('/m/supply/batch', 'POST', { ids, action, value }).then(r => {
+  batchSubmit(ids, action, value, scope, reason) {
+    api.request('/m/supply/batch', 'POST', { ids, action, value, reason }).then(r => {
       // X-03：批量改价时被并发改过的团期不静默覆盖，明确提示冲突数量
       const conflictTail = (r.conflicts && r.conflicts.length) ? ' · ' + r.conflicts.length + ' 个冲突未生效（请刷新后重试）' : ''
       wx.showToast({ title: '影响 ' + scope + ' 个团期 · 生效 ' + (r.applied || 0) + ' 个' + conflictTail, icon: 'none', duration: 3000 })
@@ -88,56 +107,95 @@ Page({
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))
     if (!s) return
     const event = { currentTarget: { dataset: { id: s.id, price: s.price_adult, early: s.early_price, earlydays: s.early_days, version: s.version } } }
-    const actions = ['调整名额','修改价格','早鸟设置']; if (Number(s.status) === 1) actions.push('停售团期')
-    wx.showActionSheet({ itemList: actions, success: r => { [this.addQuota,this.changePrice,this.setEarly,this.stopSell][r.tapIndex].call(this,event) } })
+    const actions = ['调整名额','修改价格','早鸟设置']
+    const handlers = [this.addQuota,this.changePrice,this.setEarly]
+    if (Number(s.status) === 1) { actions.push('停售团期'); handlers.push(this.stopSell) }
+    if (Number(s.status) === 3) { actions.push('恢复在售'); handlers.push(this.resumeSell) }
+    wx.showActionSheet({ itemList: actions, success: r => { handlers[r.tapIndex].call(this,event) } })
   },
+  // A-35：停售恢复通道（免确认：重新上架是低危动作，停售才需要确认）
+  resumeSell(e) {
+    const id = e.currentTarget.dataset.id
+    api.request('/m/supply/' + id, 'POST', { action: 'resume_sell' }).then(() => { wx.showToast({ title: '已恢复在售', icon: 'success' }); this.fetch() }).catch(err => wx.showToast({ title: err.msg || '恢复失败', icon: 'none' }))
+  },
+  // 停售团期（A 级确认；恢复在 manageSession 里）
   stopSell(e) {
     const id = e.currentTarget.dataset.id
-    wx.showModal({ title: '停售确认', content: '停售后游客无法再报名该团期', success: (r) => {
-      if (r.confirm) api.request('/m/supply/' + id, 'POST', { action: 'stop_sell' }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '停售失败',icon:'none'}))
-    }})
+    const s = this.data.list.find(x => Number(x.id) === Number(id))
+    confirmChange({ title: '停售确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
+      changes: [{ label: '状态', from: '在售', to: '停售' }], impact: '停售后游客无法再报名该团期；恢复走「管理团期 → 恢复在售」', confirmText: '确认停售', danger: true })
+      .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'stop_sell' }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '停售失败',icon:'none'})) })
   },
   addQuota(e) {
     const id = e.currentTarget.dataset.id
     const version = e.currentTarget.dataset.version != null ? Number(e.currentTarget.dataset.version) : undefined
-    wx.showModal({ title: '增加名额', editable: true, placeholderText: '输入新名额总数', success: (r) => {
-      if (r.confirm && r.content) api.request('/m/supply/' + id, 'POST', { action: 'adjust_quota', value: Number(r.content), expectedVersion: version }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '名额调整失败',icon:'none'}))
+    const s = this.data.list.find(x => Number(x.id) === Number(id))
+    wx.showModal({ title: '调整名额', editable: true, placeholderText: '输入新名额总数' + (s ? '（当前 ' + s.quota + '，已报 ' + s.booked + '）' : ''), success: (r) => {
+      if (!r.confirm || !r.content) return
+      if (!/^\d+$/.test(String(r.content).trim())) return wx.showToast({ title: '名额须为非负整数', icon: 'none' })
+      const val = Number(r.content)
+      confirmChange({ title: '调名额确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
+        changes: [{ label: '名额', from: s ? String(s.quota) : '原名额', to: String(val) }],
+        impact: '名额调整立即生效；不少于已报名人数才会成功', confirmText: '确认调整' })
+        .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'adjust_quota', value: val, expectedVersion: version }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '名额调整失败',icon:'none'})) })
     }})
   },
-  // 改价（店长/老板权限；单位分，界面提示元）。X-03：带乐观锁版本提交，两端并发改价时后者收到明确冲突提示
+  // 改价（店长/老板都能改——负责人 2026-11-19 指令；单位分，界面输入元、最多两位小数）。
+  // X-03：带乐观锁版本提交，两端并发改价时后者收到明确冲突提示。
+  // M-12：输入完成后必须再弹「旧→新」确认；价差超 ±30% 需填原因（A+）。确认步骤拆在 confirmPriceChange，供走查直调。
   changePrice(e) {
     const id = e.currentTarget.dataset.id
     const cur = (Number(e.currentTarget.dataset.price) / 100).toFixed(2)
     const version = e.currentTarget.dataset.version != null ? Number(e.currentTarget.dataset.version) : undefined
-    wx.showModal({ title: '修改团期价格', editable: true, placeholderText: '当前 ¥' + cur + '，输入新价格（元）', success: (r) => {
+    wx.showModal({ title: '修改团期价格', editable: true, placeholderText: '当前 ¥' + cur + '，输入新价格（元，最多两位小数）', success: (r) => {
       if (!r.confirm || !r.content) return
-      const yuan = Number(r.content)
-      if (!yuan || yuan <= 0) return wx.showToast({ title: '价格非法', icon: 'none' })
-      api.request('/m/supply/' + id, 'POST', { action: 'price', value: Math.round(yuan * 100), expectedVersion: version })
-        .then(() => { wx.showToast({ title: '已改价 ¥' + yuan }); this.fetch() })
-        .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none', duration: 3000 }))
+      this.confirmPriceChange(id, version, e.currentTarget.dataset.price, String(r.content).trim())
     }})
   },
-  // 早鸟价（旺季武器 §9 P1）：格式「价格(元),提前天数」；留空提交=关闭早鸟
+  confirmPriceChange(id, version, fromFen, raw) {
+    const s = this.data.list.find(x => Number(x.id) === Number(id))
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) return wx.showToast({ title: '价格最多两位小数', icon: 'none' })
+    const yuan = Number(raw)
+    if (!(yuan > 0)) return wx.showToast({ title: '价格非法', icon: 'none' })
+    const pct = Number(fromFen) > 0 ? Math.round((yuan * 100 - Number(fromFen)) / Number(fromFen) * 100) : 0
+    confirmChange({ title: '改价确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
+      changes: [{ label: '价格', from: '¥' + (Number(fromFen) / 100).toFixed(2), to: '¥' + yuan.toFixed(2) + (pct ? '（' + (pct > 0 ? '涨' : '降') + Math.abs(pct) + '%）' : '') }],
+      impact: '改价立即对游客生效；该团期刚被其他端改过时会提示冲突',
+      needReason: Math.abs(pct) > 30, confirmText: '确认改价', danger: Math.abs(pct) > 30 })
+      .then(c => { if (!c.ok) return
+        api.request('/m/supply/' + id, 'POST', { action: 'price', value: Math.round(yuan * 100), expectedVersion: version, reason: c.reason })
+          .then(() => { wx.showToast({ title: '已改价 ¥' + (Number(fromFen) / 100).toFixed(2) + '→¥' + yuan.toFixed(2), icon: 'none', duration: 2500 }); this.fetch() })
+          .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none', duration: 3000 }))
+      })
+  },
+  // 早鸟价（旺季武器 §9 P1）：格式「价格(元),提前天数」；留空提交=关闭早鸟；设置后过 M-12 确认
   setEarly(e) {
     const id = e.currentTarget.dataset.id
     const version = e.currentTarget.dataset.version != null ? Number(e.currentTarget.dataset.version) : undefined
+    const s = this.data.list.find(x => Number(x.id) === Number(id))
     const cur = e.currentTarget.dataset.early ? (Number(e.currentTarget.dataset.early) / 100).toFixed(0) + ',' + e.currentTarget.dataset.earlydays : ''
     wx.showModal({ title: '早鸟价设置', editable: true, content: cur,
       placeholderText: '早鸟价(元),提前天数 如 238,7 · 清空=关闭', success: (r) => {
         if (!r.confirm) return
         const txt = String(r.content || '').trim()
         if (!txt) {
-          api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: null }, expectedVersion: version })
-            .then(() => { wx.showToast({ title: '早鸟已关闭' }); this.fetch() })
+          confirmChange({ title: '关闭早鸟确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
+            changes: [{ label: '早鸟价', from: cur ? '¥' + cur.split(/[,，]/)[0] : '未设置', to: '关闭' }],
+            impact: '关闭后该团期按原价销售，不再有早鸟优惠', confirmText: '确认关闭' })
+            .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: null }, expectedVersion: version })
+              .then(() => { wx.showToast({ title: '早鸟已关闭' }); this.fetch() }) })
           return
         }
         const parts = txt.split(/[,，]/)
         const yuan = Number(parts[0]), days = Number(parts[1] || 7)
         if (!yuan || yuan <= 0 || !(days >= 0)) return wx.showToast({ title: '格式：238,7', icon: 'none' })
-        api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: Math.round(yuan * 100), days }, expectedVersion: version })
-          .then(() => { wx.showToast({ title: '早鸟 ¥' + yuan + ' · 提前' + days + '天' }); this.fetch() })
-          .catch((err) => wx.showToast({ title: err.msg || '设置失败', icon: 'none' }))
+        if (!/^\d+(\.\d{1,2})?$/.test(String(parts[0]).trim())) return wx.showToast({ title: '早鸟价最多两位小数', icon: 'none' })
+        confirmChange({ title: '早鸟设置确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
+          changes: [{ label: '早鸟价', from: cur ? '¥' + cur.split(/[,，]/)[0] : '未设置', to: '¥' + yuan.toFixed(2) + ' · 提前' + days + '天' }],
+          impact: '早鸟窗口内按早鸟价成交，需低于现价', confirmText: '确认设置' })
+          .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: Math.round(yuan * 100), days }, expectedVersion: version })
+            .then(() => { wx.showToast({ title: '早鸟 ¥' + yuan.toFixed(2) + ' · 提前' + days + '天', icon: 'none', duration: 2500 }); this.fetch() })
+            .catch((err) => wx.showToast({ title: err.msg || '设置失败', icon: 'none' })) })
       }})
   },
 })

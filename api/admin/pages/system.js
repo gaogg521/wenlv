@@ -23,6 +23,8 @@ async function config() {
   </div>`
 }
 function cfgEdit(k, v) {
+  // D-06：参数编辑弹窗带关闭守卫（modal 第 4 参）——输入置脏，未保存关闭时先二次确认
+  window.__cfgDirty = false
   modal('修改参数 · ' + esc(window.__cfgNames?.[k] || k) + ' <code>' + esc(k) + '</code>', `
     <div style="margin-bottom:12px">当前值：<code>${esc(v)}</code> → 新值：
     <input id="cfg_new" value="${esc(v)}" style="width:100%;margin-top:8px;padding:9px 12px;border:1.5px solid var(--line);border-radius:9px"></div>
@@ -30,13 +32,17 @@ function cfgEdit(k, v) {
     <div id="cfg_hint" class="muted" style="margin-top:10px"></div>`,
     `<button class="btn ghost" onclick="cfgHistory('${escJs(k)}')">变更历史</button>
      <button class="btn ghost" onclick="closeModal()">取消</button>
-     <button class="btn primary" onclick="cfgPropose('${escJs(k)}')">提交提案</button>`)
+     <button class="btn primary" onclick="cfgPropose('${escJs(k)}')">提交提案</button>`, true)
+  const markDirty = () => { window.__cfgDirty = true }
+  document.getElementById('cfg_new')?.addEventListener('input', markDirty)
+  document.getElementById('cfg_reason')?.addEventListener('input', markDirty)
 }
 async function cfgPropose(k) {
   const reason = $('#cfg_reason').value.trim()
   if (!reason) return toast('必须填写修改原因', true)
   try {
     const r = await api('POST', '/admin/config/proposal', { key: k, newValue: $('#cfg_new').value, reason })
+    window.__cfgDirty = false // D-06：提交成功即无未保存修改，closeModal 不再被守卫拦下
     closeModal()
     toast('提案 #' + r.historyId + ' 已提交' + (r.sensitive ? '，需另一账号审批生效' : '，可由财务/超管审批生效') +
       (r.preview ? `｜近30日 ${r.preview.orders30d} 单：返豆 ${r.preview.beanOld} → ${r.preview.beanNew}` : ''))
@@ -57,10 +63,14 @@ async function cfgHistory(k) {
     `<button class="btn ghost" onclick="closeModal()">关闭</button>`)
 }
 async function cfgApprove(id) {
-  try { await api('POST', '/admin/config/approve', { historyId: id }); toast('参数已生效'); closeModal(); config() } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '参数提案审批生效', target: '参数提案 #' + id, impact: '审批通过后参数立即生效（敏感参数为双人复核的第二道闸）', needReason: true, reasonPlaceholder: '审批意见（必填，记入审计）', confirmText: '审批生效' })
+  if (!r.ok) return
+  try { await api('POST', '/admin/config/approve', { historyId: id, reason: r.reason }); toast('参数已生效'); closeModal(); config() } catch (e) { toast(e.message, true) }
 }
 async function cfgRollback(k) {
-  try { const r = await api('POST', '/admin/config/rollback', { key: k }); toast('已回滚，恢复为 ' + r.restored) } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '参数回滚', target: '参数 ' + k, impact: '回滚到上一版本并立即生效；回滚动作与原因写入审计', needReason: true, reasonPlaceholder: '回滚原因（必填，记入审计）', danger: true, confirmText: '确认回滚' })
+  if (!r.ok) return
+  try { const res = await api('POST', '/admin/config/rollback', { key: k, reason: r.reason }); toast('已回滚，恢复为 ' + res.restored) } catch (e) { toast(e.message, true) }
 }
 
 
@@ -130,7 +140,7 @@ async function audit() {
       ${Q.kw || Q.module ? '<button class="btn ghost" type="button" onclick="window.__auditQ={page:1,kw:\'\',module:\'\'};audit()">重置</button>' : ''}</form>
     ${rows.length ? `<table><thead><tr><th>时间</th><th>操作人</th><th>模块 / 动作</th><th>对象</th><th>变更</th></tr></thead><tbody>
     ${rows.map((a) => `<tr><td class="td-sub num">${esc(String(a.created_at).slice(5, 19))}</td><td>${esc(a.actor)}</td>
-      <td><b>${esc(auditModuleCn(a.module))}</b> · ${esc(auditActionCn(a.action))}<div class="td-sub">${esc(a.module)} / ${esc(a.action)}</div></td><td class="td-sub">${esc(a.biz_ref || '')}</td>
+      <td><b>${esc(auditModuleCn(a.module))}</b> · ${esc(auditActionCn(a.action))}<div class="td-sub">${esc(a.module)} / ${esc(a.action)}</div></td><td class="td-sub">${esc(a.biz_ref || '')}${a.biz_ref ? copyCell('审计对象', a.biz_ref, 1) : ''}</td>
       <td>${auditDiff(a.before_val, a.after_val)}</td></tr>`).join('')}</tbody></table>
     <div class="pagination"><span>第 ${d.page} / ${pages} 页</span><div class="pagination-actions">
       <button class="btn ghost sm" ${d.page <= 1 ? 'disabled' : ''} onclick="window.__auditQ.page--;audit()">上一页</button>
@@ -211,6 +221,9 @@ async function notifyLogsLoad(result) {
   } catch (e) { document.getElementById('notifyLogsBox').textContent = e.message }
 }
 async function runJob(name, thenPage) {
+  const JOB_CN = { 'close-timeout': '关单', 'commission-due': '佣金到期', 'complete-due': '完成到期单', 'attest-pack': '存证打包', 'bean-expire': '豆过期' }
+  const r0 = await uiConfirm({ title: '手动运行后台任务', target: (JOB_CN[name] || name) + '（' + name + '）', impact: '会在演示库执行该任务（如关单/结算/存证打包），影响条数执行后提示', confirmText: '立即执行' })
+  if (!r0.ok) return
   try {
     const r = await api('POST', '/admin/system/jobs/' + name + '/run', {})
     toast('已执行，影响 ' + r.affected + ' 条')
@@ -241,13 +254,16 @@ async function features() {
     <table><thead><tr><th>能力</th><th>说明</th><th>状态</th><th>操作</th></tr></thead><tbody>
     ${rows.map((f) => `<tr><td><code>${esc(f.key)}</code></td><td class="td-sub">${esc(f.memo || '')}</td>
       <td>${f.on ? '<span class="pill ok">开启</span>' : '<span class="pill off">关闭</span>'}</td>
-      <td><button class="btn ${f.on ? 'ghost' : 'primary'} sm" onclick="toggleFeature('${escJs(f.key)}')">${f.on ? '关闭' : '开启'}</button></td></tr>`).join('')}
+      <td><button class="btn ${f.on ? 'ghost' : 'primary'} sm" onclick="toggleFeature('${escJs(f.key)}', ${f.on ? 1 : 0})">${f.on ? '关闭' : '开启'}</button></td></tr>`).join('')}
     </tbody></table>
     <p class="muted" style="margin-top:12px">扩展维度：feature.city.320508（苏州开城）· feature.promo（推广灰度）· 新主题小程序上线 = 新增 feature.channel.yoga</p>
   </div>`
 }
-async function toggleFeature(key) {
-  try { const r = await api('POST', '/admin/features/' + key + '/toggle', {}); toast(r.key + ' → ' + (r.on ? '开启' : '关闭')); features() } catch (e) { toast(e.message, true) }
+async function toggleFeature(key, cur) {
+  const turningOff = cur === 1
+  const r = await uiConfirm({ title: '功能开关启停', target: '功能开关 ' + key, changes: [{ label: '开关状态', from: turningOff ? '开启' : '关闭', to: turningOff ? '关闭' : '开启' }], impact: '切换即时生效并写审计；关闭会影响对应角色的端上能力', danger: turningOff, confirmText: turningOff ? '确认关闭' : '确认开启' })
+  if (!r.ok) return
+  try { const res = await api('POST', '/admin/features/' + key + '/toggle', {}); toast(res.key + ' → ' + (res.on ? '开启' : '关闭')); features() } catch (e) { toast(e.message, true) }
 }
 
 
@@ -353,9 +369,14 @@ window.mfaModeSubmit = async (mode) => {
 }
 // 安全中心内的单账号豁免/强制（与账号页共用同一接口；完成后刷新本页）
 window.mfaFlagsHere = async (id, patch) => {
+  const isForce = patch.force !== undefined
+  const setting = isForce ? patch.force === 1 : patch.exempt === 1
+  const label = isForce ? '单账号强制' : '豁免'
+  const r = await uiConfirm({ title: (setting ? '设为' : '取消') + label, target: '后台账号 #' + id, changes: [{ label: 'MFA 策略', from: setting ? ('非' + label) : label, to: setting ? label : ('非' + label) }], impact: '策略调整写审计；该账号旧会话立即失效，需重新登录', danger: setting && isForce, confirmText: setting ? '确认设置' : '确认取消' })
+  if (!r.ok) return
   try {
-    const r = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
-    toast(r.note || '已调整'); security()
+    const res = await api('POST', `/admin/accounts/${id}/mfa-flags`, patch)
+    toast(res.note || '已调整'); security()
   } catch (e) { toast(e.message, true) }
 }
 const mfaChanHint = (c) => c.deliverable || c.state === 'verified' ? '凭据齐全，走真实发送程序' : c.state === 'mock' ? '未真实送达：验证码只显示在安全中心「最近验证码」（MOCK，仅演示/联调）' : c.state === 'ready' ? '凭据已保存，但尚未完成一次真实发送联调' : c.state === 'fault' ? '最近一次真实发送失败，请检查凭据/网络后重试' : '未配置：请先在集成中心保存凭据'
@@ -400,7 +421,8 @@ async function bindContactSubmit(userId, channel) {
   } catch (e) { err.textContent = e.message }
 }
 async function mfaDisable(userId) {
-  if (!confirm('确认停用该账号 MFA？')) return
+  const r = await uiConfirm({ title: '停用 MFA', target: '后台账号 #' + userId, changes: [{ label: '两步验证', from: '已绑定', to: '停用' }], impact: '停用后该账号登录不再需要两步验证（安全强度降低）', danger: true, confirmText: '确认停用' })
+  if (!r.ok) return
   try { await api('POST', '/admin/security/mfa/disable', { userId }); (window.__mfaAfter || security)() } catch (e) { toast(e.message, true) }
 }
 
@@ -442,6 +464,7 @@ async function saveCred(key) {
   try { await api('POST', '/admin/integrations/' + key, { value: val }); closeModal(); toast(key + ' 已保存，热生效'); integrations() } catch (e) { document.getElementById('credErr').textContent = e.message }
 }
 async function delCred(key) {
-  if (!confirm('清除 ' + key + '？（对应通道将回落到 MOCK 或 .env）')) return
-  try { await api('DELETE', '/admin/integrations/' + key); toast('已清除'); integrations() } catch (e) { toast(e.message, true) }
+  const r = await uiConfirm({ title: '清除通道凭据', target: '凭据 ' + key, impact: '清除后对应通道将回落到 MOCK 或 .env（未配置则停用真实发送）', needReason: true, reasonPlaceholder: '清除原因（必填，记入审计）', danger: true, confirmText: '确认清除' })
+  if (!r.ok) return
+  try { await api('DELETE', '/admin/integrations/' + key, { reason: r.reason }); toast('已清除'); integrations() } catch (e) { toast(e.message, true) }
 }

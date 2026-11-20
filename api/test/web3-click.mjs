@@ -31,6 +31,23 @@ const ctx = {
 ctx.esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))   // 与 core.js 的 esc 同一语义
 ctx.escJs = (v) => String(v ?? '').replace(/['"\\<>&\n\r\t]/g, (c) => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0'))   // 与 core.js 的 escJs 同一语义（A-05）
 ctx.parseDate = (s) => new Date(String(s ?? '').replace(' ', 'T').replace(/\./g, '-'))   // 与 core.js 的 parseDate 同一语义（Safari 日期解析）
+// M-14：core.js 公共工具（D-01 持久化 / D-03 分页条 / D-05 复制 / EXPBTN）按同样语义注入
+ctx.sessionStorage = { _d: {}, setItem(k, v) { this._d[k] = String(v) }, getItem(k) { return k in this._d ? this._d[k] : null }, removeItem(k) { delete this._d[k] } }
+ctx.persistQ = (key, obj) => { try { ctx.sessionStorage.setItem('wlq:' + key, JSON.stringify(obj || {})) } catch { /* 同 core.js：存储不可用静默 */ } }
+ctx.restoreQ = (key, fallback) => { try { const raw = ctx.sessionStorage.getItem('wlq:' + key); if (!raw) return fallback; const v = JSON.parse(raw); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback } catch { return fallback } }
+ctx.pager = (total, page, pageSize, onGo) => {
+  total = Math.max(0, Number(total) || 0); page = Math.max(1, Number(page) || 1); pageSize = Math.max(1, Number(pageSize) || 20)
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  return `<div class="pagination"><span>共 ${total.toLocaleString()} 条 · 第 ${page} / ${pages} 页</span><div class="pagination-actions">
+    <button class="btn ghost sm" ${page <= 1 ? 'disabled' : ''} onclick="${onGo}(${page - 1})">上一页</button>
+    <button class="btn ghost sm" ${page >= pages ? 'disabled' : ''} onclick="${onGo}(${page + 1})">下一页</button></div></div>`
+}
+ctx.copyText = (t) => toasts.push({ m: '已复制', err: false })   // 与 core.js 的 window.copyText 同位（M-14 D-05 上移 core.js）
+ctx.copyCell = (label, value, render) => render
+  ? `<span class="copy-chip" title="${ctx.esc('复制' + (label || '内容'))}" onclick="event.stopPropagation();copyCell('${ctx.escJs(label)}','${ctx.escJs(value)}')">⧉</span>`
+  : ctx.copyText(value)
+ctx.EXPBTN = (what, label) => `<button class="btn ghost sm" onclick="downloadExport('${what}')">⬇ 导出${label || ''}</button>`
+ctx.downloadExport = noop
 ctx.ICONS = new Proxy({}, { get: () => '<svg viewBox="0 0 24 24"></svg>' })   // core.js 图标集：沙箱里只关心占位存在
 ctx.toast = (m, err) => toasts.push({ m, err: !!err })
 ctx.$ = (sel) => (sel === '#app' ? app : mkEl())

@@ -26,7 +26,7 @@
 
 <view class="sec-title">约稿任务</view>
 <view class="card tk-card" wx:for="{{tasks.open}}" wx:key="id" bindtap="openTask" data-id="{{item.id}}">
-  <image wx:if="{{item.cover}}" class="tk-cover" src="{{item.cover}}" mode="aspectFill" />
+  <app-image wx:if="{{item.cover}}" class="tk-cover" src="{{item.cover}}" mode="aspectFill" />
   <view style="flex:1;min-width:0">
     <view class="tour-title">{{item.title}}</view>
     <view class="muted2" style="margin:4rpx 0">{{item.brief}}</view>
@@ -54,7 +54,7 @@
   <view class="work-col" wx:for="{{worksCols}}" wx:key="index" wx:for-item="col">
     <view class="work-card" wx:for="{{col}}" wx:key="id" wx:for-item="item" bindtap="openWork" longpress="onWorkLongPress" data-id="{{item.id}}">
       <view class="wk-cover-box">
-        <image wx:if="{{item.cover}}" class="wk-cover" src="{{item.cover}}" mode="aspectFill" lazy-load />
+        <app-image wx:if="{{item.cover}}" class="wk-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" />
         <view wx:else class="wk-cover wk-ph"><text class="wk-ph-text">{{item.coverChar}}</text></view>
         <view wx:if="{{item.hasVideo}}" class="wk-play">▶</view>
         <view wx:if="{{item.isPrivate}}" class="wk-lock">🔒</view>

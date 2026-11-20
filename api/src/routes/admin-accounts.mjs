@@ -52,9 +52,19 @@ const adminAccounts = {
   'GET /admin/accounts': async (req) => {
     await requireAdmin(req, ['super'])
     // 不下发 password_hash / mfa_secret（红线：密钥哈希不出接口）
-    return await q(`SELECT id, username, display_name, role, scope_city, subject_type, subject_id, status, note, mfa_enabled, mfa_channel, mfa_exempt, mfa_force,
+    // D-03：带 page 参数走分页对象 { items, total, page, pageSize, stats }（stats 为全量口径，KPI 卡用）；
+    // 无 page 保持旧数组形态（账号弹窗 / 合伙人中心按 ID 查找等旧调用兼容）
+    const select = `SELECT id, username, display_name, role, scope_city, subject_type, subject_id, status, note, mfa_enabled, mfa_channel, mfa_exempt, mfa_force,
         mobile, email, last_login_at, token_epoch, must_change_pwd, created_at
-      FROM admin_user ORDER BY FIELD(role, 'super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'merchant_partner', 'scenic_partner'), id`)
+      FROM admin_user`
+    const order = ` ORDER BY FIELD(role, 'super', 'ops', 'finance', 'review', 'risk', 'city_partner', 'readonly', 'merchant_partner', 'scenic_partner'), id`
+    if (req.query.page == null || req.query.page === '') return await q(select + order)
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1))
+    const pageSize = Math.min(100, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)))
+    const total = Number((await one('SELECT COUNT(*) n FROM admin_user')).n)
+    const items = await q(select + order + ` LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`)
+    const s = await one("SELECT COUNT(*) total, SUM(status = 1) active, SUM(role = 'city_partner') city, SUM(mfa_enabled = 1) mfa FROM admin_user")
+    return { items, total, page, pageSize, stats: { total: Number(s.total), active: Number(s.active), city: Number(s.city), mfa: Number(s.mfa) } }
   },
 
   // 创建账号：登录名唯一；城市合伙人必填城市；商户/景区主体方必填绑定主体；初始密码 ≥8 位；创建即写入审计（不含密码）

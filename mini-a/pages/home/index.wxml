@@ -8,7 +8,7 @@
 </view>
 <view class="theme-grid">
 <view wx:for="{{themeEntries}}" wx:key="cat" class="theme-tile tg{{index}}" data-cat="{{item.cat}}" bindtap="goTours">
-<image class="theme-scene" src="{{item.cover}}" mode="aspectFill" />
+<app-image class="theme-scene" src="{{item.cover}}" mode="aspectFill" />
 <view class="theme-shade"></view>
 <view class="theme-top"><text class="theme-index">0{{index + 1}}</text><view class="theme-hairline"></view></view>
 <view class="theme-body"><view class="theme-name">{{item.name}}</view><view class="theme-sub">{{item.sub}}</view></view>
@@ -34,7 +34,7 @@
   <view wx:else class="notes-body">
     <view class="note-card" wx:for="{{notes}}" wx:key="id" bindtap="goNote" data-id="{{item.id}}">
       <view class="note-cover-box">
-        <image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" lazy-load binderror="onNoteCoverError" data-id="{{item.id}}" />
+        <app-image wx:if="{{item.cover}}" class="note-cover" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" data-id="{{item.id}}" />
         <view wx:else class="note-cover note-cover-text"><text>{{item.excerpt}}</text></view>
         <view wx:if="{{item.video}}" class="note-flag">▶ 视频</view>
       </view>
@@ -46,7 +46,7 @@
 <view wx:if="{{banners.length}}" class="home-banner-frame">
   <swiper class="home-banner" indicator-dots="{{banners.length > 1}}" circular bindchange="onBannerChange">
     <swiper-item wx:for="{{banners}}" wx:key="id">
-      <image class="home-banner-image" src="{{item.image}}" mode="aspectFill" style="background:{{item.bgColor || '#f3ece2'}}" data-i="{{index}}" bindtap="tapBanner" />
+      <app-image class="home-banner-image" src="{{item.image}}" mode="aspectFill" style="background:{{item.bgColor || '#f3ece2'}}" data-i="{{index}}" bindtap="tapBanner" />
       <view wx:if="{{item.samplePhoto}}" class="photo-banner-copy" data-i="{{index}}" bindtap="tapBanner"><view>{{item.title}}</view><text>场景参考图 · 探索更多 →</text></view>
     </swiper-item>
   </swiper>
@@ -62,7 +62,7 @@
 <view wx:elif="{{!tours.length}}" class="empty"><view class="e-ico">🧳</view>暂无在架线路</view>
 <view wx:else>
   <view class="tour-item fade-up" wx:for="{{tours}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
-    <view wx:if="{{item.cover}}" class="tour-visual"><image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy-load /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>
+    <view wx:if="{{item.cover}}" class="tour-visual"><app-image class="tour-img" src="{{item.cover}}" mode="aspectFill" lazy="{{true}}" /><text wx:if="{{item.sampleCover}}" class="tour-sample">主题示意图</text></view>
     <view wx:else class="tour-cover cover-{{index % 5}}">{{icons[index % 5]}}</view>
     <view style="flex:1;min-width:0">
       <view class="tour-title">{{item.title}}</view>

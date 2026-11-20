@@ -1,1 +1,1 @@
-{"navigationBarTitleText": "主题游", "enablePullDownRefresh": true}
+{"navigationBarTitleText": "主题游", "enablePullDownRefresh": true, "usingComponents": { "app-image": "/components/app-image/index" }}
