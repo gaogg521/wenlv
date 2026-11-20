@@ -251,22 +251,22 @@
     const video = demo.querySelector('.mini-video');
     const tabs = [...demo.querySelectorAll('[data-mini-tab]')];
     if (!video || !tabs.length) continue;
-    // 提前缓冲：preload=auto + 主动 load，让手机滚动到演示区时视频已就绪，不再等几秒下载
-    // 商户端初始处于 hidden 面板，主动 load 可强制浏览器开始缓冲（否则 display:none 不下载）
-    const prewarm = () => { try { video.load(); } catch (e) {} };
-    if ('requestIdleCallback' in window) requestIdleCallback(prewarm, { timeout: 1500 });
-    else setTimeout(prewarm, 400);
-    // 进入视口前即开始缓冲播放，离开暂停；提前量 + 低阈值避免"看到了才开始下载"
+    // 手机端秒开：加载后即静音后台播放预热，滚到演示区时视频已缓冲好，不再"等几秒才动"。
+    // 静音 muted 视频允许自动播放；两视频合计约 9MB，缓冲一次后走缓存，不重复下载。
+    const startWarm = () => { try { const p = video.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} };
+    startWarm();
+    if ('requestIdleCallback' in window) requestIdleCallback(startWarm, { timeout: 600 });
+    else setTimeout(startWarm, 200);
+    // 进入视口时确保继续播放（幂等）；离开视口不再 pause——暂停会让浏览器节流缓冲，正是启动慢的根因
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(entries => {
-        const on = entries[0].isIntersecting && document.visibilityState === 'visible';
-        if (on) { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
-        else video.pause();
+        if (entries[0].isIntersecting && document.visibilityState === 'visible') startWarm();
       }, { threshold: .05, rootMargin: '240px 0px' }).observe(demo);
     }
+    // 仅在页面切到后台时暂停省电，回到前台恢复
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) video.pause();
-      else { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
+      else startWarm();
     });
     // 每个栏目对应一套宣传语与说明卡：视频切到哪一栏，文案就跟着换
     // 严格 CSP：仅用 textContent / DOM API，无内联样式、无 element.style 写入
