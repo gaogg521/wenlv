@@ -263,28 +263,67 @@
       if (document.hidden) video.pause();
       else { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
     });
-    const setActive = (idx) => tabs.forEach((tab, i) => {
-      tab.classList.toggle('is-active', i === idx);
-      tab.setAttribute('aria-pressed', String(i === idx));
-    });
+    // 每个栏目对应一套宣传语与说明卡：视频切到哪一栏，文案就跟着换
+    // 严格 CSP：仅用 textContent / DOM API，无内联样式、无 element.style 写入
+    const STAGE_COPY = {
+      'panel-visitor': [
+        { slogan: '世界就是我的游乐场', top: ['发现值得出发的体验', '主题线路 · 在地好物'], bottom: ['让旅程留下自己的作品', '图文笔记 · 旅行攻略'] },
+        { slogan: '每一次出发有主题', top: ['挑一条线路就出发', '主题线路 · 剧本探秘'], bottom: ['把期待变成真实旅程', '可约时段 · 到店体验'] },
+        { slogan: '把在地好物带回家', top: ['看见在地的好东西', '严选商品 · 产地直发'], bottom: ['下单履约清楚可查', '库存 · 订单 · 售后'] },
+        { slogan: '真实旅程自己写下', top: ['发现一篇喜欢的笔记', '真实体验 · 图文视频'], bottom: ['收藏下一次出发的灵感', '攻略图 · 云草稿'] },
+        { slogan: '每一次出发都算数', top: ['旅豆权益一目了然', '旅豆 · 自由豆 · 会员'], bottom: ['数字身份记录旅程', 'DID · 勋章 · 成长'] },
+      ],
+      'panel-merchant': [
+        { slogan: '把时间留给好好接待', top: ['订单与履约，一眼有数', '待接待 · 核销 · 对账'], bottom: ['安心接待每一位来客', '扫码 · 对暗号 · 手动输码'] },
+        { slogan: '每一单都清清楚楚', top: ['今日订单尽在掌握', '待接待 · 已核销 · 已结算'], bottom: ['收入分列看得懂', '实付 · 补贴 · 分账'] },
+        { slogan: '货与时段心里有数', top: ['库存时段分开管理', '商品库存 · 可约时段'], bottom: ['上架下架随时调整', '库存预警 · 时段设置'] },
+        { slogan: '把经营握在自己手里', top: ['门店经营一目了然', '数据 · 荣誉 · 记录'], bottom: ['凭证与身份随时可查', '数字身份 · 经营凭证'] },
+      ],
+    };
+    const panelId = demo.closest('.product-panel')?.id || '';
+    const visual = demo.closest('.product-visual');
+    const sloganEl = visual?.querySelector('.demo-slogan');
+    const noteTop = visual?.querySelector('.demo-note-top');
+    const noteBottom = visual?.querySelector('.demo-note-bottom');
+    const fillNote = (el, no, title, sub) => {
+      if (!el) return;
+      const b = el.querySelector('b'); if (b) b.textContent = no;
+      const span = el.querySelector('span'); if (!span) return;
+      const em = document.createElement('em'); em.textContent = sub;
+      span.replaceChildren(document.createTextNode(title), em);
+    };
+    let lastStage = -1;
+    const setStage = (idx) => {
+      tabs.forEach((tab, i) => {
+        tab.classList.toggle('is-active', i === idx);
+        tab.setAttribute('aria-pressed', String(i === idx));
+      });
+      if (idx === lastStage) return;
+      lastStage = idx;
+      const set = STAGE_COPY[panelId] && STAGE_COPY[panelId][idx];
+      if (!set) return;
+      if (sloganEl) sloganEl.textContent = set.slogan;
+      fillNote(noteTop, '01', set.top[0], set.top[1]);
+      fillNote(noteBottom, '02', set.bottom[0], set.bottom[1]);
+    };
+    setStage(0);
     tabs.forEach((tab, i) => tab.addEventListener('click', () => {
-      setActive(i);
+      setStage(i);
       const at = Number(tab.getAttribute('data-seek'));
       if (Number.isFinite(at)) {
         try { video.currentTime = at; } catch (e) {}
         const p = video.play(); if (p && p.catch) p.catch(() => {});
       }
     }));
-    // 视频播到某个功能段落时，同步高亮对应菜单
+    // 视频播到某个功能段落时，同步高亮菜单并更新宣传语（区间判定：seek[i] <= t < seek[i+1]）
     video.addEventListener('timeupdate', () => {
       const t = video.currentTime;
-      let active = 0, best = Infinity;
+      let active = 0;
       tabs.forEach((tab, i) => {
         const at = Number(tab.getAttribute('data-seek'));
-        const gap = Math.abs(at - t);
-        if (gap < best) { best = gap; active = i; }
+        if (Number.isFinite(at) && at <= t + 0.05) active = i;
       });
-      setActive(active);
+      setStage(active);
     });
   }
 })();
