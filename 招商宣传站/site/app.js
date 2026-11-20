@@ -242,3 +242,39 @@
     renderIdentity(button.dataset.identity);
   }));
 })();
+
+/* ==== 双端小程序菜单动态演示：自动轮播 + 点击切换（无内联样式，严格 CSP 兼容） ==== */
+(() => {
+  const demos = [...document.querySelectorAll('[data-mini-demo]')];
+  if (!demos.length) return;
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  for (const demo of demos) {
+    const pages = [...demo.querySelectorAll('[data-mini-page]')];
+    const tabs = [...demo.querySelectorAll('[data-mini-tab]')];
+    if (pages.length !== tabs.length) continue;
+    let index = 0;
+    let holdUntil = 0;
+    let visible = false;
+    const show = (next) => {
+      index = (next + pages.length) % pages.length;
+      pages.forEach((page, i) => page.classList.toggle('is-active', i === index));
+      tabs.forEach((tab, i) => {
+        tab.classList.toggle('is-active', i === index);
+        tab.setAttribute('aria-pressed', String(i === index));
+      });
+    };
+    tabs.forEach((tab, i) => tab.addEventListener('click', () => {
+      show(i);
+      holdUntil = Date.now() + 9000;
+    }));
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(entries => {
+        visible = entries[0].isIntersecting;
+      }, { threshold: .2 }).observe(demo);
+    } else visible = true;
+    if (motion.matches) { show(0); continue; }
+    setInterval(() => {
+      if (visible && document.visibilityState === 'visible' && Date.now() >= holdUntil) show(index + 1);
+    }, 2600);
+  }
+})();

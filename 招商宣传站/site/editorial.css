@@ -512,3 +512,110 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .cv-step strong{font-size:13.5px}
 }
 @media(max-width:360px){.cv-chip{font-size:9px;padding:2.5px 5px}}
+
+/* ---- 双端小程序 · 可点击的界面演示（替代静态截图，纯 DOM/CSP 友好） ---- */
+.demo-phone{width:246px;border-width:6px;border-radius:30px}
+.demo-phone .phone-speaker{display:none}
+.mini-screen{position:relative;display:flex;flex-direction:column;width:100%;height:512px;background:#f9f6f0;overflow:hidden;font-family:var(--sans)}
+.mini-osbar{flex:none;display:flex;align-items:center;justify-content:space-between;height:17px;padding:0 11px;background:#fffdf9;font-size:7px;color:#4d4842}
+.mini-nav{flex:none;position:relative;display:flex;align-items:center;justify-content:center;height:27px;background:#fffdf9;border-bottom:1px solid #efe8df;font-size:9px;font-weight:600;color:#3b3834}
+.mini-capsule{position:absolute;right:7px;top:5px;padding:1px 6px;border:1px solid #e4ded7;border-radius:10px;background:#fff;font-size:7px;font-weight:400;letter-spacing:1px;color:#665f58}
+.mini-pages{position:relative;flex:1;overflow:hidden}
+.mini-page{position:absolute;inset:0;overflow:hidden;opacity:0;transform:translateY(7px);transition:opacity .42s ease,transform .42s ease;pointer-events:none}
+.mini-page.is-active{opacity:1;transform:none;pointer-events:auto}
+.mini-screen img{display:block;width:100%;height:auto;min-height:0;object-fit:cover}
+.mini-tabbar{flex:none;display:grid;grid-template-columns:repeat(5,1fr);height:42px;background:#fffdf9;border-top:1px solid #ece5db}
+.merchant-demo .mini-tabbar{grid-template-columns:repeat(4,1fr)}
+.mini-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;border:0;background:transparent;color:#a8a097;font-size:8px;cursor:pointer}
+.mini-tab svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.mini-tab svg .solid{fill:currentColor;stroke:none}
+.mini-tab.is-active{color:#cf6329;font-weight:700}
+.merchant-demo .mini-tab.is-active{color:#ad603d}
+.mini-tab.is-active::after{content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:2px;background:currentColor}
+/* 游客端 · 首页 */
+.mini-home{height:100%;padding:9px 10px 7px;background:linear-gradient(180deg,#fbf6ee,#f5eee4)}
+.mini-brand{margin:0 0 5px;font-size:6.5px;letter-spacing:.11em;color:#a58f79}
+.mini-home h4{margin:0;font-size:16px;line-height:1.45;font-weight:700;color:#2d2926}
+.mini-home h4 em{font-style:normal;color:#c65324}
+.mini-sub{margin:4px 0 7px;font-size:7px;line-height:1.6;color:#897e73}
+.mini-search{display:flex;align-items:center;justify-content:space-between;height:24px;padding:0 7px;border:1px solid #eee4d8;border-radius:6px;background:#fff;font-size:7px;color:#9a9086}
+.mini-search b{color:#c65324;font-size:7px}
+.mini-place{display:flex;justify-content:space-between;margin:6px 1px;font-size:6.5px;color:#9a9086}
+.mini-theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mini-theme-card{position:relative;height:50px;border-radius:6px;overflow:hidden;background:#ddd}
+.mini-theme-card img{height:100%}
+.mini-theme-card::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 34%,#171310b0)}
+.mini-theme-card b,.mini-theme-card span{position:absolute;left:6px;z-index:1;color:#fff}
+.mini-theme-card b{bottom:5px;font-size:8px}
+.mini-theme-card span{bottom:16px;font-size:5.5px;opacity:.85}
+.mini-note-head{display:flex;justify-content:space-between;margin:8px 1px 5px;font-size:7.5px;font-weight:600;color:#5b5147}
+.mini-note-head span:last-child{color:#c65324;font-weight:400}
+.mini-video-row{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.mini-video{position:relative;height:35px;border-radius:5px;overflow:hidden}
+.mini-video img{height:100%}
+.mini-video b{position:absolute;left:3px;top:3px;padding:0 3px;border-radius:3px;background:#0008;color:#fff;font-size:5px;font-weight:400}
+/* 游客端 · 主题游 / 商城 */
+.mini-tour{height:100%;background:#faf7f2}
+.mini-head-orange{padding:9px 10px 11px;background:linear-gradient(120deg,#e97d25,#c9511f);color:#fff}
+.mini-head-orange h4{margin:0 0 6px;font-size:12px}
+.mini-pills{display:flex;gap:4px}
+.mini-pills span{padding:2px 6px;border-radius:9px;background:#ffffff2e;font-size:6.5px;white-space:nowrap}
+.mini-pills span:first-child{background:#fff;color:#c65324}
+.mini-searchbar{display:flex;align-items:center;justify-content:space-between;margin:-5px 8px 7px;padding:5px 7px;border-radius:6px;background:#fff;box-shadow:0 2px 8px #a55c2020;font-size:6.5px;color:#9b9188}
+.mini-searchbar b{padding:2px 6px;border-radius:4px;background:#db6527;color:#fff;font-size:6.5px}
+.mini-list{padding:0 8px}
+.mini-item{display:flex;gap:7px;margin-bottom:6px;padding:5px;border-radius:7px;background:#fff;box-shadow:0 2px 8px #6b4a2a0d}
+.mini-item img{width:52px;height:40px;min-height:0;border-radius:5px;object-fit:cover;flex:none}
+.mini-item div{min-width:0}
+.mini-item b{display:block;overflow:hidden;font-size:7.5px;color:#423a32;white-space:nowrap;text-overflow:ellipsis}
+.mini-item span{display:block;margin-top:2px;font-size:6px;color:#9c9086}
+.mini-price{margin-top:3px!important;color:#d0551f!important;font-size:9px!important;font-weight:700}
+.mini-badge{display:inline-block;margin-top:2px;padding:1px 4px;border-radius:6px;background:#fde9da;color:#c65324;font-size:5.5px}
+/* 游客端 · 笔记 / 我的 */
+.mini-note-hero{padding:10px;background:linear-gradient(120deg,#8f4c33,#c36c3f);color:#fff}
+.mini-note-hero h4{margin:0;font-size:13px}
+.mini-note-hero p{margin:3px 0 0;font-size:6.5px;opacity:.85}
+.mini-note-cards{padding:8px}
+.mini-note-card{margin-bottom:7px;border-radius:8px;background:#fff;overflow:hidden;box-shadow:0 2px 8px #6b4a2a0d}
+.mini-note-card img{height:47px}
+.mini-note-card div{padding:5px 7px}
+.mini-note-card b{font-size:7.5px;color:#4b4139}
+.mini-note-card p{margin:2px 0 0;font-size:6px;color:#9c9086}
+.mini-note-cta{display:block;margin:2px auto;padding:4px 10px;border:0;border-radius:12px;background:#c2572b;color:#fff;font-size:7px}
+.mini-me-hero{padding:9px;background:linear-gradient(120deg,#8d4a32,#c46c40);color:#fff}
+.mini-me-top{display:flex;align-items:center;gap:7px}
+.mini-avatar{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#ffffff3d;font-size:10px}
+.mini-me-top b{font-size:9px}
+.mini-me-top span{display:block;font-size:6px;opacity:.85}
+.mini-growth{margin-top:7px;padding:4px 6px;border-radius:5px;background:#ffffff24;font-size:6px}
+.mini-stats{display:grid;grid-template-columns:repeat(3,1fr);margin:7px 8px;padding:7px 0;border-radius:7px;background:#fff;text-align:center}
+.mini-stats b{display:block;font-size:11px;color:#c65324}
+.mini-stats span{font-size:6px;color:#9c9086}
+.mini-me-block{margin:0 8px 7px;padding:7px;border-radius:7px;background:#fff}
+.mini-me-block h5{margin:0 0 6px;font-size:7.5px;color:#4b4139}
+.mini-me-links{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center;font-size:6px;color:#8d8177}
+.mini-me-links i{display:block;width:15px;height:15px;margin:0 auto 3px;border-radius:5px;background:#f5e8dc}
+/* 商户端：紫色导航 + 棕色强调 */
+.merchant-demo .mini-screen{background:#f5f4f7}
+.merchant-demo .mini-osbar,.merchant-demo .mini-nav,.merchant-demo .mini-tabbar{background:#fff}
+.merchant-demo .mini-nav{color:#3b3540;border-bottom-color:#ebe8ee}
+.mini-mch-head{padding:8px 9px;background:#fff;border-bottom:1px solid #ebe8ee}
+.mini-mch-head h4{margin:0;font-size:10px;color:#39333d}
+.mini-mch-head span{font-size:6.5px;color:#9a93a0}
+.mini-mch-hero{margin:7px;padding:10px;border-radius:9px;background:linear-gradient(120deg,#3b3247,#6b4b5f);color:#fff}
+.mini-mch-hero b{font-size:10px}
+.mini-mch-hero p{margin:3px 0 0;font-size:6.5px;opacity:.8}
+.mini-mch-tag{display:inline-block;margin-top:7px;padding:3px 6px;border-radius:10px;background:#ffffff2b;font-size:6px}
+.mini-mch-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:0 7px}
+.mini-mch-cell{padding:7px;border-radius:8px;background:#fff;box-shadow:0 2px 8px #4b3b5010}
+.mini-mch-cell b{display:block;font-size:12px;color:#6b4a5a}
+.mini-mch-cell span{font-size:6.5px;color:#9a93a0}
+.mini-mch-quick{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 7px;text-align:center;font-size:6px;color:#7d7484}
+.mini-mch-quick i{display:block;height:17px;margin-bottom:3px;border-radius:5px;background:#efe9f2}
+.mini-mch-todo span{display:block;padding:4px 0;border-top:1px dashed #ebe8ee;font-size:6.5px;color:#7d7484}
+.merchant-demo .mini-head-orange{background:linear-gradient(120deg,#7c5b86,#5f466d)}
+.merchant-demo .mini-note-hero,.merchant-demo .mini-me-hero{background:linear-gradient(120deg,#5f466d,#8a6275)}
+.merchant-demo .mini-stats b,.merchant-demo .mini-price{color:#ad603d!important}
+.merchant-demo .mini-me-links i{background:#efe9f2}
+@media(max-width:1100px){.demo-phone{width:224px}.mini-screen{height:472px}.mini-home h4{font-size:15px}.mini-theme-card{height:45px}.mini-mch-cell b{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.mini-page{transition:none}}
