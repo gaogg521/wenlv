@@ -1,0 +1,31 @@
+# 文旅小程序 API 服务
+# 用法（在 /opt/wanderlust 下）：
+#   docker rm -f wanderlust-api && docker compose up -d
+# 说明：只管理 API 容器；MySQL 容器独立运行（数据卷 /opt/wanderlust/mysql），不在此文件中，
+#       避免误操作重建数据库。
+#
+# 【必须保留】volumes 里的 static 挂载：
+#   api/static 存放 uploads（用户上传图片/视频）与 receipts。
+#   不挂载 → 容器内没有这些文件 → 所有图片 404（2026-11-18 踩过此坑）。
+
+services:
+  api:
+    image: wanderlust-api:v2
+    container_name: wanderlust-api
+    restart: always
+    ports:
+      - "127.0.0.1:18080:8080"
+    env_file:
+      - ./api/.env.production
+    volumes:
+      - ./api/static:/app/static
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+networks:
+  default:
+    external: true
+    name: wanderlust-net

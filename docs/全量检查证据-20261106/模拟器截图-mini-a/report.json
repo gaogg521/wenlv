@@ -1,0 +1,106 @@
+{
+ "report": [
+  {
+   "pg": "pages/home/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/tour-list/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/shop/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/bean/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/me/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/destination/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/faq/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-tour/pages/detail/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-tour/pages/pay-result/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-tour/pages/booking/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-tour/pages/place/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-order/pages/orders/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-order/pages/order-detail/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-order/pages/pass-code/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-content/pages/identity/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-content/pages/create/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-content/pages/note/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-content/pages/task/index",
+   "ok": true,
+   "err": "任务不存在或已下线"
+  },
+  {
+   "pg": "package-content/pages/doc/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "package-promo/pages/center/index",
+   "ok": true,
+   "err": null
+  }
+ ],
+ "errors": [],
+ "paid": "WL202611067854731134"
+}

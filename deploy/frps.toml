@@ -1,0 +1,18 @@
+# frp 服务端配置 —— 部署在腾讯云 62.234.93.202
+# 放置路径：/etc/frp/frps.toml
+# 作用：接收本机 Windows 发起的隧道，把公网请求转回本机 8080
+
+bindPort = 7000
+
+# 鉴权：两边 token 必须完全一致，换成你自己的强密码
+auth.method = "token"
+auth.token = "REPLACE_WITH_LONG_RANDOM_TOKEN"
+
+# 仅允许指定的端口被映射，防止隧道被滥用
+allowPorts = [
+  { start = 18080, end = 18080 }
+]
+
+log.to = "/var/log/frps.log"
+log.level = "info"
+log.maxDays = 7
