@@ -251,13 +251,18 @@
     const video = demo.querySelector('.mini-video');
     const tabs = [...demo.querySelectorAll('[data-mini-tab]')];
     if (!video || !tabs.length) continue;
-    // 视频进入视口才播放，离开暂停，省流量且避免后台空跑
+    // 提前缓冲：preload=auto + 主动 load，让手机滚动到演示区时视频已就绪，不再等几秒下载
+    // 商户端初始处于 hidden 面板，主动 load 可强制浏览器开始缓冲（否则 display:none 不下载）
+    const prewarm = () => { try { video.load(); } catch (e) {} };
+    if ('requestIdleCallback' in window) requestIdleCallback(prewarm, { timeout: 1500 });
+    else setTimeout(prewarm, 400);
+    // 进入视口前即开始缓冲播放，离开暂停；提前量 + 低阈值避免"看到了才开始下载"
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(entries => {
         const on = entries[0].isIntersecting && document.visibilityState === 'visible';
         if (on) { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
         else video.pause();
-      }, { threshold: .25 }).observe(demo);
+      }, { threshold: .05, rootMargin: '240px 0px' }).observe(demo);
     }
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) video.pause();
