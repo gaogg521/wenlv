@@ -30,6 +30,9 @@ if (whyImgs.length !== 3) fail('Expected three why photographs');
 const creationPhoto = html.match(/<img class="creation-photo" src="([^"]+)"/);
 if (!creationPhoto) fail('Expected one creation photograph');
 actual.set('creation-share', creationPhoto[1]);
+const partnerImgs = [...html.matchAll(/<img class="partner-photo-img" src="([^"]+)"/g)];
+if (partnerImgs.length !== 3) fail('Expected three partner photographs');
+['destination', 'merchant', 'creator'].forEach((name, i) => actual.set('partner-' + name, partnerImgs[i][1]));
 if (catalog.length !== actual.size) fail('Photograph catalog and showcase slots differ');
 const ids = new Set(), hashes = new Set();
 for (const photo of catalog) {

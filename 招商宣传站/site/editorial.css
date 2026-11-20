@@ -349,3 +349,77 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .why-field-index a{font-size:12px;gap:6px}
 .why-field-index a b{width:20px;height:20px;font-size:10px}
 }
+
+/* ==== 2026-11-20 合作共建区块重构：摄影叙事卡 + 深色四步闭环 ==== */
+.partners-section{padding-bottom:78px}
+.partners-section .section-head{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:end;gap:48px;text-align:left;margin-bottom:38px}
+.partners-section .section-head>div{text-align:left}
+.partners-section .section-head h2{font-family:var(--serif);font-weight:450;font-size:clamp(30px,3.1vw,45px);line-height:1.5;letter-spacing:.025em}
+.partners-head-note{padding-bottom:12px}
+.partners-head-note p{font-size:15px;color:#806f5e;line-height:1.95;margin-bottom:18px}
+.partners-head-note a{display:inline-flex;align-items:center;gap:14px;font-size:14px;font-weight:700;color:#a74d2b;border-bottom:1px solid #d5a284;padding-bottom:5px}
+.partners-head-note a i{font-style:normal;font-size:18px;line-height:1;transition:transform .25s var(--ease)}
+.partners-head-note a:hover i{transform:translateX(5px)}
+.partners-showcase{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.partner-card{display:flex;flex-direction:column;overflow:hidden;border:1px solid #e4d5c3;border-radius:20px;background:#fffdf9;box-shadow:0 12px 30px rgba(93,63,39,.05);transition:transform .32s var(--ease),box-shadow .32s var(--ease)}
+.partner-card:hover{transform:translateY(-5px);box-shadow:0 20px 42px rgba(93,63,39,.13)}
+.partner-photo{position:relative;height:228px;overflow:hidden;background:#e9dccb}
+.partner-photo:after{content:"";position:absolute;inset:42% 0 0;background:linear-gradient(transparent,rgba(34,22,14,.58))}
+.partner-photo-img{width:100%;height:100%;object-fit:cover;transition:transform .7s var(--ease)}
+.partner-card:hover .partner-photo-img{transform:scale(1.045)}
+.partner-index{position:absolute;left:22px;bottom:18px;z-index:1;color:#fff4e6;font-size:11px;font-weight:700;letter-spacing:.17em;text-shadow:0 1px 5px rgba(0,0,0,.35)}
+.partner-body{display:flex;flex-direction:column;flex:1;padding:28px 28px 30px}
+.partner-body h3{font-family:var(--serif);font-weight:500;font-size:24px;line-height:1.5;color:#3e2d20}
+.partner-body>p{margin-top:12px;min-height:76px;font-size:14px;line-height:1.9;color:#82705f}
+.partner-tags{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 22px}
+.partner-tags span{padding:5px 11px;border:1px solid #e5d3bd;border-radius:99px;background:#faf4ec;color:#9b6a45;font-size:11px;font-weight:600;letter-spacing:.02em}
+.partner-body>a{display:inline-flex;align-items:center;gap:10px;margin-top:auto;align-self:flex-start;font-size:14px;font-weight:700;color:#a74d2b;border-bottom:1px solid #d5a284;padding-bottom:5px}
+.partner-body>a i{font-style:normal;font-size:18px;line-height:1;transition:transform .25s var(--ease)}
+.partner-body>a:hover i{transform:translateX(5px)}
+.partners-flow{position:relative;overflow:hidden;margin-top:46px;padding:34px 38px 38px;border-radius:22px;background:linear-gradient(125deg,#33261c,#4a3223 60%,#5a3b28);color:#fff5e8}
+.partners-flow:before{content:"";position:absolute;width:420px;height:420px;right:-90px;top:-210px;border-radius:50%;background:radial-gradient(circle,rgba(226,142,77,.22),transparent 68%)}
+.partners-flow:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:46px 46px;pointer-events:none}
+.partners-flow-head{position:relative;z-index:1;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:30px}
+.partners-flow-head>span{font-size:11px;font-weight:700;letter-spacing:.2em;color:#dba976}
+.partners-flow-head>strong{font-family:var(--serif);font-size:24px;font-weight:450;letter-spacing:.02em}
+.partners-flow-head>p{margin-left:auto;font-size:12px;color:#c5b09b}
+.partners-flow-track{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.partners-flow-track:before{content:"";position:absolute;left:5%;right:5%;top:22px;height:1px;background:linear-gradient(90deg,rgba(226,163,108,.15),rgba(226,163,108,.65))}
+.partners-flow-track>span{position:relative;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.flow-no{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#b1683d,#d48248);color:#fff8ee;font-family:var(--serif);font-size:16px;font-weight:500;box-shadow:0 0 0 5px rgba(226,163,108,.12);position:relative;z-index:1;transition:transform .3s var(--ease)}
+.partners-flow-track>span:hover .flow-no{transform:translateY(-3px)}
+.partners-flow-track em{font-style:normal;font-size:16px;font-weight:700;color:#fff3e4}
+.partners-flow-track small{font-size:12px;line-height:1.7;color:#c4ad97}
+@media(max-width:1000px){
+.partners-section .section-head{grid-template-columns:1fr;gap:18px}
+.partners-head-note{padding-bottom:0}
+.partners-showcase{grid-template-columns:1fr;gap:16px}
+.partner-card{display:grid;grid-template-columns:38% 1fr;align-items:stretch}
+.partner-photo{height:100%;min-height:224px}
+.partner-body>p{min-height:0}
+}
+@media(max-width:700px){
+.partners-flow-track{grid-template-columns:1fr 1fr;gap:24px 16px}
+.partners-flow-track:before{display:none}
+.partners-flow-head>p{margin-left:0;width:100%}
+}
+@media(max-width:560px){
+.partners-section{padding-bottom:56px}
+.partners-section .section-head h2{font-size:27px}
+.partners-head-note p{font-size:13px}
+.partner-card{display:flex}
+.partner-photo{height:196px;min-height:0}
+.partner-body{padding:22px 22px 24px}
+.partner-body h3{font-size:22px}
+.partner-body>p{font-size:13px}
+.partners-flow{margin-top:32px;padding:27px 22px 30px;border-radius:18px}
+.partners-flow-head>strong{font-size:20px}
+.partners-flow-track{grid-template-columns:1fr;gap:18px}
+.partners-flow-track>span{display:grid;grid-template-columns:44px 1fr;gap:2px 14px;align-items:center}
+.partners-flow-track .flow-no{grid-row:1/3;grid-column:1}
+.partners-flow-track em{grid-column:2}
+.partners-flow-track small{grid-column:2}
+}
+@media(max-width:360px){
+.partners-section .section-head h2{font-size:24px;letter-spacing:0}
+}

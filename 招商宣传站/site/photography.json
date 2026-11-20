@@ -191,6 +191,36 @@
         1600,
         2400
       ]
+    },
+    {
+      "slot": "partner-destination",
+      "photoId": 36466085,
+      "asset": "assets/scene-partner-destination-36466085.webp",
+      "source": "https://www.pexels.com/photo/36466085/",
+      "size": [
+        1280,
+        853
+      ]
+    },
+    {
+      "slot": "partner-merchant",
+      "photoId": 34222605,
+      "asset": "assets/scene-partner-merchant-34222605.webp",
+      "source": "https://www.pexels.com/photo/34222605/",
+      "size": [
+        1280,
+        863
+      ]
+    },
+    {
+      "slot": "partner-creator",
+      "photoId": 38113357,
+      "asset": "assets/scene-partner-creator-38113357.webp",
+      "source": "https://www.pexels.com/photo/38113357/",
+      "size": [
+        1280,
+        814
+      ]
     }
   ]
 }
