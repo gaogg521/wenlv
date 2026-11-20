@@ -480,3 +480,35 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .cv-steps{isolation:isolate}
 .cv-steps::after{content:"";position:absolute;z-index:0;pointer-events:none;top:26px;left:4%;right:4%;height:64px;border-radius:12px;background:linear-gradient(90deg,transparent 0%,transparent 43%,rgba(160,205,255,.2) 50%,transparent 57%,transparent 100%);background-size:220% 100%;background-position:120% 0;animation:cvBusScan 6s linear infinite}
 .cv-steps>.cv-step{z-index:1}
+
+/* ==== 2026-11-20 手机端链上视图：按屏宽自动折成 S 形（3+2 蛇形），取消横向滚动 ==== */
+@media(max-width:760px){
+.cv-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:30px 0;overflow:visible;padding-bottom:0}
+.cv-step{min-width:0}
+/* 第二行折返：DOM 04 05 06 视觉上放到 右→中→左，与第一行 01→02→03 构成 S */
+.cv-step:nth-child(4){grid-column:3;grid-row:2}
+.cv-step:nth-child(5){grid-column:2;grid-row:2}
+.cv-step:nth-child(6){grid-column:1;grid-row:2}
+/* 第一行横向连线：01→02→03（保留原虚线与数据包，仅微调到立方体边缘） */
+.cv-step:nth-child(1):after,.cv-step:nth-child(2):after{left:calc(50% + 34px);width:calc(100% - 68px)}
+/* 折返点 03→04：同一列竖直向下 */
+.cv-step:nth-child(3):after{content:"";top:76px;left:50%;width:0;height:30px;border-top:0;border-left:1px dashed rgba(126,163,255,.5)}
+.cv-step:nth-child(3):before{top:76px;left:calc(50% - 1px);width:2px;height:22px;background:linear-gradient(#bfe0ff,#fff);animation-name:cvPacketDown}
+@keyframes cvPacketDown{0%{top:76px;opacity:0}12%{opacity:1}80%{opacity:1}100%{top:100px;opacity:0}}
+/* 第二行反向连线：04→05→06（从右往左），虚线与数据包都改从右边缘出发 */
+.cv-step:nth-child(4):after,.cv-step:nth-child(5):after{left:auto;right:calc(50% + 34px);width:calc(100% - 68px)}
+.cv-step:nth-child(4):before,.cv-step:nth-child(5):before{left:auto;right:calc(50% + 34px);width:56px;background:linear-gradient(270deg,transparent 55%,#bfe0ff 90%,#fff);animation-name:cvPacketLeft}
+@keyframes cvPacketLeft{0%{right:calc(50% + 34px);opacity:0}12%{opacity:1}80%{opacity:1}100%{right:calc(150% - 22px);opacity:0}}
+/* S 形下扫描光带改为两行各一道，避免只扫到第一行 */
+.cv-steps::after{height:auto;top:26px;bottom:0}
+}
+@media(max-width:380px){
+.cv-steps{gap:24px 0}
+.cv-step:nth-child(3):after{height:24px}
+@keyframes cvPacketDown{0%{top:76px;opacity:0}12%{opacity:1}80%{opacity:1}100%{top:94px;opacity:0}}
+}
+@media(max-width:760px){
+.cv-chip{font-size:9.5px;padding:2.5px 7px;white-space:nowrap}
+.cv-step strong{font-size:13.5px}
+}
+@media(max-width:360px){.cv-chip{font-size:9px;padding:2.5px 5px}}
