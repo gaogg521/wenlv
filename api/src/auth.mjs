@@ -27,8 +27,13 @@ export function jwtVerify(token) {
 }
 
 export function authUser(req) {
+  // 验收修复（M-01）：同一请求内只解析一次并挂在 req 上——商户端网关用库里的实时角色覆写 u.role，
+  // 接口内部再调 requireUser(req) 必须拿到同一个对象，否则降权后仍按 token 里的旧角色放行、升权后仍被拒。
+  if (req.__authUser !== undefined) return req.__authUser
   const p = jwtVerify((req.headers.authorization || '').replace(/^Bearer /, ''))
-  return p && p.uid ? p : null
+  const u = p && p.uid ? p : null
+  req.__authUser = u
+  return u
 }
 export function requireUser(req) {
   const u = authUser(req)

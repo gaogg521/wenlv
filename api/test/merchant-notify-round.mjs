@@ -100,6 +100,21 @@ try {
     await resetSession(s1)
   })
 
+  await test('M-01 验收补充：升权/降权对「接口内部角色门槛」同样即时生效（回复评价、门店码、改价）', async () => {
+    await resetSession(s1)
+    // 升权：核销员 token（role=1）被老板升为店长后，同一 token 能改价——此前接口内部 requireUser 重新解析 token 拿到旧角色，仍被 1003
+    ok(await call('POST', '/m/staff/' + V.staffRowId, { role: 2, status: 1, reason: '升权验收' }, B.token))
+    ok(await call('POST', '/m/supply/' + s1, { action: 'price', value: 9700 }, V.token))
+    // 降权：店长 token（role=2）被降为核销员后，不再能回复评价 / 调门店码（这两个入口不在网关 manager 正则里，只靠接口内部 u.role 判定）
+    ok(await call('POST', '/m/staff/' + M.staffRowId, { role: 1, status: 1, reason: '降权验收' }, B.token))
+    await fail(await call('POST', '/m/reviews/99999999/reply', { content: 'x' }, M.token), 1003)
+    await fail(await call('GET', '/m/qrcode', null, M.token), 1003)
+    // 还原，避免影响后续用例
+    ok(await call('POST', '/m/staff/' + M.staffRowId, { role: 2, status: 1, reason: '还原' }, B.token))
+    ok(await call('POST', '/m/staff/' + V.staffRowId, { role: 1, status: 1, reason: '还原' }, B.token))
+    await resetSession(s1)
+  })
+
   /* ---------- M-07：团期卡最近改价（谁、几点、旧→新） ---------- */
   await test('M-07 改价后 /m/supply 返回 priceChange（操作人昵称 + 时间 + 旧→新）', async () => {
     await resetSession(s1)
