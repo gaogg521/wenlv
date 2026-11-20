@@ -635,5 +635,30 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .demo-phone .mini-tab svg,.demo-phone .mini-tab.is-active::after{display:none}
 .demo-phone .mini-hot-lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .demo-phone .mini-tab:focus-visible{outline:2px solid #4a90ff;outline-offset:-2px;border-radius:4px}
-.demo-phone .mini-video{display:block;width:100%;height:auto;aspect-ratio:372/900;object-fit:cover;background:#fff}
+.demo-phone .mini-video{display:block;width:100%;height:auto;aspect-ratio:390/830;object-fit:cover;background:#fff}
 @media(max-width:1100px){.demo-phone{width:226px}}
+
+/* ================= 产品演示舞台重构 2026-11-20 ================= */
+/* 背景：暖白→浅杏柔和渐变 + 聚光光晕，取代旧同心圆 */
+.product-visual{min-height:624px;background:radial-gradient(ellipse 68% 60% at 52% 40%,#fffdf9 0%,#faf3e9 52%,#f1e6d6 100%);border:1px solid #ecdfcd;box-shadow:inset 0 1px 0 #fffdf8}
+.merchant-visual{background:radial-gradient(ellipse 68% 60% at 52% 40%,#fdfbf8 0%,#f7f1e9 52%,#eee6dc 100%)}
+.product-visual:before{width:min(78%,470px);height:min(86%,560px);left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #dfcdb599;border-radius:50%;background:radial-gradient(circle,#fffdf900 55%,#fffdf970 100%);box-shadow:0 0 0 30px #dfcdb51c,0 0 0 62px #dfcdb510}
+.product-visual:after{display:none}
+/* 舞台标语（竖排 serif） */
+.demo-stage-head{position:absolute;left:32px;top:30px;z-index:3}
+.demo-kicker{display:block;font-size:10px;font-weight:600;letter-spacing:.2em;color:#a9845f;text-transform:uppercase}
+.demo-slogan{margin:14px 0 0;font-family:var(--serif);font-size:29px;font-weight:500;line-height:1.5;letter-spacing:.14em;color:#6d4b33;writing-mode:vertical-rl;text-orientation:upright;max-height:330px}
+/* 序号说明卡 */
+.demo-note{position:absolute;z-index:4;display:flex;align-items:center;gap:12px;padding:11px 15px;background:rgba(255,253,249,.94);border:1px solid #e7d7c1;border-radius:14px;box-shadow:0 12px 30px #5b3d1f14;backdrop-filter:blur(4px)}
+.demo-note b{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#c07a4e,#a85c34);color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 10px #a85c3440}
+.demo-note span{font-size:13px;font-weight:600;color:#5e4531;white-space:nowrap}
+.demo-note em{display:block;margin-top:3px;font-size:10px;font-style:normal;font-weight:400;letter-spacing:.04em;color:#a08a73}
+.demo-note-top{right:16px;top:20%}
+.demo-note-bottom{left:18px;bottom:20%}
+/* 底部演示提示 */
+.demo-hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:3;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid #e7d7c1;border-radius:999px;background:rgba(255,253,249,.9);font-size:11px;letter-spacing:.05em;color:#967659;white-space:nowrap}
+.demo-hint-dot{width:6px;height:6px;border-radius:50%;background:#c4643a;animation:demoPulse 1.8s ease-out infinite}
+@keyframes demoPulse{0%{box-shadow:0 0 0 0 #c4643a66}70%{box-shadow:0 0 0 8px #c4643a00}100%{box-shadow:0 0 0 0 #c4643a00}}
+@media(prefers-reduced-motion:reduce){.demo-hint-dot{animation:none}}
+@media(max-width:800px){.product-visual{min-height:560px}.demo-stage-head{left:14px;top:16px}.demo-kicker{font-size:8px;letter-spacing:.14em}.demo-slogan{font-size:20px;max-height:210px;letter-spacing:.08em}.demo-note{padding:6px 9px;gap:6px;border-radius:11px}.demo-note b{width:22px;height:22px;font-size:10px}.demo-note span{font-size:10px;white-space:normal;line-height:1.35}.demo-note em{font-size:8px}.demo-note-top{right:8px;top:12%;max-width:42%}.demo-note-bottom{left:8px;bottom:13%;max-width:46%}.demo-hint{font-size:9px;bottom:10px;max-width:calc(100% - 20px);padding:6px 10px;white-space:normal;text-align:center}}
+@media(max-width:560px){.demo-slogan{font-size:18px;max-height:180px}.demo-note em{display:none}}
