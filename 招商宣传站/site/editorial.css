@@ -331,24 +331,10 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .hero-controls .hero-dot.active:before{animation:none!important;transform:scaleX(1)!important}
 .hero-meta>#hero-caption.is-updated{animation:none!important}
 }
-/* ---- why 区块：字段徽章 + 五板块导览（2026-11-20 重构） ---- */
+/* ---- why 区块：字段徽章（2026-11-20 重构） ---- */
 .why-columns .why-field{display:flex;align-items:center;gap:12px;margin:0 0 2px}
 .why-columns .why-field b{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#8a5a3b,#c5542c);color:#fff6e8;font-family:var(--serif);font-size:13px;font-weight:500;letter-spacing:0;box-shadow:0 6px 16px rgba(139,74,38,.2)}
 .why-columns .why-field i{font-style:normal;font-size:13px;font-weight:700;letter-spacing:.16em;color:#a06a3f}
-.why-field-index{display:flex;align-items:center;flex-wrap:wrap;gap:10px 24px;margin-top:34px;padding:22px 26px;border:1px solid #e3d3bf;border-radius:16px;background:linear-gradient(120deg,#faf4ec,#f6ecdf)}
-.why-index-title{flex:none;font-size:12px;font-weight:700;letter-spacing:.14em;color:#8a7561;padding-right:22px;border-right:1px solid #e0cfb9}
-.why-field-index a{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#5c4636;border:0;padding:6px 2px}
-.why-field-index a b{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#ecddc9;color:#a06a3f;font-family:var(--serif);font-size:11px;font-weight:500;transition:background .2s,color .2s}
-.why-field-index a:hover{color:#a74d2b}
-.why-field-index a:hover b{background:linear-gradient(135deg,#8a5a3b,#c5542c);color:#fff6e8}
-@media(max-width:800px){
-.why-field-index{gap:10px 18px;padding:18px 16px}
-.why-index-title{width:100%;border-right:0;border-bottom:1px solid #e0cfb9;padding:0 0 12px}
-}
-@media(max-width:560px){
-.why-field-index a{font-size:12px;gap:6px}
-.why-field-index a b{width:20px;height:20px;font-size:10px}
-}
 
 /* ==== 2026-11-20 合作共建区块重构：摄影叙事卡 + 深色四步闭环 ==== */
 .partners-section{padding-bottom:78px}
