@@ -1,11 +1,11 @@
 (() => {
   'use strict';
 
-  // Travel photography crossfades, with a user-controlled and motion-aware timer.
+  // Travel photography crossfades, with a motion-aware timer and synced progress bars.
   const hero = document.querySelector('.hero');
   const heroPhotos = [...document.querySelectorAll('.hero-photo')];
   const heroDots = [...document.querySelectorAll('[data-hero-slide]')];
-  const playButton = document.querySelector('.hero-play');
+  const heroCaption = document.querySelector('#hero-caption');
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const captions = ['浙江 · 乌镇 / 走进水乡生活', '北京 · 古建 / 看见文化', '上海 · 朱家角 / 在水岸读懂日常', '北京 · 长城 / 让旅程成为经历'];
   let heroIndex = 0;
@@ -17,26 +17,23 @@
     heroIndex = (index + heroPhotos.length) % heroPhotos.length;
     heroPhotos.forEach((photo, i) => photo.classList.toggle('is-active', i === heroIndex));
     heroDots.forEach((dot, i) => { dot.classList.toggle('active', i === heroIndex); dot.setAttribute('aria-current', String(i === heroIndex)); });
-    document.querySelector('#hero-caption').textContent = captions[heroIndex];
-    document.querySelector('.hero-counter').textContent = String(heroIndex + 1).padStart(2, '0') + ' / 04';
+    heroCaption.textContent = captions[heroIndex];
+    heroCaption.classList.remove('is-updated');
+    void heroCaption.offsetWidth;
+    heroCaption.classList.add('is-updated');
   }
   function updatePlayback() {
     clearInterval(heroTimer);
-    playButton.textContent = paused ? '播放' : '暂停';
-    playButton.setAttribute('aria-label', paused ? '播放轮播' : '暂停轮播');
-    playButton.setAttribute('aria-pressed', String(paused));
     hero.classList.toggle('rotation-paused', paused || !heroVisible || document.hidden || focusHeld);
     if (!paused && heroVisible && !document.hidden && !focusHeld) heroTimer = setInterval(() => showSlide(heroIndex + 1), 6500);
   }
-  heroDots.forEach((dot, index) => dot.addEventListener('click', () => { showSlide(index); paused = true; updatePlayback(); }));
-  document.querySelector('[data-hero-prev]').addEventListener('click', () => { showSlide(heroIndex - 1); paused = true; updatePlayback(); });
-  document.querySelector('[data-hero-next]').addEventListener('click', () => { showSlide(heroIndex + 1); paused = true; updatePlayback(); });
-  playButton.addEventListener('click', () => { paused = !paused; focusHeld = false; updatePlayback(); });
+  heroDots.forEach((dot, index) => dot.addEventListener('click', () => { showSlide(index); updatePlayback(); }));
   hero.addEventListener('focusin', () => { focusHeld = true; updatePlayback(); });
   hero.addEventListener('focusout', () => setTimeout(() => { focusHeld = hero.contains(document.activeElement); updatePlayback(); }, 0));
   document.addEventListener('visibilitychange', updatePlayback);
   motionPreference.addEventListener('change', () => { paused = motionPreference.matches; updatePlayback(); });
   if ('IntersectionObserver' in window) new IntersectionObserver(entries => { heroVisible = entries[0].isIntersecting; updatePlayback(); }, {threshold:0.15}).observe(hero);
+  showSlide(heroIndex);
   updatePlayback();
 
 
