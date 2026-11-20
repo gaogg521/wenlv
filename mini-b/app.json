@@ -10,7 +10,8 @@
     "pages/order-detail/index",
     "pages/reviews/index",
     "pages/honor/index",
-    "pages/proof/index"
+    "pages/proof/index",
+    "pages/requests/index"
   ],
   "window": {
     "navigationStyle": "custom",

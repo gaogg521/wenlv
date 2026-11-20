@@ -141,15 +141,25 @@ void orders
 
     // 内部角色（如 finance）的各自概览入口不在本用例范围；超管只读预览契约见上
   })
-  await check('商户主体方·本店商品自维护：建品强制本店、他店编辑/上下架/排团期拒绝、本店可用', async () => {
-    const foreign = ok(await call('POST', '/admin/products', { title: 'PI他店品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, tokM))
-    assert.equal(Number((await one('SELECT merchant_id FROM tour_product WHERE id=?', [foreign.id])).merchant_id), Number(midA), '建品 merchant_id 强制为绑定主体（传他店也落本店）')
-    assert.equal((await call('POST', '/admin/sessions', { productId: foreign.id, departDate: bizDay(1), quota: 10, priceAdult: 100 }, tokM)).code, 0, '本店商品排团期可用')
+  await check('商户主体方·本店商品自维护：V94 直写收口——旧直写入口全部拦截并指引审批流,本店变更走申请制', async () => {
+    // V94:主体直写收口——直接调用旧接口一律 1003(含对本店资源),统一走「主体工作台」申请审批
+    const r1 = await call('POST', '/admin/products', { title: 'PI他店品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, tokM)
+    assert.equal(r1.code, 1003, '主体方直写建品被拦截')
+    assert.ok(/审批制|主体工作台/.test(r1.msg), '拦截文案应指引审批流: ' + r1.msg)
     const otherProd = ok(await call('POST', '/admin/products', { title: 'PI他店真品', merchantId: midB, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, admin))
     assert.equal((await call('PUT', '/admin/products/' + otherProd.id, { title: '越权改' }, tokM)).code, 1003, '他店商品编辑拒绝')
     assert.equal((await call('POST', `/admin/products/${otherProd.id}/status`, { status: 1 }, tokM)).code, 1003, '他店商品上下架拒绝')
     assert.equal((await call('POST', '/admin/sessions', { productId: otherProd.id, departDate: bizDay(1), quota: 10, priceAdult: 100 }, tokM)).code, 1003, '他店商品排团期拒绝')
-    assert.equal((await call('PUT', '/admin/products/' + foreign.id, { title: '本店改名' }, tokM)).code, 0, '本店商品编辑可用')
+    assert.equal((await call('PUT', '/admin/products/' + otherProd.id, { title: '本店改名' }, tokM)).code, 1003, '本店直写编辑同样收口(走申请制)')
+    // 本店资源变更走审批申请:修改他店商品 → 归属拒绝;本店商品 → 提交成功
+    await (async () => {
+      const ownProd = ok(await call('POST', '/admin/products', { title: 'PI本店真品', merchantId: midA, priceFrom: 100, cat: 'theme', cityCode: '310118', channelId: 'main' }, admin))
+      const rOwn = await call('POST', '/admin/subject-requests', { kind: 'product', action: 'update', resourceId: ownProd.id, payload: { title: '本店改名(申请)' }, submit: true }, tokM)
+      assert.equal(rOwn.code, 0, '本店商品变更申请可提交: ' + rOwn.msg)
+      const rForeign = await call('POST', '/admin/subject-requests', { kind: 'product', action: 'update', resourceId: otherProd.id, payload: { title: 'x' }, submit: true }, tokM)
+      assert.equal(rForeign.code, 1003, '他店商品申请被归属校验拒绝')
+      await call('POST', `/admin/subject-requests/${rOwn.data.id}/withdraw`, {}, tokM)
+    })()
   })
 
   // ===== 改绑主体：epoch+1 旧会话失效，改绑即生效 =====

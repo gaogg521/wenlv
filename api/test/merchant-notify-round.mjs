@@ -115,17 +115,32 @@ try {
     await resetSession(s1)
   })
 
-  /* ---------- M-07：团期卡最近改价（谁、几点、旧→新） ---------- */
-  await test('M-07 改价后 /m/supply 返回 priceChange（操作人昵称 + 时间 + 旧→新）', async () => {
+  /* ---------- M-07：团期卡最近改价（谁、几点、旧→新） ----------
+     V94:改价走审批制——店长提交申请 → 超管批准生效 → /m/supply 的 priceChange 显示平台审批与旧→新 */
+  await test('M-07 改价申请批准生效后 /m/supply 返回 priceChange（平台审批 + 旧→新）', async () => {
     await resetSession(s1)
-    ok(await call('POST', '/m/supply/' + s1, { action: 'price', value: 9200 }, M.token))
+    // 先撤掉 M-01 循环遗留的 s1 待审单，保证本用例申请是唯一待审
+    const pend = ok(await call('GET', '/m/subject-requests?status=1', null, M.token))
+    for (const it of (pend.items || []).filter((x) => Number(x.resource_id) === Number(s1) && x.canWithdraw !== false)) {
+      ok(await call('POST', '/m/subject-requests/' + it.id + '/withdraw', {}, M.token))
+    }
+    const supTok = (await (await fetch(base + '/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' }) })).json())
+    assert.equal(supTok.code, 0, '超管登录应成功(需 ADMIN_INIT_PASSWORD)：' + supTok.msg)
+    const adminTok = supTok.data.token
+    const sub = ok(await call('POST', '/m/supply/' + s1, { action: 'price', value: 9200, reason: 'M-07 回归' }, M.token))
+    assert.ok(sub.reqNo, '提交应返回申请号: ' + JSON.stringify(sub))
+    const before = ok(await call('GET', '/m/supply?paged=1&page=1&pageSize=60&history=1', null, M.token))
+    const rowBefore = before.items.find((x) => Number(x.id) === Number(s1))
+    assert.equal(Number(rowBefore.price_adult), 10000, '批准前正式价保持原值')
+    ok(await call('POST', '/admin/subject-requests/' + sub.requestId + '/approve', { confirm: { price: true }, note: 'M-07 批准' }, adminTok))
     const d = ok(await call('GET', '/m/supply?paged=1&page=1&pageSize=60&history=1', null, M.token))
     const row = d.items.find((x) => Number(x.id) === Number(s1))
     assert(row, '团期应在列表里')
     assert(row.priceChange, '应有 priceChange')
     assert.equal(Number(row.priceChange.from), 10000)
     assert.equal(Number(row.priceChange.to), 9200)
-    assert.equal(String(row.priceChange.by), M.nickname, '操作人应为店长昵称')
+    assert.ok(String(row.priceChange.by).includes('平台审批'), '操作人应为平台审批: ' + row.priceChange.by)
     assert.ok(/^\d{2}-\d{2} \d{2}:\d{2}$/.test(String(row.priceChange.at)), '时间应为 MM-DD HH:mm: ' + row.priceChange.at)
   })
 

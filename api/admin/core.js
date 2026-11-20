@@ -275,7 +275,7 @@ async function boot() {
   try { const pt = sessionStorage.getItem('postLoginToast'); if (pt) { sessionStorage.removeItem('postLoginToast'); setTimeout(() => toast(pt, true), 300) } } catch { /* sessionStorage 不可用时忽略 */ }
   try {
     ADMIN_CAPABILITIES = await api('GET', '/admin/capabilities')
-    ME = { ...ME, role: ADMIN_CAPABILITIES.role, scopeCity: ADMIN_CAPABILITIES.scopeCity }
+    ME = { ...ME, role: ADMIN_CAPABILITIES.role, scopeCity: ADMIN_CAPABILITIES.scopeCity, modules: ADMIN_CAPABILITIES.modules || [] }
     // X-01/X-02：字典以服务端下发为准（订单状态三视角文案、城市、品类、商户类目），
     // 新增字典项只改服务端一处，刷新页面即生效
     const dcts = ADMIN_CAPABILITIES.dicts || {}
@@ -332,6 +332,9 @@ async function boot() {
   // 有效时保留完整 hash（含筛选查询串）
   history.replaceState(null, '', keys.includes(requested) ? location.hash : '#' + destination)
   go(destination, { history: false })
+  // V94:站内收件箱顶栏未读——登录/回前台/切页时刷新,60s 轮询兜底
+  window.refreshInboxBadge?.()
+  if (!window.__inboxTimer) window.__inboxTimer = setInterval(() => window.refreshInboxBadge?.(), 60000)
 }
 
 const skel = (n = 5) => Array(n).fill('<div class="sk sk-row"></div>').join('')

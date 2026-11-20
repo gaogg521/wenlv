@@ -7,8 +7,8 @@
 // - readonly/sre/dev 原来因缺省放行泄露全部 50 个菜单（缺陷），改为显式默认集合（D-01 决策，见进度台账）；
 // - 未知角色默认拒绝（空集合）。
 export const MODULE_GROUPS = [
-  ['经营总览', [['partnerdash', '主体方经营', 'dash'], ['dash', '经营概览', 'dash'], ['scenario', '经营测算', 'budgets']]],
-  ['商品与资源', [['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
+  ['经营总览', [['partnerdash', '主体方经营', 'dash'], ['opsdesk', '运营工作台', 'dash'], ['dash', '经营概览', 'dash'], ['scenario', '经营测算', 'budgets']]],
+  ['商品与资源', [['subjectwork', '主体工作台', 'dash'], ['subjectapprove', '主体资源审批', 'flag'], ['products', '商品与团期', 'products'], ['merchants', '商户与进件', 'merchants'], ['scenics', '景区资源', 'eco'], ['suppliers', '供应商', 'merchants']]],
   ['订单履约', [['orders', '订单管理', 'orders'], ['tickets', '售后工单', 'orders'], ['phrases', '核销暗号', 'flag'], ['conflicts', '离线核销冲突', 'risk']]],
   ['用户与权益', [['users', '用户中心', 'promoters'], ['kyc', '实名认证', 'audit'], ['wallets', '权益账户', 'orders'], ['badges', '徽章管理', 'flag'], ['entitlements', '权益调整', 'budgets']]],
   ['内容运营', [['contentdash', '内容看板', 'content'], ['reviewqueue', '审核队列', 'content'], ['content', '内容审核', 'content'], ['contentcases', '举报与申诉', 'audit'], ['comments', '评论管理', 'content'], ['tasks', '约稿任务', 'flag'], ['creators', '创作者池', 'content']]],
@@ -23,7 +23,7 @@ export const MODULES = MODULE_GROUPS.flatMap(([group, items]) => items.map(([key
 export const MODULE_KEYS = MODULES.map((m) => m.key)
 
 /** D-01：城市合伙人不可被授予的模块（系统级/资金敏感/链上配置类）——批次 D 的 requireModule 强制叠加 */
-export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 'integrations', 'system', 'web3dash', 'attest', 'vc', 'pointassets', 'chainassets', 'chainhub', 'terms', 'suppliers', 'kyc', 'wallets', 'badges', 'creators', 'rateov', 'miniapp', 'phrases', 'conflicts']
+export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 'integrations', 'system', 'web3dash', 'attest', 'vc', 'pointassets', 'chainassets', 'chainhub', 'terms', 'suppliers', 'kyc', 'wallets', 'badges', 'creators', 'rateov', 'miniapp', 'phrases', 'conflicts', 'subjectapprove']
 
 /**
  * 角色默认模块集合（基线快照，与迁移 V54 种子一致）：
@@ -34,7 +34,8 @@ export const CITY_DENY_MODULES = ['security', 'accounts', 'config', 'features', 
  * - 未知角色：空集合（默认拒绝，不再缺省放行全菜单）。
  */
 export const ROLE_DEFAULT_MODULES = {
-  ops: ['users', 'dash', 'scenario', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
+  // V94:ops 增加主体资源审批页与运营工作台(审批动作仍需超管按员工授予 subject.approve)
+  ops: ['users', 'dash', 'opsdesk', 'scenario', 'orders', 'tickets', 'entitlements', 'fund', 'reviewqueue', 'subjectapprove', 'products', 'merchants', 'content', 'tasks', 'faqs', 'banners', 'promoters', 'agreements', 'kyc', 'cocreate', 'partners', 'partnerperf', 'scenics', 'contentdash', 'contentcases', 'comments', 'taskcash'],
   finance: ['dash', 'orders', 'fund', 'settlements', 'withdrawals', 'agreements', 'budgets', 'audit', 'cocreate', 'entitlements', 'partners', 'partnerperf', 'scenics', 'taskcash', 'config'],
   review: ['content', 'tasks', 'reviewqueue', 'contentdash', 'contentcases', 'comments'],
   risk: ['risk', 'users', 'conflicts', 'audit', 'entitlements', 'cases'],
@@ -43,8 +44,9 @@ export const ROLE_DEFAULT_MODULES = {
   sre: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest'],
   dev: ['dash', 'audit', 'system', 'integrations', 'chainhub', 'web3dash', 'attest', 'features', 'terms'],
   // 商户/景区主体方（V82 独立 PC 身份）：只看本主体授权范围；不给 dash（平台聚合）与资金/参数等平台模块
-  merchant_partner: ['partnerdash', 'orders', 'settlements', 'products', 'merchants', 'partnerperf'],
-  scenic_partner: ['partnerdash', 'orders', 'scenics', 'settlements', 'products'],
+  // V94:主体工作台为主体方默认落地页(新增商品/维护资料/我的变更申请)
+  merchant_partner: ['subjectwork', 'partnerdash', 'orders', 'settlements', 'products', 'merchants', 'partnerperf'],
+  scenic_partner: ['subjectwork', 'partnerdash', 'orders', 'scenics', 'settlements', 'products'],
 }
 
 /** 有效模块集合：super 全部；已知角色取默认；未知角色空（默认拒绝） */
@@ -61,6 +63,6 @@ export function effectiveModules(role) {
  * risk→风控事件；sre/dev→运维控制台。未知角色 null（前端回落）。
  */
 export const ROLE_HOME = {
-  super: 'dash', ops: 'dash', readonly: 'dash', merchant_partner: 'partnerdash', scenic_partner: 'partnerdash', city_partner: 'dash',
+  super: 'dash', ops: 'dash', readonly: 'dash', merchant_partner: 'subjectwork', scenic_partner: 'subjectwork', city_partner: 'dash',
   finance: 'fund', review: 'reviewqueue', risk: 'risk', sre: 'system', dev: 'system',
 }

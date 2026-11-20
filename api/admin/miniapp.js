@@ -57,7 +57,8 @@
     { end: '商户端', path: 'pages/order-detail/index', name: '订单详情', items: [['订单与凭证', [['订单', 'orders']]]] },
     { end: '商户端', path: 'pages/reviews/index', name: '游客评价与回复', items: [
       ['评价列表与筛选、本店回复（提交后由平台内容审核把关，通过后游客可见）', [['内容审核 · 评价管理', 'content']]]] },
-    { end: '商户端', path: 'pages/supply/index', name: '供给 / 库存', items: [['按商品分组、搜索与历史日期筛选的团期余位', [['商品与团期', 'products']]]] },
+    { end: '商户端', path: 'pages/supply/index', name: '供给 / 库存', items: [['按商品分组、搜索与历史日期筛选的团期余位', [['商品与团期', 'products']]], ['改价/名额/停售/恢复/早鸟申请(审批制,状态与进度)', [['主体资源审批', 'subjectapprove']]]] },
+    { end: '商户端', path: 'pages/requests/index', name: '我的变更申请', items: [['改价/名额/停售/恢复/早鸟申请的审批进度与结果', [['主体资源审批', 'subjectapprove']]], ['主体资源权限(谁能提交什么)', [['后台账号 · 主体资源权限', 'accounts']]]] },
     { end: '商户端', path: 'pages/settlement/index', name: '结算', items: [['周结算单、确认、异议、回单', [['结算', 'settlements'], ['协议变更', 'agreements']]], ['退改手续费分成比例', [['参数中心 · settlement.refund_fee_merchant_pct', 'config'], ['商户资料 · 结算账户', 'merchants']]]] },
     { end: '商户端', path: 'pages/proof/index', name: '记录复核', items: [['复核结果里的类型、名称、日期、封存状态', [['存证总览 → 存证检索（后台查同一条记录）', 'web3dash']]], ['记录编号对应的勋章名称', [['徽章管理', 'badges']]]] },
     { end: '商户端', path: 'pages/honor/index', name: '经营等级与荣誉', items: [['商户等级名、门槛、权益说明', [['参数中心 · merchant.levels', 'config']]], ['商户徽章（等级 / 经营荣誉 / 可信经营）的定义与发放', [['徽章管理', 'badges']]], ['某家商户的当前等级与徽章', [['商户与进件 → 全景', 'merchants']]]] },

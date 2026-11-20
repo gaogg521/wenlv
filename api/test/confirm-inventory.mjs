@@ -204,6 +204,22 @@ export const INVENTORY = [
   { end: 'mini-a', file: 'mini-a/package-promo/pages/work/index.js', func: 'sendFeedback', action: '分润对账反馈（填原因）', grade: 'B', how: 'rich' },
   { end: 'mini-a', file: 'mini-a/utils/promo-source.js', func: 'visit', action: '推广访问归因上报', grade: 'C', how: '-' },
 
+  // ===== V94 主体资源审批与运营权限 =====
+  { end: 'pc', file: 'api/admin/pages/subject-work.js', func: 'swSubmitDraft|swWithdraw|swDeleteDraft|swResubmit|swStockSubmit', action: '主体资源申请:提交审核/撤回/删除草稿/重新发起/库存申请(uiConfirm 统一确认,提交后锁定)', grade: 'A', how: 'uiConfirm' },
+  { end: 'pc', file: 'api/admin/pages/subject-work.js', func: 'note', action: '申请说明/影响说明文本域(非写操作,随提交锁定)', grade: 'C', how: '-' },
+  { end: 'pc', file: 'api/admin/pages/subject-approve.js', func: 'saApproveDo', action: '批准生效(影响勾选确认弹窗+按钮防重复提交)', grade: 'A+', how: 'rich' },
+  { end: 'pc', file: 'api/admin/pages/subject-approve.js', func: 'saRejectDo', action: '退回申请(必填原因)', grade: 'A+', how: 'rich' },
+  { end: 'pc', file: 'api/admin/pages/subject-approve.js', func: 'saPreauditDo', action: '预审意见(填写即记录)', grade: 'B', how: 'rich' },
+  { end: 'pc', file: 'api/admin/pages/subject-approve.js', func: 'note', action: '审批说明文本域(随批准提交)', grade: 'C', how: '-' },
+  { end: 'pc', file: 'api/admin/entity-editor.js', func: 'eeApprovalSave', action: '审批制保存草稿/提交审核(编辑器抽屉即表单;提交后锁定,草稿可续编)', grade: 'B', how: '-' },
+  { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'subjectPermCreate|subjectPermDelete', action: '主体资源权限授予/删除(必填原因,进审计)', grade: 'A+', how: 'uiConfirm' },
+  { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'accountActionSet', action: '按员工动作授予/撤回(确认即父级授权弹窗,原因必填校验)', grade: 'A+', how: 'uiConfirm' },
+  { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'reason', action: '授权原因输入(随提交校验)', grade: 'C', how: '-' },
+  { end: 'pc', file: 'api/admin/inbox.js', func: 'inboxGo|inboxRead|inboxReadAll', action: '站内通知已读/直达(低危)', grade: 'C', how: '-' },
+  { end: 'mini-b', file: 'mini-b/pages/requests/index.js', func: 'withdraw', action: '撤回申请(showModal 确认)', grade: 'A', how: 'rich' },
+  { end: 'mini-b', file: 'mini-b/pages/requests/index.js', func: 'redo', action: '重新发起指引(跳转库存页重提)', grade: 'C', how: '-' },
+  { end: 'mini-b', file: 'mini-b/pages/supply/index.js', func: 'resumeSell', action: '恢复销售申请(低危,提交审批)', grade: 'B', how: 'uiConfirm' },
+  { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'refreshPerms', action: '权限快照刷新(读操作)', grade: 'C', how: '-' },
   // ===== mini-b 商户端 =====
   { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'demoLogin', action: '演示登录（仅开发版）', grade: 'C', how: '-' },
   { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'login', action: '商户微信登录', grade: 'C', how: '-' },

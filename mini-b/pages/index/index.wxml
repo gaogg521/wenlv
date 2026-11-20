@@ -43,6 +43,7 @@
     <view class="service-grid">
       <button class="service-order" wx:if="{{role >= 2}}" bindtap="goOrders"><view class="service-icon">☰</view><view>门店订单</view><text>跟进预约与游客安排</text><view class="service-arrow">↗</view></button>
       <button class="service-stock" wx:if="{{role >= 2}}" bindtap="goSupply"><view class="service-icon">▦</view><view>库存与价格</view><text>管理团期、名额与定价</text><view class="service-arrow">↗</view></button>
+      <button class="service-bill" wx:if="{{role >= 2}}" bindtap="goRequests"><view class="service-icon">⇄</view><view>我的变更申请</view><text>改价调名额的审批进度</text><view class="service-arrow">↗</view></button>
       <button class="service-bill" wx:if="{{role >= 2}}" bindtap="goSettle"><view class="service-icon">≋</view><view>对账结算</view><text>核对账单与结算进度</text><view class="service-arrow">↗</view></button>
       <button class="service-record" bindtap="goRecords"><view class="service-icon">↺</view><view>核销记录</view><text>每一次接待都有记录</text><view class="service-arrow">↗</view></button>
       <button wx:if="{{role < 2}}" bindtap="goHonor"><view class="service-icon">◇</view><view>门店荣誉</view><text>查看成长与权益</text></button>

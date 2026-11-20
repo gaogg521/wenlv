@@ -14,7 +14,8 @@ function stockView(list, options = {}, now = Date.now()) {
     return !keyword || (s.title + ' ' + date).toLowerCase().includes(keyword)
   }).map(s => {
     const date = String(s.depart_date).slice(0, 10), past = date < today, left = Math.max(0, Number(s.left_seats))
-    const statusLabel = past ? '已过期' : ({ 1: left ? '可售' : '已满', 2: '已成团', 3: '已截止', 4: '已取消' }[Number(s.status)] || '不可售')
+    // V94:该团期有待审变更申请时,状态文案带「变更审核中」(JS 预计算,WXML 只做取值)
+    const statusLabel = (past ? '已过期' : ({ 1: left ? '可售' : '已满', 2: '已成团', 3: '已截止', 4: '已取消' }[Number(s.status)] || '不可售')) + (Number(s.pending_cnt) > 0 ? ' · 变更审核中' : '')
     return Object.assign({}, s, { date, dateShort: date.slice(5), priceLabel: money(s.price_adult), earlyLabel: money(s.early_price), left, statusLabel, canSell: !past && Number(s.status) === 1, tight: !past && Number(s.status) === 1 && left <= 2,
       priceNote: Number(s.early_price) > 0 ? ('早鸟 ¥' + money(s.early_price) + ' · 提前' + s.early_days + '天') : '常规团期价格' })
   }).sort((a,b) => a.date.localeCompare(b.date) || Number(a.id) - Number(b.id))

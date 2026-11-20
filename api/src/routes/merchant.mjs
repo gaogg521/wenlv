@@ -32,6 +32,8 @@ import { capabilityDoc, renderPdf as renderOnepagerPdf, renderPng as renderOnepa
 import * as chain from '../infra/chain.mjs'
 import * as wxapi from '../domain/wxapi.mjs'
 import * as wxsec from '../infra/wxsec.mjs'
+import { actorFromStaff, saveDraft as saveSubjectDraft, submitRequest as submitSubjectRequest } from '../domain/subject-approval.mjs'
+import { resolveSubjectPerms, assertPayloadAllowed, assertPermFresh } from '../domain/subject-perms.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -67,10 +69,51 @@ async function lastPriceChanges(sessionIds, fmt) {
   const names = uids.length ? new Map((await q(`SELECT id, nickname FROM user_account WHERE id IN (${uids.map(() => '?').join(',')})`, uids)).map((r) => [String(r.id), r.nickname])) : new Map()
   const out = {}
   for (const [sid, h] of hits) {
-    const uid = String(h.changedBy || '').split(':')[1]
-    out[sid] = { by: (uid && names.get(uid)) || '店员', at: fmt(h.at), from: h.from, to: h.to }
+    const seg = String(h.changedBy || '').split(':')
+    const uid = seg[1]
+    // V94:审批生效的变更(changedBy=admin:approval:审批人:申请号 / approval:审批人)显示审批人;店员按 uid 查昵称
+    const by = uid && names.get(uid) ? names.get(uid)
+      : (seg[1] === 'approval' ? '平台审批·' + (seg[2] || '') : (seg[0] === 'approval' ? '平台审批·' + (seg[1] || '') : '店员'))
+    out[sid] = { by, at: fmt(h.at), from: h.from, to: h.to }
   }
   return out
+}
+
+// ==================== V94 主体资源审批:商户端供给写入口 → 待审申请 ====================
+const SUPPLY_ACTION_LABEL = { price: '改价', adjust_quota: '调名额', early: '早鸟设置', stop_sell: '停售', resume_sell: '恢复销售' }
+// mini 输入(分/整数) → 实体 schema 展示口径 payload(元);金额红线(存分)在 entity save 归一化时保持
+function batchPayload(action, value, row) {
+  if (action === 'price') {
+    const price = Math.floor(Number(value))
+    if (!(price > 0)) return null
+    if (Number(row.early_price) > 0 && price <= Number(row.early_price)) return null
+    return { price_adult: Number((price / 100).toFixed(2)) }
+  }
+  if (action === 'adjust_quota') {
+    const quota = Math.floor(Number(value))
+    if (!(quota >= Number(row.booked))) return null
+    return { quota }
+  }
+  if (action === 'stop_sell') return { status: 3 }
+  if (action === 'resume_sell') return { status: 1 }
+  if (action === 'early') {
+    const price = value && value.price != null ? Number(value.price) : null
+    const days = value && value.days != null ? Number(value.days) : null
+    return { early_price: price == null ? null : Number((price / 100).toFixed(2)), early_days: price == null ? null : days }
+  }
+  return null
+}
+// 创建并提交待审申请(幂等:同资源已有待审单时返回既有单)
+async function submitSupplyRequest(actor, row, action, payload, reason) {
+  const impactNoteMap = { price: '改价影响在售价格与新订单成交价,已下单订单保持原价', adjust_quota: '名额调整影响可报名人数', early: '早鸟设置影响促销期成交价', stop_sell: '停售影响该团期后续销售,已下单游客仍按原约定履约', resume_sell: '恢复销售重新开放该团期报名' }
+  const label = SUPPLY_ACTION_LABEL[action] || action
+  const draft = await saveSubjectDraft(actor, {
+    kind: 'session', action: 'update', resourceId: row.id, payload,
+    note: reason ? '商户端' + label + ':' + reason : '商户端' + label,
+    impactNote: reason ? impactNoteMap[action] + ':' + reason : impactNoteMap[action],
+    baselineVersion: Number(row.version),
+  })
+  return submitSubjectRequest(actor, draft.id, { idemKey: 'mini:session:' + row.id + ':' + action })
 }
 
 const m = {
@@ -351,7 +394,8 @@ const m = {
     const kw = String(req.query.kw || '').trim().slice(0, 60)
     if (kw) { where.push('(p.title LIKE ? OR DATE_FORMAT(s.depart_date, \'%Y-%m-%d\') LIKE ?)'); args.push('%' + kw + '%', '%' + kw + '%') }
     const sql = `SELECT s.id, s.depart_date, s.quota, s.booked, s.quota - s.booked AS left_seats, s.price_adult,
-      s.early_price, s.early_days, s.min_go, s.status, s.version, p.id AS product_id, p.title
+      s.early_price, s.early_days, s.min_go, s.status, s.version, p.id AS product_id, p.title,
+      (SELECT COUNT(*) FROM subject_resource_request r WHERE r.status = 1 AND r.kind = 'session' AND r.resource_id = s.id) AS pending_cnt
       FROM tour_session s JOIN tour_product p ON p.id = s.product_id
       WHERE ${where.join(' AND ')}
       ORDER BY (s.depart_date >= CURDATE()) DESC, s.depart_date, p.id, s.id`
@@ -368,135 +412,74 @@ const m = {
     return { items: items.map((r) => ({ ...r, priceChange: changes[r.id] || null })), total, page: Math.floor(paging.offset / paging.size) + 1, pageSize: paging.size, hasMore: paging.offset + items.length < total }
   },
 
-  // C-02 批量操作：ids 内逐条校验归属门店，返回实际生效条数（前端先展示影响范围再提交）
+  // V94 主体资源审批:商户端供给写入口(改价/名额/早鸟/停售/恢复/批量)全部改为「提交审核」——
+  // 创建 subject_resource_request 待审申请,经超管或获授权运营批准后经正式写服务生效;
+  // 审批前正式资源保持原版本,乐观锁(expectedVersion)在受理时刻校验,拦截过期数据提交。
+  // 权限版本闸:请求头 X-Perm-Version 落后于最新发布版本 → 2101,端侧刷新快照后重试(乱序响应不能恢复旧授权)。
   'POST /m/supply/batch': async (req) => {
     const u = requireUser(req)
     if (u.role < 2) throw new BizError(1003, '批量调整需店长及以上')
+    await assertPermFresh(req.headers['x-perm-version'])
     const { ids, action, value } = req.body || {}
     if (!Array.isArray(ids) || !ids.length || ids.length > 200) throw new BizError(1001, '请选择 1-200 个团期')
     if (!['adjust_quota', 'price', 'stop_sell'].includes(action)) throw new BizError(1001, '不支持的批量操作')
-    // M-12：批量>5 条属 A+，前端强制填原因，这里留痕入审计
     const batchReason = String((req.body || {}).reason || '').trim().slice(0, 200)
+    const actor = await actorFromStaff(u)
+    const perms = await resolveSubjectPerms({ subjectType: 'merchant', subjectId: u.merchantId, channel: 'mini', staffRole: u.role })
+    assertPayloadAllowed(perms.perms, 'session', 'update', {}) // 注意解包 {version, perms} // 仅校验动作是否允许;字段按各请求 payload 校验
     const rows = await q(`SELECT s.id, s.quota, s.booked, s.price_adult, s.early_price, s.status, s.version FROM tour_session s
       JOIN tour_product p ON p.id = s.product_id WHERE p.merchant_id = ? AND s.id IN (${ids.map(() => '?').join(',')})`, [u.merchantId, ...ids.map(Number)])
     const allowed = rows.filter((s) => Number(s.status) !== 4)
-    let applied = 0
+    const created = []
+    const duplicates = []
     const conflicts = []
+    const skipped = []
     for (const s of allowed) {
-      if (action === 'stop_sell') { await q('UPDATE tour_session SET status = 3 WHERE id = ? AND status <> 4', [s.id]); applied++ }
-      else if (action === 'adjust_quota') {
-        const quota = Math.floor(Number(value))
-        if (!(quota >= Number(s.booked))) continue
-        // X-03：批量调名额同样走乐观锁 + 版本簿，被并发改过的团期记入 conflicts
-        const done = await tx(async (c) => {
-          const n = await c.upd('UPDATE tour_session SET quota = ?, version = version + 1 WHERE id = ? AND version = ? AND booked <= ?', [quota, s.id, Number(s.version), quota])
-          if (n !== 1) return false
-          await recordVersion(c, { kind: 'session', refId: s.id,
-            snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(s.quota) }, after: { quota } },
-            changedBy: 'merchant-staff:' + u.uid, reason: batchReason ? '商户端批量调名额 · ' + batchReason : '商户端批量调名额' })
-          await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + s.id, { quota: Number(s.quota) }, { quota })
-          return true
-        })
-        if (done) applied++; else conflicts.push(s.id)
-      } else if (action === 'price') {
-        const price = Math.floor(Number(value))
-        if (!(price > 0) || (Number(s.early_price) > 0 && price <= Number(s.early_price))) continue
-        // X-03：批量改价同样走乐观锁 + 版本簿——并发被改过的团期记入 conflicts，不静默覆盖
-        const done = await tx(async (c) => {
-          const n = await c.upd('UPDATE tour_session SET price_adult = ?, version = version + 1 WHERE id = ? AND version = ?', [price, s.id, Number(s.version)])
-          if (n !== 1) return false
-          await recordVersion(c, { kind: 'session', refId: s.id,
-            snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: price } },
-            changedBy: 'merchant-staff:' + u.uid, reason: batchReason ? '商户端批量改价 · ' + batchReason : '商户端批量改价' })
-          await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + s.id, { price_adult: Number(s.price_adult) }, { price_adult: price })
-          return true
-        })
-        if (done) applied++; else conflicts.push(s.id)
+      const payload = batchPayload(action, value, s)
+      if (!payload) { skipped.push(s.id); continue }
+      if (Number(s.version) == null) { skipped.push(s.id); continue }
+      try {
+        const res = await submitSupplyRequest(actor, s, action, payload, batchReason)
+        if (res.idempotent) duplicates.push(s.id)
+        else created.push({ id: s.id, requestId: res.id, reqNo: res.reqNo })
+      } catch (e) {
+        if (e.code === 2002) conflicts.push(s.id)
+        else throw e
       }
     }
-    return { requested: ids.length, matched: allowed.length, applied, skipped: ids.length - applied, conflicts }
+    return { requested: ids.length, matched: allowed.length, created: created.length, createdItems: created,
+      duplicates, conflicts, skipped: ids.length - created.length - duplicates.length }
   },
 
   'POST /m/supply/:sid': async (req) => {
     const u = requireUser(req)
     if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
+    await assertPermFresh(req.headers['x-perm-version'])
     const { action, value } = req.body
-    // M-12：价差超 ±30% 等 A+ 情形前端强制填原因，这里留痕进版本簿与审计
     const changeReason = String((req.body || {}).reason || '').trim().slice(0, 200)
-    const owned = await one('SELECT s.id, s.booked, s.quota, s.price_adult, s.early_price, s.early_days, s.version FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
+    const owned = await one('SELECT s.id, s.booked, s.quota, s.price_adult, s.early_price, s.early_days, s.version, s.status FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND p.merchant_id = ?', [req.params.sid, u.merchantId])
     if (!owned) throw new BizError(1004, '团期不存在或不属于本店')
+    const payload = batchPayload(action, value, owned)
+    if (!payload) throw new BizError(1001, '未知操作')
+    // X-03 口径保持:携带乐观锁版本且与当前不一致 → 2002(拦截过期数据提交)
+    if (req.body.expectedVersion != null && Number(req.body.expectedVersion) !== Number(owned.version)) {
+      throw new BizError(2002, '该团期刚被其他端修改，请刷新团期后重试')
+    }
     if (action === 'adjust_quota' && (!Number.isInteger(value) || value < owned.booked)) throw new BizError(1001, '名额必须为整数且不少于已报名人数')
     if (action === 'price' && (!Number.isInteger(value) || value <= 0)) throw new BizError(1001, '价格必须为正整数分')
-    if (action === 'stop_sell') {
-      await tx(async (c) => {
-        await c.upd('UPDATE tour_session SET status = 3 WHERE id = ?', [req.params.sid])
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'stop_sell', 'session-' + req.params.sid, { status: 1 }, { status: 3 })
-      })
-      return { stopped: true }
+    if (action === 'price' && owned.early_price != null && value <= Number(owned.early_price))
+      throw new BizError(1001, '现价需高于已设置的早鸟价 ' + fen2yuan(owned.early_price) + ' 元（请先关闭早鸟或调低早鸟价）')
+    if (action === 'early' && value && value.price != null) {
+      if (!Number.isInteger(Number(value.price)) || Number(value.price) <= 0) throw new BizError(1001, '早鸟价必须为正整数分')
+      if (Number(value.price) >= Number(owned.price_adult)) throw new BizError(1001, '早鸟价需低于原价')
     }
-    // A-35：停售可恢复（此前没有恢复通道，停售后永远不可卖）
-    if (action === 'resume_sell') {
-      await tx(async (c) => {
-        await c.upd('UPDATE tour_session SET status = 1 WHERE id = ? AND status = 3', [req.params.sid])
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'resume_sell', 'session-' + req.params.sid, { status: 3 }, { status: 1 })
-      })
-      return { resumed: true }
+    // A-07/A-35 口径保持:早鸟提前天数必须为非负整数(关闭 = price null)
+    if (action === 'early' && value && value.days != null && (!Number.isInteger(Number(value.days)) || Number(value.days) < 0)) {
+      throw new BizError(1001, '提前天数必须为非负整数')
     }
-    if (action === 'adjust_quota') {
-      // X-03：调名额同样走乐观锁 + 版本簿；报名人数在调整瞬间超过新名额也按冲突处理
-      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(owned.version)
-      await tx(async (c) => {
-        const n = await c.upd('UPDATE tour_session SET quota = ?, version = version + 1 WHERE id = ? AND version = ? AND booked <= ?', [value, req.params.sid, expected, value])
-        if (n !== 1) throw new BizError(2002, '该团期刚被其他端修改或报名人数已变化，请刷新团期后重试')
-        await recordVersion(c, { kind: 'session', refId: req.params.sid,
-          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['quota'], before: { quota: Number(owned.quota) }, after: { quota: value } },
-          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端调名额 · ' + changeReason : '商户端调名额' })
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'adjust_quota', 'session-' + req.params.sid, { quota: Number(owned.quota) }, { quota: value })
-      })
-      return { quota: value, version: expected + 1 }
-    }
-    if (action === 'price') {
-      // A-07：改现价同步校验——不得低于已设早鸟价，否则早鸟窗口内游客按更高价成交还显示"早鸟价"
-      const s = await one('SELECT early_price, price_adult, version FROM tour_session WHERE id = ?', [req.params.sid])
-      if (s && s.early_price != null && value <= Number(s.early_price))
-        throw new BizError(1001, '现价需高于已设置的早鸟价 ' + fen2yuan(s.early_price) + ' 元（请先关闭早鸟或调低早鸟价）')
-      // X-03：改价并发防护（乐观锁）+ 与 PC 共用同一份变更历史（master_data_version kind=session）
-      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(s.version)
-      await tx(async (c) => {
-        const n = await c.upd('UPDATE tour_session SET price_adult = ?, version = version + 1 WHERE id = ? AND version = ?', [value, req.params.sid, expected])
-        if (n !== 1) throw new BizError(2002, '该团期价格刚被其他端修改，请刷新团期后重试')
-        await recordVersion(c, { kind: 'session', refId: req.params.sid,
-          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['price_adult'], before: { price_adult: Number(s.price_adult) }, after: { price_adult: value } },
-          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端改价 · ' + changeReason : '商户端改价' })
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'price', 'session-' + req.params.sid, { price_adult: Number(s.price_adult) }, { price_adult: value })
-      })
-      return { price: value, version: expected + 1 }
-    }
-    if (action === 'early') {
-      // 早鸟价（旺季武器 §9 P1）：value={price, days}；price=null 关闭
-      // A-07：早鸟价必须为正整数且严格低于现价（负数早鸟会造出负金额订单）；early_days 必须为非负整数
-      const price = value && value.price != null ? Number(value.price) : null
-      const days = value && value.days != null ? Number(value.days) : 3
-      if (price != null && (!Number.isInteger(price) || price <= 0)) throw new BizError(1001, '早鸟价必须为正整数分')
-      if (value && value.days != null && (!Number.isInteger(days) || days < 0)) throw new BizError(1001, '提前天数必须为非负整数')
-      if (price != null && price >= (await one('SELECT price_adult FROM tour_session WHERE id = ?', [req.params.sid])).price_adult)
-        throw new BizError(1001, '早鸟价需低于原价')
-      // X-03：早鸟价同样走乐观锁 + 版本簿（与改现价共用同一份变更历史）
-      const expected = req.body.expectedVersion != null ? Number(req.body.expectedVersion) : Number(owned.version)
-      const nextDays = price == null ? null : days
-      await tx(async (c) => {
-        const n = await c.upd('UPDATE tour_session SET early_price = ?, early_days = ?, version = version + 1 WHERE id = ? AND version = ?', [price, nextDays, req.params.sid, expected])
-        if (n !== 1) throw new BizError(2002, '该团期刚被其他端修改，请刷新团期后重试')
-        await recordVersion(c, { kind: 'session', refId: req.params.sid,
-          snapshot: { source: 'merchant', operator: 'staff:' + u.uid, changedFields: ['early_price', 'early_days'],
-            before: { early_price: owned.early_price == null ? null : Number(owned.early_price), early_days: owned.early_days == null ? null : Number(owned.early_days) },
-            after: { early_price: price, early_days: nextDays } },
-          changedBy: 'merchant-staff:' + u.uid, reason: changeReason ? '商户端设置早鸟价 · ' + changeReason : '商户端设置早鸟价' })
-        await audit(c, 'merchant:' + u.merchantId, 'supply', 'set_early', 'session-' + req.params.sid, null, { earlyPrice: price, earlyDays: nextDays })
-      })
-      return { earlyPrice: price, earlyDays: nextDays, version: expected + 1 }
-    }
-    throw new BizError(1001, '未知操作')
+    const actor = await actorFromStaff(u)
+    const res = await submitSupplyRequest(actor, owned, action, payload, changeReason)
+    return { requestId: res.id, reqNo: res.reqNo, status: 'pending', idempotent: !!res.idempotent }
   },
 
   // 商户经营数据（7 日订单/核销趋势 + 本店评分 + 最新评价）

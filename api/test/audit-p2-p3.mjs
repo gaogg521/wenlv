@@ -176,18 +176,32 @@ await t('A34-1 商户趋势的核销数按核销日统计；订单号用业务�
 })
 
 console.log('== A-35 商户端库存操作 ==')
-await t('A35-1 停售可恢复；加名额/停售/改价有审计；非法输入有中文报错', async () => {
+await t('A35-1 停售可恢复；加名额/停售/改价有审计；非法输入有中文报错（V94 申请制口径：提交→批准→生效全程留痕）', async () => {
   const staff = await cLogin('a35staff')
   const sid = await mkSession({ days: 44 })
   const pid = Number((await one('SELECT product_id FROM tour_session WHERE id = ?', [sid])).product_id)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES ((SELECT merchant_id FROM tour_product WHERE id = ?), ?, 3)', [pid, staff.id])
   const mid = Number((await one('SELECT merchant_id FROM tour_product WHERE id = ?', [pid])).merchant_id)
   const mTok = ok(await call('POST', '/m/auth/login', { code: staff.code, merchantId: mid })).token
+  // V94:停售/恢复改为申请制——提交申请 → 超管批准 → 生效,审计随审批写入
   ok(await call('POST', `/m/supply/${sid}`, { action: 'stop_sell' }, mTok))
+  const A35tok = ok(await call('POST', '/admin/login', { username: 'admin', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' })).token
+  const findReq = async () => {
+    const reqs = ok(await call('GET', '/admin/subject-requests?view=approval&status=1&kind=session', null, A35tok))
+    return reqs.items.find(x => Number(x.resource_id) === Number(sid))
+  }
+  const stopReq = await findReq()
+  assert.ok(stopReq, '停售申请进入待审')
+  ok(await call('POST', '/admin/subject-requests/' + stopReq.id + '/approve', { confirm: { status: true }, note: 'A35 停售批准' }, A35tok))
+  assert.equal(Number((await one('SELECT status FROM tour_session WHERE id = ?', [sid])).status), 3, '停售批准后生效')
   ok(await call('POST', `/m/supply/${sid}`, { action: 'resume_sell' }, mTok)) // 此前无恢复通道
+  const resumeReq = await findReq()
+  assert.ok(resumeReq, '恢复申请进入待审')
+  ok(await call('POST', '/admin/subject-requests/' + resumeReq.id + '/approve', { confirm: { status: true }, note: 'A35 恢复批准' }, A35tok))
   assert.equal(Number((await one('SELECT status FROM tour_session WHERE id = ?', [sid])).status), 1, '恢复在售')
-  const audits = await q("SELECT id FROM audit_log WHERE biz_ref = ? AND module = 'supply'", ['session-' + sid])
-  assert.ok(audits.length >= 2, '停售与恢复都应有审计: ' + audits.length)
+  const audits = await q("SELECT id FROM audit_log WHERE module = 'subject-request' AND action = 'effective' AND after_val LIKE ?", ['%session-' + sid + '%'])
+  const audits2 = await q("SELECT id FROM audit_log WHERE module = 'subject-request' AND action = 'effective' AND biz_ref IN (?, ?)", ['req-' + stopReq.id, 'req-' + resumeReq.id])
+  assert.ok(audits.length + audits2.length >= 2, '停售与恢复的审批生效都应有审计: ' + (audits.length + audits2.length))
   const bad = await call('POST', `/m/supply/${sid}`, { action: 'adjust_quota', value: 1.5 }, mTok)
   assert.match(bad.msg || '', /名额|整数/, '中文报错: ' + bad.msg)
 })

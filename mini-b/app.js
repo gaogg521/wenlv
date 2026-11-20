@@ -14,7 +14,19 @@ function apiBaseForEnv() {
   try { return wx.getDeviceInfo().platform === 'devtools' ? API_BASE_DEV : API_BASE_LAN } catch (e) { return API_BASE_DEV }
 }
 
+const { refreshPerms } = require('./utils/api')
+
 App({
-  globalData: { apiBase: apiBaseForEnv(), token: '', merchant: null, role: 0 },
-  onLaunch() { const t = wx.getStorageSync('mtoken'); if (t) this.globalData.token = t; this.globalData.merchant = wx.getStorageSync('merchant') || null; this.globalData.role = wx.getStorageSync('mrole') || 0 },
+  globalData: { apiBase: apiBaseForEnv(), token: '', merchant: null, role: 0, permVersion: 0, perms: {} },
+  onLaunch() {
+    const t = wx.getStorageSync('mtoken'); if (t) this.globalData.token = t
+    this.globalData.merchant = wx.getStorageSync('merchant') || null
+    this.globalData.role = wx.getStorageSync('mrole') || 0
+    // V94:恢复本地权限快照(仅作入口展示;服务端每次敏感读写按库内最新权限判定)
+    const snap = wx.getStorageSync('mperm') || null
+    if (snap) { this.globalData.permVersion = Number(snap.version) || 0; this.globalData.perms = snap.perms || {} }
+    if (this.globalData.token) refreshPerms(true)
+  },
+  // V94:回前台刷新权限快照——PC 下发的新权限在回到小程序时可见
+  onShow() { if (this.globalData.token) refreshPerms(true) },
 })

@@ -99,6 +99,15 @@ export async function requireModule(req, moduleKey) {
   return p
 }
 
+/** V94 动作级授权闸:按员工有效动作集合(基线 ∪ 授予 − 收回)校验,撤销授权后旧会话即时被拒 */
+export async function requireAction(req, action) {
+  const p = await requireAdmin(req)
+  const { effectiveActionsFor } = await import('../domain/admin-capabilities.mjs')
+  const set = await effectiveActionsFor(p.uid, p.role)
+  if (!set.has(action)) throw new BizError(1003, '未获授权执行该操作(' + action + '),请联系超级管理员授予')
+  return p
+}
+
 /** 行级隔离：城市合伙人只能看自己城市；内部角色全量 */
 export function scopeFilter(admin, col = 'city_code') {
   const city = admin.scopeCity

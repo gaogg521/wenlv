@@ -203,18 +203,22 @@ try {
     assert.ok(audit2, '转派写审计')
   })
 
-  /* ---------- X-03 改价留痕与并发 ---------- */
-  await test('X-03 团期改价：乐观锁冲突明确拒绝；两端版本簿同一份（merchant/pc）', async () => {
+  /* ---------- X-03 改价留痕与并发（V94 申请制口径：商户端提交申请 → 批准生效,版本簿 source=subject-approval） ---------- */
+  await test('X-03 团期改价：乐观锁冲突明确拒绝；商户申请批准后版本簿同一份（subject-approval/pc）', async () => {
     const sid = session.id
     const cur = await one('SELECT version, price_adult FROM tour_session WHERE id = ?', [sid])
-    // 商户端：stale version → 2002 冲突
+    // 商户端：stale version → 2002 冲突（过期数据提交在受理时刻即拦截）
     const conflict = await call('POST', '/m/supply/' + sid, { action: 'price', value: Number(cur.price_adult) + 100, expectedVersion: Number(cur.version) + 5 }, mTok)
     assert.equal(conflict.code, 2002, '并发冲突明确提示（不静默覆盖）')
-    // 正确 version → 成功 + 版本簿 source=merchant
+    // 正确 version → 申请受理（待审）；批准后生效 + 版本簿 source=subject-approval
     const fine = await call('POST', '/m/supply/' + sid, { action: 'price', value: Number(cur.price_adult) + 100, expectedVersion: Number(cur.version) }, mTok)
-    assert.equal(fine.code, 0, '商户端改价成功')
+    assert.equal(fine.code, 0, '商户端改价申请受理成功')
+    const reqs = ok(await call('GET', '/admin/subject-requests?view=approval&status=1&kind=session', null, superTok))
+    const req = reqs.items.find(x => Number(x.resource_id) === Number(sid))
+    assert.ok(req, '改价申请在待审列表')
+    ok(await call('POST', '/admin/subject-requests/' + req.id + '/approve', { confirm: { price: true, stock: true }, note: 'X-03 回归批准' }, superTok))
     const mv = await one(`SELECT snapshot FROM master_data_version WHERE kind = 'session' AND ref_id = ? ORDER BY id DESC LIMIT 1`, [sid])
-    assert.equal((typeof mv.snapshot === 'string' ? JSON.parse(mv.snapshot) : mv.snapshot).source, 'merchant')
+    assert.equal((typeof mv.snapshot === 'string' ? JSON.parse(mv.snapshot) : mv.snapshot).source, 'subject-approval')
     // PC 编辑器路径改价 → 版本簿 source=pc（同一份历史）
     const pcv = await call('PUT', `/admin/entities/session/${sid}`, { values: { price_adult: (Number(cur.price_adult) + 200) / 100 } }, superTok)
     assert.equal(pcv.code, 0, 'PC 改价成功')
@@ -224,40 +228,51 @@ try {
     await q('UPDATE tour_session SET price_adult = ? WHERE id = ?', [cur.price_adult, sid])
   })
 
-  await test('X-03 补充：名额与早鸟价同样走乐观锁并写入同一份版本簿；批量调名额递增版本并留痕', async () => {
+  await test('X-03 补充：名额与早鸟价同样走乐观锁并写入同一份版本簿（V94 申请制：提交→批准→生效，source=subject-approval）', async () => {
     const sid = session.id
     const parse = (r) => (typeof r.snapshot === 'string' ? JSON.parse(r.snapshot) : r.snapshot)
     const lastSnap = async () => parse(await one(`SELECT snapshot FROM master_data_version WHERE kind = 'session' AND ref_id = ? ORDER BY id DESC LIMIT 1`, [sid]))
     const cur = await one('SELECT version, quota, booked, price_adult, early_price, early_days FROM tour_session WHERE id = ?', [sid])
+    const approveLatest = async (confirm) => {
+      const reqs = ok(await call('GET', '/admin/subject-requests?view=approval&status=1&kind=session', null, superTok))
+      const req = reqs.items.find(x => Number(x.resource_id) === Number(sid))
+      assert.ok(req, '待审申请应存在')
+      ok(await call('POST', '/admin/subject-requests/' + req.id + '/approve', { confirm, note: 'X-03 补充回归批准' }, superTok))
+    }
     try {
       const q1 = Number(cur.quota) + 1
-      // 名额：过期版本 → 2002；正确版本 → 成功、版本 +1、版本簿记录 quota 的前后值
+      // 名额：过期版本 → 2002（受理时刻拦截过期数据提交）；正确版本 → 申请受理，批准后版本 +1、版本簿记录 quota 前后值
       const stale = await call('POST', '/m/supply/' + sid, { action: 'adjust_quota', value: q1, expectedVersion: Number(cur.version) + 5 }, mTok)
       assert.equal(stale.code, 2002, '名额并发冲突明确提示')
       ok(await call('POST', '/m/supply/' + sid, { action: 'adjust_quota', value: q1, expectedVersion: Number(cur.version) }, mTok))
+      const midQ = await one('SELECT version, quota FROM tour_session WHERE id = ?', [sid])
+      assert.equal(Number(midQ.version), Number(cur.version), '审批前版本不变')
+      await approveLatest({ price: true, stock: true })
       const afterQ = await one('SELECT version, quota FROM tour_session WHERE id = ?', [sid])
-      assert.equal(Number(afterQ.version), Number(cur.version) + 1, '改名额后版本 +1')
+      assert.equal(Number(afterQ.version), Number(cur.version) + 1, '改名额批准后版本 +1')
       assert.equal(Number(afterQ.quota), q1)
-      let snap = await lastSnap()
-      assert.deepEqual(snap.changedFields, ['quota']); assert.equal(snap.source, 'merchant'); assert.equal(snap.after.quota, q1)
-      // 早鸟价：过期版本 → 2002；正确版本 → 成功、版本 +1、版本簿记录早鸟前后值
+      const snapQ = await lastSnap()
+      assert.deepEqual(snapQ.changedFields, ['quota']); assert.equal(snapQ.source, 'subject-approval'); assert.equal(Number(snapQ.after.quota), q1)
+      // 早鸟价：过期版本 → 2002；正确版本 → 申请受理，批准后版本 +1、版本簿记录早鸟前后值
       const ep = Math.max(1, Math.floor(Number(cur.price_adult) / 2))
       const staleE = await call('POST', '/m/supply/' + sid, { action: 'early', value: { price: ep, days: 3 }, expectedVersion: Number(afterQ.version) + 5 }, mTok)
       assert.equal(staleE.code, 2002, '早鸟价并发冲突明确提示')
       ok(await call('POST', '/m/supply/' + sid, { action: 'early', value: { price: ep, days: 3 }, expectedVersion: Number(afterQ.version) }, mTok))
+      await approveLatest({ price: true })
       const afterE = await one('SELECT version, early_price FROM tour_session WHERE id = ?', [sid])
-      assert.equal(Number(afterE.version), Number(afterQ.version) + 1, '改早鸟价后版本 +1')
-      snap = await lastSnap()
-      assert.deepEqual(snap.changedFields, ['early_price', 'early_days']); assert.equal(snap.after.early_price, ep)
-      // 批量调名额：生效、版本 +1、版本簿 source=merchant
+      assert.equal(Number(afterE.version), Number(afterQ.version) + 1, '改早鸟价批准后版本 +1')
+      const snapE = await lastSnap()
+      assert.deepEqual(snapE.changedFields, ['early_price', 'early_days']); assert.equal(Number(snapE.after.early_price), ep)
+      // 批量调名额：创建申请、批准后版本 +1、版本簿 source=subject-approval
       const q2 = q1 + 1
       const batch = ok(await call('POST', '/m/supply/batch', { ids: [sid], action: 'adjust_quota', value: q2 }, mTok))
-      assert.equal(batch.applied, 1); assert.deepEqual(batch.conflicts, [])
+      assert.equal(batch.created, 1); assert.deepEqual(batch.conflicts, [])
+      await approveLatest({ price: true, stock: true })
       const afterB = await one('SELECT version, quota FROM tour_session WHERE id = ?', [sid])
-      assert.equal(Number(afterB.version), Number(afterE.version) + 1, '批量调名额后版本 +1')
+      assert.equal(Number(afterB.version), Number(afterE.version) + 1, '批量调名额批准后版本 +1')
       assert.equal(Number(afterB.quota), q2)
-      snap = await lastSnap()
-      assert.deepEqual(snap.changedFields, ['quota']); assert.equal(snap.source, 'merchant')
+      const snapB = await lastSnap()
+      assert.deepEqual(snapB.changedFields, ['quota']); assert.equal(snapB.source, 'subject-approval')
     } finally {
       await q('UPDATE tour_session SET quota = ?, early_price = ?, early_days = ?, version = ? WHERE id = ?',
         [cur.quota, cur.early_price, cur.early_days, cur.version, sid])

@@ -207,8 +207,11 @@ async function orderFiltersOf(req, a) {
 const admin = {
   'GET /admin/capabilities': async (req) => {
     const a = await requireAdmin(req)
+    // V94:动作集合按员工有效口径下发(基线角色映射 ∪ 授予 − 收回),前端按钮与网关校验同源
+    const { effectiveActionsFor } = await import('../domain/admin-capabilities.mjs')
+    const eff = await effectiveActionsFor(a.uid, a.role)
     const actions = Object.fromEntries(Object.entries(ADMIN_ACTIONS).map(([key, rule]) => [key, {
-      allowed: rule.roles.includes(a.role), reason: '需' + rule.label,
+      allowed: eff.has(key), reason: '需' + rule.label,
     }]))
     for (const kind of entities.kinds()) {
       const sc = entities.get(kind)
@@ -474,6 +477,16 @@ const admin = {
         settleCount: Number(rev.settleCount) || 0, payableFen: Number(rev.payable) || 0, paidFen: Number(rev.paid) || 0,
         orders: Number(cityGmv.orders) || 0, gmvFen: Number(cityGmv.gmv) || 0, merchantsPending: Number(pendingMerchants.c) || 0 }
     }
+    // V94:主体资源待审数(超管/获授权运营可见口径)与本人站内未读——待审数与未读数分别计算
+    const subjectApprovalMod = await (async () => {
+      const mod = await import('../domain/subject-approval.mjs')
+      const caps = await import('../domain/admin-capabilities.mjs')
+      const canApprove = (await caps.effectiveActionsFor(a.uid, a.role)).has('subject.approve')
+      return {
+        subjectRequests: canApprove || a.role === 'super' ? await mod.approvalPendingCount() : 0,
+        inboxUnread: await mod.inboxUnread(a.uid),
+      }
+    })()
     return {
       period: { range: per.range, label: per.label, from: per.from, to: per.to, days: per.days },
       pending: {
@@ -482,7 +495,9 @@ const admin = {
         notes: Number(pendingNotes.c) || 0,
         merchants: Number(pendingMerchants.c) || 0,
         tasks: Number(pendingTasks.c) || 0,
+        subjectRequests: subjectApprovalMod.subjectRequests,
       },
+      inboxUnread: subjectApprovalMod.inboxUnread,
       topTours, topToursTotal,
       statusMix: statusMix.map((r) => ({ status: Number(r.s), count: Number(r.c) })),
       revenue,
@@ -845,6 +860,8 @@ const admin = {
   },
   'POST /admin/products': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    // V94 主体直写收口:商户主体新增商品走「主体工作台 → 新增商品」申请审批流,旧直写入口一律拦截
+    if (a.role === 'merchant_partner') throw new BizError(1003, '主体方新增商品已改为审批制,请进入「主体工作台 → 新增商品」提交申请')
     const subP = subjectScope(a)
     const { title, cat, cityCode, channelId, merchantId, priceFrom, beanGift, daysDesc, subtitle, status,
       intro, includes, highlights, meetingPoint, safetyNote, supplierId, scenicId } = req.body
@@ -871,6 +888,8 @@ const admin = {
   // 编辑商品内容（P0 宣传力：行程/费用包含/亮点/集合点/安全告知）
   'PUT /admin/products/:id': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    // V94 主体直写收口:商品修改走「主体工作台」申请审批流
+    if (a.role === 'merchant_partner') throw new BizError(1003, '主体方修改商品已改为审批制,请进入「主体工作台」提交变更申请')
     const p = await one('SELECT rich_desc, price_from, status, title, bean_gift, supplier_id, scenic_id, updated_version, merchant_id FROM tour_product WHERE id = ?', [req.params.id])
     if (!p) throw new BizError(1004, '商品不存在')
     if (a.role === 'merchant_partner') { const subE = subjectScope(a); if (!subE.merchantId || Number(subE.merchantId) !== Number(p.merchant_id)) throw new BizError(1003, '仅可编辑本店商品') } // V82
@@ -1000,6 +1019,8 @@ const admin = {
 
   'POST /admin/products/:id/status': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    // V94 主体直写收口:上下架申请走「主体工作台」审批流
+    if (a.role === 'merchant_partner') throw new BizError(1003, '主体方上下架已改为审批制,请在「主体工作台」提交上下架申请')
     if (a.role === 'merchant_partner') { const subS = subjectScope(a); const own = subS.merchantId && (await one('SELECT id FROM tour_product WHERE id = ? AND merchant_id = ?', [req.params.id, subS.merchantId])); if (!own) throw new BizError(1003, '仅可操作本店商品') } // V82
     if (![0,1].includes(Number(req.body.status))) throw new BizError(1001, '商品状态无效')
     if (Number(req.body.status) === 1) {
@@ -1028,12 +1049,14 @@ const admin = {
     if (!p) throw new BizError(1004, '商品不存在')
     if (a.scopeCity && String(a.scopeCity) !== String(p.city_code)) throw new BizError(1003, '仅可查看本城商品团期')
     if (a.role === 'merchant_partner' && Number(subjectScope(a).merchantId) !== Number(p.merchant_id)) throw new BizError(1003, '仅可查看本店商品')
-    const stock = p.cat === 'shop' ? await one('SELECT quota - booked available FROM tour_session WHERE stock_product_id = ?', [p.id]) : null
+    const stock = p.cat === 'shop' ? await one('SELECT id, version, quota - booked available FROM tour_session WHERE stock_product_id = ?', [p.id]) : null
     const sessions = stock ? [] : await q('SELECT id, depart_date, quota, booked, min_go, price_adult, early_price, status FROM tour_session WHERE product_id = ? AND depart_date IS NOT NULL ORDER BY depart_date DESC', [p.id])
     return { title: p.title, cat: p.cat, priceFrom: Number(p.price_from), sessions, stock }
   },
   'PUT /admin/products/:id/stock': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    // V94 主体直写收口:直购库存调整走「主体工作台」审批流
+    if (a.role === 'merchant_partner') throw new BizError(1003, '主体方库存调整已改为审批制,请在「主体工作台」提交库存变更申请')
     const { available, previous } = req.body
     if (!Number.isInteger(available) || available < 0 || available > 1000000) throw new BizError(1001, '库存须为 0–1000000 的整数')
     return tx(async (c) => {
@@ -1050,6 +1073,8 @@ const admin = {
   },
   'POST /admin/sessions': async (req) => {
     const a = await requireAdmin(req, ['super', 'ops', 'merchant_partner'])
+    // V94 主体直写收口:排团期走「主体工作台」审批流(新增商品可携带首批团期合并生效)
+    if (a.role === 'merchant_partner') throw new BizError(1003, '主体方排团期已改为审批制,请在「主体工作台」提交团期申请')
     const { productId, departDate, quota, minGo, priceAdult, earlyPrice, earlyDays } = req.body
     if (a.role === 'merchant_partner') { const subSes = subjectScope(a); const own = subSes.merchantId && (await one('SELECT id FROM tour_product WHERE id = ? AND merchant_id = ?', [productId, subSes.merchantId])); if (!own) throw new BizError(1003, '仅可为本店商品排团期') } // V82
     if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate || '') || !Number.isInteger(Number(quota)) || Number(quota) < 1 || !Number.isInteger(Number(priceAdult)) || Number(priceAdult) < 1) throw new BizError(1001, '请填写有效日期、正整数名额和价格')
@@ -1126,11 +1151,15 @@ const admin = {
   },
   'POST /admin/entities/:kind': async (req) => {
     const a = await requireAdmin(req)
+    // V94 主体直写收口:主体方资源写入走「主体工作台」申请审批流,直接调用接口同样拦截
+    if (a.role === 'merchant_partner' || a.role === 'scenic_partner') throw new BizError(1003, '主体方资源写入已改为审批制,请进入「主体工作台」提交申请')
     return entities.save(req.params.kind, req.body.values || {}, { admin: a, parentId: Number(req.body.parentId) || null,
       audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
   },
   'PUT /admin/entities/:kind/:id': async (req) => {
     const a = await requireAdmin(req)
+    // V94 主体直写收口:主体方资源写入走「主体工作台」申请审批流,直接调用接口同样拦截
+    if (a.role === 'merchant_partner' || a.role === 'scenic_partner') throw new BizError(1003, '主体方资源写入已改为审批制,请进入「主体工作台」提交申请')
     return entities.save(req.params.kind, req.body.values || {}, { admin: a, id: req.params.id,
       expectedVersion: req.body.expectedVersion, versionReason: req.body.versionReason,
       audit: (c, m, act, ref, b, af) => audit(c, 'admin:' + a.name, m, act, ref, b, af) }, tx)
