@@ -465,3 +465,18 @@ body{background:var(--paper);color:var(--ink);font-weight:400;line-height:1.85}h
 .tp-flow li{flex:auto;min-width:0}
 .tp-flow li:last-child{grid-column:1/-1;justify-self:center;width:50%}
 }
+
+/* ==== 2026-11-20 链上视图科技感光效（纯叠加层：不触碰 SVG 形体 / 文案 / 布局） ==== */
+@keyframes cvAura{0%,100%{opacity:.3;transform:translate(-50%,-50%) scale(.8)}50%{opacity:.9;transform:translate(-50%,-50%) scale(1.1)}}
+@keyframes cvBeam{0%,100%{opacity:0;transform:translateX(-50%) scaleY(.45)}45%{opacity:.8;transform:translateX(-50%) scaleY(1)}}
+@keyframes cvBusScan{0%{background-position:120% 0}100%{background-position:-120% 0}}
+
+/* 立方体背后柔光晕：沿用每个节点已有的 --cube 色彩，按 --i 错相位依次呼吸 */
+.cv-cube{isolation:isolate}
+.cv-cube::before{content:"";position:absolute;left:50%;top:46%;z-index:-1;width:calc(var(--s)*2.2);height:calc(var(--s)*2.2);border-radius:50%;pointer-events:none;opacity:.45;background:radial-gradient(circle,color-mix(in srgb,var(--cube) 40%,transparent) 0%,color-mix(in srgb,var(--cube) 12%,transparent) 44%,transparent 72%);filter:blur(3px);animation:cvAura 3.6s ease-in-out infinite;animation-delay:calc(var(--i,0)*.32s)}
+/* 底部能量注入光柱：从立方体底面向上收束的细光 */
+.cv-cube::after{content:"";position:absolute;left:50%;bottom:-3px;z-index:2;width:3px;height:28px;margin-left:-1.5px;border-radius:3px;pointer-events:none;opacity:0;background:linear-gradient(to top,color-mix(in srgb,var(--cube) 72%,transparent),transparent);box-shadow:0 0 10px color-mix(in srgb,var(--cube) 55%,transparent);transform-origin:bottom center;animation:cvBeam 3.6s ease-in-out infinite;animation-delay:calc(var(--i,0)*.32s)}
+/* 数据总线扫描光带：横贯六步链、周期性扫过，位于立方体之后 */
+.cv-steps{isolation:isolate}
+.cv-steps::after{content:"";position:absolute;z-index:0;pointer-events:none;top:26px;left:4%;right:4%;height:64px;border-radius:12px;background:linear-gradient(90deg,transparent 0%,transparent 43%,rgba(160,205,255,.2) 50%,transparent 57%,transparent 100%);background-size:220% 100%;background-position:120% 0;animation:cvBusScan 6s linear infinite}
+.cv-steps>.cv-step{z-index:1}
