@@ -1,0 +1,51 @@
+{
+ "report": [
+  {
+   "pg": "pages/index/index",
+   "ok": true,
+   "err": "login"
+  },
+  {
+   "pg": "pages/orders/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/supply/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/me/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/verify/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/records/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/settlement/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/order-detail/index",
+   "ok": true,
+   "err": null
+  },
+  {
+   "pg": "pages/honor/index",
+   "ok": true,
+   "err": null
+  }
+ ],
+ "errors": [],
+ "paid": "WL202611067947648723"
+}

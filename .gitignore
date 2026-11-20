@@ -42,3 +42,15 @@ backup/*.sql.gz
 backup/*.txt
 api/start-*.cmd
 api/.env*
+
+# 本机杂项：不入库（2026-11-20 清理）
+automator-shots-*/
+backup-20261105/
+brand-logo/
+/*.docx
+/*.pdf
+/*.png
+/向往的自由-*.html
+/智能纪要*
+docs/PPT素材-20261108/PC后台-整页/
+docs/PPT素材-20261108/PC后台-首屏/

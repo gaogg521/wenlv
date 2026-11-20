@@ -2,8 +2,10 @@
 // develop：本机回环 / 局域网真机联调；trial / release：HTTPS 合法域名（提审前由负责人改成真实域名，静态校验兜底）
 const LAN_IP = '172.29.128.120'
 const API_BASE_DEV = 'http://127.0.0.1:8080'
-const API_BASE_LAN = 'http://' + LAN_IP + ':8080'
-const API_BASE_RELEASE = 'https://api.wenlv.example'
+// 真机（开发版/体验版/正式版）统一走公网，任何网络都可用；
+// 需要局域网联调时，把 API_BASE_LAN 临时改回 'http://' + LAN_IP + ':8080'
+const API_BASE_LAN = 'https://api.1work.vip'
+const API_BASE_RELEASE = 'https://api.1work.vip'
 
 function apiBaseForEnv() {
   let env = 'develop'

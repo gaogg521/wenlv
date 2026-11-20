@@ -2,13 +2,15 @@
 // tabBar 5 个（D14 赵老师拍板商城一级位）
 
 // ===== 后端地址：按 envVersion 分环境（A-19）=====
-// develop（开发者工具/开发版）：模拟器走本机回环；真机走电脑局域网 IP（ipconfig 查看 WLAN IPv4，变了只改 LAN_IP）
-// trial（体验版）/ release（正式版）：必须是 HTTPS 合法域名（小程序后台「服务器域名」已备案配置的地址）。
-// 注意：正式域名为占位常量，提审前由负责人改成真实 HTTPS 域名；静态校验保证 trial/release 分支不可能请求 http 或内网地址。
+// develop（开发者工具）：模拟器走本机回环 127.0.0.1:8080
+// develop（真机）/ trial（体验版）/ release（正式版）：统一走公网 https://api.1work.vip（已备案域名 + Let's Encrypt 证书）
+// 静态校验仍保证 trial/release 分支不可能请求 http 或内网地址。
 const LAN_IP = '172.29.128.120'
 const API_BASE_DEV = 'http://127.0.0.1:8080'
-const API_BASE_LAN = 'http://' + LAN_IP + ':8080'
-const API_BASE_RELEASE = 'https://api.wenlv.example'
+// 真机（开发版/体验版/正式版）统一走公网，任何网络都可用；
+// 需要局域网联调时，把 API_BASE_LAN 临时改回 'http://' + LAN_IP + ':8080'
+const API_BASE_LAN = 'https://api.1work.vip'
+const API_BASE_RELEASE = 'https://api.1work.vip'
 
 function apiBaseForEnv() {
   let env = 'develop'

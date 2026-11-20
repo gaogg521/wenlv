@@ -1,0 +1,403 @@
+[
+ {
+  "id": "T01",
+  "title": "游客取消未支付订单：旅豆与名额是否归还",
+  "facts": {
+   "下单前余额": 500,
+   "下单后余额": 300,
+   "下单后已报": 2,
+   "取消响应": {
+    "closed": true
+   },
+   "取消后状态": 90,
+   "取消后余额": 300,
+   "取消后已报": 2,
+   "跑超时任务后余额": 300,
+   "跑超时任务后已报": 2
+  }
+ },
+ {
+  "id": "T02",
+  "title": "未成团取消：未支付订单已抵扣的旅豆是否归还",
+  "facts": {
+   "下单前": 500,
+   "下单后": 400,
+   "团期取消后订单状态": 90,
+   "关单原因": "group_cancel",
+   "取消后余额": 400
+  }
+ },
+ {
+  "id": "T03",
+  "title": "未成团：退款后再免费改签（是否既退钱又得票；改签单能否核销；能否再退一次）（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-11-07' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T04",
+  "title": "旅豆过期任务：同一批旧豆是否被重复扣减（任务每分钟跑一次）",
+  "facts": {
+   "初始余额": 1000,
+   "过期量": 300,
+   "第1轮后": 700,
+   "第2轮后": 400,
+   "第3轮后": 100
+  }
+ },
+ {
+  "id": "T04b",
+  "title": "旅豆过期：已花掉的旧豆是否仍被当作过期再扣一次",
+  "facts": {
+   "旧豆已全部花掉后余额": 400,
+   "过期任务后余额": 100
+  }
+ },
+ {
+  "id": "T05",
+  "title": "暗号核销：不带订单号时核销的是谁的单（商户端实际就是不带）",
+  "facts": {
+   "到场游客A订单": "WL202611067641755831",
+   "A状态": 30,
+   "未到场B订单60天后出发": "WL202611067641757592",
+   "B状态": 40,
+   "响应": {
+    "ok": true,
+    "reason": "暗号对上了 · 已核销 1 张凭证",
+    "orderNo": "WL202611067641757592",
+    "verified": 1,
+    "counterPhrase": "对答乙"
+   },
+   "B的核销日志": [
+    {
+     "merchant_id": 0,
+     "method": 3,
+     "result": 1
+    },
+    {
+     "merchant_id": 1,
+     "method": 4,
+     "result": 1
+    }
+   ]
+  }
+ },
+ {
+  "id": "T05b",
+  "title": "暗号核销：指定已退款单 / 多人单的流水（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T06",
+  "title": "一键获取手机号：接口返回值能否通过下单页校验",
+  "facts": {
+   "接口返回": {
+    "phone": "138****6456",
+    "mock": true
+   },
+   "通过下单校验": false
+  }
+ },
+ {
+  "id": "T07",
+  "title": "离线核销上传：断网时扫到的码，5 分钟后上传是否通过（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T08",
+  "title": "核销码页：接口是否带订单号（暗号依赖）；已核销凭证点「查看」（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T09",
+  "title": "跨端令牌与冻结：商户令牌调游客接口；冻结后商户令牌是否仍可用",
+  "facts": {
+   "商户令牌调c_me": {
+    "code": 0,
+    "nick": "旅友904001"
+   },
+   "冻结后游客令牌": {
+    "code": 1003
+   },
+   "冻结后商户工作台": {
+    "code": 0
+   },
+   "冻结后商户令牌调c_me": {
+    "code": 0
+   }
+  }
+ },
+ {
+  "id": "T10",
+  "title": "商户早鸟价：负数/高于现价；下单金额（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T11",
+  "title": "实名：身份证是否明文入库；校验强度",
+  "facts": {
+   "响应": {
+    "submitted": true,
+    "masked": "110***********123X"
+   },
+   "id_no_enc实际内容": "11010119900307123X|张三丰",
+   "全X身份证": {
+    "submitted": true,
+    "masked": "XXX***********XXXX"
+   }
+  }
+ },
+ {
+  "id": "T12",
+  "title": "约稿：同一篇笔记投多个任务；字数要求；各拿多少奖励",
+  "facts": {
+   "笔记状态": 2,
+   "任务1提交": {
+    "submitted": true
+   },
+   "任务2提交同一笔记": {
+    "submitted": true
+   },
+   "裁决": [
+    {
+     "finished": true,
+     "rewarded": 200,
+     "cashReward": 0
+    },
+    {
+     "finished": true,
+     "rewarded": 200,
+     "cashReward": 0
+    }
+   ],
+   "奖励前": 0,
+   "奖励后": 400
+  }
+ },
+ {
+  "id": "T13",
+  "title": "推广：自买返佣；归因首触 vs 末次；计佣基数（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T14",
+  "title": "推广客户列表：未支付/已关闭订单是否被当作成交（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T17",
+  "title": "先用商户端后用游客端（同 unionid）：游客 openid 是否写入",
+  "facts": {
+   "用户行": {
+    "mini_a_openid": null,
+    "mini_b_openid": "mock-openid-mock-aud-t17-mw538mld",
+    "unionid": "mock-union-mock-aud-t17-mw538mld"
+   },
+   "旅豆账户数": 0
+  }
+ },
+ {
+  "id": "T19",
+  "title": "列表与首页数据：主题游列表是否混入商城；首页团期是否含下架商品",
+  "facts": {
+   "主题游全部条数": 6,
+   "其中商城商品": 3,
+   "首页团期含下架商品条数": 2,
+   "详情接口": "商品不存在或已下架",
+   "列表项字段含bean": false
+  }
+ },
+ {
+  "id": "T20",
+  "title": "订单时间线下发给游客的内容（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T22",
+  "title": "公开接口：匿名枚举结算单",
+  "facts": {
+   "http": 200,
+   "code": 0,
+   "data": "{\"found\":true,\"bizType\":\"settlement\",\"bizRef\":\"settle-1\",\"settlementId\":1,\"payloadHash\":\"f46927ca8b3626f644f266d8de304c3afd1528644938ba7e1093afb3e92badf4\",\"merkleRoot\":null,\"prevRoot\":null,\"leafPath\":null,\"leafIndex\":null,\"proofValid\":null,\"merkleVersion\":1,\"canonicalValid\":true,\"batchSeq\":null,\"status\":2,\"chainRef\":null,\"anchoredAt\":null,\"note\":\"已入队待打包（小时级批次）\",\"privacy\":\"本接口不返回金额、商户名与订单明细\"}"
+  }
+ },
+ {
+  "id": "T23",
+  "title": "后台登录：连续错误密码是否限制",
+  "facts": {
+   "三十次错误中按普通错误返回": 30,
+   "随后正确密码登录": true
+  }
+ },
+ {
+  "id": "T25",
+  "title": "提现审批并发：同一申请并发通过",
+  "facts": {
+   "并发结果": [
+    {
+     "status": 1
+    },
+    {
+     "status": 1
+    }
+   ],
+   "最终流水号": "PAYREF-BBB222"
+  }
+ },
+ {
+  "id": "T26",
+  "title": "退款连点：并发两次的结果与遗留数据（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T27",
+  "title": "评价连点：并发是否产生多条（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T28",
+  "title": "下单入参：联系方式服务端校验（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T31",
+  "title": "核销日期：未到出发日 / 已过出发日的凭证（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2027-01-05' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T33",
+  "title": "笔记：详情接口是否带内部机审字段；外链图片",
+  "facts": {
+   "发布": {
+    "id": 2,
+    "status": 2,
+    "secMock": true,
+    "imgChecked": 1,
+    "msg": "已发布"
+   },
+   "详情body": {
+    "text": "<p>正文正文正文</p>",
+    "images": [
+     "http://evil.example/a.png"
+    ],
+    "imgSec": [
+     {
+      "url": "http://evil.example/a.png",
+      "mock": true,
+      "traceId": "mock-1793976419660"
+     }
+    ]
+   },
+   "关联不存在商品": 99999999
+  }
+ },
+ {
+  "id": "T35",
+  "title": "分润回单：直接访问与受控下载",
+  "facts": {
+   "上传": {
+    "url": "/receipts/receipt_1793976419673_2246.png"
+   },
+   "直接访问http": 404
+  }
+ },
+ {
+  "id": "T36",
+  "title": "返豆承诺 vs 实际到账（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T38",
+  "title": "核销员角色：底部标签对应接口",
+  "facts": {
+   "/m/orders": "需要店长及以上权限",
+   "/m/supply": "需要店长及以上权限",
+   "/m/stats": "需要店长及以上权限",
+   "/m/settlements": "需要店长及以上权限",
+   "/m/verify/records": "ok",
+   "/m/workbench": "ok",
+   "离线名单给核销员": {
+    "凭证": 1,
+    "码数": 33,
+    "字段": [
+     "pass_id",
+     "name",
+     "order_no",
+     "contact_name",
+     "title"
+    ]
+   }
+  }
+ },
+ {
+  "id": "T41",
+  "title": "头像地址：接口返回值",
+  "facts": {
+   "上传返回": {
+    "url": "/uploads/avatar_40.png"
+   },
+   "c_me返回": "/uploads/avatar_40.png",
+   "非图片内容被接受": true
+  }
+ },
+ {
+  "id": "T45",
+  "title": "被关闭后才到账的支付：是否留痕（探针异常）",
+  "facts": {
+   "error": "Duplicate entry '1-2026-12-06' for key 'tour_session.uk_prod_date'"
+  }
+ },
+ {
+  "id": "T48",
+  "title": "轮播跳转：链接值与跳转方式",
+  "facts": {
+   "轮播": []
+  }
+ },
+ {
+  "id": "T50",
+  "title": "商户申请：驳回路径",
+  "facts": {
+   "申请": {
+    "id": 4,
+    "merchantNo": "MAPPLY3976419744",
+    "msg": "已提交，审核通过后重新登录即可进入门店"
+   },
+   "重复": "已有待审核申请，请勿重复提交",
+   "列表": [
+    {
+     "id": 4,
+     "name": "审计门店mw538mld",
+     "status": 0,
+     "merchant_no": "MAPPLY3976419744",
+     "created_at": "2026-11-06 22:46:59.744",
+     "approved_at": null
+    }
+   ]
+  }
+ }
+]

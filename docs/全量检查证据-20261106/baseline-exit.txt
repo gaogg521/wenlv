@@ -1,0 +1,3 @@
+seed=0
+npmtest=0
+testdb=0
