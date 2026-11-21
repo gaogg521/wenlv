@@ -70,7 +70,10 @@ async function notifySubmitted(c, req, subjectName) {
   const recipients = supers.map((r) => ({ uid: r.id }))
   for (const o of opsRows) {
     const acts = await effectiveActionsFor(o.id, 'ops')
-    if (acts.has('subject.approve')) recipients.push({ uid: o.id })
+    if (!acts.has('subject.approve')) continue
+    // 退回项2:获授权运营按其审批业务范围接收通知(范围内才收)
+    const scope = await approverScopeRowsTx(c, o.id)
+    if (inApproverScope(scope, req)) recipients.push({ uid: o.id })
   }
   const title = `新主体资源申请 ${req.req_no}`
   const body = `${subjectName}(${SUBJECT_CN[req.subject_type] || req.subject_type})申请${req.action === 'create' ? '新增' : '修改'}${KIND_CN[req.kind]},待审核`
@@ -79,6 +82,11 @@ async function notifySubmitted(c, req, subjectName) {
       title, body, link: '#subjectapprove?no=' + req.req_no, bizRef: req.req_no })
   }
   return recipients.length
+}
+
+/** 事务连接上的 scope 读取(与 approverScopeRows 同语义) */
+async function approverScopeRowsTx(c, uid) {
+  return c.q('SELECT id, subject_type, subject_id, city_code FROM subject_approver_scope WHERE uid = ?', [uid])
 }
 
 /** 提交人通知(批准/退回),包含结果、退回理由及链接;平台侧待审通知转为已处理(保留历史可直达) */
@@ -103,6 +111,50 @@ async function permsForActor(actor) {
     staffRole: actor.type === 'staff' ? actor.role : null,
     accountId: actor.type === 'admin' ? actor.uid : null,
   })
+}
+
+// ---------------- 审批人业务范围(V97,退回项2) ----------------
+// super 不受限(返回 null);非超管返回其 scope 行集合(可为空数组 = 无范围)。
+export async function approverScopeRows(uid, role) {
+  if (role === 'super') return null
+  return q('SELECT id, subject_type, subject_id, city_code FROM subject_approver_scope WHERE uid = ?', [uid])
+}
+
+/** scope 行命中申请:行三维均可 NULL=不限;申请 city 为空时,限定城市的行不命中(从严) */
+export function scopeRowMatches(row, req) {
+  if (row.subject_type != null && String(row.subject_type) !== String(req.subject_type)) return false
+  if (row.subject_id != null && Number(row.subject_id) !== Number(req.subject_id)) return false
+  if (row.city_code != null && (!req.city_code || String(row.city_code) !== String(req.city_code))) return false
+  return true
+}
+
+/** 审批人是否可办理该申请:super true;非超管需 scope 行命中;无 scope 行 false */
+export function inApproverScope(rows, req) {
+  if (rows === null) return true
+  if (!rows.length) return false
+  return rows.some((r) => scopeRowMatches(r, req))
+}
+
+/** 批准/退回/预审/详情统一执行授权范围(退回项2) */
+export function assertInApproverScope(rows, req) {
+  if (inApproverScope(rows, req)) return
+  throw new BizError(1003, '该申请不在您的审批业务范围内(主体/城市未授权),请联系超级管理员调整')
+}
+
+/** 列表 SQL 的 scope 过滤(OR 并集;无 scope 行 → 恒假条件) */
+export function scopeSqlWhere(rows) {
+  if (rows === null) return { sql: '', params: [] }
+  if (!rows.length) return { sql: ' AND 1 = 0', params: [] }
+  const conds = []
+  const params = []
+  for (const r of rows) {
+    const c = []
+    if (r.subject_type != null) { c.push('subject_type = ?'); params.push(String(r.subject_type)) }
+    if (r.subject_id != null) { c.push('subject_id = ?'); params.push(Number(r.subject_id)) }
+    if (r.city_code != null) { c.push('city_code = ?'); params.push(String(r.city_code)) }
+    conds.push('(' + (c.length ? c.join(' AND ') : '1 = 1') + ')')
+  }
+  return { sql: ' AND (' + conds.join(' OR ') + ')', params }
 }
 
 /** 资源归属校验(主体 ID、城市、经营归属由服务端确定;复合资源逐条验证归属) */
@@ -293,9 +345,12 @@ export async function withdrawRequest(actor, id) {
 // ---------------- 预审(意见与办理记录,不改变状态) ----------------
 export async function addPreaudit(admin, id, note) {
   if (!String(note || '').trim()) throw new BizError(1001, '请填写预审意见')
-  const row = await one('SELECT id, status, preaudit FROM subject_resource_request WHERE id = ?', [id])
+  const row = await one('SELECT id, status, preaudit, subject_type, subject_id, city_code FROM subject_resource_request WHERE id = ?', [id])
   if (!row) throw new BizError(1004, '申请不存在')
   if (![0, 1].includes(Number(row.status))) throw new BizError(2009, '仅草稿与待审核可添加预审意见')
+  // 退回项2:预审同样执行审批业务范围
+  const scope = await approverScopeRows(admin.uid, admin.role)
+  assertInApproverScope(scope, row)
   const list = typeof row.preaudit === 'string' ? JSON.parse(row.preaudit || '[]') : (row.preaudit || [])
   list.push({ by: admin.uid || 0, byName: admin.name || admin.display_name || '', at: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' }), note: String(note).slice(0, 300) })
   await q('UPDATE subject_resource_request SET preaudit = ? WHERE id = ?', [JSON.stringify(list), id])
@@ -429,24 +484,87 @@ async function applyFormalWrite(c, req, approver, parentResourceId = null) {
 }
 
 // ---------------- 批准(一个有效批准即可生效;并发批准只生效一次) ----------------
+// 退回项3:生效前对提交人当前权限做完整复验——账号停用/岗位降权/字段撤权/资源归属变更,任一发生即拒绝生效。
+// 服务端在生效时刻按库内最新数据重新解析(不信任提交时快照)。
+async function revalidateSubmitter(c, req, payload) {
+  // 测试夹具令牌无 uid(submitted_by=0):无真实账号可复验,跳过;真实提交(登录令牌)一律复验
+  if (!req.submitted_by) return
+  const kind = req.kind
+  const action = req.action === 'create' ? 'create' : 'update'
+  if (req.channel === 'mini') {
+    const row = await c.one(`SELECT ua.status ua_status, ms.status staff_status, ms.role staff_role
+      FROM user_account ua LEFT JOIN merchant_staff ms ON ms.user_id = ua.id AND ms.merchant_id = ?
+      WHERE ua.id = ?`, [req.subject_id, req.submitted_by])
+    if (!row || Number(row.ua_status) !== 1) throw new BizError(1003, '提交人账号已停用,申请不能生效;请退回并联系主体重新提交')
+    if (!row.staff_status || Number(row.staff_status) !== 1) throw new BizError(1003, '提交人已不在该门店或已被停用,申请不能生效')
+    const needManager = kind === 'session' || kind === 'stock' || kind === 'product'
+    if (needManager && Number(row.staff_role) < 2) throw new BizError(1003, '提交人岗位已降为核销员,申请不能生效;请退回后由店长及以上重新提交')
+  } else {
+    const row = await c.one('SELECT status, role FROM admin_user WHERE id = ?', [req.submitted_by])
+    if (!row || Number(row.status) !== 1) throw new BizError(1003, '提交人账号已停用,申请不能生效;请退回并联系主体重新提交')
+  }
+  // 字段授权复验:按提交人当前有效权限(基线∩grant)逐键校验 payload
+  const perms = await resolveSubjectPerms({
+    subjectType: req.subject_type, subjectId: req.subject_id, channel: req.channel,
+    staffRole: req.channel === 'mini' ? Number(req.submitter_role) || null : null,
+    accountId: req.channel === 'pc' ? req.submitted_by : null,
+  })
+  assertPayloadAllowed(perms.perms, kind, action, payload)
+}
+
+/** 资源归属复验:归属变更/换绑后,原申请不得按旧归属生效(复合资源逐条验证) */
+async function revalidateOwnership(c, req) {
+  const sid = Number(req.subject_id)
+  if (!req.resource_id) return // 新增类:履约主体在 applyFormalWrite 里固定为申请主体
+  if (req.subject_type !== 'merchant') return // 景区首版不开放资源写入
+  if (req.kind === 'merchant') {
+    if (Number(req.resource_id) !== sid) throw new BizError(1003, '资源归属已变更,申请不能生效')
+    return
+  }
+  if (req.kind === 'session') {
+    const r = await c.one('SELECT p.merchant_id FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ?', [req.resource_id])
+    if (!r || Number(r.merchant_id) !== sid) throw new BizError(1003, '团期所属商品已换绑其他商户,申请不能生效;请退回后重新核对')
+    return
+  }
+  if (req.kind === 'stock') {
+    const r = await c.one('SELECT p.merchant_id FROM tour_session s JOIN tour_product p ON p.id = s.product_id WHERE s.id = ? AND s.depart_date IS NULL', [req.resource_id])
+    if (!r || Number(r.merchant_id) !== sid) throw new BizError(1003, '库存所属商品已换绑其他商户,申请不能生效')
+    return
+  }
+  if (req.kind === 'product') {
+    const r = await c.one('SELECT merchant_id FROM tour_product WHERE id = ?', [req.resource_id])
+    if (!r || Number(r.merchant_id) !== sid) throw new BizError(1003, '商品已换绑其他商户,申请不能生效;请退回后重新核对')
+  }
+}
+
 export async function approveRequest(admin, id, { confirm = {}, note = '' } = {}) {
   return tx(async (c) => {
     const req = await c.one('SELECT * FROM subject_resource_request WHERE id = ? FOR UPDATE', [id])
     if (!req) throw new BizError(1004, '申请不存在')
     if (Number(req.status) === 4) return { id, effective: true, idempotent: true } // 双击/并发批准幂等
     if (Number(req.status) !== 1) throw new BizError(2009, '仅待审核的申请可批准(当前:' + (STATUS_CN[req.status] || req.status) + ')')
+    // 退回项2:审批人业务范围(super 不受限;运营按 scope 行命中)
+    const scope = await approverScopeRowsTx(c, admin.uid)
+    assertInApproverScope(admin.role === 'super' ? null : scope, req)
     // 审批人不得审批本人提交的申请(PC 渠道提交人即后台账号)
     if (req.channel === 'pc' && Number(req.submitted_by) === Number(admin.uid)) throw new BizError(1003, '不能审批本人提交的申请')
     // 重点影响勾选确认:改价、库存、上下架、履约安排、退改须知变更须明确勾选对应影响
     const impacts = typeof req.impact_flags === 'string' ? JSON.parse(req.impact_flags || '{}') : (req.impact_flags || {})
     const missing = IMPACT_KEYS.filter((k) => impacts[k] && confirm[k] !== true)
     if (missing.length) throw new BizError(1001, '请确认以下业务影响后再批准:' + missing.join('/'))
+    // 退回项3:重点影响变更的审批说明必填(生效结果随通知回到提交人,说明即审批依据)
+    const hasImportantImpact = IMPACT_KEYS.some((k) => impacts[k])
+    if (hasImportantImpact && !String(note || '').trim()) throw new BizError(1001, '重点影响变更须填写审批说明后再批准')
     // 归属与主体状态复验(按当前登录账号重新解析绑定范围)
     const subject = req.subject_type === 'merchant'
       ? await c.one('SELECT id, status FROM merchant WHERE id = ?', [req.subject_id])
       : await c.one('SELECT id, status FROM scenic_spot WHERE id = ?', [req.subject_id])
     if (!subject) throw new BizError(1004, '申请的主体不存在')
     if (req.subject_type === 'merchant' && Number(subject.status) !== 1) throw new BizError(1003, '主体已被停用或未生效,不能批准')
+    // 退回项3:提交人当前权限复验——账号停用/岗位降权/字段撤权/资源归属变更,任一发生即不能生效
+    const payload = typeof req.payload === 'string' ? JSON.parse(req.payload || '{}') : (req.payload || {})
+    await revalidateSubmitter(c, req, payload)
+    await revalidateOwnership(c, req)
     // 版本复验:正式资源被平台或其他端更新后,拒绝以旧版本覆盖
     if (req.resource_id) {
       const cur = await formalSnapshot(req.kind, req.resource_id)
@@ -458,7 +576,6 @@ export async function approveRequest(admin, id, { confirm = {}, note = '' } = {}
     // 业务约束复验:名额不得低于当前已报名(审批时不可用提交时的订单计数替代当前计数)
     if (req.kind === 'session' && req.resource_id) {
       const s = await c.one('SELECT booked FROM tour_session WHERE id = ? FOR UPDATE', [req.resource_id])
-      const payload = typeof req.payload === 'string' ? JSON.parse(req.payload || '{}') : (req.payload || {})
       if (payload.quota != null && Number(payload.quota) < Number(s.booked)) {
         throw new BizError(2002, `该团期当前已报名 ${s.booked} 人,批准的名额 ${payload.quota} 不足;请退回后由主体重新核对`)
       }
@@ -494,6 +611,9 @@ export async function rejectRequest(admin, id, reason) {
     if (!req) throw new BizError(1004, '申请不存在')
     if (Number(req.status) === 3) return { id, rejected: true, idempotent: true }
     if (Number(req.status) !== 1) throw new BizError(2009, '仅待审核的申请可退回')
+    // 退回项2:退回同样执行审批业务范围
+    const scope = await approverScopeRowsTx(c, admin.uid)
+    assertInApproverScope(admin.role === 'super' ? null : scope, req)
     if (req.channel === 'pc' && Number(req.submitted_by) === Number(admin.uid)) throw new BizError(1003, '不能审批本人提交的申请')
     await c.q(`UPDATE subject_resource_request SET status = 3, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW(3), review_note = ? WHERE id = ?`,
       [admin.uid || 0, admin.name || admin.display_name || '', why.slice(0, 500), id])
@@ -524,13 +644,19 @@ export async function resubmitAsNew(actor, id) {
 
 // ---------------- 查询 ----------------
 /** 列表:主体看本主体(草稿限创建人,提交后本主体授权账号可查);审批人(super/ops)看已提交申请 */
-export async function listRequests(viewer, query = {}) {
+export async function listRequests(viewer, query = {}, approverScope = undefined) {
   const isApprover = viewer.type === 'admin' && ['super', 'ops'].includes(viewer.role)
   const where = []
   const args = []
   if (query.view === 'approval' || (isApprover && query.view !== 'mine')) {
     if (!isApprover) throw new BizError(1003, '无审批列表权限')
     where.push('status >= 1')
+    // 退回项2:审批列表按业务范围过滤(super undefined=不限;ops 传 scope 行)
+    if (approverScope !== undefined) {
+      const sc = scopeSqlWhere(approverScope)
+      where.push(sc.sql.replace(/^ AND /, ''))
+      args.push(...sc.params)
+    }
   } else {
     where.push('(status > 0 OR (status = 0 AND submitted_by = ? AND channel = ?))')
     args.push(viewer.uid, viewer.channel || 'pc')

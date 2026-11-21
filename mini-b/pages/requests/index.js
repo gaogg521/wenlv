@@ -6,11 +6,15 @@ const STATUS_CN = { 0: '草稿', 1: '待审核', 2: '已撤回', 3: '已退回',
 const KIND_CN = { session: '团期', product: '商品', stock: '直购库存', merchant: '商户资料', scenic: '景区资料' }
 
 Page({
-  data: { list: [], loaded: false, tab: 'all', error: '' },
+  data: { list: [], loaded: false, tab: 'all', error: '', canCreateProduct: false },
   onShow() {
     const app = getApp()
     this.setData({ role: app.globalData.role || 0 })
-    api.refreshPerms(true)
+    // 退回项4:按最新权限快照决定「新增商品」入口(撤权后入口关闭)
+    api.refreshPerms(true).then(() => {
+      const perms = api.permsFor()
+      this.setData({ canCreateProduct: !!(perms.product && perms.product.create && perms.product.create.allowed) })
+    })
     this.fetch()
   },
   onPullDownRefresh() { this.fetch(() => wx.stopPullDownRefresh()) },
@@ -32,6 +36,7 @@ Page({
       done && done()
     }).catch((e) => { this.setData({ loaded: true, list: [], error: e.msg || '申请加载失败' }); done && done() })
   },
+  goCreate() { wx.navigateTo({ url: '/pages/product-edit/index' }) },
   setTab(e) {
     const k = String(e.currentTarget.dataset.k || 'all')
     this.setData({ tab: k })

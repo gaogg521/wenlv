@@ -9,6 +9,7 @@
     <view class="tab {{tab === '3' ? 'on' : ''}}" data-k="3" bindtap="setTab">已退回</view>
     <view class="tab {{tab === '4' ? 'on' : ''}}" data-k="4" bindtap="setTab">已生效</view>
   </view>
+  <view class="tabs" wx:if="{{canCreateProduct}}"><view class="tab on" bindtap="goCreate">＋ 新增商品申请</view></view>
   <view wx:if="{{error}}" class="empty">{{error}}</view>
   <view wx:if="{{loaded && !list.length && !error}}" class="empty">暂无申请记录;在「库存」页发起的调整会出现在这里</view>
   <view wx:for="{{list}}" wx:key="id" class="card">

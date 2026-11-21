@@ -11,7 +11,8 @@
     "pages/reviews/index",
     "pages/honor/index",
     "pages/proof/index",
-    "pages/requests/index"
+    "pages/requests/index",
+    "pages/product-edit/index"
   ],
   "window": {
     "navigationStyle": "custom",

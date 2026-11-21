@@ -2,7 +2,7 @@ const api = require('../../utils/api')
 const { stockView, businessDay, money } = require('../../utils/catalog-view')
 const { confirmChange } = require('../../utils/confirm')
 Page({
-  data: { list: [], groups: [], loaded: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
+  data: { list: [], groups: [], loaded: false, canManage: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
   onShow() {
     // B2 工作台「临近截止」下钻预设：一次性消费（未来7天）
     const preset = wx.getStorageSync('supplyPreset') || null
@@ -21,7 +21,10 @@ Page({
   },
   fetch(done, append = false) {
     if (typeof done !== 'function') done = undefined
-    this.setData({ role: getApp().globalData.role || 0, error: '' })
+    api.refreshPerms(true)
+    const perms = api.permsFor()
+    const canManage = (getApp().globalData.role || 0) >= 2 && !(perms.session && perms.session.update && perms.session.update.allowed === false)
+    this.setData({ role: getApp().globalData.role || 0, canManage, error: '' })
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
     const requestId = this._requestId = (this._requestId || 0) + 1
     const page = append ? this.data.page + 1 : 1
@@ -56,8 +59,10 @@ Page({
   resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.fetch() },
   toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },
   // C-02 批量操作：对本商品当前筛选下的团期批量改价/调名额/停售；先输入、再过 M-12 统一确认（旧→新 + 影响范围；批量>5 条或价差超 ±30% 需填原因）
+  // 退回项4:商品档案修改入口(申请制,与 PC 同链路)
+  goArchive(e) { wx.navigateTo({ url: '/pages/product-edit/index?id=' + Number(e.currentTarget.dataset.id) }) },
   batchProduct(e) {
-    if (this.data.role < 2) return
+    if (this.data.role < 2 || !this.data.canManage) return
     const key = e.currentTarget.dataset.key
     const rows = this.data.list.filter(s => String(s.product_id) === String(key))
     if (!rows.length) return
@@ -105,7 +110,7 @@ Page({
     }).catch(e => wx.showToast({ title: e.msg || '批量操作失败', icon: 'none' }))
   },
   manageSession(e) {
-    if (this.data.role < 2) return
+    if (this.data.role < 2 || !this.data.canManage) return
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))
     if (!s) return
     const event = { currentTarget: { dataset: { id: s.id, price: s.price_adult, early: s.early_price, earlydays: s.early_days, version: s.version } } }

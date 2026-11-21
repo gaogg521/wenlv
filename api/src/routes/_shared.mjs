@@ -47,7 +47,10 @@ export function toCsv(rows) {
 }
 // ---------- /admin 运营后台 ----------
 export async function requireAdmin(req, roles) {
-  if (typeof roles === 'string') roles = actionRoles(roles)
+  // V94:字符串角色 = 动作名(note.review/ticket.manage 等)——记住动作名,静态角色不符时
+  // 按 admin_user_action 有效动作集合(基线 ∪ 授予 − 收回)兜底,支持按员工授予动作职责
+  let actionName = null
+  if (typeof roles === 'string') { actionName = roles; roles = actionRoles(roles) }
   const h = (req.headers.authorization || '').replace(/^Bearer /, '')
   const { jwtVerify } = await import('../auth.mjs')
   const p = jwtVerify(h)
@@ -74,7 +77,13 @@ export async function requireAdmin(req, roles) {
     p.subjectType = p.subjectType || null
     p.subjectId = p.subjectId != null ? Number(p.subjectId) : null
   }
-  if (roles && !roles.includes(p.role)) throw new BizError(1003, '权限不足（' + p.role + '）')
+  if (roles && !roles.includes(p.role)) {
+    if (actionName) {
+      const { effectiveActionsFor } = await import('../domain/admin-capabilities.mjs')
+      if ((await effectiveActionsFor(p.uid, p.role)).has(actionName)) return p // 按员工授予的动作生效
+    }
+    throw new BizError(1003, '权限不足（' + p.role + '）')
+  }
   return p // 含 scopeCity（城市合伙人行级隔离）/ subjectType+subjectId（主体方行级隔离）：列表查询必须经 scopeFilter/subjectScope 注入
 }
 

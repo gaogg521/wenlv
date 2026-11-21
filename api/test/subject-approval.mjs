@@ -125,7 +125,7 @@ try {
     await q('UPDATE tour_session SET booked = 8 WHERE id = ?', [sid])
     const r1 = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { quota: 5 }, impactNote: '缩容', expectedVersion: 2, submit: true }, merTok))
-    const f1 = await fail(await call('POST', '/admin/subject-requests/' + r1.id + '/approve', { confirm: { stock: true } }, supTok), 2002, '已报名')
+    const f1 = await fail(await call('POST', '/admin/subject-requests/' + r1.id + '/approve', { confirm: { stock: true }, note: '回归批准' }, supTok), 2002, '已报名')
     assert.ok(await one('SELECT id FROM subject_resource_request WHERE id=? AND status=1', [r1.id]), '批准失败后申请仍在待审可追踪')
     ok(await call('POST', '/admin/subject-requests/' + r1.id + '/reject', { reason: '名额低于已报名,请重新核对' }, supTok))
     // 停售:批准须勾选 status 影响;缺勾选拒绝
@@ -172,10 +172,11 @@ try {
     await resetSession(sid)
     const r = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { price_adult: 158 }, impactNote: '调价', expectedVersion: await verOf(sid), submit: true }, merTok))
-    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, opsTok), 1003) // 网关模块闸或动作授权闸,任一拒绝均正确
+    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, opsTok), 1003) // 网关模块闸或动作授权闸,任一拒绝均正确
     // 授予 subject.approve(真实账号,授权原因必填)
     await fail(await call('POST', '/admin/accounts/' + opsUid + '/actions', { action: 'subject.approve', effect: 1, reason: '' }, supTok), 1001, '原因')
     ok(await call('POST', '/admin/accounts/' + opsUid + '/actions', { action: 'subject.approve', effect: 1, reason: '试点授权运营审批' }, supTok))
+    ok(await call('POST', '/admin/accounts/' + opsUid + '/approver-scope', { subjectType: 'merchant', subjectId: String(merchantId), reason: '试点范围:商户A' }, supTok))
     // 授权变更联动 token_epoch:旧会话失效,按新权限重新登录
     const opsLg2 = await login(opsName, 'TempPass2026')
     assert.equal(opsLg2.code, 0, '重新登录失败: ' + opsLg2.msg)
@@ -189,7 +190,7 @@ try {
     const sid2 = await mkSession()
     const r2 = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid2,
       payload: { price_adult: 99 }, impactNote: '调价', expectedVersion: await verOf(sid2), submit: true }, merTok))
-    const denied = await call('POST', '/admin/subject-requests/' + r2.id + '/approve', { confirm: { price: true } }, opsLg2.data.token)
+    const denied = await call('POST', '/admin/subject-requests/' + r2.id + '/approve', { confirm: { price: true }, note: '回归批准' }, opsLg2.data.token)
     assert.ok([1002, 1003].includes(denied.code), '撤权后旧会话应被拒(1002/1003),实际 ' + denied.code + ':' + denied.msg)
     ok(await call('POST', '/admin/subject-requests/' + r2.id + '/withdraw', {}, merTok))
     await q("UPDATE subject_resource_request SET status=3 WHERE id=?", [r.id]) // 清理:避免影响后续待审去重
@@ -200,7 +201,7 @@ try {
     // 真实商户主体账号提交后本人批准 → 1003(夹具令牌无 uid 不构成"本人",必须用真实账号)
     const r = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { price_adult: 90 }, impactNote: '自审边界', expectedVersion: await verOf(sid), submit: true }, mpTok))
-    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, mpTok), 1003) // 模块闸先拦(主体方无 subjectapprove);本人提交的服务端校验在 AC10 场景下由超管/运营令牌触发
+    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, mpTok), 1003) // 模块闸先拦(主体方无 subjectapprove);本人提交的服务端校验在 AC10 场景下由超管/运营令牌触发
     // 同资源重复提交合并为同一待审单(幂等,AC13 跨端同口径)
     const again = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { price_adult: 91 }, impactNote: '自审边界2', expectedVersion: await verOf(sid), submit: true }, mpTok))
@@ -253,6 +254,7 @@ try {
   /* ==================== 通知与待办 ==================== */
   await test('AC06 提交通知:每位启用超管+获授权运营各一条(按收件人去重);已读仍留待审', async () => {
     ok(await call('POST', '/admin/accounts/' + opsUid + '/actions', { action: 'subject.approve', effect: 1, reason: '通知测试' }, supTok))
+    ok(await call('POST', '/admin/accounts/' + opsUid + '/approver-scope', { subjectType: 'merchant', subjectId: String(merchantId), reason: '通知测试范围' }, supTok))
     const opsLg3 = await login(opsName, 'TempPass2026')
     assert.equal(opsLg3.code, 0, 'ops 重登录失败')
     await cleanReq()
@@ -320,7 +322,7 @@ try {
     const r = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { price_adult: 55 }, impactNote: '撤回测试', expectedVersion: await verOf(sid), submit: true }, merTok))
     ok(await call('POST', '/admin/subject-requests/' + r.id + '/withdraw', {}, merTok))
-    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, supTok), 2009, '仅待审核')
+    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, supTok), 2009, '仅待审核')
     const re = ok(await call('POST', '/admin/subject-requests/' + r.id + '/resubmit', {}, merTok))
     assert.notEqual(re.id, r.id, '重提应创建新申请')
     const reRow = await one('SELECT reentry_of, version, payload FROM subject_resource_request WHERE id=?', [re.id])
@@ -352,8 +354,8 @@ try {
       payload: { price_adult: 150 }, impactNote: '并发测试', expectedVersion: await verOf(sid), submit: true }, merTok))
     assert.equal(replay.reqNo, r.reqNo, '重放应返回既有待审单(同资源一份待审单)')
     // 双击批准
-    const a1 = await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, supTok)
-    const a2 = await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, supTok)
+    const a1 = await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, supTok)
+    const a2 = await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, supTok)
     assert.equal(a1.code, 0, '首次批准应成功')
     assert.ok(a2.code === 0 ? a2.data.idempotent : a2.code === 2009, '二次批准应幂等或明确拒绝,实际 ' + JSON.stringify(a2).slice(0, 120))
     const s = await one('SELECT price_adult, version FROM tour_session WHERE id=?', [sid])
@@ -371,7 +373,7 @@ try {
       payload: { price_adult: 120 }, impactNote: '冲突测试', expectedVersion: await verOf(sid), submit: true }, merTok))
     // 平台在待审期间调整正式资源(版本+1)
     ok(await call('PUT', '/admin/entities/session/' + sid, { values: { note: '平台调整' }, expectedVersion: await verOf(sid) }, supTok))
-    const f = await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, supTok), 2002, '已被平台更新')
+    const f = await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, supTok), 2002, '已被平台更新')
     const s = await one('SELECT price_adult, version FROM tour_session WHERE id=?', [sid])
     assert.equal(Number(s.price_adult), 10000, '冲突时正式价保持平台最新值')
     assert.ok(Number(s.version) >= 2, '平台更新已入版本')
@@ -381,7 +383,7 @@ try {
     const cur = await one('SELECT version FROM tour_session WHERE id=?', [sid])
     const r2 = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { price_adult: 130 }, impactNote: '冲突后重提', expectedVersion: Number(cur.version), submit: true }, merTok))
-    ok(await call('POST', '/admin/subject-requests/' + r2.id + '/approve', { confirm: { price: true } }, supTok))
+    ok(await call('POST', '/admin/subject-requests/' + r2.id + '/approve', { confirm: { price: true }, note: '回归批准' }, supTok))
     const fin = await one('SELECT price_adult FROM tour_session WHERE id=?', [sid])
     assert.equal(Number(fin.price_adult), 13000, '按最新版本重提后生效')
   })
@@ -392,7 +394,7 @@ try {
     const r = ok(await call('POST', '/admin/subject-requests', { kind: 'session', action: 'update', resourceId: sid,
       payload: { quota: 20 }, impactNote: '扩容', expectedVersion: await verOf(sid), submit: true }, merTok))
     await q('UPDATE tour_session SET quota = 15, version = version + 1 WHERE id = ?', [sid])
-    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { stock: true } }, supTok), 2002)
+    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { stock: true }, note: '回归批准' }, supTok), 2002)
     const s = await one('SELECT quota, version FROM tour_session WHERE id=?', [sid])
     assert.equal(Number(s.quota), 15, '平台调整值保留')
     ok(await call('POST', '/admin/subject-requests/' + r.id + '/reject', { reason: '名额已被平台调整' }, supTok))
@@ -481,7 +483,7 @@ try {
     await fail(await call('POST', '/admin/accounts', { username: stamp + 'x', displayName: 'x', role: 'ops', password: 'TempPass2026' }, opsTok10), 1003)
     // finance 不能批准主体申请(未授权动作)
     const finTok = jwtSign({ end: 'admin', role: 'finance', name: '财务夹具' })
-    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true } }, finTok), 1003) // 模块闸/动作闸任一拒绝
+    await fail(await call('POST', '/admin/subject-requests/' + r.id + '/approve', { confirm: { price: true }, note: '回归批准' }, finTok), 1003) // 模块闸/动作闸任一拒绝
     // city_partner 不可进入审批页/权限配置
     const cityTok = jwtSign({ end: 'admin', role: 'city_partner', name: '城市夹具', scopeCity: '310118' })
     await fail(await call('GET', '/admin/subject-perms', null, cityTok), 1003)

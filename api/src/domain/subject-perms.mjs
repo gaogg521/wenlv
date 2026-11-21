@@ -13,7 +13,7 @@ const BASELINE = {
 }
 
 // mini 商户端供给类动作沿用现有岗位门槛:店长及以上(M-01 口径,核销员只读)
-const MINI_MIN_ROLE = { session: 2, stock: 2 }
+const MINI_MIN_ROLE = { session: 2, stock: 2, product: 2 }
 
 export function baselinePerms(subjectType) {
   return BASELINE[subjectType] || {}

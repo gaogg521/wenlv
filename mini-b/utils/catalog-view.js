@@ -22,7 +22,7 @@ function stockView(list, options = {}, now = Date.now()) {
   for (const s of rows) {
     // 商品ID是身份；同名商品不能混到一组。
     const key = String(s.product_id == null ? s.title : s.product_id)
-    if (!byProduct[key]) byProduct[key] = { key, title: s.title, sessions: [], seats: 0, minPrice: Number(s.price_adult) }
+    if (!byProduct[key]) byProduct[key] = { key, title: s.title, productId: s.product_id, sessions: [], seats: 0, minPrice: Number(s.price_adult) }
     const g = byProduct[key]; g.sessions.push(s); if (s.canSell) g.seats += s.left
     g.minPrice = Math.min(g.minPrice, Number(s.price_adult))
   }

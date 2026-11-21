@@ -5,10 +5,14 @@ import { q, one, count, tx as tx2, BizError } from '../db.mjs'
 import { requireUser } from '../auth.mjs'
 import { requireAdmin, requireAction, audit, scopeFilter } from './_shared.mjs'
 import * as approval from '../domain/subject-approval.mjs'
-import { resolveSubjectPerms, permVersion, bumpPermVersion, serializePerms } from '../domain/subject-perms.mjs'
+import { resolveSubjectPerms, permVersion, bumpPermVersion, serializePerms, assertPermFresh } from '../domain/subject-perms.mjs'
 import { effectiveActionsFor, invalidateActionCache, ADMIN_ACTIONS } from '../domain/admin-capabilities.mjs'
-import { FIELD_GROUPS } from '../domain/subject-fields.mjs'
+import { FIELD_GROUPS, SUBJECT_FIELDS } from '../domain/subject-fields.mjs'
+import * as entities from '../domain/entity-schema.mjs'
 import { actorFromAdmin, actorFromStaff } from '../domain/subject-approval.mjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const routes = {
   // ==================== PC 主体工作台 ====================
@@ -68,7 +72,9 @@ const routes = {
       throw new BizError(1003, '无申请列表权限')
     }
     const city = a.scopeCity ? scopeFilter(a, 'city_code') : null
-    const result = await approval.listRequests(viewer, req.query)
+    // 退回项2:审批列表按审批人业务范围过滤(super 不限;ops 按 scope 行并集;无 scope 行 → 空)
+    const scope = a.role === 'ops' ? await approval.approverScopeRows(a.uid, a.role) : undefined
+    const result = await approval.listRequests(viewer, req.query, scope)
     if (city?.sql) result.items = result.items.filter((r) => !r.city_code || String(r.city_code) === String(a.scopeCity))
     return result
   },
@@ -78,7 +84,13 @@ const routes = {
     const viewer = a.role === 'merchant_partner' || a.role === 'scenic_partner'
       ? { ...actorFromAdmin(a), channel: 'pc' }
       : { type: 'admin', uid: a.uid, role: a.role, channel: 'pc', subjectType: null, subjectId: null, name: a.display_name }
-    return approval.detailRequest(viewer, req.params.id)
+    const detail = await approval.detailRequest(viewer, req.params.id)
+    // 退回项2:审批人详情同样执行业务范围(super 不受限)
+    if (a.role === 'ops') {
+      const scope = await approval.approverScopeRows(a.uid, a.role)
+      approval.assertInApproverScope(scope, detail)
+    }
+    return detail
   },
 
   // 新建草稿(可带 submit:true 直接提交,幂等键防重放)
@@ -142,19 +154,19 @@ const routes = {
   // ==================== 审批端 ====================
   'POST /admin/subject-requests/:id/preaudit': async (req) => {
     const a = await requireAction(req, 'subject.preaudit')
-    return approval.addPreaudit({ uid: a.uid, name: a.name || a.display_name }, Number(req.params.id), (req.body || {}).note)
+    return approval.addPreaudit({ uid: a.uid, role: a.role, name: a.name || a.display_name }, Number(req.params.id), (req.body || {}).note)
   },
 
   'POST /admin/subject-requests/:id/approve': async (req) => {
     const a = await requireAction(req, 'subject.approve')
     const b = req.body || {}
-    return approval.approveRequest({ uid: a.uid, name: a.name || a.display_name }, Number(req.params.id),
+    return approval.approveRequest({ uid: a.uid, role: a.role, name: a.name || a.display_name }, Number(req.params.id),
       { confirm: b.confirm || {}, note: b.note })
   },
 
   'POST /admin/subject-requests/:id/reject': async (req) => {
     const a = await requireAction(req, 'subject.approve')
-    return approval.rejectRequest({ uid: a.uid, name: a.name || a.display_name }, Number(req.params.id), (req.body || {}).reason)
+    return approval.rejectRequest({ uid: a.uid, role: a.role, name: a.name || a.display_name }, Number(req.params.id), (req.body || {}).reason)
   },
 
   // ==================== 权限配置(仅超管;最新下发的权限为准) ====================
@@ -248,6 +260,44 @@ const routes = {
     return { ok: true }
   },
 
+  // ==================== 审批业务范围管理(V97,退回项2;仅超管) ====================
+  'GET /admin/accounts/:id/approver-scope': async (req) => {
+    await requireAdmin(req, ['super'])
+    const u = await one('SELECT id, username, display_name, role FROM admin_user WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1004, '账号不存在')
+    const rows = await q('SELECT id, subject_type, subject_id, city_code, reason, granted_by_name, granted_at FROM subject_approver_scope WHERE uid = ? ORDER BY id DESC', [req.params.id])
+    return { account: u, rows }
+  },
+
+  'POST /admin/accounts/:id/approver-scope': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    const b = req.body || {}
+    if (!String(b.reason || '').trim()) throw new BizError(1001, '请填写授权原因')
+    const u = await one('SELECT id, role FROM admin_user WHERE id = ?', [req.params.id])
+    if (!u) throw new BizError(1004, '账号不存在')
+    const id = await tx2(async (c) => {
+      const rid = await c.ins(`INSERT INTO subject_approver_scope (uid, subject_type, subject_id, city_code, reason, granted_by, granted_by_name)
+        VALUES (?,?,?,?,?,?,?)`,
+        [Number(req.params.id), b.subjectType || null, b.subjectId != null && b.subjectId !== '' ? Number(b.subjectId) : null,
+          b.city || null, String(b.reason).slice(0, 200), a.uid, a.display_name])
+      // 范围变更联动 token_epoch:被调整账号旧会话失效,按新范围重新登录
+      await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE id = ?', [Number(req.params.id)])
+      await audit(c, 'admin:' + a.display_name, 'approver-scope', 'uid-' + req.params.id, null, { ...b })
+      return rid
+    })
+    return { id }
+  },
+
+  'DELETE /admin/accounts/:id/approver-scope/:sid': async (req) => {
+    const a = await requireAdmin(req, ['super'])
+    await tx2(async (c) => {
+      await c.q('DELETE FROM subject_approver_scope WHERE id = ? AND uid = ?', [Number(req.params.sid), Number(req.params.id)])
+      await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE id = ?', [Number(req.params.id)])
+      await audit(c, 'admin:' + a.display_name, 'approver-scope', 'scope-' + req.params.sid, null, null)
+    })
+    return { ok: true }
+  },
+
   // ==================== 站内收件箱 ====================
   'GET /admin/inbox': async (req) => {
     const a = await requireAdmin(req)
@@ -260,7 +310,14 @@ const routes = {
   'GET /admin/inbox/summary': async (req) => {
     const a = await requireAdmin(req)
     const unread = await one('SELECT COUNT(*) c FROM platform_inbox WHERE recipient_type = ? AND recipient_uid = ? AND read_at IS NULL', ['admin', a.uid])
-    const pending = await approval.approvalPendingCount()
+    // 退回项2:待审数按审批人业务范围计(super 全量;ops 取范围内主申请数)
+    let pending = 0
+    if (a.role === 'super') pending = await approval.approvalPendingCount()
+    else if (a.role === 'ops' && (await effectiveActionsFor(a.uid, a.role)).has('subject.approve')) {
+      const scope = await approval.approverScopeRows(a.uid, a.role)
+      const list = await approval.listRequests({ type: 'admin', uid: a.uid, role: 'ops', channel: 'pc', subjectType: null, subjectId: null }, { view: 'approval', status: '1' }, scope)
+      pending = list.items.filter((r) => !r.parent_id).length
+    }
     return { unread: Number(unread?.c || 0), pendingApprovals: pending, canApprove: (await effectiveActionsFor(a.uid, a.role)).has('subject.approve') }
   },
 
@@ -277,6 +334,70 @@ const routes = {
   },
 
   // ==================== 商户小程序端 ====================
+  // ==================== 商户小程序:商品新增/档案修改(退回项4,与 PC 同状态机同白名单) ====================
+  'POST /m/upload/image': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
+    await assertPermFresh(req.headers['x-perm-version'])
+    const { data, ext = 'jpg' } = req.body || {}
+    if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) throw new BizError(1001, '仅支持 jpg/png/webp')
+    const buf = Buffer.from(String(data || ''), 'base64')
+    if (buf.length === 0 || buf.length > 2 * 1024 * 1024) throw new BizError(1001, '图片需在 2MB 内')
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'static', 'uploads')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = 'm_' + Date.now() + '_' + Math.floor(Math.random() * 9000 + 1000) + '.' + (ext === 'jpeg' ? 'jpg' : ext)
+    fs.writeFileSync(path.join(dir, name), buf)
+    return { url: '/uploads/' + name }
+  },
+
+  // 本店商品读取(档案修改入口;白名单展示口径 + 乐观锁版本)
+  'GET /m/products/:id': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
+    const row = await one('SELECT * FROM tour_product WHERE id = ?', [req.params.id])
+    if (!row || Number(row.merchant_id) !== Number(u.merchantId)) throw new BizError(1003, '商品不存在或不属于本店')
+    const values = entities.readValues('product', row)
+    const allow = new Set(SUBJECT_FIELDS.product)
+    const picked = {}
+    for (const k of Object.keys(values)) if (allow.has(k)) picked[k] = values[k]
+    return { id: row.id, title: row.title, cat: row.cat, status: row.status, version: Number(row.updated_version) || 0, values: picked }
+  },
+
+  // 小程序端草稿/提交(与 PC 同状态机;字段白名单、乐观锁、幂等一致)
+  'POST /m/subject-requests': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
+    await assertPermFresh(req.headers['x-perm-version'])
+    const actor = await actorFromStaff(u)
+    const b = req.body || {}
+    const draft = await approval.saveDraft(actor, {
+      kind: b.kind, action: b.action || 'update', resourceId: b.resourceId != null ? Number(b.resourceId) : null,
+      payload: b.payload, note: b.note, attachments: b.attachments, impactNote: b.impactNote,
+      parentId: b.parentId != null ? Number(b.parentId) : null,
+      baselineVersion: b.expectedVersion != null ? Number(b.expectedVersion) : null,
+    })
+    if (b.submit) {
+      const sub = await approval.submitRequest(actor, draft.id, { idemKey: b.idemKey || null })
+      return { ...draft, ...sub }
+    }
+    return draft
+  },
+
+  'PUT /m/subject-requests/:id': async (req) => {
+    const u = requireUser(req)
+    if (u.role < 2) throw new BizError(1003, '需要店长及以上权限')
+    await assertPermFresh(req.headers['x-perm-version'])
+    const actor = await actorFromStaff(u)
+    const b = req.body || {}
+    return approval.saveDraft(actor, {
+      id: Number(req.params.id), kind: b.kind, action: b.action || 'update',
+      resourceId: b.resourceId != null ? Number(b.resourceId) : null,
+      payload: b.payload, note: b.note, attachments: b.attachments, impactNote: b.impactNote,
+      parentId: b.parentId != null ? Number(b.parentId) : null,
+      baselineVersion: b.expectedVersion != null ? Number(b.expectedVersion) : null,
+    })
+  },
+
   'GET /m/perm/snapshot': async (req) => {
     const u = requireUser(req)
     const perms = await resolveSubjectPerms({ subjectType: 'merchant', subjectId: u.merchantId, channel: 'mini', staffRole: u.role })

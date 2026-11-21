@@ -13,11 +13,12 @@
     <view class="group-copy"><view class="group-title">{{g.title}}</view><view class="group-sub">最近 {{g.nextDate}} · ¥{{g.priceLabel}}起</view></view><text class="group-arrow">{{g.expanded ? '−' : '+'}}</text>
   </view>
   <view class="group-footer" wx:if="{{!g.expanded}}" bindtap="toggleProduct" data-key="{{g.key}}"><text>本组可售余量 {{g.seats}} 席</text><text>展开管理　⌄</text></view>
-  <view class="group-footer" wx:if="{{g.expanded && role >= 2}}" bindtap="batchProduct" data-key="{{g.key}}"><text>当前筛选 {{g.count}} 个团期</text><text>批量调整本商品　⋯</text></view>
+  <view class="group-footer" wx:if="{{g.expanded && canManage}}" bindtap="batchProduct" data-key="{{g.key}}"><text>当前筛选 {{g.count}} 个团期</text><text>批量调整本商品　⋯</text></view>
+  <view class="group-footer" wx:if="{{g.expanded && canManage && g.productId}}" bindtap="goArchive" data-id="{{g.productId}}"><text>商品档案与图集</text><text>修改档案申请　⌄</text></view>
   <block wx:if="{{g.expanded}}">
     <view class="session-item" wx:for="{{g.sessions}}" wx:key="id" wx:for-item="s">
       <view class="session-main"><view><view class="session-date">{{s.date}}</view><view class="group-sub">剩余 {{s.left}} / {{s.quota}} 席</view></view><view class="session-price">¥{{s.priceLabel}}<view class="status-label {{s.canSell ? 'positive' : ''}}">{{s.statusLabel}}</view></view></view>
-      <view class="session-bottom"><text class="group-sub">{{s.priceNote}}</text><button wx:if="{{role >= 2}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
+      <view class="session-bottom"><text class="group-sub">{{s.priceNote}}</text><button wx:if="{{canManage}}" class="compact-button" bindtap="manageSession" data-id="{{s.id}}">管理团期　⋯</button></view>
       <view wx:if="{{s.priceChangeText}}" class="price-change-line"><text>{{s.priceChangeText}}</text></view>
     </view>
     <view wx:if="{{g.hasMore}}" class="group-footer" bindtap="moreSessions"><text>本组共 {{g.count}} 个团期</text><text>再显示 6 个　⌄</text></view>
@@ -30,4 +31,4 @@
   </ui-state>
 </view>
 <view wx:if="{{!loaded}}" class="card"><ui-state kind="loading" /></view>
-<view class="note">{{role >= 2 ? '改价、名额和停售仅对所选团期生效' : '库存为只读，调整请联系店长或老板'}}</view>
+<view class="note">{{canManage ? '改价、名额和停售提交平台审批,批准后生效' : (role >= 2 ? '资源调整权限已被平台收回,入口已关闭;如有需要请联系平台' : '库存为只读,调整请联系店长或老板')}}</view>

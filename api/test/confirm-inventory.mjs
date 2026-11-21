@@ -220,6 +220,8 @@ export const INVENTORY = [
   { end: 'mini-b', file: 'mini-b/pages/requests/index.js', func: 'redo', action: '重新发起指引(跳转库存页重提)', grade: 'C', how: '-' },
   { end: 'mini-b', file: 'mini-b/pages/supply/index.js', func: 'resumeSell', action: '恢复销售申请(低危,提交审批)', grade: 'B', how: 'uiConfirm' },
   { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'refreshPerms', action: '权限快照刷新(读操作)', grade: 'C', how: '-' },
+  { end: 'mini-b', file: 'mini-b/pages/product-edit/index.js', func: 'save|saveDraft|submitReview', action: '商品新增/档案修改(草稿/提交审核,审批制)', grade: 'B', how: '-' },
+  { end: 'mini-b', file: 'mini-b/pages/product-edit/index.js', func: 'addImage|removeImage', action: '图集添加/移除(choosMedia 上传,提交前可编辑)', grade: 'C', how: '-' },
   // ===== mini-b 商户端 =====
   { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'demoLogin', action: '演示登录（仅开发版）', grade: 'C', how: '-' },
   { end: 'mini-b', file: 'mini-b/utils/api.js', func: 'login', action: '商户微信登录', grade: 'C', how: '-' },
