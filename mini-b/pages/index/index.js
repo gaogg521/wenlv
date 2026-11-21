@@ -121,6 +121,7 @@ Page({
   goRecords() { wx.navigateTo({ url: '/pages/records/index' }) },
   goOrders() { wx.switchTab({ url: '/pages/orders/index' }) },
   goSupply() { wx.switchTab({ url: '/pages/supply/index' }) },
+  goRequests() { wx.navigateTo({ url: '/pages/requests/index' }) },
   goHonor() { wx.navigateTo({ url: '/pages/honor/index' }) },
   goCredentials() { wx.navigateTo({ url: '/pages/honor/index?tab=proof' }) },
   goSettle() { wx.navigateTo({ url: '/pages/settlement/index' }) },

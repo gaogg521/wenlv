@@ -360,17 +360,26 @@ await t('A07-1 早鸟价必须为正整数且低于现价；天数非负整数',
   assert.equal(good.code, 0, '合法早鸟价应成功')
 })
 
-await t('A07-2 改现价时同步校验：不得低于已设早鸟价；priceForSession 取较低价', async () => {
+await t('A07-2 改现价时同步校验：不得低于已设早鸟价；priceForSession 取较低价（V94 申请制：早鸟/改价经批准生效）', async () => {
   const staff = await cLogin('a07b')
   const sid = await mkSession({ days: 44, price: 10000 })
   const pid = Number((await one('SELECT product_id FROM tour_session WHERE id = ?', [sid])).product_id)
   await q('INSERT IGNORE INTO merchant_staff (merchant_id, user_id, role) VALUES ((SELECT merchant_id FROM tour_product WHERE id = ?), ?, 3)', [pid, staff.id])
   const mid = Number((await one('SELECT merchant_id FROM tour_product WHERE id = ?', [pid])).merchant_id)
   const mTok = ok(await call('POST', '/m/auth/login', { code: staff.code, merchantId: mid })).token
+  const tok = ok(await call('POST', '/admin/login', { username: 'admin', password: process.env.ADMIN_INIT_PASSWORD || 'admin123' })).token
+  const approvePending = async (confirmKey) => {
+    const reqs = ok(await call('GET', '/admin/subject-requests?view=approval&status=1&kind=session', null, tok))
+    const req = reqs.items.find(x => Number(x.resource_id) === Number(sid))
+    assert.ok(req, '待审申请应存在')
+    ok(await call('POST', '/admin/subject-requests/' + req.id + '/approve', { confirm: { [confirmKey]: true }, note: 'A07 回归批准' }, tok))
+  }
   ok(await call('POST', `/m/supply/${sid}`, { action: 'early', value: { price: 9000, days: 30 } }, mTok))
+  await approvePending('price')
   const r = await call('POST', `/m/supply/${sid}`, { action: 'price', value: 5000 }, mTok)
   assert.notEqual(r.code, 0, '现价改到早鸟价之下应被拒绝（此前会造成实付 ¥90 还显示早鸟）')
   ok(await call('POST', `/m/supply/${sid}`, { action: 'price', value: 9500 }, mTok))
+  await approvePending('price')
   const s = await one('SELECT * FROM tour_session WHERE id = ?', [sid])
   const { price } = order.priceForSession({ ...s, depart_date: String(s.depart_date).slice(0, 10) })
   assert.ok(price <= Number(s.price_adult), 'priceForSession 必须取较低价')

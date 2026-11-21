@@ -2,7 +2,7 @@ const api = require('../../utils/api')
 const { stockView, businessDay, money } = require('../../utils/catalog-view')
 const { confirmChange } = require('../../utils/confirm')
 Page({
-  data: { list: [], groups: [], loaded: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
+  data: { list: [], groups: [], loaded: false, canManage: false, kw: '', status: 'all', range: 'future', rangeIndex: 0, rangeNames: ['未来团期','未来7天','未来30天','历史团期','全部日期'], statusOptions: [{k:'all',n:'全部状态'},{k:'open',n:'可售'},{k:'tight',n:'余量紧张'},{k:'closed',n:'已截止/取消'}], page: 1, hasMore: false, total: 0 },
   onShow() {
     // B2 工作台「临近截止」下钻预设：一次性消费（未来7天）
     const preset = wx.getStorageSync('supplyPreset') || null
@@ -21,7 +21,14 @@ Page({
   },
   fetch(done, append = false) {
     if (typeof done !== 'function') done = undefined
-    this.setData({ role: getApp().globalData.role || 0, error: '' })
+    this.setData({ role: getApp().globalData.role || 0, canManage: false, canEditProduct: false, error: '' })
+    api.refreshPerms(true).then(() => {
+      const perms = api.permsFor()
+      this.setData({
+        canManage: perms.session?.update?.allowed === true,
+        canEditProduct: perms.product?.update?.allowed === true,
+      })
+    })
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
     const requestId = this._requestId = (this._requestId || 0) + 1
     const page = append ? this.data.page + 1 : 1
@@ -56,8 +63,10 @@ Page({
   resetFilters() { this.setData({ kw: '', status: 'all', range: 'future', rangeIndex: 0 }); this.fetch() },
   toggleProduct(e) { const key = e.currentTarget.dataset.key; this.setData({ expandedKey: this.data.expandedKey === key ? '' : key, sessionLimit: 6 }); this.applyFilters() },
   // C-02 批量操作：对本商品当前筛选下的团期批量改价/调名额/停售；先输入、再过 M-12 统一确认（旧→新 + 影响范围；批量>5 条或价差超 ±30% 需填原因）
+  // 退回项4:商品档案修改入口(申请制,与 PC 同链路)
+  goArchive(e) { wx.navigateTo({ url: '/pages/product-edit/index?id=' + Number(e.currentTarget.dataset.id) }) },
   batchProduct(e) {
-    if (this.data.role < 2) return
+    if (this.data.role < 2 || !this.data.canManage) return
     const key = e.currentTarget.dataset.key
     const rows = this.data.list.filter(s => String(s.product_id) === String(key))
     if (!rows.length) return
@@ -96,14 +105,16 @@ Page({
   },
   batchSubmit(ids, action, value, scope, reason) {
     api.request('/m/supply/batch', 'POST', { ids, action, value, reason }).then(r => {
-      // X-03：批量改价时被并发改过的团期不静默覆盖，明确提示冲突数量
-      const conflictTail = (r.conflicts && r.conflicts.length) ? ' · ' + r.conflicts.length + ' 个冲突未生效（请刷新后重试）' : ''
-      wx.showToast({ title: '影响 ' + scope + ' 个团期 · 生效 ' + (r.applied || 0) + ' 个' + conflictTail, icon: 'none', duration: 3000 })
+      // X-03：批量提交时被并发改过的团期不静默覆盖，明确提示冲突数量
+      // V94：提交后进入平台审批（不即时生效），重复提交返回既有待审单
+      const conflictTail = (r.conflicts && r.conflicts.length) ? ' · ' + r.conflicts.length + ' 个冲突未受理（请刷新后重试）' : ''
+      const dupTail = (r.duplicates && r.duplicates.length) ? ' · ' + r.duplicates.length + ' 个已在待审' : ''
+      wx.showToast({ title: '已提交 ' + (r.created || 0) + ' 笔申请待平台确认' + dupTail + conflictTail, icon: 'none', duration: 3000 })
       this.fetch()
     }).catch(e => wx.showToast({ title: e.msg || '批量操作失败', icon: 'none' }))
   },
   manageSession(e) {
-    if (this.data.role < 2) return
+    if (this.data.role < 2 || !this.data.canManage) return
     const s = this.data.list.find(x => Number(x.id) === Number(e.currentTarget.dataset.id))
     if (!s) return
     const event = { currentTarget: { dataset: { id: s.id, price: s.price_adult, early: s.early_price, earlydays: s.early_days, version: s.version } } }
@@ -114,17 +125,18 @@ Page({
     wx.showActionSheet({ itemList: actions, success: r => { handlers[r.tapIndex].call(this,event) } })
   },
   // A-35：停售恢复通道（免确认：重新上架是低危动作，停售才需要确认）
+  // V94：恢复/停售/改价/名额/早鸟均改为「提交审核」——平台确认后才生效，此前继续使用原版本
   resumeSell(e) {
     const id = e.currentTarget.dataset.id
-    api.request('/m/supply/' + id, 'POST', { action: 'resume_sell' }).then(() => { wx.showToast({ title: '已恢复在售', icon: 'success' }); this.fetch() }).catch(err => wx.showToast({ title: err.msg || '恢复失败', icon: 'none' }))
+    api.request('/m/supply/' + id, 'POST', { action: 'resume_sell' }).then(() => { wx.showToast({ title: '恢复申请已提交,待平台确认', icon: 'none', duration: 2500 }); this.fetch() }).catch(err => wx.showToast({ title: err.msg || '提交失败', icon: 'none' }))
   },
   // 停售团期（A 级确认；恢复在 manageSession 里）
   stopSell(e) {
     const id = e.currentTarget.dataset.id
     const s = this.data.list.find(x => Number(x.id) === Number(id))
     confirmChange({ title: '停售确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
-      changes: [{ label: '状态', from: '在售', to: '停售' }], impact: '停售后游客无法再报名该团期；恢复走「管理团期 → 恢复在售」', confirmText: '确认停售', danger: true })
-      .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'stop_sell' }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '停售失败',icon:'none'})) })
+      changes: [{ label: '状态', from: '在售', to: '停售' }], impact: '提交平台审批;批准后游客无法再报名该团期,已下单游客仍按原约定履约', confirmText: '提交停售申请', danger: true })
+      .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'stop_sell' }).then(() => { wx.showToast({ title: '停售申请已提交', icon: 'none' }); this.fetch() }).catch(e => wx.showToast({title:e.msg || '提交失败',icon:'none'})) })
   },
   addQuota(e) {
     const id = e.currentTarget.dataset.id
@@ -136,8 +148,10 @@ Page({
       const val = Number(r.content)
       confirmChange({ title: '调名额确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
         changes: [{ label: '名额', from: s ? String(s.quota) : '原名额', to: String(val) }],
-        impact: '名额调整立即生效；不少于已报名人数才会成功', confirmText: '确认调整' })
-        .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'adjust_quota', value: val, expectedVersion: version }).then(() => this.fetch()).catch(e => wx.showToast({title:e.msg || '名额调整失败',icon:'none'})) })
+        impact: '提交平台审批;批准前名额保持原值,已报名人数不受影响', confirmText: '提交调整申请' })
+        .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'adjust_quota', value: val, expectedVersion: version })
+          .then(() => { wx.showToast({ title: '名额调整申请已提交', icon: 'none' }); this.fetch() })
+          .catch(e => wx.showToast({title:e.msg || '提交失败',icon:'none'})) })
     }})
   },
   // 改价（店长/老板都能改——负责人 2026-11-19 指令；单位分，界面输入元、最多两位小数）。
@@ -160,12 +174,12 @@ Page({
     const pct = Number(fromFen) > 0 ? Math.round((yuan * 100 - Number(fromFen)) / Number(fromFen) * 100) : 0
     confirmChange({ title: '改价确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
       changes: [{ label: '价格', from: '¥' + (Number(fromFen) / 100).toFixed(2), to: '¥' + yuan.toFixed(2) + (pct ? '（' + (pct > 0 ? '涨' : '降') + Math.abs(pct) + '%）' : '') }],
-      impact: '改价立即对游客生效；该团期刚被其他端改过时会提示冲突',
-      needReason: Math.abs(pct) > 30, confirmText: '确认改价', danger: Math.abs(pct) > 30 })
+      impact: '提交平台审批;批准前游客端按原价下单,已下单订单保持原价',
+      needReason: true, confirmText: '提交改价申请', danger: Math.abs(pct) > 30 })
       .then(c => { if (!c.ok) return
         api.request('/m/supply/' + id, 'POST', { action: 'price', value: Math.round(yuan * 100), expectedVersion: version, reason: c.reason })
-          .then(() => { wx.showToast({ title: '已改价 ¥' + (Number(fromFen) / 100).toFixed(2) + '→¥' + yuan.toFixed(2), icon: 'none', duration: 2500 }); this.fetch() })
-          .catch((err) => wx.showToast({ title: err.msg || '改价失败', icon: 'none', duration: 3000 }))
+          .then(() => { wx.showToast({ title: '改价申请已提交:¥' + (Number(fromFen) / 100).toFixed(2) + '→¥' + yuan.toFixed(2) + ',待平台确认', icon: 'none', duration: 3000 }); this.fetch() })
+          .catch((err) => wx.showToast({ title: err.msg || '提交失败', icon: 'none', duration: 3000 }))
       })
   },
   // 早鸟价（旺季武器 §9 P1）：格式「价格(元),提前天数」；留空提交=关闭早鸟；设置后过 M-12 确认
@@ -181,9 +195,9 @@ Page({
         if (!txt) {
           confirmChange({ title: '关闭早鸟确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
             changes: [{ label: '早鸟价', from: cur ? '¥' + cur.split(/[,，]/)[0] : '未设置', to: '关闭' }],
-            impact: '关闭后该团期按原价销售，不再有早鸟优惠', confirmText: '确认关闭' })
+            impact: '提交平台审批;批准后该团期按原价销售', confirmText: '提交申请' })
             .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: null }, expectedVersion: version })
-              .then(() => { wx.showToast({ title: '早鸟已关闭' }); this.fetch() }) })
+              .then(() => { wx.showToast({ title: '关闭早鸟申请已提交', icon: 'none' }); this.fetch() }) })
           return
         }
         const parts = txt.split(/[,，]/)
@@ -192,10 +206,10 @@ Page({
         if (!/^\d+(\.\d{1,2})?$/.test(String(parts[0]).trim())) return wx.showToast({ title: '早鸟价最多两位小数', icon: 'none' })
         confirmChange({ title: '早鸟设置确认', target: (s ? s.title + ' ' : '') + '团期 ' + (s && s.dateShort ? s.dateShort : id),
           changes: [{ label: '早鸟价', from: cur ? '¥' + cur.split(/[,，]/)[0] : '未设置', to: '¥' + yuan.toFixed(2) + ' · 提前' + days + '天' }],
-          impact: '早鸟窗口内按早鸟价成交，需低于现价', confirmText: '确认设置' })
+          impact: '提交平台审批;批准后早鸟窗口内按早鸟价成交', confirmText: '提交申请' })
           .then(c => { if (c.ok) api.request('/m/supply/' + id, 'POST', { action: 'early', value: { price: Math.round(yuan * 100), days }, expectedVersion: version })
-            .then(() => { wx.showToast({ title: '早鸟 ¥' + yuan.toFixed(2) + ' · 提前' + days + '天', icon: 'none', duration: 2500 }); this.fetch() })
-            .catch((err) => wx.showToast({ title: err.msg || '设置失败', icon: 'none' })) })
+            .then(() => { wx.showToast({ title: '早鸟申请已提交:¥' + yuan.toFixed(2) + ' · 提前' + days + '天', icon: 'none', duration: 2500 }); this.fetch() })
+            .catch((err) => wx.showToast({ title: err.msg || '提交失败', icon: 'none' })) })
       }})
   },
 })

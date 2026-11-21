@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="hero">
+    <view class="hero-title">{{mode === 'edit' ? '修改商品档案' : '新增商品'}}</view>
+    <view class="hero-sub">与 PC 同流程:保存草稿 → 提交审核 → 平台确认 → 生效;审批前游客端继续使用原版本。归属、上架与补贴规则由平台管理。</view>
+  </view>
+  <view wx:if="{{error}}" class="empty">{{error}}</view>
+  <view wx:if="{{loaded && !canEdit}}" class="empty">当前无商品编辑权限，可联系平台核对授权。</view>
+  <view wx:if="{{loaded && canEdit}}" class="form">
+    <view class="field" wx:if="{{editableFields.title}}"><text class="label">商品标题 *</text>
+      <input class="inp" value="{{title}}" data-k="title" bindinput="onInput" placeholder="如:朱家角剧本游 · 江南谜案" maxlength="60" /></view>
+    <view class="field" wx:if="{{editableFields.subtitle}}"><text class="label">副标题 / 卖点</text>
+      <input class="inp" value="{{subtitle}}" data-k="subtitle" bindinput="onInput" placeholder="一句话说清楚为什么值得去" maxlength="80" /></view>
+    <view class="field" wx:if="{{editableFields.cat}}"><text class="label">主题频道</text>
+      <picker range="{{catNames}}" value="{{catIndex}}" bindchange="onCat"><view class="inp picker">{{catNames[catIndex]}}</view></picker></view>
+    <view class="field" wx:if="{{editableFields.days_desc}}"><text class="label">行程天数</text>
+      <input class="inp" value="{{daysDesc}}" data-k="daysDesc" bindinput="onInput" placeholder="如:1天 / 2天1夜" maxlength="20" /></view>
+    <view class="field" wx:if="{{editableFields.price_from}}"><text class="label">起售价(元)*</text>
+      <input class="inp" type="digit" value="{{priceYuan}}" data-k="priceYuan" bindinput="onInput" placeholder="列表展示的「起」价" /></view>
+    <view class="field" wx:if="{{editableFields.intro}}"><text class="label">商品介绍 *</text>
+      <textarea class="inp area" value="{{intro}}" data-k="intro" bindinput="onInput" placeholder="面向游客的介绍文案" maxlength="2000" /></view>
+    <view class="field" wx:if="{{editableFields.images}}"><text class="label">图集(最多 9 张,第一张为封面)</text>
+      <view class="imgs"><view wx:for="{{images}}" wx:key="*this" class="imgbox"><image src="{{item}}" mode="aspectFill" class="img" /><view class="imgdel" data-i="{{index}}" bindtap="removeImage">删</view></view>
+        <view wx:if="{{images.length < 9}}" class="imgbox add" bindtap="addImage">＋</view></view></view>
+    <view class="btns">
+      <view class="btn ghost {{submitting ? 'dis' : ''}}" bindtap="saveDraft">保存草稿</view>
+      <view class="btn primary {{submitting ? 'dis' : ''}}" bindtap="submitReview">提交审核</view>
+    </view>
+    <view class="tip">提交后内容锁定;平台批准前游客端按原版本展示与下单</view>
+  </view>
+</view>

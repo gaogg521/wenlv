@@ -9,6 +9,7 @@ const cityLabelAccounts = (code) => CITY_CN[String(code)] || code || '—'
 async function accounts() {
   $('#app').innerHTML = '<div class="card"><div class="sk" style="height:120px"></div></div>'
   if (window.__accTab === 'rolematrix') return roleMatrixTab()
+  if (window.__accTab === 'subjectperms') return subjectPermsTab()
   if (window.__accTab === 'roleexplain') {
     await roleExplainTab()
     // 项9：说明页签此前没有页签栏（切过去就回不来，只能刷新恢复）——补挂同一根页签栏
@@ -17,6 +18,154 @@ async function accounts() {
   }
   return accountsList()
 }
+
+// V94:主体资源权限配置(PC 平台后台唯一授权入口)。配置记录商户/账号·岗位/渠道/资源/动作/字段组/授权人/变更时间;
+// grant 只能收紧或按字段组收紧,不可凭空扩权;变更即递增下发版本并联动目标账号旧会话失效。
+async function subjectPermsTab() {
+  const d = await api('GET', '/admin/subject-perms')
+  const accts = await api('GET', '/admin/accounts?page=1&pageSize=100').catch(() => ({ items: [] }))
+  const accounts = (accts.items || []).filter((u) => ['merchant_partner', 'scenic_partner'].includes(u.role))
+  window.__spFieldGroups = d.fieldGroups || []
+  window.__spAccounts = accounts
+  $('#app').innerHTML = `
+  <div class="card">
+    <div class="card-head"><h2>主体资源权限</h2><span class="muted">下发版本 v${d.permVersion} · 变更即生效,小程序/PC 旧会话按新权限复验</span></div>
+    ${tabBar('subjectperms')}
+    <p class="td-sub">最终权限 = 平台授权 ∩ 主体范围 ∩ 岗位 ∩ 渠道;「拒绝」优先于「允许」;允许行带字段组=收紧到所授字段组。服务端在编辑读取、保存草稿、提交及生效前逐请求校验。</p>
+    <div class="row"><button class="btn primary sm" onclick="subjectPermCreateModal()">＋ 新增授权配置</button></div>
+    ${d.grants.length ? `<table><thead><tr><th>ID</th><th>主体</th><th>岗位/账号</th><th>渠道</th><th>资源</th><th>动作</th><th>字段组</th><th>效果</th><th>授权人/时间</th><th>原因</th><th>操作</th></tr></thead><tbody>
+      ${d.grants.map((g) => `<tr>
+        <td class="num">#${g.id}</td>
+        <td>${g.subject_type === 'merchant' ? '商户' : '景区'}${g.subject_id ? '#' + g.subject_id : '<span class="td-sub">(全部)</span>'}</td>
+        <td>${g.staff_role ? ['核销员', '店长', '老板'][g.staff_role - 1] || g.staff_role : '<span class="td-sub">全部岗位</span>'}${g.account_uid ? '<small class="td-sub"> 账号#' + g.account_uid + '</small>' : ''}</td>
+        <td>${{ all: '双端', pc: 'PC', mini: '小程序' }[g.channel] || g.channel}</td>
+        <td>${esc(g.res_kind)}</td><td>${esc(g.action)}</td><td>${g.field_group ? esc(g.field_group) : '<span class="td-sub">全部</span>'}</td>
+        <td><span class="pill ${Number(g.effect) === 1 ? 'ok' : 's70'}">${Number(g.effect) === 1 ? '允许/收紧' : '拒绝'}</span></td>
+        <td class="td-sub">${esc(g.granted_by_name || '')}<br>${esc((g.granted_at || '').slice(0, 16))}</td>
+        <td class="td-sub" style="max-width:180px">${esc(g.reason || '')}</td>
+        <td><button class="btn s70 sm" onclick="subjectPermDelete(${g.id})">删除</button></td></tr>`).join('')}</tbody></table>` : '<p class="td-sub">暂无自定义授权(按内置基线执行)</p>'}
+    <h3 style="margin:16px 0 8px">按员工动作授权(审批权单独授予)</h3>
+    <p class="td-sub">主体资源审批(subject.approve)基线仅超管;运营由超管按员工单独授予或撤回,普通运营默认无权审批;申请人不得审批本人提交的申请。</p>
+    ${d.actions.length ? `<table><thead><tr><th>账号</th><th>动作</th><th>效果</th><th>授权人/时间</th><th>原因</th></tr></thead><tbody>
+      ${d.actions.map((a) => `<tr><td>${esc(a.display_name || a.username)}<small class="td-sub"> #${a.uid}</small></td>
+        <td><code>${esc(a.action)}</code></td>
+        <td><span class="pill ${Number(a.effect) === 1 ? 'ok' : 's70'}">${Number(a.effect) === 1 ? '授予' : '收回'}</span></td>
+        <td class="td-sub">${esc(a.granted_by_name || '')} ${esc((a.granted_at || '').slice(0, 16))}</td>
+        <td class="td-sub">${esc(a.reason || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="td-sub">暂无按员工动作授权记录</p>'}
+  </div>`
+}
+window.subjectPermDelete = async (id) => {
+  const ok = await uiConfirm({ title: '删除授权配置', message: '删除后该条授权立即失效,下发版本递增,各端旧会话按新权限复验。确认删除?', danger: true })
+  if (!ok) return
+  try { await api('DELETE', '/admin/subject-perms/' + id); closeModal(); toast('授权已删除'); subjectPermsTab() }
+  catch (e) { toast(e.message, true) }
+}
+window.subjectPermCreateModal = () => {
+  const groups = window.__spFieldGroups || []
+  const accounts = window.__spAccounts || []
+  modal('新增主体资源授权', `
+    <div class="field"><label>主体类型</label><select id="spType" onchange="document.getElementById('spSubjectWrap').style.display=this.value==='scenic'?'none':'block'">
+      <option value="merchant">商户</option><option value="scenic">景区</option></select></div>
+    <div class="field" id="spSubjectWrap"><label>主体 ID(留空=该类型全部主体)</label><input id="spSubject" type="number" placeholder="如 1"></div>
+    <div class="field"><label>岗位(仅小程序渠道生效;留空=全部)</label><select id="spRole"><option value="">全部岗位</option><option value="1">核销员</option><option value="2">店长</option><option value="3">老板</option></select></div>
+    <div class="field"><label>PC 账号(留空=全部账号)</label><select id="spAccount"><option value="">全部账号</option>
+      ${accounts.map((u) => `<option value="${u.id}">${esc(u.display_name || u.username)} (#${u.id})</option>`).join('')}</select></div>
+    <div class="field"><label>渠道</label><select id="spChannel"><option value="all">双端</option><option value="pc">仅 PC</option><option value="mini">仅小程序</option></select></div>
+    <div class="field"><label>资源类型</label><select id="spKind"><option value="product">商品</option><option value="session">团期</option><option value="stock">直购库存</option><option value="merchant">商户资料</option><option value="scenic">景区资料</option></select></div>
+    <div class="field"><label>动作</label><select id="spAction"><option value="*">全部动作</option><option value="create">新增</option><option value="update">修改</option></select></div>
+    <div class="field"><label>字段组</label><select id="spGroup"><option value="">全部字段</option>${groups.map((g) => `<option value="${g}">${g}</option>`).join('')}</select></div>
+    <div class="field"><label>效果</label><select id="spEffect"><option value="0">拒绝(整体或该字段组)</option><option value="1">允许/收紧</option></select></div>
+    <div class="field"><label>授权原因 *(进入审计与授权记录)</label><input id="spReason" maxlength="200" placeholder="如:试点门店先收紧价格字段"></div>`,
+    `<button class="btn ghost" onclick="closeModal()">取消</button><button class="btn primary" onclick="subjectPermCreate()">保存</button>`)
+}
+window.subjectPermCreate = async () => {
+  const body = { subjectType: $('#spType').value, subjectId: $('#spSubject').value || null,
+    staffRole: $('#spRole').value || null, accountUid: $('#spAccount').value || null,
+    channel: $('#spChannel').value, resKind: $('#spKind').value, action: $('#spAction').value,
+    fieldGroup: $('#spGroup').value || null, effect: Number($('#spEffect').value), reason: ($('#spReason').value || '').trim() }
+  if (!body.reason) return toast('请填写授权原因', true)
+  try { await api('POST', '/admin/subject-perms', body); closeModal(); toast('授权已保存,下发版本已递增'); subjectPermsTab() }
+  catch (e) { toast(e.message, true) }
+}
+
+// V94:按员工动作授权弹窗(授予/撤回 subject.approve 等;变更联动 token_epoch 旧会话立即失效)
+window.accountActionModal = async (uid, username) => {
+  const d = await api('GET', '/admin/accounts/' + uid + '/actions')
+  const eff = new Set(d.effective || [])
+  modal('动作授权 · ' + username, `
+    <p class="td-sub">有效动作 = 角色基线 ∪ 授予 − 收回;变更后该账号旧会话立即失效,按新权限重新登录。主体资源审批默认仅超管,运营须在此单独授予。</p>
+    <table><thead><tr><th>动作</th><th>说明</th><th>当前</th><th>操作</th></tr></thead><tbody>
+      ${Object.entries(d.actionCatalog || {}).map(([k, label]) => `<tr><td><code>${esc(k)}</code></td><td class="td-sub">${esc(label)}</td>
+        <td><span class="pill ${eff.has(k) ? 'ok' : 'off'}">${eff.has(k) ? '有权' : '无权'}</span></td>
+        <td><button class="btn ${eff.has(k) ? 's70' : 'primary'} sm" onclick="accountActionSet(${uid}, '${escJs(k)}', ${eff.has(k) ? 0 : 1}, '${escJs(username)}')">${eff.has(k) ? '撤回' : '授予'}</button></td></tr>`).join('')}
+    </tbody></table>
+    <div id="aaReasonWrap" style="margin-top:10px"><div class="field"><label>授权原因 *(进入审计)</label><input id="aaReason" maxlength="200"></div></div>`,
+    `<button class="btn ghost" onclick="closeModal()">关闭</button>`, true)
+}
+window.accountActionSet = async (uid, action, effect, username) => {
+  const reason = ($('#aaReason')?.value || '').trim()
+  if (!reason) return toast('请填写授权原因', true)
+  const okc = await uiConfirm({ title: (effect === 1 ? '授予' : '撤回') + ' ' + action,
+    impact: (effect === 1 ? '授予后该账号可执行该动作,旧会话立即失效、需重新登录。' : '撤回后该账号立即失去该动作,旧会话立即失效。') + '原因:' + reason,
+    danger: effect !== 1 })
+  if (!okc.ok) return accountActionModal(uid, username)
+  try {
+    await api('POST', '/admin/accounts/' + uid + '/actions', { action, effect, reason })
+    toast(effect === 1 ? '已授予,该账号旧会话已失效' : '已撤回,该账号旧会话已失效')
+    accountActionModal(uid, username)
+  } catch (e) { toast(e.message, true) }
+}
+
+
+window.accountApproverScope = async (uid) => {
+  const endpoint = '/admin/accounts/' + uid + '/approver-scope'
+  try {
+    const { account, rows } = await api('GET', endpoint)
+    const describe = (row) => [
+      { merchant: '商户', scenic: '景区' }[row.subject_type] || '全部主体类型',
+      row.subject_id ? '#' + row.subject_id : '全部主体',
+      row.city_code ? cityLabelAccounts(row.city_code) : '全部城市',
+    ].join(' · ')
+    modal('审批范围 · ' + account.username, `
+      <p>运营须同时拥有主体资源审批动作权限和至少一条有效范围。每条范围内的条件同时满足即可办理，多条范围可叠加。</p>
+      ${rows.length ? `<table><thead><tr><th>范围</th><th>授权原因</th><th>授权人</th><th>操作</th></tr></thead><tbody>
+        ${rows.map(row => `<tr><td>${esc(describe(row))}</td><td>${esc(row.reason)}</td><td>${esc(row.granted_by_name || '—')}</td><td><button class="btn ghost sm" data-scope-id="${Number(row.id)}">撤回</button></td></tr>`).join('')}
+      </tbody></table>` : '<p>暂无审批范围</p>'}
+      <div class="field"><label for="approverType">主体类型</label><select id="approverType"><option value="">全部类型</option><option value="merchant">商户</option><option value="scenic">景区</option></select></div>
+      <div class="field"><label for="approverSubject">主体 ID（留空适用所选类型的全部主体）</label><input id="approverSubject" type="number" min="1" step="1"></div>
+      <div class="field"><label for="approverCity">城市</label><select id="approverCity"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([code, name]) => `<option value="${esc(code)}">${esc(name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="approverReason">授权原因（必填）</label><input id="approverReason" maxlength="200"></div>`,
+      '<button class="btn ghost" onclick="closeModal()">关闭</button><button id="saveApproverScope" class="btn primary">授予范围</button>', true)
+    $('#saveApproverScope').onclick = async function saveApproverScope() {
+      const subjectType = $('#approverType').value
+      const subjectId = $('#approverSubject').value
+      const city = $('#approverCity').value
+      const reason = $('#approverReason').value.trim()
+      if (!reason || (subjectId && (!subjectType || !/^[1-9][0-9]*$/.test(subjectId)))) return toast('请填写原因；指定主体时需选择类型并填写有效 ID', true)
+      const summary = describe({ subject_type: subjectType, subject_id: subjectId, city_code: city })
+      const confirmation = await uiConfirm({ title: '授予审批范围', target: account.username, impact: summary + '。该账号需重新登录。' })
+      if (!confirmation.ok) return accountApproverScope(uid)
+      try {
+        await api('POST', endpoint, { subjectType, subjectId, city, reason })
+        toast('已授予审批范围')
+        await accountApproverScope(uid)
+      } catch (e) { toast(e.message, true) }
+    }
+    for (const button of document.querySelectorAll('[data-scope-id]')) {
+      button.onclick = async function removeApproverScope() {
+        const row = rows.find(item => Number(item.id) === Number(button.dataset.scopeId))
+        const confirmation = await uiConfirm({ title: '撤回审批范围', target: account.username, impact: describe(row) + '。该账号需重新登录。', danger: true })
+        if (!confirmation.ok) return accountApproverScope(uid)
+        try {
+          await api('DELETE', endpoint + '/' + row.id)
+          toast('已撤回审批范围')
+          await accountApproverScope(uid)
+        } catch (e) { toast(e.message, true) }
+      }
+    }
+  } catch (e) { toast(e.message, true) }
+}
+
 
 // R-05：角色能力说明（谁、在哪端、能看什么、能做什么）——数据与 modules.mjs / ADMIN_ACTIONS 同源（domain/role-matrix.mjs）
 async function roleExplainTab() {
@@ -79,6 +228,7 @@ function tabBar(active) {
   return `<div class="cfg-tabs" style="margin-bottom:12px">
     <button class="cfg-tab ${active === 'list' ? 'on' : ''}" onclick="window.__accTab='list';accounts()">账号</button>
     <button class="cfg-tab ${active === 'rolematrix' ? 'on' : ''}" onclick="window.__accTab='rolematrix';accounts()">角色默认权限</button>
+    <button class="cfg-tab ${active === 'subjectperms' ? 'on' : ''}" onclick="window.__accTab='subjectperms';accounts()">主体资源权限</button>
     <button class="cfg-tab ${active === 'roleexplain' ? 'on' : ''}" onclick="window.__accTab='roleexplain';accounts()">角色说明</button></div>`
 }
 
@@ -110,7 +260,10 @@ async function accountsList() {
       const lastSuper = u.role === 'super' && rows.filter((r) => r.role === 'super' && Number(r.status) === 1).length <= 1
       const ops = []
       ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${escJs(u.username)}')">验证方式</button>`)
+      if (u.role === 'ops') ops.push(`<button class="btn ghost sm" onclick="accountApproverScope(${u.id})">审批范围</button>`)
       if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountPermModal(${u.id}, '${escJs(u.username)}')">权限</button>`)
+      // V94:动作级授权(主体资源审批等按员工授予/撤回)
+      if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountActionModal(${u.id}, '${escJs(u.username)}')">动作授权</button>`)
       ops.push(`<button class="btn ghost sm" onclick="accountProfileModal(${u.id}, '${escJs(u.display_name)}', '${escJs(u.note || '')}')">资料</button>`)
       if (!self) {
         ops.push(`<button class="btn ghost sm" onclick="accountRoleModal(${u.id}, '${escJs(u.username)}', '${u.role}', '${escJs(u.scope_city || '')}')">角色/城市</button>`)

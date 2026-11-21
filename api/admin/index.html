@@ -39,7 +39,7 @@
         <button id="loginSubmit" class="login-submit" type="submit"><span>登录工作台</span><span aria-hidden="true">↗</span></button>
         <p class="login-access-note"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 3 5v5c0 4 7 8 7 8s7-4 7-8V5zM7 10l2 2 4-4"/></svg>登录后按账号角色开放相应权限</p>
         <!-- 演示快捷填充：按钮不带凭据，账号密码只在 login.js 的本机判断分支里注入，公开部署的 HTML 不含默认凭据 -->
-        <details class="demo-accounts" id="demoAccounts" hidden><summary>本地演示账号 <span>仅供体验</span></summary><div class="quick-accounts"><button type="button" class="qa" data-demo-user="admin">超级管理员</button><button type="button" class="qa" data-demo-user="finance">财务</button><button type="button" class="qa" data-demo-user="city310118">城市合伙人</button><button type="button" class="qa" data-demo-user="mer310118">商户主体</button><button type="button" class="qa" data-demo-user="sce310118">景区主体</button></div></details>
+        <details class="demo-accounts" id="demoAccounts" hidden><summary>本地演示账号 <span>仅供体验</span></summary><div class="quick-accounts"><button type="button" class="qa" data-demo-user="admin">超级管理员</button><button type="button" class="qa" data-demo-user="ops">平台运营</button><button type="button" class="qa" data-demo-user="finance">财务</button><button type="button" class="qa" data-demo-user="city310118">城市合伙人</button><button type="button" class="qa" data-demo-user="mer310118">商户主体</button><button type="button" class="qa" data-demo-user="sce310118">景区主体</button></div></details>
       </form>
       <form class="glass-card" id="step2" style="display:none">
         <p class="form-eyebrow">账号安全验证</p><h2>再确认一下，是你本人</h2><p class="login-intro" id="mfaTip">请输入验证器 App 中的 6 位动态码</p>
@@ -72,6 +72,7 @@
     <header class="topbar">
       <button class="menu-toggle" id="menuToggle" aria-label="展开导航" aria-expanded="false" aria-controls="workspaceSide">☰</button><div id="crumb" role="link" tabindex="0" title="返回工作台" aria-label="返回工作台首页">经营概览</div>
       <div class="top-right">
+        <button id="inboxBell" class="btn ghost sm" type="button" hidden onclick="openInbox()" aria-label="站内通知" title="站内通知">🔔<span id="inboxBadge" class="pill warn" hidden style="margin-left:4px">0</span></button>
         <span class="who" id="who"></span>
         <button class="btn ghost sm" onclick="logout()">退出登录</button>
       </div>
@@ -108,6 +109,10 @@
 <script src="/admin-ui/pages/partnerdash.js"></script>
 <script src="/admin-ui/pages/tickets.js"></script>
 <script src="/admin-ui/pages/actions.js"></script>
+<script src="/admin-ui/pages/subject-work.js"></script>
+<script src="/admin-ui/pages/subject-approve.js"></script>
+<script src="/admin-ui/pages/ops-desk.js"></script>
+<script src="/admin-ui/inbox.js"></script>
 <script src="/admin-ui/entity-editor.js"></script>
 <script src="/admin-ui/chainhub.js"></script>
 <script src="/admin-ui/miniapp.js"></script>

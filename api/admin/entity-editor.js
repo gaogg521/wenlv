@@ -250,8 +250,9 @@
 
   /* ---------------- 主入口 ---------------- */
   window.entityEditor = async (kind, id, opts = {}) => {
-    const action = `entity.${kind}.${id ? 'edit' : 'create'}`
-    if (!adminCan(action)) return toast(adminWhy(action), true)
+    const ap = opts.approval // V94 审批模式:主体方编辑走「保存草稿 → 提交审核」,字段按平台授权投影
+    const action = `entity.${kind}.${id && !ap ? 'edit' : 'create'}`
+    if (!ap && !adminCan(action)) return toast(adminWhy(action), true)
     if (st && st.dirty && !confirm('当前编辑尚未保存，确定放弃？')) return
     closeEditor(true)
     const root = document.createElement('div')
@@ -260,37 +261,59 @@
     document.body.appendChild(root)
     document.body.classList.add('dialog-open')
     try {
+      let draftPayload = null
+      if (ap && ap.draftId) draftPayload = (await api('GET', '/admin/subject-requests/' + ap.draftId)).payload || {}
       const [schema, data] = await Promise.all([api('GET', '/admin/entity-schemas/' + kind), id ? api('GET', `/admin/entities/${kind}/${id}`) : Promise.resolve(null)])
       const values = data ? data.values : Object.fromEntries(schema.sections.flatMap((s) => s.fields).map((f) => [f.k, f.dflt ?? (opts.defaults || {})[f.k] ?? null]))
       Object.assign(values, id ? {} : (opts.defaults || {}))
-      st = { kind, id, schema, values, dirty: false, opts, version: data && data.version != null ? Number(data.version) : undefined }
+      if (draftPayload) Object.assign(values, draftPayload)
+      st = { kind, id, schema, values, dirty: false, opts, version: data && data.version != null ? Number(data.version) : undefined, sessions: [] }
       render()
     } catch (e) { closeEditor(true); toast(e.message, true) }
   }
   function render() {
     const { schema, values, id } = st
+    const ap = st.opts.approval
+    // 审批模式字段投影:只渲染平台授权的字段(合同/凭据/归属等平台专管字段不进入主体表单)
+    const allowed = ap ? (ap.perms?.[st.kind]?.[ap.action || 'update']?.fields || []) : null
     const title = id ? `编辑${schema.label}${values[schema.titleKey] ? ' · ' + E(String(values[schema.titleKey]).slice(0, 24)) : ''}` : `新建${schema.label}`
     const drawer = document.querySelector('#eeRoot .ee-drawer')
     drawer.innerHTML = `
       <header class="ee-head"><div class="ee-ring" id="eeRing" title="资料完整度"><b>0%</b></div>
-        <div><h3>${title}</h3><p>${id ? 'ID ' + E(id) + ' · ' : ''}带 <b>*</b> 为必填；修改会写入审计日志</p></div>
+        <div><h3>${title}${ap ? '<span class="pill warn" style="margin-left:8px">审批制</span>' : ''}</h3>
+          <p>${id ? 'ID ' + E(id) + ' · ' : ''}带 <b>*</b> 为必填${ap ? ';保存草稿 → 提交审核 → 平台确认后生效,审批前游客端使用原正式版本' : ';修改会写入审计日志'}</p></div>
         <button class="ee-close" onclick="eeClose()" aria-label="关闭">✕</button></header>
       <div class="ee-main">
         <nav class="ee-nav">${schema.sections.map((s, i) => `<a data-i="${i}" onclick="eeJump(${i})">${E(s.title)}<small></small></a>`).join('')}</nav>
-        <div class="ee-body" id="eeBody">${schema.sections.map((s, i) => `
+        <div class="ee-body" id="eeBody">${ap ? `
+          <section class="ee-sec"><div class="ee-sec-h"><h4>申请信息</h4><p>提交后内容锁定;差异与影响将展示给审批人</p></div>
+            <div class="ee-grid">
+              <div class="ee-field span2"><label for="eeApNote">申请说明</label>
+                <textarea id="eeApNote" rows="2" placeholder="如:旺季调价依据/上新说明"></textarea></div>
+              <div class="ee-field span2"><label for="eeApImpact">影响说明(价格/库存/时段/上下架等影响在售资源时必填)</label>
+                <textarea id="eeApImpact" rows="2" placeholder="受影响时段与既有订单处理说明,如:已下单游客按原约定履约"></textarea></div>
+            </div></section>` : ''}
+          ${schema.sections.map((s, i) => `
           <section class="ee-sec" id="eeSec${i}"><div class="ee-sec-h"><h4>${E(s.title)}</h4>${s.desc ? `<p>${E(s.desc)}</p>` : ''}</div>
-            <div class="ee-grid">${s.fields.map((f) => `
+            <div class="ee-grid">${s.fields.filter((f) => !allowed || allowed.includes(f.k)).map((f) => `
               <div class="ee-field ${f.span === 2 || ['rich', 'gallery', 'repeat'].includes(f.type) ? 'span2' : ''}" data-field="${f.k}">
                 <label for="${fid(f.k)}">${E(f.label)}${f.required ? '<b>*</b>' : ''}${f.isCol ? '' : ''}</label>
                 ${control(f, values[f.k])}
                 <div class="ee-help">${f.help ? E(f.help) : ''}<span class="ee-cnt"></span></div>
                 <div class="ee-err" id="eeErr_${f.k}"></div>
-              </div>`).join('')}</div></section>`).join('')}</div>
+              </div>`).join('') || '<p class="td-sub">本组字段未授权</p>'}</div></section>`).join('')}
+          ${ap && st.kind === 'product' && !id ? '<section class="ee-sec" id="eeSesBlock"><div class="ee-sec-h"><h4>首批团期(可选,合并生效)</h4><p>新增商品可携带首批可售团期,审批通过后与商品同事务生效,避免出现孤立团期</p></div><div id="eeSesList"></div><div class="ee-grid" style="margin-top:8px"><div class="ee-field"><label>出发日期</label><input type="date" id="eeSesDate"></div><div class="ee-field"><label>名额</label><input type="number" id="eeSesQuota" min="1" value="20"></div><div class="ee-field"><label>成人价(元)</label><input type="number" id="eeSesPrice" min="1" step="0.01"></div><div class="ee-field"><label>早鸟价(元,可空)</label><input type="number" id="eeSesEarly" step="0.01"></div><div class="ee-field"><label>成团人数</label><input type="number" id="eeSesMin" min="1" value="10"></div><div class="ee-field"><label style="visibility:hidden">添加</label><button class="btn ghost" onclick="eeSesAdd()">＋ 加入首批团期</button></div></div></section>' : ''}
+        </div>
       </div>
-      <footer class="ee-foot"><span class="muted" id="eeState">${id ? '已加载' : '新建'}</span><span style="flex:1"></span>
-        <button class="btn ghost" onclick="eeClose()">取消</button>
-        <button class="btn primary" id="eeSave" onclick="eeSave()">${id ? '保存修改' : '创建'}<small> Ctrl+S</small></button></footer>`
+      <footer class="ee-foot"><span class="muted" id="eeState">${ap ? (ap.draftId ? '续编草稿' : (id ? '基于当前正式版本修改' : '新建申请')) : (id ? '已加载' : '新建')}</span><span style="flex:1"></span>
+        ${ap
+          ? `<button class="btn ghost" onclick="eeClose()">取消</button>
+             <button class="btn ghost" id="eeDraft" onclick="eeApprovalSave(false)">保存草稿</button>
+             <button class="btn primary" id="eeSave" onclick="eeApprovalSave(true)">提交审核<small> Ctrl+S 保存草稿</small></button>`
+          : `<button class="btn ghost" onclick="eeClose()">取消</button>
+             <button class="btn primary" id="eeSave" onclick="eeSave()">${id ? '保存修改' : '创建'}<small> Ctrl+S</small></button>`}</footer>`
     drawer.querySelectorAll('.ee-rt-body').forEach((el) => { el.closest('.ee-rich').querySelector('.ee-rt-foot span').textContent = el.innerText.replace(/\s/g, '').length })
+    if (ap && st.sessions.length) eeSesRender()
     drawer.addEventListener('input', (e) => { if (!e.target.closest('.ee-tags input,.ee-refm-q')) { counter(e.target); eeDirty() } })
     drawer.addEventListener('change', (e) => { if (e.target.closest('.ee-switch')) e.target.nextElementSibling.nextElementSibling.textContent = e.target.checked ? '是' : '否'; eeDirty() })
     drawer.querySelectorAll('[data-count]').forEach(counter)
@@ -356,9 +379,77 @@
   window.eeCloseHard = () => closeEditor(true)
   document.addEventListener('keydown', (e) => {
     if (!st) return
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); eeSave() }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); st.opts.approval ? eeApprovalSave(false) : eeSave() }
     if (e.key === 'Escape') { e.stopPropagation(); eeClose() }
   }, true)
+
+  /* ---------------- V94 审批模式:草稿/提交与首批团期 ---------------- */
+  window.eeSesAdd = () => {
+    if (!st) return
+    const date = document.getElementById('eeSesDate')?.value
+    const quota = Number(document.getElementById('eeSesQuota')?.value)
+    const price = Number(document.getElementById('eeSesPrice')?.value)
+    const early = document.getElementById('eeSesEarly')?.value
+    const minGo = Number(document.getElementById('eeSesMin')?.value || 10)
+    if (!date) return toast('请选择出发日期', true)
+    if (!(quota >= 1)) return toast('名额须为正整数', true)
+    if (!(price > 0)) return toast('请填写成人价(元)', true)
+    if (early !== '' && early != null && Number(early) >= price) return toast('早鸟价须低于成人价', true)
+    st.sessions.push({ depart_date: date, quota, price_adult: price,
+      early_price: early !== '' && early != null ? Number(early) : null, early_days: null, min_go: minGo || 10 })
+    st.dirty = true
+    eeSesRender()
+  }
+  window.eeSesDel = (i) => { if (!st) return; st.sessions.splice(i, 1); eeSesRender() }
+  window.eeSesRender = () => {
+    const box = document.getElementById('eeSesList')
+    if (!box) return
+    box.innerHTML = st.sessions.length ? `<table><thead><tr><th>出发日期</th><th>名额</th><th>成人价</th><th>早鸟价</th><th>成团</th><th></th></tr></thead><tbody>
+      ${st.sessions.map((s, i) => `<tr><td>${E(s.depart_date)}</td><td>${s.quota}</td><td>¥${Number(s.price_adult).toFixed(2)}</td>
+        <td>${s.early_price ? '¥' + Number(s.early_price).toFixed(2) : '—'}</td><td>${s.min_go}</td>
+        <td><button class="btn s70 sm" onclick="eeSesDel(${i})">移除</button></td></tr>`).join('')}</tbody></table>` : '<p class="td-sub">未添加;也可审批通过后再单独提交团期申请</p>'
+  }
+  window.eeApprovalSave = async (submit) => {
+    if (!st) return
+    const ap = st.opts.approval
+    const btn = document.getElementById(submit ? 'eeSave' : 'eeDraft')
+    if (btn) { if (btn.disabled) return; btn.disabled = true }
+    document.querySelectorAll('.ee-err').forEach((x) => { x.textContent = '' })
+    document.querySelectorAll('.ee-field.bad').forEach((x) => x.classList.remove('bad'))
+    try {
+      const values = collect()
+      const base = { kind: st.kind, action: st.id ? (ap.action || 'update') : 'create', resourceId: st.id || null,
+        payload: values, expectedVersion: st.version, note: document.getElementById('eeApNote')?.value || '',
+        impactNote: document.getElementById('eeApImpact')?.value || '' }
+      let r
+      if (ap.draftId) {
+        r = await api('PUT', '/admin/subject-requests/' + ap.draftId, base)
+        if (submit) r = await api('POST', '/admin/subject-requests/' + r.id + '/submit', {})
+      } else {
+        r = await api('POST', '/admin/subject-requests', { ...base, submit: false })
+        // 首批团期子申请:挂到主申请,提交主申请时随单进入待审、批准时合并生效
+        for (const s of (st.sessions || [])) {
+          await api('POST', '/admin/subject-requests', { kind: 'session', action: 'create', payload: s, parentId: r.id, submit: false })
+        }
+        if (submit) r = await api('POST', '/admin/subject-requests/' + r.id + '/submit', {})
+      }
+      st.dirty = false
+      toast(submit ? '已提交审核' + (r.reqNo ? ' · 申请号 ' + r.reqNo : '') + ',已通知平台审批人' : '草稿已保存,可在「我的变更申请」续编、预览或提交')
+      const cb = st.opts.onSaved
+      closeEditor(true)
+      if (cb) cb(r); else if (typeof go === 'function') go(location.hash.slice(1) || 'dash', { history: false })
+    } catch (e) {
+      const errs = e.fieldErrors || {}
+      let first = null
+      for (const [k, msg] of Object.entries(errs)) {
+        const box = document.getElementById('eeErr_' + k)
+        if (box) { box.textContent = msg; box.closest('.ee-field').classList.add('bad'); first ||= box }
+      }
+      if (first) first.closest('.ee-field').scrollIntoView({ behavior: 'smooth', block: 'center' })
+      document.getElementById('eeState').textContent = Object.keys(errs).length ? `有 ${Object.keys(errs).length} 处需要修改` : '保存失败'
+      toast(e.message, true)
+    } finally { if (btn) btn.disabled = false }
+  }
   window.addEventListener('beforeunload', (e) => { if (st && st.dirty) { e.preventDefault(); e.returnValue = '' } })
 
   /* 列表页小部件：完整度条 + 缩略图 */

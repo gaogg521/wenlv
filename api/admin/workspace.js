@@ -32,8 +32,11 @@
     wallets: '用户积分、等级、勋章与存证事件的汇总视图。', vc: '可携出的旅行凭证：签发、验签与吊销。',
     terms: '后台术语与小程序合规用语的对照表。',
     users: '所有注册用户：分群、搜索、消费与内容画像；可冻结账号或标记风险，操作全部留痕。',
+    subjectwork: '商户/景区主体工作台：新增商品、维护资料、发起变更申请并跟踪审批进度；资源列表同时显示正式状态与申请状态。',
+    subjectapprove: '主体资源审批：字段三列对比与业务影响确认；批准即生效、退回必填原因，审批前游客端继续使用原正式版本。',
+    opsdesk: '运营工作台：按当前授权聚合主体预审、内容待办与售后工单;审批类动作须单独授权。',
   }
-  const renderers = { partnerdash: partnerDashPage, scenario: scenarioPage, taskcash: taskCash, contentcases: contentCases, comments: adminComments, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, accounts, tickets, entitlements, cases, fund, reviewqueue, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators }
+  const renderers = { partnerdash: partnerDashPage, scenario: scenarioPage, taskcash: taskCash, contentcases: contentCases, comments: adminComments, partnerperf: partnerPerformancePage, contentdash, partners, dash, users, products, merchants, settlements, budgets, promoters, config, risk, audit, system, features, content, withdrawals, agreements, attest, security, accounts, tickets, entitlements, cases, fund, reviewqueue, integrations, web3dash, pointassets, badges, wallets, contract, faqs, banners, phrases, rateov, kyc, cocreate, terms, tasks, conflicts, scenics, suppliers, creators, subjectwork, subjectapprove, opsdesk }
   // 兼容工作区中新增的数字身份/链与资产页面，不将其后台业务改动纳入本轮提交。
   if (typeof vcPage === 'function') renderers.vc = vcPage
   if (typeof chainAssetsPage === 'function') renderers.chainassets = chainAssetsPage

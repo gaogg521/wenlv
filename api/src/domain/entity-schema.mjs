@@ -145,7 +145,16 @@ const S = {
     ],
     async validate(v, ctx) {
       if (v.sign_deadline && !validDeadline(v.sign_deadline)) return { sign_deadline: '请输入有效的本地报名截止日期时间' }
-      if (v.early_price != null && v.price_adult != null && v.early_price >= v.price_adult) return { early_price: '早鸟价须低于成人价' }
+      // 早鸟<现价:比较双方必须同口径——payload 已 normalize 为分,行存储也是分;
+      // 仅当本次提交触及价格字段时才比较(提交了取 v(分),没提交回退行存储(分)),
+      // 避免"payload 分 × before 元"混合口径误判,也避免状态类变更(不触价格)被行内相等值误报
+      const touches = ctx.input && ('early_price' in ctx.input || 'price_adult' in ctx.input)
+      if (touches) {
+        const src = (k) => (k in ctx.input) ? (v[k] != null ? Number(v[k]) : null) : (ctx.row && ctx.row[k] != null ? Number(ctx.row[k]) : null)
+        const early = src('early_price')
+        const adult = src('price_adult')
+        if (early != null && adult != null && early >= adult) return { early_price: '早鸟价须低于成人价' }
+      }
       if (ctx.creating && v.depart_date && v.depart_date < bizDay()) return { depart_date: '出发日期不可早于今天' }
       if (!ctx.creating && v.quota != null && ctx.row && v.quota < Number(ctx.row.booked)) return { quota: `已报名 ${ctx.row.booked} 人，名额不能少于已报名人数` }
     },
@@ -877,7 +886,9 @@ export async function save(kind, input, ctx, tx) {
     if (f.showIf && vals[f.showIf[0]] !== undefined && String(vals[f.showIf[0]] ?? '') !== f.showIf[1]) delete errors[f.k]
     if (f.hideIf && vals[f.hideIf[0]] !== undefined && String(vals[f.hideIf[0]] ?? '') === f.hideIf[1]) delete errors[f.k]
   }
-  if (sc.validate) Object.assign(errors, (await sc.validate({ ...before, ...vals }, { creating, row, id: ctx.id })) || {})
+  // validate 收到 {...before(展示口径), ...vals(存储口径)};需要区分"本次提交了哪些字段"的校验
+  // 通过 ctx.input 取原始入参(如 session 早鸟/现价的同源比较),其余校验不受影响
+  if (sc.validate) Object.assign(errors, (await sc.validate({ ...before, ...vals }, { creating, row, id: ctx.id, input: input })) || {})
   if (Object.keys(errors).length) {
     const first = Object.entries(errors)[0]
     const lab = allFields(sc).find((f) => f.k === first[0])?.label || first[0]
@@ -927,7 +938,7 @@ export async function save(kind, input, ctx, tx) {
         await c.q('INSERT INTO master_data_version (kind, ref_id, version_no, snapshot, changed_by, reason) VALUES (?,?,?,?,?,?)',
           [kind, id, Number(vseq.v) + 1,
             // 前后值统一存"存储口径"（金额=分）——before 来自 readValues 是展示口径，要转回去
-            JSON.stringify({ source: 'pc', operator: 'admin:' + (ctx.admin.name || ''),
+            JSON.stringify({ source: ctx.source || 'pc', operator: 'admin:' + (ctx.admin.name || ''),
               before: Object.fromEntries(changed.map((k) => [k, mask(k, toStore(allFields(sc).find((f) => f.k === k), before[k]))])), after: Object.fromEntries(changed.map((k) => [k, mask(k, vals[k])])), changedFields: changed }),
             'admin:' + (ctx.admin.name || ''), ctx.versionReason || null])
       }

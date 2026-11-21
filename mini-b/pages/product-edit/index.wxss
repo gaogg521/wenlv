@@ -1,0 +1,22 @@
+.page { min-height: 100vh; background: #f6f7fb; padding: 0 24rpx 60rpx; }
+.hero { padding: 36rpx 8rpx 20rpx; }
+.hero-title { font-size: 40rpx; font-weight: 700; color: #1c2333; }
+.hero-sub { margin-top: 10rpx; font-size: 24rpx; color: #7b849b; line-height: 1.6; }
+.form { background: #fff; border-radius: 20rpx; padding: 24rpx; }
+.field { margin-bottom: 22rpx; }
+.label { display: block; font-size: 26rpx; color: #5a6377; margin-bottom: 10rpx; }
+.inp { width: 100%; box-sizing: border-box; border: 1rpx solid #dfe4ee; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 28rpx; color: #1c2333; background: #fbfcfe; }
+.picker { line-height: 1.5; }
+.area { height: 200rpx; }
+.imgs { display: flex; flex-wrap: wrap; gap: 14rpx; }
+.imgbox { width: 150rpx; height: 150rpx; border-radius: 12rpx; overflow: hidden; position: relative; border: 1rpx solid #e4e8f0; }
+.img { width: 100%; height: 100%; }
+.imgdel { position: absolute; right: 0; bottom: 0; background: rgba(180,35,24,.85); color: #fff; font-size: 20rpx; padding: 4rpx 14rpx; border-radius: 8rpx 0 0 0; }
+.imgbox.add { display: flex; align-items: center; justify-content: center; font-size: 44rpx; color: #2953ff; background: #f2f5ff; }
+.btns { display: flex; gap: 16rpx; margin-top: 28rpx; }
+.btn { flex: 1; text-align: center; padding: 20rpx 0; border-radius: 14rpx; font-size: 28rpx; }
+.btn.primary { background: #2953ff; color: #fff; }
+.btn.ghost { border: 1rpx solid #2953ff; color: #2953ff; background: #fff; }
+.btn.dis { opacity: .5; }
+.tip { margin-top: 16rpx; font-size: 22rpx; color: #9aa2b5; text-align: center; }
+.empty { padding: 80rpx 0; text-align: center; color: #b42318; font-size: 26rpx; }

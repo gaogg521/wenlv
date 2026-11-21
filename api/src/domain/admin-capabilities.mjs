@@ -1,4 +1,6 @@
 // 后台按钮与对应写接口共享角色规则；实体编辑权限仍以 entity-schema 为准。
+// V94:动作级按员工三态授权(admin_user_action 允许/收回)叠加在角色基线上——
+// subject.approve(主体资源审批)基线仅超管,由超管按员工单独授予或撤回,普通运营默认无权审批。
 export const ADMIN_ACTIONS = {
   'order.refund': { roles: ['super', 'ops', 'finance'], label: '超级管理员、运营或财务' },
   'order.service': { roles: ['super', 'ops'], label: '超级管理员或运营' },
@@ -40,10 +42,41 @@ export const ADMIN_ACTIONS = {
   'settle.pay': { roles: ['super', 'finance'], label: '超级管理员或财务' },
   // P-03/P-04：手动任务干预（存证打包/补锚/日终封存/关单/佣金放行等全库动作）= 超管或运维；开发只读
   'system.jobRun': { roles: ['super', 'sre'], label: '超级管理员或运维' },
+  // V94 主体资源审批:基线仅超管;运营由超管按员工单独授予(admin_user_action),撤回后旧会话即时复验
+  'subject.approve': { roles: ['super'], label: '超级管理员;运营可由超管按员工单独授予' },
+  // V94 主体申请预审(意见/提醒补材料,不改状态):超管与运营默认可办
+  'subject.preaudit': { roles: ['super', 'ops'], label: '超级管理员或运营' },
 }
 
 export function actionRoles(action) {
   const rule = ADMIN_ACTIONS[action]
   if (!rule) throw new Error('未知后台操作权限：' + action)
   return rule.roles
+}
+
+// ---- V94 动作级按员工有效集合:基线角色映射 ∪ allow − deny(admin_user_action 三态) ----
+// 30s 进程内缓存 + 授予/撤回即失效;服务端每次敏感写入调用——撤销授权后旧会话立即复验被拒。
+import { q } from '../db.mjs'
+
+const _actionCache = new Map() // uid -> { set, at }
+const ACTION_TTL = 30 * 1000
+export function invalidateActionCache(uid) {
+  if (uid != null) _actionCache.delete(Number(uid))
+  else _actionCache.clear()
+}
+
+export async function effectiveActionsFor(uid, role) {
+  const base = new Set(Object.entries(ADMIN_ACTIONS).filter(([, r]) => r.roles.includes(role)).map(([k]) => k))
+  if (uid == null) return base // 测试夹具令牌:按角色基线
+  const key = Number(uid)
+  const hit = _actionCache.get(key)
+  if (hit && Date.now() - hit.at < ACTION_TTL) return hit.set
+  const rows = await q('SELECT action, effect FROM admin_user_action WHERE uid = ?', [key])
+  const set = new Set(base)
+  for (const r of rows) {
+    if (Number(r.effect) === 1) set.add(r.action)
+    else set.delete(r.action)
+  }
+  _actionCache.set(key, { set, at: Date.now() })
+  return set
 }

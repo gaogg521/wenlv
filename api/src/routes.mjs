@@ -30,9 +30,10 @@ import { freedomRoutes } from './routes/freedom.mjs'
 import { promoAdminRoutes } from './routes/promo-admin.mjs'
 import { supplyAdminRoutes } from './routes/supply-admin.mjs'
 import { pkgAdminRoutes } from './routes/pkg-admin.mjs'
+import { routes as subjectApprovalRoutes } from './routes/subject-approval.mjs'
 
 
-export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes, ...scenicFollowupRoutes, ...partnerDash, ...noteCommentRoutes }
+export const routes = { ...workAccess, ...c, ...m, ...mPkg, ...admin, ...people, ...contentGovernance, ...adminSys, ...adminEco, ...adminFin, ...adminAccounts, ...adminTickets, ...adminUserOps, ...adminRiskCases, ...fundWorkbenchAgg, ...adminReviewQueue, ...cWithdraw, ...cPromo, ...integrations, ...web3, ...open, ...lexicon, ...cIdentity, ...cNotes, ...mApply, ...cPhraseKyc, ...mPhrase, ...mSite, ...adminNew, ...adminEdit, ...callback, ...salesRoutes, ...freedomRoutes, ...promoAdminRoutes, ...supplyAdminRoutes, ...pkgAdminRoutes, ...scenicCalculatorRoutes, ...scenicFollowupRoutes, ...partnerDash, ...noteCommentRoutes, ...subjectApprovalRoutes }
 
 for (const [key, handler] of Object.entries(routes)) {
   if (key.includes('/admin/dev/')) routes[key] = (req, res) => {
