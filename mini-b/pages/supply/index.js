@@ -21,10 +21,14 @@ Page({
   },
   fetch(done, append = false) {
     if (typeof done !== 'function') done = undefined
-    api.refreshPerms(true)
-    const perms = api.permsFor()
-    const canManage = (getApp().globalData.role || 0) >= 2 && !(perms.session && perms.session.update && perms.session.update.allowed === false)
-    this.setData({ role: getApp().globalData.role || 0, canManage, error: '' })
+    this.setData({ role: getApp().globalData.role || 0, canManage: false, canEditProduct: false, error: '' })
+    api.refreshPerms(true).then(() => {
+      const perms = api.permsFor()
+      this.setData({
+        canManage: perms.session?.update?.allowed === true,
+        canEditProduct: perms.product?.update?.allowed === true,
+      })
+    })
     if (!getApp().globalData.token) { this.setData({ loaded: true, list: [] }); this.applyFilters(); done && done(); return }
     const requestId = this._requestId = (this._requestId || 0) + 1
     const page = append ? this.data.page + 1 : 1

@@ -8,6 +8,11 @@ function canDemoLogin() {
   } catch (e) { return false }
 }
 function saveSession(d, mode) {
+  if (g().token !== d.token) {
+    wx.removeStorageSync('mperm')
+    g().permVersion = 0
+    g().perms = {}
+  }
   g().token = d.token; g().merchant = d.merchant || null; g().role = d.role || 0
   wx.setStorageSync('mtoken', d.token); wx.setStorageSync('merchant', d.merchant || null); wx.setStorageSync('mrole', d.role || 0)
   if (mode === 'demo') wx.setStorageSync('mloginMode', mode)
@@ -37,11 +42,14 @@ function demoLogin() {
 let _permRefreshing = null
 function refreshPerms(force) {
   if (!g().token) return Promise.resolve(null)
+  const token = g().token
   const run = () => new Promise((resolve) => {
+    if (g().token !== token) return resolve(null)
     wx.request({
       url: g().apiBase + '/m/perm/snapshot', method: 'GET',
-      header: { Authorization: 'Bearer ' + (g().token || '') },
+      header: { Authorization: 'Bearer ' + token },
       success: (res) => {
+        if (g().token !== token) return resolve(null)
         if (res.data && res.data.code === 0 && res.data.data) {
           const snap = res.data.data
           // 写入前实时重读本地(不能用调用时捕获的旧基线,否则并发下旧响应覆盖新版本)

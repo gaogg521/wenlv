@@ -29,6 +29,7 @@ Page({
         changeText: (r.changedLabels || []).join('、') || (r.action === 'create' ? '新增' : '—'),
         timeText: String(r.submitted_at || r.created_at || '').slice(0, 16),
         resultText: Number(r.status) === 3 && r.review_note ? '退回原因:' + r.review_note : (Number(r.status) === 4 ? '已生效' : ''),
+        canEditDraft: Number(r.status) === 0 && r.kind === 'product',
         canWithdraw: Number(r.status) === 1,
         canRedo: Number(r.status) === 2 || Number(r.status) === 3,
       }))
@@ -36,6 +37,7 @@ Page({
       done && done()
     }).catch((e) => { this.setData({ loaded: true, list: [], error: e.msg || '申请加载失败' }); done && done() })
   },
+  editDraft(e) { wx.navigateTo({ url: '/pages/product-edit/index?draftId=' + Number(e.currentTarget.dataset.id) }) },
   goCreate() { wx.navigateTo({ url: '/pages/product-edit/index' }) },
   setTab(e) {
     const k = String(e.currentTarget.dataset.k || 'all')

@@ -68,3 +68,51 @@ const snap = (version) => ({ code: 0, data: { version, role: 2, merchantId: 1, p
 }
 
 console.log('商户端权限快照:乱序不回退/低版本不覆盖/撤权收紧/并发串行化 通过')
+
+function loadPage(path, api, globals = {}) {
+  let page
+  vm.runInNewContext(fs.readFileSync(new URL(path, import.meta.url), 'utf8'), {
+    require: () => api, Page: (definition) => { page = definition },
+    getApp: () => ({ globalData: { role: 2, token: 'fixture' } }),
+    wx: { showToast() {} }, setTimeout() {}, ...globals,
+  })
+  page.setData = function (patch) { Object.assign(this.data, patch) }
+  return page
+}
+
+{
+  let perms = { session: { update: { allowed: true } } }
+  let finishRefresh
+  const page = loadPage('../../mini-b/pages/supply/index.js', {
+    refreshPerms: () => new Promise(resolve => { finishRefresh = resolve }),
+    permsFor: () => perms, request: async () => ({ items: [] }),
+  })
+  page.dateWindow = () => ({})
+  page.applyFilters = () => {}
+  page.fetch()
+  perms = { session: { update: { allowed: false } }, product: { update: { allowed: true } } }
+  finishRefresh()
+  await Promise.resolve()
+  assert.equal(page.data.canManage, false)
+  assert.equal(page.data.canEditProduct, true, '商品与团期分别执行各自权限')
+}
+
+{
+  const calls = []
+  const api = {
+    request: async (path, method, body) => { calls.push({ path, method, body }); return { id: 42 } },
+    permsFor: () => ({ product: { update: { allowed: true, fields: ['subtitle'] } } }),
+  }
+  const page = loadPage('../../mini-b/pages/product-edit/index.js', api)
+  page.fill({ title: '正式商品', subtitle: '草稿卖点' }, { mode: 'edit', id: 5, version: 2 })
+  page.saveDraft()
+  await Promise.resolve()
+  page.save(true)
+  await Promise.resolve()
+  assert.deepEqual(calls.map(({ path, method }) => [path, method]), [
+    ['/m/subject-requests', 'POST'], ['/m/subject-requests/42', 'PUT'],
+  ])
+  assert.equal(calls[1].body.submit, true)
+  assert.deepEqual(Object.keys(calls[1].body.payload), ['subtitle'])
+}
+console.log('小程序实页逻辑：异步撤权后更新入口，编辑草稿先创建再提交同一申请，非授权字段不提交')

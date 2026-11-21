@@ -22,6 +22,7 @@
     <view wx:if="{{item.resultText}}" class="sub warn">{{item.resultText}}</view>
     <view class="sub">提交时间:{{item.timeText}}{{item.channel === 'mini' ? ' · 小程序' : ' · PC 后台'}}</view>
     <view class="btns">
+      <view wx:if="{{item.canEditDraft}}" class="btn ghost" data-id="{{item.id}}" bindtap="editDraft">继续编辑</view>
       <view wx:if="{{item.canWithdraw}}" class="btn ghost" data-id="{{item.id}}" bindtap="withdraw">撤回</view>
       <view wx:if="{{item.canRedo}}" class="btn ghost" data-id="{{item.id}}" bindtap="redo">重新发起</view>
     </view>

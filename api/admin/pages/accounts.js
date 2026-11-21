@@ -106,15 +106,66 @@ window.accountActionSet = async (uid, action, effect, username) => {
   const reason = ($('#aaReason')?.value || '').trim()
   if (!reason) return toast('请填写授权原因', true)
   const okc = await uiConfirm({ title: (effect === 1 ? '授予' : '撤回') + ' ' + action,
-    message: (effect === 1 ? '授予后该账号可执行该动作,旧会话立即失效、需重新登录。' : '撤回后该账号立即失去该动作,旧会话立即失效。') + '原因:' + reason,
+    impact: (effect === 1 ? '授予后该账号可执行该动作,旧会话立即失效、需重新登录。' : '撤回后该账号立即失去该动作,旧会话立即失效。') + '原因:' + reason,
     danger: effect !== 1 })
-  if (!okc) return
+  if (!okc.ok) return accountActionModal(uid, username)
   try {
     await api('POST', '/admin/accounts/' + uid + '/actions', { action, effect, reason })
     toast(effect === 1 ? '已授予,该账号旧会话已失效' : '已撤回,该账号旧会话已失效')
     accountActionModal(uid, username)
   } catch (e) { toast(e.message, true) }
 }
+
+
+window.accountApproverScope = async (uid) => {
+  const endpoint = '/admin/accounts/' + uid + '/approver-scope'
+  try {
+    const { account, rows } = await api('GET', endpoint)
+    const describe = (row) => [
+      { merchant: '商户', scenic: '景区' }[row.subject_type] || '全部主体类型',
+      row.subject_id ? '#' + row.subject_id : '全部主体',
+      row.city_code ? cityLabelAccounts(row.city_code) : '全部城市',
+    ].join(' · ')
+    modal('审批范围 · ' + account.username, `
+      <p>运营须同时拥有主体资源审批动作权限和至少一条有效范围。每条范围内的条件同时满足即可办理，多条范围可叠加。</p>
+      ${rows.length ? `<table><thead><tr><th>范围</th><th>授权原因</th><th>授权人</th><th>操作</th></tr></thead><tbody>
+        ${rows.map(row => `<tr><td>${esc(describe(row))}</td><td>${esc(row.reason)}</td><td>${esc(row.granted_by_name || '—')}</td><td><button class="btn ghost sm" data-scope-id="${Number(row.id)}">撤回</button></td></tr>`).join('')}
+      </tbody></table>` : '<p>暂无审批范围</p>'}
+      <div class="field"><label for="approverType">主体类型</label><select id="approverType"><option value="">全部类型</option><option value="merchant">商户</option><option value="scenic">景区</option></select></div>
+      <div class="field"><label for="approverSubject">主体 ID（留空适用所选类型的全部主体）</label><input id="approverSubject" type="number" min="1" step="1"></div>
+      <div class="field"><label for="approverCity">城市</label><select id="approverCity"><option value="">全部城市</option>${Object.entries(CITY_CN).map(([code, name]) => `<option value="${esc(code)}">${esc(name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="approverReason">授权原因（必填）</label><input id="approverReason" maxlength="200"></div>`,
+      '<button class="btn ghost" onclick="closeModal()">关闭</button><button id="saveApproverScope" class="btn primary">授予范围</button>', true)
+    $('#saveApproverScope').onclick = async function saveApproverScope() {
+      const subjectType = $('#approverType').value
+      const subjectId = $('#approverSubject').value
+      const city = $('#approverCity').value
+      const reason = $('#approverReason').value.trim()
+      if (!reason || (subjectId && (!subjectType || !/^[1-9][0-9]*$/.test(subjectId)))) return toast('请填写原因；指定主体时需选择类型并填写有效 ID', true)
+      const summary = describe({ subject_type: subjectType, subject_id: subjectId, city_code: city })
+      const confirmation = await uiConfirm({ title: '授予审批范围', target: account.username, impact: summary + '。该账号需重新登录。' })
+      if (!confirmation.ok) return accountApproverScope(uid)
+      try {
+        await api('POST', endpoint, { subjectType, subjectId, city, reason })
+        toast('已授予审批范围')
+        await accountApproverScope(uid)
+      } catch (e) { toast(e.message, true) }
+    }
+    for (const button of document.querySelectorAll('[data-scope-id]')) {
+      button.onclick = async function removeApproverScope() {
+        const row = rows.find(item => Number(item.id) === Number(button.dataset.scopeId))
+        const confirmation = await uiConfirm({ title: '撤回审批范围', target: account.username, impact: describe(row) + '。该账号需重新登录。', danger: true })
+        if (!confirmation.ok) return accountApproverScope(uid)
+        try {
+          await api('DELETE', endpoint + '/' + row.id)
+          toast('已撤回审批范围')
+          await accountApproverScope(uid)
+        } catch (e) { toast(e.message, true) }
+      }
+    }
+  } catch (e) { toast(e.message, true) }
+}
+
 
 // R-05：角色能力说明（谁、在哪端、能看什么、能做什么）——数据与 modules.mjs / ADMIN_ACTIONS 同源（domain/role-matrix.mjs）
 async function roleExplainTab() {
@@ -209,6 +260,7 @@ async function accountsList() {
       const lastSuper = u.role === 'super' && rows.filter((r) => r.role === 'super' && Number(r.status) === 1).length <= 1
       const ops = []
       ops.push(`<button class="btn ghost sm" onclick="accountMfaDialog(${u.id}, '${escJs(u.username)}')">验证方式</button>`)
+      if (u.role === 'ops') ops.push(`<button class="btn ghost sm" onclick="accountApproverScope(${u.id})">审批范围</button>`)
       if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountPermModal(${u.id}, '${escJs(u.username)}')">权限</button>`)
       // V94:动作级授权(主体资源审批等按员工授予/撤回)
       if (u.role !== 'super') ops.push(`<button class="btn ghost sm" onclick="accountActionModal(${u.id}, '${escJs(u.username)}')">动作授权</button>`)

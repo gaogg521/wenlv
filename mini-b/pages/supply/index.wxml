@@ -14,7 +14,7 @@
   </view>
   <view class="group-footer" wx:if="{{!g.expanded}}" bindtap="toggleProduct" data-key="{{g.key}}"><text>本组可售余量 {{g.seats}} 席</text><text>展开管理　⌄</text></view>
   <view class="group-footer" wx:if="{{g.expanded && canManage}}" bindtap="batchProduct" data-key="{{g.key}}"><text>当前筛选 {{g.count}} 个团期</text><text>批量调整本商品　⋯</text></view>
-  <view class="group-footer" wx:if="{{g.expanded && canManage && g.productId}}" bindtap="goArchive" data-id="{{g.productId}}"><text>商品档案与图集</text><text>修改档案申请　⌄</text></view>
+  <view class="group-footer" wx:if="{{g.expanded && canEditProduct && g.productId}}" bindtap="goArchive" data-id="{{g.productId}}"><text>商品档案与图集</text><text>修改档案申请　⌄</text></view>
   <block wx:if="{{g.expanded}}">
     <view class="session-item" wx:for="{{g.sessions}}" wx:key="id" wx:for-item="s">
       <view class="session-main"><view><view class="session-date">{{s.date}}</view><view class="group-sub">剩余 {{s.left}} / {{s.quota}} 席</view></view><view class="session-price">¥{{s.priceLabel}}<view class="status-label {{s.canSell ? 'positive' : ''}}">{{s.statusLabel}}</view></view></view>

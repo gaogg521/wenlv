@@ -275,11 +275,24 @@ const routes = {
     if (!String(b.reason || '').trim()) throw new BizError(1001, '请填写授权原因')
     const u = await one('SELECT id, role FROM admin_user WHERE id = ?', [req.params.id])
     if (!u) throw new BizError(1004, '账号不存在')
+    if (u.role !== 'ops') throw new BizError(1001, '审批范围仅可配置给平台运营')
+    const subjectType = b.subjectType || null
+    const subjectId = b.subjectId === '' || b.subjectId == null ? null : Number(b.subjectId)
+    const city = b.city || null
+    if (subjectType && !['merchant', 'scenic'].includes(subjectType)) throw new BizError(1001, '主体类型无效')
+    if (city && !/^\d{6}$/.test(String(city))) throw new BizError(1001, '城市编码无效')
+    if (subjectId !== null && (!subjectType || !Number.isSafeInteger(subjectId) || subjectId < 1)) {
+      throw new BizError(1001, '指定主体须选择主体类型并填写有效 ID')
+    }
+    if (subjectId !== null) {
+      const table = subjectType === 'merchant' ? 'merchant' : 'scenic_spot'
+      const subject = await one('SELECT city_code FROM ' + table + ' WHERE id = ?', [subjectId])
+      if (!subject || (city && String(subject.city_code) !== String(city))) throw new BizError(1001, '主体不存在或不属于所选城市')
+    }
     const id = await tx2(async (c) => {
       const rid = await c.ins(`INSERT INTO subject_approver_scope (uid, subject_type, subject_id, city_code, reason, granted_by, granted_by_name)
         VALUES (?,?,?,?,?,?,?)`,
-        [Number(req.params.id), b.subjectType || null, b.subjectId != null && b.subjectId !== '' ? Number(b.subjectId) : null,
-          b.city || null, String(b.reason).slice(0, 200), a.uid, a.display_name])
+        [Number(req.params.id), subjectType, subjectId, city, String(b.reason).slice(0, 200), a.uid, a.display_name])
       // 范围变更联动 token_epoch:被调整账号旧会话失效,按新范围重新登录
       await c.q('UPDATE admin_user SET token_epoch = token_epoch + 1 WHERE id = ?', [Number(req.params.id)])
       await audit(c, 'admin:' + a.display_name, 'approver-scope', 'uid-' + req.params.id, null, { ...b })
@@ -389,13 +402,18 @@ const routes = {
     await assertPermFresh(req.headers['x-perm-version'])
     const actor = await actorFromStaff(u)
     const b = req.body || {}
-    return approval.saveDraft(actor, {
+    const draft = await approval.saveDraft(actor, {
       id: Number(req.params.id), kind: b.kind, action: b.action || 'update',
       resourceId: b.resourceId != null ? Number(b.resourceId) : null,
       payload: b.payload, note: b.note, attachments: b.attachments, impactNote: b.impactNote,
       parentId: b.parentId != null ? Number(b.parentId) : null,
       baselineVersion: b.expectedVersion != null ? Number(b.expectedVersion) : null,
     })
+    if (b.submit) {
+      const submitted = await approval.submitRequest(actor, draft.id, { idemKey: b.idemKey || null })
+      return { ...draft, ...submitted }
+    }
+    return draft
   },
 
   'GET /m/perm/snapshot': async (req) => {

@@ -281,9 +281,15 @@ try {
     // 乐观锁:stale expectedVersion → 2002
     await fail(await call('POST', '/m/subject-requests', { kind: 'product', action: 'update', resourceId: prodA,
       payload: { subtitle: '过期提交' }, expectedVersion: Number(cur.version) + 9, submit: true }, tok), 2002)
-    // 正确版本 → 提交(提交人账号复验通过:在店店长)
-    const r = ok(await call('POST', '/m/subject-requests', { kind: 'product', action: 'update', resourceId: prodA,
-      payload: { subtitle: '小程序新卖点' }, expectedVersion: Number(cur.version), impactNote: '档案修改,已下单不受影响', submit: true }, tok))
+    const input = { kind: 'product', action: 'update', resourceId: prodA,
+      payload: { subtitle: '小程序草稿卖点' }, expectedVersion: Number(cur.version), impactNote: '档案修改,已下单不受影响' }
+    const draft = ok(await call('POST', '/m/subject-requests', input, tok))
+    const resumed = ok(await call('GET', '/m/subject-requests/' + draft.id, null, tok))
+    assert.equal(resumed.payload.subtitle, '小程序草稿卖点')
+    const r = ok(await call('PUT', '/m/subject-requests/' + draft.id,
+      { ...input, payload: { subtitle: '小程序新卖点' }, submit: true }, tok))
+    assert.equal(r.id, draft.id)
+    assert.equal(r.status, 1)
     // 审批前游客端保持原文案
     const guest = await (await fetch(base + '/c/tours?kw=' + encodeURIComponent(stamp + 'A线路'))).json()
     assert.ok(!JSON.stringify(guest).includes('小程序新卖点'), '审批前游客端保持原版')

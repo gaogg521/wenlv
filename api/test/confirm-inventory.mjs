@@ -29,6 +29,7 @@ export const INVENTORY = [
   { end: 'pc', file: 'api/admin/pages/actions.js', func: 'togglePromoter', action: '冻结/解冻推广服务商（资金账号）', grade: 'A+', how: 'uiConfirm' },
   { end: 'pc', file: 'api/admin/pages/actions.js', func: 'changePromoterTier', action: '推广商调档', grade: 'A', how: 'uiConfirm' },
   // ===== PC · pages/accounts.js =====
+  { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'saveApproverScope|removeApproverScope', action: '审批范围授予和撤回', grade: 'A', how: 'uiConfirm' },
   { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'roleModuleSubmit', action: '授予/收回角色默认模块（原因必填）', grade: 'A+', how: 'rich' },
   { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'accountMfaFlags', action: 'MFA 豁免/单账号强制', grade: 'A', how: 'uiConfirm' },
   { end: 'pc', file: 'api/admin/pages/accounts.js', func: 'accountPermSubmit', action: '保存模块权限三态（原因必填）', grade: 'A+', how: 'rich' },
