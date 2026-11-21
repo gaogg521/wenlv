@@ -26,9 +26,12 @@ Page({
       editableFields: Object.fromEntries((permission?.fields || []).map(key => [key, true])) })
   },
   loadDraft(id) {
-    api.request('/m/subject-requests/' + id).then((draft) => {
+    api.request('/m/subject-requests/' + id).then(async (draft) => {
       if (draft.kind !== 'product' || Number(draft.status) !== 0) throw { msg: '该商品草稿不可编辑' }
-      this.fill(draft.payload || {}, {
+      const payload = draft.payload || {}
+      const formal = draft.resource_id ? await api.request('/m/products/' + draft.resource_id) : null
+      this.changedFields = new Set(Object.keys(payload))
+      this.fill({ ...(formal?.values || {}), ...(formal ? { cat: formal.cat } : {}), ...payload }, {
         draftId: draft.id, id: draft.resource_id, version: draft.baseline_version,
         mode: draft.action === 'update' ? 'edit' : 'create',
       })
@@ -54,7 +57,15 @@ Page({
     if (!html) return ''
     return String(html).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
   },
-  onInput(e) { const k = e.currentTarget.dataset.k; const d = {}; d[k] = e.detail.value; this.setData(d) },
+  markChanged(key) {
+    if (!this.changedFields) this.changedFields = new Set()
+    this.changedFields.add(key)
+  },
+  onInput(e) {
+    const key = e.currentTarget.dataset.k
+    this.markChanged(({ priceYuan: 'price_from', daysDesc: 'days_desc' })[key] || key)
+    this.setData({ [key]: e.detail.value })
+  },
   onCat(e) { this.setData({ catIndex: Number(e.detail.value) }) },
   addImage() {
     if (!this.data.canEdit || !this.data.editableFields?.images || this.data.images.length >= 9) return
@@ -65,6 +76,7 @@ Page({
       files.forEach((f) => {
         wx.getFileSystemManager().readFile({ filePath: f.tempFilePath, base64: true, success: (b) => {
           api.request('/m/upload/image', 'POST', { data: b.data, ext: f.tempFilePath.split('.').pop().toLowerCase() }).then((u) => {
+            this.markChanged('images')
             this.data.images.push(u.url); done += 1; next()
           }).catch((e) => { failed += 1; wx.showToast({ title: e.msg || '图片上传失败', icon: 'none' }); next() })
         }, fail: () => { failed += 1; next() } })
@@ -75,6 +87,7 @@ Page({
     if (!this.data.canEdit || !this.data.editableFields?.images) return
     const i = Number(e.currentTarget.dataset.i)
     const images = this.data.images.slice(); images.splice(i, 1)
+    this.markChanged('images')
     this.setData({ images })
   },
   buildPayload() {
@@ -91,7 +104,8 @@ Page({
     // 品类(cat)仅新增可提交;修改申请不触类目(白名单口径,类目变更走平台侧)
     if (this.data.mode === 'create') payload.cat = cat[0]
     if (this.data.intro === this.stripRich(this.originalIntro)) payload.intro = this.originalIntro
-    return Object.fromEntries(Object.entries(payload).filter(([key]) => this.data.editableFields?.[key]))
+    return Object.fromEntries(Object.entries(payload).filter(([key]) =>
+      this.data.editableFields?.[key] && (this.data.mode === 'create' || this.changedFields?.has(key))))
   },
   validate(payload) {
     if (!this.data.canEdit || !Object.keys(payload).length) return '当前没有可编辑的商品字段'

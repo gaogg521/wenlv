@@ -105,6 +105,7 @@ function loadPage(path, api, globals = {}) {
   }
   const page = loadPage('../../mini-b/pages/product-edit/index.js', api)
   page.fill({ title: '正式商品', subtitle: '草稿卖点' }, { mode: 'edit', id: 5, version: 2 })
+  page.onInput({ currentTarget: { dataset: { k: 'subtitle' } }, detail: { value: '新卖点' } })
   page.saveDraft()
   await Promise.resolve()
   page.save(true)
